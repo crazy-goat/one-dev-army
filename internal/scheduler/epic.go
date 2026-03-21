@@ -3,6 +3,7 @@ package scheduler
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
@@ -36,7 +37,7 @@ func (ea *EpicAnalyzer) Analyze(description string) ([]TaskSpec, error) {
 	}
 
 	prompt := buildEpicPrompt(description)
-	msg, err := ea.oc.SendMessage(session.ID, prompt, ea.cfg.EpicAnalysis.LLM)
+	msg, err := ea.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(ea.cfg.EpicAnalysis.LLM), os.Stdout)
 	if err != nil {
 		return nil, fmt.Errorf("sending epic analysis prompt: %w", err)
 	}
@@ -94,6 +95,7 @@ Respond with a JSON array of tasks. Each task should have:
 - "dependencies": array of 1-based task indices this task depends on (empty if none)
 - "labels": array of relevant labels
 
+Do NOT ask any questions - just produce the output.
 Respond ONLY with the JSON array, no other text.`, description)
 }
 
@@ -139,8 +141,8 @@ func buildTaskLabels(task TaskSpec) []string {
 
 func extractTextContent(msg *opencode.Message) string {
 	for _, part := range msg.Parts {
-		if part.Type == "text" && part.Content != "" {
-			return part.Content
+		if part.Type == "text" && part.Text != "" {
+			return part.Text
 		}
 	}
 	return ""

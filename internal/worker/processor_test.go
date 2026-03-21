@@ -97,13 +97,71 @@ type messageLog struct {
 	content   string
 }
 
+type sseClient struct {
+	w       http.ResponseWriter
+	flusher http.Flusher
+}
+
+type sseHub struct {
+	mu      sync.Mutex
+	clients map[*sseClient]bool
+}
+
+func newSSEHub() *sseHub {
+	return &sseHub{clients: make(map[*sseClient]bool)}
+}
+
+func (h *sseHub) add(c *sseClient) {
+	h.mu.Lock()
+	h.clients[c] = true
+	h.mu.Unlock()
+}
+
+func (h *sseHub) remove(c *sseClient) {
+	h.mu.Lock()
+	delete(h.clients, c)
+	h.mu.Unlock()
+}
+
+func (h *sseHub) broadcast(data string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for c := range h.clients {
+		fmt.Fprintf(c.w, "data: %s\n\n", data)
+		c.flusher.Flush()
+	}
+}
+
 func mockOpenCodeServer(t *testing.T, log *requestLog) *httptest.Server {
 	t.Helper()
 
 	var sessionCounter int
 	var counterMu sync.Mutex
+	hub := newSSEHub()
 
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/event" && r.Method == http.MethodGet {
+			flusher, ok := w.(http.Flusher)
+			if !ok {
+				http.Error(w, "streaming not supported", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.Header().Set("Connection", "keep-alive")
+			w.WriteHeader(http.StatusOK)
+
+			fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
+			flusher.Flush()
+
+			client := &sseClient{w: w, flusher: flusher}
+			hub.add(client)
+			defer hub.remove(client)
+
+			<-r.Context().Done()
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 
 		if r.URL.Path == "/session" && r.Method == http.MethodPost {
@@ -127,7 +185,7 @@ func mockOpenCodeServer(t *testing.T, log *requestLog) *httptest.Server {
 			return
 		}
 
-		if strings.Contains(r.URL.Path, "/session/") && strings.HasSuffix(r.URL.Path, "/message") && r.Method == http.MethodPost {
+		if strings.Contains(r.URL.Path, "/session/") && strings.HasSuffix(r.URL.Path, "/prompt_async") && r.Method == http.MethodPost {
 			pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/session/"), "/")
 			sessID := pathParts[0]
 
@@ -138,11 +196,15 @@ func mockOpenCodeServer(t *testing.T, log *requestLog) *httptest.Server {
 			log.mu.Lock()
 			content := ""
 			if len(req.Parts) > 0 {
-				content = req.Parts[0].Content
+				content = req.Parts[0].Text
+			}
+			model := ""
+			if req.Model != nil {
+				model = req.Model.ModelID
 			}
 			log.messages = append(log.messages, messageLog{
 				sessionID: sessID,
-				model:     req.Model,
+				model:     model,
 				content:   content,
 			})
 			log.mu.Unlock()
@@ -152,16 +214,19 @@ func mockOpenCodeServer(t *testing.T, log *requestLog) *httptest.Server {
 				responseContent = `{"summary": "test analysis", "requirements": [], "complexity": "low"}`
 			}
 
-			json.NewEncoder(w).Encode(opencode.Message{
-				Info: opencode.MessageInfo{
-					ID:        "msg-1",
-					SessionID: sessID,
-					Role:      "assistant",
-				},
-				Parts: []opencode.Part{
-					{Type: "text", Content: responseContent},
-				},
-			})
+			w.WriteHeader(http.StatusNoContent)
+
+			go func() {
+				msgUpdated := fmt.Sprintf(`{"type":"message.updated","properties":{"info":{"id":"msg-1","sessionID":"%s","role":"assistant"}}}`, sessID)
+				hub.broadcast(msgUpdated)
+
+				delta := fmt.Sprintf(`{"type":"message.part.delta","properties":{"sessionID":"%s","messageID":"msg-1","partID":"prt-1","field":"text","delta":"%s"}}`,
+					sessID, strings.ReplaceAll(responseContent, `"`, `\"`))
+				hub.broadcast(delta)
+
+				status := fmt.Sprintf(`{"type":"session.status","properties":{"sessionID":"%s","status":{"type":"idle"}}}`, sessID)
+				hub.broadcast(status)
+			}()
 			return
 		}
 

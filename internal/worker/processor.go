@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"os"
+
 	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/git"
@@ -16,6 +18,10 @@ import (
 )
 
 const maxSlugLen = 50
+
+const automatedPipelineNotice = "CRITICAL: You are running in a fully automated pipeline with NO human operator. " +
+	"NEVER ask questions, request clarification, or wait for input - nobody will answer and the pipeline will hang forever. " +
+	"Make your best judgment and produce output immediately.\n\n"
 
 const promptAnalysis = `You are analyzing a GitHub issue for implementation.
 
@@ -30,6 +36,8 @@ Analyze this issue and produce a structured analysis. Consider:
 2. What files/packages might need changes?
 3. What are the edge cases and potential risks?
 4. What dependencies exist?
+
+Do NOT ask any questions - just produce the output.
 
 Respond with a JSON object:
 {
@@ -58,6 +66,8 @@ Create a detailed implementation plan. Include:
 2. Specific code changes needed
 3. Test cases to write
 4. Any refactoring needed
+
+Do NOT ask any questions - just produce the output.
 
 Respond with a JSON object:
 {
@@ -88,6 +98,8 @@ Review this plan critically. Check for:
 4. Potential breaking changes
 5. Security concerns
 
+Do NOT ask any questions - just produce the output.
+
 Respond with a JSON object:
 {
   "approved": true/false,
@@ -113,6 +125,8 @@ const promptCoding = `You are implementing code changes for a GitHub issue.
 - Test command: %s
 
 ## Instructions
+
+Do NOT ask any questions - just implement the solution.
 
 Implement all changes according to the plan. Make sure to:
 1. Follow existing code style and patterns
@@ -143,6 +157,8 @@ Review these code changes. Check for:
 4. Tests - adequate test coverage?
 5. Security - any vulnerabilities introduced?
 6. Performance - any obvious performance issues?
+
+Do NOT ask any questions - just produce the output.
 
 Respond with a JSON object:
 {
@@ -304,8 +320,8 @@ func (e *StageExecutor) executeSession(taskID int, stage pipeline.Stage, stageCo
 		return nil, fmt.Errorf("creating session for %s: %w", stage, err)
 	}
 
-	prompt := fmt.Sprintf(promptTpl, e.task.IssueNumber, e.task.Title, e.task.Body, stageContext)
-	msg, err := e.oc.SendMessage(session.ID, prompt, llm)
+	prompt := automatedPipelineNotice + fmt.Sprintf(promptTpl, e.task.IssueNumber, e.task.Title, e.task.Body, stageContext)
+	msg, err := e.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(llm), os.Stdout)
 	if err != nil {
 		return nil, fmt.Errorf("sending message for %s: %w", stage, err)
 	}
@@ -333,8 +349,8 @@ func (e *StageExecutor) executeReview(taskID int, stage pipeline.Stage, stageCon
 		return nil, fmt.Errorf("creating session for %s: %w", stage, err)
 	}
 
-	prompt := fmt.Sprintf(promptTpl, e.task.IssueNumber, e.task.Title, e.task.Body, stageContext)
-	msg, err := e.oc.SendMessage(session.ID, prompt, llm)
+	prompt := automatedPipelineNotice + fmt.Sprintf(promptTpl, e.task.IssueNumber, e.task.Title, e.task.Body, stageContext)
+	msg, err := e.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(llm), os.Stdout)
 	if err != nil {
 		return nil, fmt.Errorf("sending message for %s: %w", stage, err)
 	}
@@ -364,12 +380,12 @@ func (e *StageExecutor) executeCoding(taskID int, stage pipeline.Stage, stageCon
 		return nil, fmt.Errorf("creating session for %s: %w", stage, err)
 	}
 
-	prompt := fmt.Sprintf(promptCoding,
+	prompt := automatedPipelineNotice + fmt.Sprintf(promptCoding,
 		e.task.IssueNumber, e.task.Title, e.task.Body,
 		stageContext,
 		e.cfg.Tools.LintCmd, e.cfg.Tools.TestCmd,
 	)
-	msg, err := e.oc.SendMessage(session.ID, prompt, llm)
+	msg, err := e.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(llm), os.Stdout)
 	if err != nil {
 		return nil, fmt.Errorf("sending message for %s: %w", stage, err)
 	}
@@ -457,8 +473,8 @@ func extractTextContent(msg *opencode.Message) string {
 	}
 	var parts []string
 	for _, p := range msg.Parts {
-		if p.Type == "text" && p.Content != "" {
-			parts = append(parts, p.Content)
+		if p.Type == "text" && p.Text != "" {
+			parts = append(parts, p.Text)
 		}
 	}
 	return strings.Join(parts, "\n")

@@ -111,8 +111,8 @@ func TestRunAll_CollectsAllResults(t *testing.T) {
 	defer srv.Close()
 
 	results := preflight.RunAll(dir, srv.URL)
-	if len(results) != 5 {
-		t.Fatalf("expected 5 results, got %d", len(results))
+	if len(results) != 6 {
+		t.Fatalf("expected 6 results, got %d", len(results))
 	}
 
 	names := map[string]bool{}

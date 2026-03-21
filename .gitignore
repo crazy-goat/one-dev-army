@@ -20,5 +20,7 @@ Thumbs.db
 
 # ODA runtime
 .oda/metrics.db
+.oda/metrics.db-shm
+.oda/metrics.db-wal
 .oda/worktrees/
 one-dev-army

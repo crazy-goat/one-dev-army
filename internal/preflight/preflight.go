@@ -1,6 +1,7 @@
 package preflight
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -100,6 +101,38 @@ func CheckOpencode(url string) error {
 	return nil
 }
 
+func CheckOpencodeDirectory(opencodeURL, projectDir string) error {
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(opencodeURL + "/path")
+	if err != nil {
+		return nil // opencode not running, CheckOpencode will catch it
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil // endpoint might not exist in older versions
+	}
+
+	var result struct {
+		Directory string `json:"directory"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil || result.Directory == "" {
+		return nil
+	}
+
+	if result.Directory != projectDir {
+		return fmt.Errorf(
+			"opencode serve is running in wrong directory\n"+
+				"  opencode dir: %s\n"+
+				"  project dir:  %s\n\n"+
+				"  Stop opencode and restart it from the project directory:\n"+
+				"    cd %s && opencode serve",
+			result.Directory, projectDir, projectDir,
+		)
+	}
+	return nil
+}
+
 func CheckConfig(dir string) error {
 	path := filepath.Join(dir, ".oda", "config.yaml")
 	if _, err := os.Stat(path); err != nil {
@@ -121,6 +154,7 @@ func RunAll(projectDir, opencodeURL string) []CheckResult {
 		{"gh-cli", func() error { return CheckGhCLI() }},
 		{"gh-auth", func() error { return CheckGhAuth() }},
 		{"opencode", func() error { return CheckOpencode(opencodeURL) }},
+		{"opencode-dir", func() error { return CheckOpencodeDirectory(opencodeURL, projectDir) }},
 		{"config", func() error { return CheckConfig(projectDir) }},
 	}
 
