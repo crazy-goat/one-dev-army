@@ -1,15 +1,20 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/one-dev-army/oda/internal/config"
 	"github.com/one-dev-army/oda/internal/dashboard"
 	"github.com/one-dev-army/oda/internal/db"
+	"github.com/one-dev-army/oda/internal/git"
+	"github.com/one-dev-army/oda/internal/github"
 	"github.com/one-dev-army/oda/internal/initialize"
 	"github.com/one-dev-army/oda/internal/opencode"
 	"github.com/one-dev-army/oda/internal/preflight"
@@ -39,6 +44,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
+	fmt.Println("ODA stopped.")
 }
 
 func printUsage() {
@@ -98,36 +104,81 @@ func runServe() error {
 	}
 	defer store.Close()
 
-	_ = opencode.NewClient(cfg.OpenCode.URL)
+	oc := opencode.NewClient(cfg.OpenCode.URL)
+	gh := github.NewClient(cfg.GitHub.Repo)
 
 	fmt.Println("Verifying GitHub setup...")
-	fmt.Println("Syncing GitHub...")
+	if err := gh.EnsureLabels(); err != nil {
+		return fmt.Errorf("ensuring labels: %w", err)
+	}
+
+	worktreesDir := filepath.Join(dir, ".oda", "worktrees")
+	if err := os.MkdirAll(worktreesDir, 0o755); err != nil {
+		return fmt.Errorf("creating worktrees directory: %w", err)
+	}
+	wtMgr := git.NewWorktreeManager(dir, worktreesDir)
+
+	processor := worker.NewProcessor(cfg, oc, gh, store, wtMgr)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
 	fmt.Printf("Starting %d workers...\n", cfg.Workers.Count)
-	fmt.Println()
+	pool := worker.NewPool(cfg.Workers.Count, nil, processor)
+	pool.Start(ctx)
 
-	poolInfoFn := func() []worker.WorkerInfo { return nil }
-
-	srv, err := dashboard.NewServer(cfg.Dashboard.Port, store, poolInfoFn)
+	srv, err := dashboard.NewServer(cfg.Dashboard.Port, store, pool.Workers)
 	if err != nil {
 		return fmt.Errorf("creating dashboard server: %w", err)
 	}
 
 	fmt.Printf("Dashboard: http://localhost:%d\n", cfg.Dashboard.Port)
 	fmt.Println("Press Ctrl+C to stop")
+	fmt.Println()
 
-	errCh := make(chan error, 1)
+	srvErrCh := make(chan error, 1)
 	go func() {
-		errCh <- srv.Start()
+		if err := srv.Start(); err != nil && err != http.ErrServerClosed {
+			srvErrCh <- err
+		}
+		close(srvErrCh)
 	}()
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	workersDone := make(chan struct{})
+	go func() {
+		pool.Wait()
+		close(workersDone)
+	}()
 
 	select {
-	case sig := <-sigCh:
-		fmt.Printf("\nReceived %s, shutting down...\n", sig)
-		return nil
-	case err := <-errCh:
+	case <-sigCh:
+		fmt.Println("\nShutting down... Press Ctrl+C again to force quit.")
+		cancel()
+
+		go func() {
+			<-sigCh
+			fmt.Println("\nForce quitting...")
+			os.Exit(1)
+		}()
+
+		<-workersDone
+		fmt.Println("All workers finished.")
+
+	case <-workersDone:
+		fmt.Println("All workers finished.")
+
+	case err := <-srvErrCh:
 		return fmt.Errorf("dashboard server: %w", err)
 	}
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("shutting down dashboard: %w", err)
+	}
+
+	return nil
 }

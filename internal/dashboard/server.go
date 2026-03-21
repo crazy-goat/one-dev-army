@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"html/template"
@@ -14,11 +15,12 @@ import (
 var templateFS embed.FS
 
 type Server struct {
-	port  int
-	tmpls map[string]*template.Template
-	store *db.Store
-	pool  func() []worker.WorkerInfo
-	mux   *http.ServeMux
+	port    int
+	tmpls   map[string]*template.Template
+	store   *db.Store
+	pool    func() []worker.WorkerInfo
+	mux     *http.ServeMux
+	httpSrv *http.Server
 }
 
 func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo) (*Server, error) {
@@ -27,12 +29,17 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo) (*Ser
 		return nil, err
 	}
 
+	mux := http.NewServeMux()
 	s := &Server{
 		port:  port,
 		tmpls: tmpls,
 		store: store,
 		pool:  pool,
-		mux:   http.NewServeMux(),
+		mux:   mux,
+		httpSrv: &http.Server{
+			Addr:    fmt.Sprintf(":%d", port),
+			Handler: mux,
+		},
 	}
 	s.routes()
 	return s, nil
@@ -72,8 +79,11 @@ func (s *Server) routes() {
 }
 
 func (s *Server) Start() error {
-	addr := fmt.Sprintf(":%d", s.port)
-	return http.ListenAndServe(addr, s.mux)
+	return s.httpSrv.ListenAndServe()
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	return s.httpSrv.Shutdown(ctx)
 }
 
 func (s *Server) Handler() http.Handler {
