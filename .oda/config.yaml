@@ -1,0 +1,31 @@
+github:
+    repo: crazy-goat/one-dev-army
+dashboard:
+    port: 8080
+workers:
+    count: 3
+opencode:
+    url: http://localhost:4096
+pipeline:
+    stages:
+        - name: analysis
+          llm: claude-sonnet-4
+        - name: planning
+          llm: claude-opus-4
+        - name: plan-review
+          llm: claude-opus-4
+        - name: coding
+          llm: claude-sonnet-4
+        - name: testing
+          llm: claude-sonnet-4
+        - name: code-review
+          llm: claude-opus-4
+        - name: merge
+          manual_approval: true
+    max_retries: 5
+planning:
+    llm: claude-opus-4
+epic_analysis:
+    llm: claude-sonnet-4
+sprint:
+    tasks_per_sprint: 10

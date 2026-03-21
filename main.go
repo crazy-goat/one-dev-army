@@ -18,6 +18,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/initialize"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"github.com/crazy-goat/one-dev-army/internal/preflight"
+	"github.com/crazy-goat/one-dev-army/internal/setup"
 	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
 
@@ -110,6 +111,11 @@ func runServe() error {
 	fmt.Println("Verifying GitHub setup...")
 	if err := gh.EnsureLabels(); err != nil {
 		return fmt.Errorf("ensuring labels: %w", err)
+	}
+
+	s := setup.New(dir, oc, cfg)
+	if err := s.CheckAndGenerate(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: setup check failed: %v\n", err)
 	}
 
 	worktreesDir := filepath.Join(dir, ".oda", "worktrees")
