@@ -27,10 +27,13 @@ type Project struct {
 func (c *Client) EnsureProject(name string) (Project, error) {
 	owner := strings.Split(c.Repo, "/")[0]
 
-	var projects []Project
-	err := c.ghJSON(&projects, "project", "list", "--owner", owner, "--format", "json")
+	out, err := c.ghNoRepo("project", "list", "--owner", owner, "--format", "json")
 	if err != nil {
 		return Project{}, fmt.Errorf("listing projects: %w", err)
+	}
+	var projects []Project
+	if err := json.Unmarshal(out, &projects); err != nil {
+		return Project{}, fmt.Errorf("parsing projects: %w", err)
 	}
 
 	for _, p := range projects {
@@ -39,7 +42,7 @@ func (c *Client) EnsureProject(name string) (Project, error) {
 		}
 	}
 
-	out, err := c.gh("project", "create", "--owner", owner, "--title", name, "--format", "json")
+	out, err = c.ghNoRepo("project", "create", "--owner", owner, "--title", name, "--format", "json")
 	if err != nil {
 		return Project{}, fmt.Errorf("creating project %s: %w", name, err)
 	}
@@ -69,7 +72,7 @@ func (c *Client) EnsureProjectColumns(projectID string, projectNumber int) error
 		Fields []field `json:"fields"`
 	}
 
-	out, err := c.gh("project", "field-list", fmt.Sprintf("%d", projectNumber),
+	out, err := c.ghNoRepo("project", "field-list", fmt.Sprintf("%d", projectNumber),
 		"--owner", owner, "--format", "json")
 	if err != nil {
 		return fmt.Errorf("listing project fields: %w", err)
@@ -123,7 +126,7 @@ func (c *Client) EnsureProjectColumns(projectID string, projectNumber int) error
 
 // createStatusField creates a new Status SINGLE_SELECT field with all columns.
 func (c *Client) createStatusField(projectID string, projectNumber int, owner string, options []string) error {
-	_, err := c.gh(
+	_, err := c.ghNoRepo(
 		"project", "field-create", fmt.Sprintf("%d", projectNumber),
 		"--owner", owner,
 		"--name", "Status",
@@ -155,7 +158,7 @@ func (c *Client) addStatusFieldOption(projectID, fieldID, optionName string) err
 		}
 	}`
 
-	_, err := c.gh("api", "graphql",
+	_, err := c.ghNoRepo("api", "graphql",
 		"-f", fmt.Sprintf("query=%s", query),
 		"-f", fmt.Sprintf("projectId=%s", projectID),
 		"-f", fmt.Sprintf("fieldId=%s", fieldID),
