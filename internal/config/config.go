@@ -45,6 +45,7 @@ type Tools struct {
 type Stage struct {
 	Name           string `yaml:"name"`
 	LLM            string `yaml:"llm,omitempty"`
+	Lint           bool   `yaml:"lint,omitempty"`
 	ManualApproval bool   `yaml:"manual_approval,omitempty"`
 }
 
