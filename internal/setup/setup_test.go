@@ -1,10 +1,8 @@
 package setup
 
 import (
-	"bufio"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
@@ -21,7 +19,6 @@ func TestCheckAgentsMD_Exists(t *testing.T) {
 		projectDir: dir,
 		oc:         opencode.NewClient("http://localhost:0"),
 		cfg:        &config.Config{},
-		reader:     bufio.NewReader(strings.NewReader("")),
 	}
 
 	if err := s.checkAgentsMD(); err != nil {
@@ -43,7 +40,6 @@ func TestCheckGitHubActions_Exists(t *testing.T) {
 		projectDir: dir,
 		oc:         opencode.NewClient("http://localhost:0"),
 		cfg:        &config.Config{},
-		reader:     bufio.NewReader(strings.NewReader("")),
 	}
 
 	if err := s.checkGitHubActions(); err != nil {
@@ -51,38 +47,10 @@ func TestCheckGitHubActions_Exists(t *testing.T) {
 	}
 }
 
-func TestPromptYesNo(t *testing.T) {
-	tests := []struct {
-		input string
-		want  bool
-	}{
-		{"\n", true},
-		{"y\n", true},
-		{"Y\n", true},
-		{"yes\n", true},
-		{"YES\n", true},
-		{"n\n", false},
-		{"N\n", false},
-		{"no\n", false},
-		{"NO\n", false},
-		{"nah\n", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			reader := bufio.NewReader(strings.NewReader(tt.input))
-			got := promptYesNo(reader)
-			if got != tt.want {
-				t.Errorf("promptYesNo(%q) = %v, want %v", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestExtractContent_PlainText(t *testing.T) {
 	msg := &opencode.Message{
 		Parts: []opencode.Part{
-			{Type: "text", Content: "Hello world"},
+			{Type: "text", Text: "Hello world"},
 		},
 	}
 
@@ -95,7 +63,7 @@ func TestExtractContent_PlainText(t *testing.T) {
 func TestExtractContent_CodeBlock(t *testing.T) {
 	msg := &opencode.Message{
 		Parts: []opencode.Part{
-			{Type: "text", Content: "Here is the file:\n```markdown\n# My Project\nSome content\n```\nDone."},
+			{Type: "text", Text: "Here is the file:\n```markdown\n# My Project\nSome content\n```\nDone."},
 		},
 	}
 
@@ -120,7 +88,7 @@ func TestExtractContent_EmptyParts(t *testing.T) {
 func TestExtractContent_NonTextPart(t *testing.T) {
 	msg := &opencode.Message{
 		Parts: []opencode.Part{
-			{Type: "tool_use", Content: "something"},
+			{Type: "tool_use", Text: "something"},
 		},
 	}
 

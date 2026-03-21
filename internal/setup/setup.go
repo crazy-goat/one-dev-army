@@ -18,7 +18,6 @@ type Setup struct {
 	projectDir string
 	oc         *opencode.Client
 	cfg        *config.Config
-	reader     *bufio.Reader
 }
 
 func New(projectDir string, oc *opencode.Client, cfg *config.Config) *Setup {
@@ -26,7 +25,6 @@ func New(projectDir string, oc *opencode.Client, cfg *config.Config) *Setup {
 		projectDir: projectDir,
 		oc:         oc,
 		cfg:        cfg,
-		reader:     bufio.NewReader(os.Stdin),
 	}
 }
 
@@ -48,25 +46,16 @@ func (s *Setup) checkAgentsMD() error {
 		return nil
 	}
 
-	fmt.Print("AGENTS.md not found. Generate using LLM? [Y/n]: ")
-	if !promptYesNo(s.reader) {
-		fmt.Println("Skipping AGENTS.md generation. You can generate it later.")
-		return nil
-	}
+	fmt.Println("AGENTS.md not found. Generating via opencode init...")
 
-	fmt.Println("Generating AGENTS.md...")
-
-	prompt := "Analyze this project and create an AGENTS.md file. " +
-		"Describe the project structure, build commands, test commands, and coding conventions. " +
-		"Return only the file content in a single markdown code block."
-
-	content, err := s.generateWithLLM("generate-agents-md", prompt)
+	session, err := s.oc.CreateSession("generate-agents-md")
 	if err != nil {
-		return fmt.Errorf("generating AGENTS.md: %w", err)
+		return fmt.Errorf("creating session: %w", err)
 	}
 
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return fmt.Errorf("writing AGENTS.md: %w", err)
+	model := opencode.ParseModelRef(s.cfg.Planning.LLM)
+	if err := s.oc.InitSession(session.ID, model); err != nil {
+		return fmt.Errorf("generating AGENTS.md: %w", err)
 	}
 
 	fmt.Println("AGENTS.md created.")
@@ -80,17 +69,19 @@ func (s *Setup) checkGitHubActions() error {
 	}
 
 	fmt.Print("No GitHub Actions workflow found. Generate CI using LLM? [Y/n]: ")
-	if !promptYesNo(s.reader) {
-		fmt.Println("Skipping CI workflow generation. You can generate it later.")
+	reader := bufio.NewReader(os.Stdin)
+	line, _ := reader.ReadString('\n')
+	line = strings.TrimSpace(strings.ToLower(line))
+	if line != "" && line != "y" && line != "yes" {
+		fmt.Println("Skipping CI workflow generation.")
 		return nil
 	}
 
 	fmt.Println("Generating CI workflow...")
 
-	prompt := "Analyze this project and create a GitHub Actions CI workflow file appropriate for the detected stack. " +
-		"Return only the YAML content in a single code block."
-
-	content, err := s.generateWithLLM("generate-ci-workflow", prompt)
+	content, err := s.generateWithLLM("generate-ci-workflow",
+		"Analyze this project and create a GitHub Actions CI workflow file appropriate for the detected stack. "+
+			"Return ONLY the YAML content in a single code block, nothing else.")
 	if err != nil {
 		return fmt.Errorf("generating CI workflow: %w", err)
 	}
@@ -114,7 +105,7 @@ func (s *Setup) generateWithLLM(title, prompt string) (string, error) {
 		return "", fmt.Errorf("creating session: %w", err)
 	}
 
-	msg, err := s.oc.SendMessage(session.ID, prompt, s.cfg.Planning.LLM)
+	msg, err := s.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(s.cfg.Planning.LLM), os.Stdout)
 	if err != nil {
 		return "", fmt.Errorf("sending message: %w", err)
 	}
@@ -124,26 +115,14 @@ func (s *Setup) generateWithLLM(title, prompt string) (string, error) {
 
 func extractContent(msg *opencode.Message) string {
 	for _, part := range msg.Parts {
-		if part.Type == "text" && part.Content != "" {
-			if matches := codeBlockRe.FindStringSubmatch(part.Content); len(matches) > 1 {
+		if part.Type == "text" && part.Text != "" {
+			if matches := codeBlockRe.FindStringSubmatch(part.Text); len(matches) > 1 {
 				return matches[1]
 			}
-			return part.Content
+			return part.Text
 		}
 	}
 	return ""
-}
-
-func promptYesNo(reader *bufio.Reader) bool {
-	line, _ := reader.ReadString('\n')
-	line = strings.TrimSpace(line)
-
-	switch strings.ToLower(line) {
-	case "", "y", "yes":
-		return true
-	default:
-		return false
-	}
 }
 
 func fileExists(path string) bool {
