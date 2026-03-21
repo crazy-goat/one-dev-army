@@ -21,6 +21,20 @@ ODA acts as your Scrum Master + Product Owner:
 - [gh CLI](https://cli.github.com) (authenticated)
 - Git
 
+### GitHub CLI permissions
+
+ODA manages GitHub Projects (board, columns) on your behalf. The default `gh` token does not include project scopes. Add them once:
+
+```bash
+gh auth refresh -s project
+```
+
+Required scopes:
+| Scope | Purpose |
+|-------|---------|
+| `repo` | Read/write issues, PRs, labels, milestones |
+| `project` | Read/write GitHub Projects v2 (board, columns) |
+
 ## Quick Start
 
 ```bash
