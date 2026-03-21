@@ -106,7 +106,16 @@ func runServe() error {
 	defer store.Close()
 
 	oc := opencode.NewClient(cfg.OpenCode.URL)
+	oc.SetDirectory(dir)
 	gh := github.NewClient(cfg.GitHub.Repo)
+
+	fmt.Println("Validating configured models...")
+	configModels := collectConfigModels(cfg)
+	if err := oc.ValidateModels(configModels); err != nil {
+		return err
+	}
+	fmt.Println("  ✓ all models available")
+	fmt.Println()
 
 	fmt.Println("Verifying GitHub setup...")
 	if err := gh.EnsureLabels(); err != nil {
@@ -115,7 +124,7 @@ func runServe() error {
 
 	s := setup.New(dir, oc, cfg)
 	if err := s.CheckAndGenerate(); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: setup check failed: %v\n", err)
+		return fmt.Errorf("setup check failed: %w", err)
 	}
 
 	worktreesDir := filepath.Join(dir, ".oda", "worktrees")
@@ -184,4 +193,25 @@ func runServe() error {
 	}
 
 	return nil
+}
+
+func collectConfigModels(cfg *config.Config) []opencode.ModelRef {
+	seen := make(map[string]bool)
+	var models []opencode.ModelRef
+
+	add := func(llm string) {
+		if llm == "" || seen[llm] {
+			return
+		}
+		seen[llm] = true
+		models = append(models, opencode.ParseModelRef(llm))
+	}
+
+	for _, stage := range cfg.Pipeline.Stages {
+		add(stage.LLM)
+	}
+	add(cfg.Planning.LLM)
+	add(cfg.EpicAnalysis.LLM)
+
+	return models
 }
