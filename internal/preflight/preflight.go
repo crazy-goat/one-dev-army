@@ -105,7 +105,7 @@ func CheckConfig(dir string) error {
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf(
 			"config not found at %s\n\n"+
-				"  Create .oda/config.yaml in your project root",
+				"  Run: oda init",
 			path,
 		)
 	}

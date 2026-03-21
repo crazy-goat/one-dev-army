@@ -1,6 +1,9 @@
 package github
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+)
 
 type Label struct {
 	Name  string
@@ -25,11 +28,57 @@ var RequiredLabels = []Label{
 }
 
 func (c *Client) EnsureLabels() error {
+	existing, _ := c.listLabels()
+	existingSet := make(map[string]bool, len(existing))
+	for _, name := range existing {
+		existingSet[name] = true
+	}
+
+	var missing []Label
 	for _, l := range RequiredLabels {
-		_, err := c.gh("label", "create", l.Name, "--color", l.Color, "--force")
-		if err != nil {
-			return fmt.Errorf("creating label %s: %w", l.Name, err)
+		if !existingSet[l.Name] {
+			missing = append(missing, l)
 		}
 	}
+
+	if len(missing) == 0 {
+		return nil
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, len(missing))
+
+	for _, l := range missing {
+		wg.Add(1)
+		go func(l Label) {
+			defer wg.Done()
+			_, err := c.gh("label", "create", l.Name, "--color", l.Color, "--force")
+			if err != nil {
+				errs <- fmt.Errorf("creating label %s: %w", l.Name, err)
+			}
+		}(l)
+	}
+
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		return err
+	}
 	return nil
+}
+
+func (c *Client) listLabels() ([]string, error) {
+	var labels []struct {
+		Name string `json:"name"`
+	}
+	err := c.ghJSON(&labels, "label", "list", "--json", "name", "--limit", "200")
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, len(labels))
+	for i, l := range labels {
+		names[i] = l.Name
+	}
+	return names, nil
 }
