@@ -25,6 +25,16 @@ func (c *Client) gh(args ...string) ([]byte, error) {
 	return out, nil
 }
 
+// ghNoRepo runs gh without the -R flag, for commands that don't support it (e.g. gh project).
+func (c *Client) ghNoRepo(args ...string) ([]byte, error) {
+	cmd := exec.Command("gh", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("gh %s: %w\n%s", strings.Join(args, " "), err, out)
+	}
+	return out, nil
+}
+
 func (c *Client) ghJSON(result interface{}, args ...string) error {
 	out, err := c.gh(args...)
 	if err != nil {

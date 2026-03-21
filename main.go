@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -164,6 +165,18 @@ func runServe() error {
 	fmt.Println("Verifying GitHub setup...")
 	if err := gh.EnsureLabels(); err != nil {
 		return fmt.Errorf("ensuring labels: %w", err)
+	}
+
+	projectName := cfg.GitHub.Repo
+	if idx := strings.LastIndex(projectName, "/"); idx >= 0 {
+		projectName = projectName[idx+1:]
+	}
+	project, err := gh.EnsureProject(projectName)
+	if err != nil {
+		return fmt.Errorf("ensuring project: %w", err)
+	}
+	if err := gh.EnsureProjectColumns(project.ID, project.Number); err != nil {
+		return fmt.Errorf("ensuring project columns: %w", err)
 	}
 
 	s := setup.New(dir, oc, cfg)

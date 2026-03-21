@@ -24,3 +24,6 @@ Thumbs.db
 .oda/metrics.db-wal
 .oda/worktrees/
 one-dev-army
+
+# Git worktrees
+.worktrees/
