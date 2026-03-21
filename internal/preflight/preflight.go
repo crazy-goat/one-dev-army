@@ -81,6 +81,13 @@ func CheckGhAuth() error {
 	return nil
 }
 
+func CheckOpencodeInstalled() error {
+	if _, err := exec.LookPath("opencode"); err != nil {
+		return fmt.Errorf("opencode binary not found in PATH\n\n%s", opencodeInstallInstructions())
+	}
+	return nil
+}
+
 func CheckOpencode(url string) error {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(url + "/global/health")

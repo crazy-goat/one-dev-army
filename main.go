@@ -77,8 +77,10 @@ func runServe() error {
 		return fmt.Errorf("getting working directory: %w", err)
 	}
 
+	const opencodeURL = "http://localhost:4096"
+
 	fmt.Println("Running preflight checks...")
-	results := preflight.RunAll(dir, "http://localhost:4096")
+	results := preflight.RunAll(dir, opencodeURL)
 	allOK := true
 	for _, r := range results {
 		if r.OK {
@@ -88,7 +90,49 @@ func runServe() error {
 			allOK = false
 		}
 	}
+
+	// If opencode is not reachable, try to auto-start it.
+	var spawnedServer *opencode.Server
 	if !allOK {
+		opencodeOK := true
+		for _, r := range results {
+			if r.Name == "opencode" && !r.OK {
+				opencodeOK = false
+				break
+			}
+		}
+
+		if !opencodeOK {
+			// Check if opencode binary is installed before trying to start it.
+			if err := preflight.CheckOpencodeInstalled(); err != nil {
+				return err
+			}
+
+			fmt.Println("  → opencode not running, starting opencode serve...")
+			spawnedServer, err = opencode.StartServer(opencodeURL, dir, 10*time.Second)
+			if err != nil {
+				return fmt.Errorf("auto-starting opencode serve: %w\n\n  Start manually: opencode serve", err)
+			}
+			fmt.Println("  ✓ opencode serve started")
+
+			// Re-run preflight now that opencode is up.
+			results = preflight.RunAll(dir, opencodeURL)
+			allOK = true
+			for _, r := range results {
+				if r.OK {
+					fmt.Printf("  ✓ %s\n", r.Name)
+				} else {
+					fmt.Printf("  ✗ %s: %s\n", r.Name, r.Message)
+					allOK = false
+				}
+			}
+		}
+	}
+
+	if !allOK {
+		if spawnedServer != nil {
+			_ = spawnedServer.Stop()
+		}
 		return fmt.Errorf("preflight checks failed")
 	}
 	fmt.Println()
@@ -190,6 +234,13 @@ func runServe() error {
 	defer shutdownCancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutting down dashboard: %w", err)
+	}
+
+	if spawnedServer != nil {
+		fmt.Println("Stopping opencode serve...")
+		if err := spawnedServer.Stop(); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: stopping opencode serve: %v\n", err)
+		}
 	}
 
 	return nil
