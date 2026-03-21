@@ -41,6 +41,7 @@ func (c *Client) EnsureProject(name string) (Project, error) {
 
 	for _, p := range projects {
 		if p.Title == name {
+			c.LinkProjectToRepo(p.Number)
 			return p, nil
 		}
 	}
@@ -54,7 +55,19 @@ func (c *Client) EnsureProject(name string) (Project, error) {
 	if err := parseJSON(out, &created); err != nil {
 		return Project{}, err
 	}
+
+	// Link the new project to the repo so it appears in the repo's Projects tab.
+	c.LinkProjectToRepo(created.Number)
+
 	return created, nil
+}
+
+// LinkProjectToRepo links the project to the configured repository.
+// Errors are ignored — linking is best-effort (project works without it).
+func (c *Client) LinkProjectToRepo(projectNumber int) {
+	owner := strings.Split(c.Repo, "/")[0]
+	c.ghNoRepo("project", "link", fmt.Sprintf("%d", projectNumber),
+		"--owner", owner, "--repo", c.Repo)
 }
 
 // EnsureProjectColumns ensures the project's Status field contains all
