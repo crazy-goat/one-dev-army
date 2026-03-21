@@ -71,23 +71,24 @@ func (c *Client) setupProject(projectNumber int) {
 	c.ghNoRepo("project", "edit", num, "--owner", owner, "--visibility", "PUBLIC")
 }
 
+type fieldOption struct {
+	Name string `json:"name"`
+}
+
+type projectField struct {
+	ID      string        `json:"id"`
+	Name    string        `json:"name"`
+	Options []fieldOption `json:"options"`
+}
+
+type fieldList struct {
+	Fields []projectField `json:"fields"`
+}
+
 // EnsureProjectColumns ensures the project's Status field contains all
-// required columns. Missing options are added via GraphQL API.
+// required columns in the correct order. Overwrites options if they differ.
 func (c *Client) EnsureProjectColumns(projectID string, projectNumber int) error {
 	owner := strings.Split(c.Repo, "/")[0]
-
-	// Fetch existing fields via gh project field-list.
-	type fieldOption struct {
-		Name string `json:"name"`
-	}
-	type field struct {
-		ID      string        `json:"id"`
-		Name    string        `json:"name"`
-		Options []fieldOption `json:"options"`
-	}
-	type fieldList struct {
-		Fields []field `json:"fields"`
-	}
 
 	out, err := c.ghNoRepo("project", "field-list", fmt.Sprintf("%d", projectNumber),
 		"--owner", owner, "--format", "json")
@@ -101,7 +102,7 @@ func (c *Client) EnsureProjectColumns(projectID string, projectNumber int) error
 	}
 
 	// Find the Status field.
-	var statusField *field
+	var statusField *projectField
 	for i := range fl.Fields {
 		if fl.Fields[i].Name == "Status" {
 			statusField = &fl.Fields[i]
@@ -114,31 +115,26 @@ func (c *Client) EnsureProjectColumns(projectID string, projectNumber int) error
 		return c.createStatusField(projectID, projectNumber, owner, ProjectColumns)
 	}
 
-	// Determine which options are missing.
-	existing := make(map[string]bool, len(statusField.Options))
-	for _, o := range statusField.Options {
-		existing[o.Name] = true
-	}
-
-	var missing []string
-	for _, col := range ProjectColumns {
-		if !existing[col] {
-			missing = append(missing, col)
-		}
-	}
-
-	if len(missing) == 0 {
+	// Check if options match exactly (same names, same order).
+	if optionsMatch(statusField.Options, ProjectColumns) {
 		return nil
 	}
 
-	// Build full list: existing + missing, then update in one call.
-	allOptions := make([]string, 0, len(statusField.Options)+len(missing))
-	for _, o := range statusField.Options {
-		allOptions = append(allOptions, o.Name)
-	}
-	allOptions = append(allOptions, missing...)
+	// Options differ — overwrite with the canonical set.
+	return c.updateStatusFieldOptions(statusField.ID, ProjectColumns)
+}
 
-	return c.updateStatusFieldOptions(statusField.ID, allOptions)
+// optionsMatch returns true if the existing options match the expected list exactly.
+func optionsMatch(existing []fieldOption, expected []string) bool {
+	if len(existing) != len(expected) {
+		return false
+	}
+	for i, o := range existing {
+		if o.Name != expected[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // createStatusField creates a new Status SINGLE_SELECT field with all columns.
@@ -156,12 +152,26 @@ func (c *Client) createStatusField(projectID string, projectNumber int, owner st
 	return nil
 }
 
+// columnColors maps column names to GitHub project colors.
+var columnColors = map[string]string{
+	"Backlog":     "GRAY",
+	"In Progress": "BLUE",
+	"Review":      "YELLOW",
+	"Merging":     "PURPLE",
+	"Done":        "GREEN",
+	"Blocked":     "RED",
+}
+
 // updateStatusFieldOptions replaces all options on the Status field in one GraphQL call.
 func (c *Client) updateStatusFieldOptions(fieldID string, options []string) error {
 	// Build inline options list for the mutation.
 	var opts []string
 	for _, name := range options {
-		opts = append(opts, fmt.Sprintf(`{name: %q, color: GRAY, description: ""}`, name))
+		color := columnColors[name]
+		if color == "" {
+			color = "GRAY"
+		}
+		opts = append(opts, fmt.Sprintf(`{name: %q, color: %s, description: ""}`, name, color))
 	}
 	query := fmt.Sprintf(`mutation {
 		updateProjectV2Field(input: {
