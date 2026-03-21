@@ -1,0 +1,29 @@
+{{template "layout" .}}
+{{define "content"}}
+<style>
+.costs-placeholder{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:2rem;text-align:center;color:var(--muted)}
+.costs-table{width:100%;border-collapse:collapse;margin-top:1rem}
+.costs-table th,.costs-table td{text-align:left;padding:.6rem .75rem;border-bottom:1px solid var(--border);font-size:.85rem}
+.costs-table th{color:var(--muted);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em}
+</style>
+
+<h1>Costs &amp; Reports</h1>
+
+<div class="costs-placeholder">
+  <p>Cost tracking will appear here once sprints are executed.</p>
+  <table class="costs-table" style="margin-top:1.5rem;text-align:left">
+    <thead>
+      <tr>
+        <th>Sprint</th>
+        <th>Tasks</th>
+        <th>Tokens In</th>
+        <th>Tokens Out</th>
+        <th>Cost (USD)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td colspan="5" style="color:var(--muted);text-align:center;padding:1.5rem">No data yet</td></tr>
+    </tbody>
+  </table>
+</div>
+{{end}}

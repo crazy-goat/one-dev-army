@@ -1,0 +1,106 @@
+{{template "layout" .}}
+{{define "content"}}
+<style>
+.board-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+.board-actions{display:flex;gap:.5rem}
+.board{display:grid;grid-template-columns:repeat(6,1fr);gap:1rem;margin-bottom:2rem}
+.column{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem;min-height:300px}
+.column-title{font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.75rem;display:flex;justify-content:space-between;align-items:center}
+.column-title .count{background:var(--border);padding:.1rem .5rem;border-radius:10px;font-size:.75rem}
+.card{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.6rem .75rem;margin-bottom:.5rem;font-size:.85rem}
+.card .card-id{color:var(--muted);font-size:.75rem}
+.card .card-title{margin-top:.2rem}
+.card .card-worker{color:var(--accent);font-size:.75rem;margin-top:.3rem}
+.card-actions{display:flex;gap:.3rem;margin-top:.4rem}
+.card-actions .btn{padding:.2rem .5rem;font-size:.75rem}
+.col-blocked .card{border-color:var(--red)}
+.workers-panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem}
+.workers-panel h2{margin-bottom:.75rem}
+</style>
+
+<div class="board-header">
+  <h1>Sprint Board</h1>
+  <div class="board-actions">
+    <form method="post" action="/sync" style="display:inline">
+      <button type="submit" class="btn">Sync</button>
+    </form>
+    <form method="post" action="/plan-sprint" style="display:inline">
+      <button type="submit" class="btn btn-primary">Plan Sprint</button>
+    </form>
+  </div>
+</div>
+
+<div class="board">
+  <div class="column">
+    <div class="column-title">Backlog <span class="count">{{len .Backlog}}</span></div>
+    {{range .Backlog}}
+    <div class="card">
+      <div class="card-id">#{{.ID}}</div>
+      <div class="card-title">{{.Title}}</div>
+    </div>
+    {{end}}
+  </div>
+
+  <div class="column">
+    <div class="column-title">In Progress <span class="count">{{len .Progress}}</span></div>
+    {{range .Progress}}
+    <div class="card">
+      <div class="card-id">#{{.ID}}</div>
+      <div class="card-title">{{.Title}}</div>
+      {{if .Worker}}<div class="card-worker">{{.Worker}}</div>{{end}}
+    </div>
+    {{end}}
+  </div>
+
+  <div class="column">
+    <div class="column-title">Review <span class="count">{{len .Review}}</span></div>
+    {{range .Review}}
+    <div class="card">
+      <div class="card-id">#{{.ID}}</div>
+      <div class="card-title">{{.Title}}</div>
+    </div>
+    {{end}}
+  </div>
+
+  <div class="column">
+    <div class="column-title">Merging <span class="count">{{len .Merging}}</span></div>
+    {{range .Merging}}
+    <div class="card">
+      <div class="card-id">#{{.ID}}</div>
+      <div class="card-title">{{.Title}}</div>
+    </div>
+    {{end}}
+  </div>
+
+  <div class="column">
+    <div class="column-title">Done <span class="count">{{len .Done}}</span></div>
+    {{range .Done}}
+    <div class="card">
+      <div class="card-id">#{{.ID}}</div>
+      <div class="card-title">{{.Title}}</div>
+    </div>
+    {{end}}
+  </div>
+
+  <div class="column col-blocked">
+    <div class="column-title">Blocked <span class="count">{{len .Blocked}}</span></div>
+    {{range .Blocked}}
+    <div class="card">
+      <div class="card-id">#{{.ID}}</div>
+      <div class="card-title">{{.Title}}</div>
+      <div class="card-actions">
+        <form method="post" action="/approve/{{.ID}}"><button type="submit" class="btn btn-success">Approve</button></form>
+        <form method="post" action="/reject/{{.ID}}"><button type="submit" class="btn btn-danger">Reject</button></form>
+      </div>
+    </div>
+    {{end}}
+  </div>
+</div>
+
+<div class="workers-panel">
+  <h2>Workers</h2>
+  <div id="workers" hx-get="/api/workers" hx-trigger="every 2s" hx-swap="innerHTML">
+    <p style="color:var(--muted);font-size:.85rem">Loading worker status...</p>
+  </div>
+</div>
+{{end}}
