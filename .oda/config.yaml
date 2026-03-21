@@ -9,23 +9,23 @@ opencode:
 pipeline:
     stages:
         - name: analysis
-          llm: claude-sonnet-4
+          llm: nexos-ai/Kimi K2.5
         - name: planning
-          llm: claude-opus-4
+          llm: nexos-ai/Kimi K2.5
         - name: plan-review
-          llm: claude-opus-4
+          llm: nexos-ai/Kimi K2.5
         - name: coding
-          llm: claude-sonnet-4
+          llm: nexos-ai/Kimi K2.5
         - name: testing
-          llm: claude-sonnet-4
+          llm: nexos-ai/Kimi K2.5
         - name: code-review
-          llm: claude-opus-4
+          llm: nexos-ai/Kimi K2.5
         - name: merge
           manual_approval: true
     max_retries: 5
 planning:
-    llm: claude-opus-4
+    llm: nexos-ai/Kimi K2.5
 epic_analysis:
-    llm: claude-sonnet-4
+    llm: nexos-ai/Kimi K2.5
 sprint:
     tasks_per_sprint: 10
