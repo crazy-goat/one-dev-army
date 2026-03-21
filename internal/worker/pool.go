@@ -12,6 +12,12 @@ type TaskQueue interface {
 	MarkBlocked(taskID int, reason string) error
 }
 
+type EmptyQueue struct{}
+
+func (q *EmptyQueue) Next() (*Task, error)                   { return nil, nil }
+func (q *EmptyQueue) MarkDone(taskID int) error              { return nil }
+func (q *EmptyQueue) MarkBlocked(taskID int, _ string) error { return nil }
+
 type TaskProcessor interface {
 	Process(ctx context.Context, worker *Worker, task *Task) error
 }

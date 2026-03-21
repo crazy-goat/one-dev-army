@@ -127,7 +127,7 @@ func runServe() error {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 	fmt.Printf("Starting %d workers...\n", cfg.Workers.Count)
-	pool := worker.NewPool(cfg.Workers.Count, nil, processor)
+	pool := worker.NewPool(cfg.Workers.Count, &worker.EmptyQueue{}, processor)
 	pool.Start(ctx)
 
 	srv, err := dashboard.NewServer(cfg.Dashboard.Port, store, pool.Workers)
@@ -165,9 +165,6 @@ func runServe() error {
 		}()
 
 		<-workersDone
-		fmt.Println("All workers finished.")
-
-	case <-workersDone:
 		fmt.Println("All workers finished.")
 
 	case err := <-srvErrCh:
