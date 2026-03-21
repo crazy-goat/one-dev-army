@@ -1,4 +1,4 @@
-module github.com/one-dev-army/oda
+module github.com/crazy-goat/one-dev-army
 
 go 1.25.0
 

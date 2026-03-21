@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/one-dev-army/oda/internal/pipeline"
+	"github.com/crazy-goat/one-dev-army/internal/pipeline"
 )
 
 func TestStageProgression(t *testing.T) {

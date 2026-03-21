@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/one-dev-army/oda/internal/worker"
+	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
 
 type taskCard struct {

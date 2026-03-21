@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/one-dev-army/oda/internal/config"
-	"github.com/one-dev-army/oda/internal/db"
-	"github.com/one-dev-army/oda/internal/github"
-	"github.com/one-dev-army/oda/internal/opencode"
+	"github.com/crazy-goat/one-dev-army/internal/config"
+	"github.com/crazy-goat/one-dev-army/internal/db"
+	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
 type Sprint struct {

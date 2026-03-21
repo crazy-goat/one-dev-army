@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/one-dev-army/oda/internal/github"
-	"github.com/one-dev-army/oda/internal/opencode"
+	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"gopkg.in/yaml.v3"
 )
 

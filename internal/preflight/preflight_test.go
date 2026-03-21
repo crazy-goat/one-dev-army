@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/one-dev-army/oda/internal/preflight"
+	"github.com/crazy-goat/one-dev-army/internal/preflight"
 )
 
 func TestCheckGitRepo_NoGitDir(t *testing.T) {

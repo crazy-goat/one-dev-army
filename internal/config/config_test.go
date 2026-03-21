@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/one-dev-army/oda/internal/config"
+	"github.com/crazy-goat/one-dev-army/internal/config"
 )
 
 const validConfig = `github:

@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/one-dev-army/oda/internal/opencode"
+	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
 func TestHealthCheck(t *testing.T) {

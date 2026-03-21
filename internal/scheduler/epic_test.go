@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/one-dev-army/oda/internal/config"
-	"github.com/one-dev-army/oda/internal/opencode"
+	"github.com/crazy-goat/one-dev-army/internal/config"
+	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
 func TestEpicAnalyzer_ParseResponse(t *testing.T) {

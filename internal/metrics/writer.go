@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/one-dev-army/oda/internal/db"
-	"github.com/one-dev-army/oda/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/db"
+	"github.com/crazy-goat/one-dev-army/internal/github"
 )
 
 type Writer struct {

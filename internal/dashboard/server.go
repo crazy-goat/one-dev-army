@@ -7,8 +7,8 @@ import (
 	"html/template"
 	"net/http"
 
-	"github.com/one-dev-army/oda/internal/db"
-	"github.com/one-dev-army/oda/internal/worker"
+	"github.com/crazy-goat/one-dev-army/internal/db"
+	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
 
 //go:embed templates/*.html

@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/one-dev-army/oda/internal/config"
-	"github.com/one-dev-army/oda/internal/db"
-	"github.com/one-dev-army/oda/internal/git"
-	"github.com/one-dev-army/oda/internal/github"
-	"github.com/one-dev-army/oda/internal/opencode"
-	"github.com/one-dev-army/oda/internal/pipeline"
+	"github.com/crazy-goat/one-dev-army/internal/config"
+	"github.com/crazy-goat/one-dev-army/internal/db"
+	"github.com/crazy-goat/one-dev-army/internal/git"
+	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/opencode"
+	"github.com/crazy-goat/one-dev-army/internal/pipeline"
 )
 
 const maxSlugLen = 50
