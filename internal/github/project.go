@@ -31,10 +31,13 @@ func (c *Client) EnsureProject(name string) (Project, error) {
 	if err != nil {
 		return Project{}, fmt.Errorf("listing projects: %w", err)
 	}
-	var projects []Project
-	if err := json.Unmarshal(out, &projects); err != nil {
+	var result struct {
+		Projects []Project `json:"projects"`
+	}
+	if err := json.Unmarshal(out, &result); err != nil {
 		return Project{}, fmt.Errorf("parsing projects: %w", err)
 	}
+	projects := result.Projects
 
 	for _, p := range projects {
 		if p.Title == name {
