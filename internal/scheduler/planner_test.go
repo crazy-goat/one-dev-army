@@ -2,9 +2,11 @@ package scheduler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
@@ -128,21 +130,60 @@ func TestPlanSprint_Integration(t *testing.T) {
 	planJSON, _ := json.Marshal(planResponse)
 
 	callCount := 0
+
+	type planSSEClient struct {
+		w       http.ResponseWriter
+		flusher http.Flusher
+	}
+	var sseMu sync.Mutex
+	var sseClients []*planSSEClient
+
+	broadcast := func(data string) {
+		sseMu.Lock()
+		defer sseMu.Unlock()
+		for _, c := range sseClients {
+			fmt.Fprintf(c.w, "data: %s\n\n", data)
+			c.flusher.Flush()
+		}
+	}
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/event" && r.Method == http.MethodGet {
+			flusher, ok := w.(http.Flusher)
+			if !ok {
+				http.Error(w, "streaming not supported", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
+			flusher.Flush()
+
+			c := &planSSEClient{w: w, flusher: flusher}
+			sseMu.Lock()
+			sseClients = append(sseClients, c)
+			sseMu.Unlock()
+
+			<-r.Context().Done()
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 
 		switch {
 		case r.URL.Path == "/session" && r.Method == http.MethodPost:
 			json.NewEncoder(w).Encode(opencode.Session{ID: "sess-plan", Title: "sprint-planning"})
 
-		case strings.HasSuffix(r.URL.Path, "/message") && r.Method == http.MethodPost:
+		case strings.HasSuffix(r.URL.Path, "/prompt_async") && r.Method == http.MethodPost:
 			callCount++
-			json.NewEncoder(w).Encode(opencode.Message{
-				Info: opencode.MessageInfo{ID: "msg-1", SessionID: "sess-plan", Role: "assistant"},
-				Parts: []opencode.Part{
-					{Type: "text", Content: string(planJSON)},
-				},
-			})
+			escapedJSON := strings.ReplaceAll(string(planJSON), `"`, `\"`)
+			w.WriteHeader(http.StatusNoContent)
+			go func() {
+				broadcast(`{"type":"message.updated","properties":{"info":{"id":"msg-1","sessionID":"sess-plan","role":"assistant"}}}`)
+				broadcast(fmt.Sprintf(`{"type":"message.part.delta","properties":{"sessionID":"sess-plan","messageID":"msg-1","partID":"prt-1","field":"text","delta":"%s"}}`, escapedJSON))
+				broadcast(`{"type":"session.status","properties":{"sessionID":"sess-plan","status":{"type":"idle"}}}`)
+			}()
 
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -171,7 +212,7 @@ func TestPlanSprint_Integration(t *testing.T) {
 		{Number: 5, Title: "Task B", Labels: []label{{Name: "size:M"}}},
 	}, cfg.Sprint.TasksPerSprint)
 
-	msg, err := planner.oc.SendMessage(session.ID, prompt, cfg.Planning.LLM)
+	msg, err := planner.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(cfg.Planning.LLM), nil)
 	if err != nil {
 		t.Fatalf("sending message: %v", err)
 	}

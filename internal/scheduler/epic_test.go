@@ -2,10 +2,12 @@ package scheduler
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
@@ -38,33 +40,73 @@ func TestEpicAnalyzer_ParseResponse(t *testing.T) {
 	}
 
 	callCount := 0
+
+	type sseClient struct {
+		w       http.ResponseWriter
+		flusher http.Flusher
+	}
+	var sseMu sync.Mutex
+	var sseClients []*sseClient
+
+	broadcast := func(data string) {
+		sseMu.Lock()
+		defer sseMu.Unlock()
+		for _, c := range sseClients {
+			fmt.Fprintf(c.w, "data: %s\n\n", data)
+			c.flusher.Flush()
+		}
+	}
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/event" && r.Method == http.MethodGet {
+			flusher, ok := w.(http.Flusher)
+			if !ok {
+				http.Error(w, "streaming not supported", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
+			flusher.Flush()
+
+			c := &sseClient{w: w, flusher: flusher}
+			sseMu.Lock()
+			sseClients = append(sseClients, c)
+			sseMu.Unlock()
+
+			<-r.Context().Done()
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 
 		switch {
 		case r.URL.Path == "/session" && r.Method == http.MethodPost:
 			json.NewEncoder(w).Encode(opencode.Session{ID: "sess-epic", Title: "epic-analysis"})
 
-		case strings.HasSuffix(r.URL.Path, "/message") && r.Method == http.MethodPost:
+		case strings.HasSuffix(r.URL.Path, "/prompt_async") && r.Method == http.MethodPost:
 			callCount++
 			body, _ := io.ReadAll(r.Body)
 			var req opencode.SendMessageRequest
 			if err := json.Unmarshal(body, &req); err != nil {
 				t.Fatalf("unmarshaling request: %v", err)
 			}
-			if req.Model != "test-model" {
-				t.Errorf("model = %q, want %q", req.Model, "test-model")
+			if req.Model == nil || req.Model.ModelID != "test-model" {
+				t.Errorf("model = %+v, want modelID=test-model", req.Model)
 			}
-			if !strings.Contains(req.Parts[0].Content, "Build a user management system") {
+			if !strings.Contains(req.Parts[0].Text, "Build a user management system") {
 				t.Errorf("prompt should contain epic description")
 			}
 
-			json.NewEncoder(w).Encode(opencode.Message{
-				Info: opencode.MessageInfo{ID: "msg-1", SessionID: "sess-epic", Role: "assistant"},
-				Parts: []opencode.Part{
-					{Type: "text", Content: string(responseJSON)},
-				},
-			})
+			w.WriteHeader(http.StatusNoContent)
+
+			escapedJSON := strings.ReplaceAll(string(responseJSON), `"`, `\"`)
+			go func() {
+				broadcast(fmt.Sprintf(`{"type":"message.updated","properties":{"info":{"id":"msg-1","sessionID":"sess-epic","role":"assistant"}}}`))
+				broadcast(fmt.Sprintf(`{"type":"message.part.delta","properties":{"sessionID":"sess-epic","messageID":"msg-1","partID":"prt-1","field":"text","delta":"%s"}}`, escapedJSON))
+				broadcast(`{"type":"session.status","properties":{"sessionID":"sess-epic","status":{"type":"idle"}}}`)
+			}()
 
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -245,8 +287,8 @@ func TestExtractJSON_NoJSON(t *testing.T) {
 func TestExtractTextContent(t *testing.T) {
 	msg := &opencode.Message{
 		Parts: []opencode.Part{
-			{Type: "tool_call", Content: ""},
-			{Type: "text", Content: "hello world"},
+			{Type: "tool_call", Text: ""},
+			{Type: "text", Text: "hello world"},
 		},
 	}
 	result := extractTextContent(msg)
@@ -258,7 +300,7 @@ func TestExtractTextContent(t *testing.T) {
 func TestExtractTextContent_Empty(t *testing.T) {
 	msg := &opencode.Message{
 		Parts: []opencode.Part{
-			{Type: "tool_call", Content: "something"},
+			{Type: "tool_call", Text: "something"},
 		},
 	}
 	result := extractTextContent(msg)

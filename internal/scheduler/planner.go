@@ -3,6 +3,7 @@ package scheduler
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
@@ -10,6 +11,10 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
+
+const automatedPipelineNotice = "CRITICAL: You are running in a fully automated pipeline with NO human operator. " +
+	"NEVER ask questions, request clarification, or wait for input - nobody will answer and the pipeline will hang forever. " +
+	"Make your best judgment and produce output immediately.\n\n"
 
 type Sprint struct {
 	ID        int
@@ -44,8 +49,8 @@ func (p *Planner) PlanSprint() (*Sprint, error) {
 		return nil, fmt.Errorf("creating planning session: %w", err)
 	}
 
-	prompt := buildSprintPrompt(issues, p.cfg.Sprint.TasksPerSprint)
-	msg, err := p.oc.SendMessage(session.ID, prompt, p.cfg.Planning.LLM)
+	prompt := automatedPipelineNotice + buildSprintPrompt(issues, p.cfg.Sprint.TasksPerSprint)
+	msg, err := p.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(p.cfg.Planning.LLM), os.Stdout)
 	if err != nil {
 		return nil, fmt.Errorf("sending planning prompt: %w", err)
 	}
@@ -119,7 +124,7 @@ func (p *Planner) AnalyzeInsights(sprintID int) error {
 	}
 
 	prompt := buildInsightPrompt(allInsights)
-	msg, err := p.oc.SendMessage(session.ID, prompt, p.cfg.Planning.LLM)
+	msg, err := p.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(p.cfg.Planning.LLM), os.Stdout)
 	if err != nil {
 		return fmt.Errorf("sending insight prompt: %w", err)
 	}
@@ -194,6 +199,7 @@ func buildSprintPrompt(issues []github.Issue, maxTasks int) string {
 	}
 
 	b.WriteString("\nConsider task dependencies and sizes when selecting.\n")
+	b.WriteString("Do NOT ask any questions - just produce the output.\n")
 	b.WriteString("Respond with JSON: {\"task_ids\": [1, 2, 3]}\n")
 	b.WriteString("Respond ONLY with the JSON object, no other text.")
 
@@ -234,7 +240,8 @@ func buildInsightPrompt(insights []string) string {
 		b.WriteString(insight)
 		b.WriteString("\n")
 	}
-	b.WriteString("\nRespond with JSON:\n")
+	b.WriteString("\nDo NOT ask any questions - just produce the output.\n")
+	b.WriteString("Respond with JSON:\n")
 	b.WriteString(`{"concrete_ideas": [{"title": "...", "description": "..."}], "observations": ["..."]}`)
 	b.WriteString("\nRespond ONLY with the JSON object, no other text.")
 	return b.String()
