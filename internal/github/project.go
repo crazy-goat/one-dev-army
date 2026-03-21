@@ -117,14 +117,14 @@ func (c *Client) EnsureProjectColumns(projectID string, projectNumber int) error
 		return nil
 	}
 
-	// Add missing options via GraphQL.
-	for _, name := range missing {
-		if err := c.addStatusFieldOption(projectID, statusField.ID, name); err != nil {
-			return fmt.Errorf("adding status option %q: %w", name, err)
-		}
+	// Build full list: existing + missing, then update in one call.
+	allOptions := make([]string, 0, len(statusField.Options)+len(missing))
+	for _, o := range statusField.Options {
+		allOptions = append(allOptions, o.Name)
 	}
+	allOptions = append(allOptions, missing...)
 
-	return nil
+	return c.updateStatusFieldOptions(statusField.ID, allOptions)
 }
 
 // createStatusField creates a new Status SINGLE_SELECT field with all columns.
@@ -142,33 +142,27 @@ func (c *Client) createStatusField(projectID string, projectNumber int, owner st
 	return nil
 }
 
-// addStatusFieldOption adds a single option to an existing SINGLE_SELECT field
-// using the GitHub GraphQL API.
-func (c *Client) addStatusFieldOption(projectID, fieldID, optionName string) error {
-	query := `mutation($projectId: ID!, $fieldId: ID!, $name: String!) {
+// updateStatusFieldOptions replaces all options on the Status field in one GraphQL call.
+func (c *Client) updateStatusFieldOptions(fieldID string, options []string) error {
+	// Build inline options list for the mutation.
+	var opts []string
+	for _, name := range options {
+		opts = append(opts, fmt.Sprintf(`{name: %q, color: GRAY, description: ""}`, name))
+	}
+	query := fmt.Sprintf(`mutation {
 		updateProjectV2Field(input: {
-			projectId: $projectId
-			fieldId: $fieldId
-			singleSelectField: {
-				options: [{name: $name}]
-			}
+			fieldId: %q
+			singleSelectOptions: [%s]
 		}) {
 			projectV2Field {
-				... on ProjectV2SingleSelectField {
-					id
-				}
+				... on ProjectV2SingleSelectField { id }
 			}
 		}
-	}`
+	}`, fieldID, strings.Join(opts, ", "))
 
-	_, err := c.ghNoRepo("api", "graphql",
-		"-f", fmt.Sprintf("query=%s", query),
-		"-f", fmt.Sprintf("projectId=%s", projectID),
-		"-f", fmt.Sprintf("fieldId=%s", fieldID),
-		"-f", fmt.Sprintf("name=%s", optionName),
-	)
+	_, err := c.ghNoRepo("api", "graphql", "-f", "query="+query)
 	if err != nil {
-		return fmt.Errorf("graphql addStatusFieldOption: %w", err)
+		return fmt.Errorf("updating Status field options: %w", err)
 	}
 	return nil
 }
