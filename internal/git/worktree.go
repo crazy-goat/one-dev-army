@@ -140,11 +140,24 @@ func RunInWorktree(wtPath, name string, args ...string) ([]byte, error) {
 }
 
 func (m *WorktreeManager) PushBranch(branch string) error {
+	// Try force-with-lease first (safe for existing remote branches)
 	cmd := exec.Command("git", "push", "-u", "--force-with-lease", "origin", branch)
 	cmd.Dir = m.repoDir
 	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("git push -u --force-with-lease origin %s: %w\n%s", branch, err, out)
+	if err == nil {
+		return nil
 	}
-	return nil
+
+	// If stale info or no upstream, fall back to regular push
+	if strings.Contains(string(out), "stale info") || strings.Contains(string(out), "no upstream") {
+		cmd = exec.Command("git", "push", "-u", "origin", branch)
+		cmd.Dir = m.repoDir
+		out, err = cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("git push -u origin %s: %w\n%s", branch, err, out)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("git push -u --force-with-lease origin %s: %w\n%s", branch, err, out)
 }
