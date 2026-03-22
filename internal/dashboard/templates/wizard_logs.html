@@ -1,4 +1,3 @@
-{{define "content"}}
 {{if .Logs}}
 <div class="log-container" hx-on::after-swap="this.scrollTop = this.scrollHeight">
   {{range .Logs}}
@@ -39,5 +38,4 @@
 .log-assistant .log-role { background: var(--green); color: #fff; }
 .log-message { color: var(--text); word-break: break-word; }
 </style>
-{{end}}
 {{end}}

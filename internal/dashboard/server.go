@@ -25,7 +25,7 @@ var templateFS embed.FS
 const CSRFTokenLength = 32
 
 // RateLimitRequests is the maximum number of requests per window
-const RateLimitRequests = 100
+const RateLimitRequests = 10
 
 // RateLimitWindow is the time window for rate limiting
 const RateLimitWindow = time.Minute
@@ -62,11 +62,6 @@ func validateCSRFToken(token, expected string) bool {
 	return subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1
 }
 
-// GetCSRFToken returns the CSRF token for use in templates
-func (s *Server) GetCSRFToken() string {
-	return base64.URLEncoding.EncodeToString(s.csrfKey)
-}
-
 // csrfMiddleware adds CSRF protection to POST requests
 func (s *Server) csrfMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -83,7 +78,7 @@ func (s *Server) csrfMiddleware(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 
-			if !validateCSRFToken(token, s.GetCSRFToken()) {
+			if !validateCSRFToken(token, string(s.csrfKey)) {
 				http.Error(w, "Invalid CSRF token", http.StatusForbidden)
 				return
 			}

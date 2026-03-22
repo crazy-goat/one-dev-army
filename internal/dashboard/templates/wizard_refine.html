@@ -1,10 +1,8 @@
-{{define "content"}}
 <div class="wizard-step">
   <h2>Refined Description</h2>
   
   <form hx-post="/wizard/breakdown" hx-target="#wizard-modal-content" hx-swap="innerHTML" hx-disabled-elt="button[type='submit']">
     <input type="hidden" name="session_id" value="{{.SessionID}}">
-    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
     
     <div class="form-group">
       <label for="refined_description">Refined Description (edit if needed):</label>
@@ -19,7 +17,7 @@
         <button type="button" class="btn" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}" hx-target="#wizard-modal-content">
           ← Back
         </button>
-        <button type="button" class="btn btn-secondary" hx-post="/wizard/refine" hx-target="#wizard-modal-content" hx-disabled-elt="button[type='submit']" hx-vals='{"current_description": "{{.RefinedDescription}}", "csrf_token": "{{.CSRFToken}}"}'>
+        <button type="button" class="btn btn-secondary" hx-post="/wizard/refine" hx-target="#wizard-modal-content" hx-disabled-elt="button[type='submit']" hx-vals='{"current_description": "{{.RefinedDescription}}"}'>
           <span class="spinner" style="display:none;">⏳</span>
           <span class="label">Refine Again</span>
         </button>
@@ -61,4 +59,3 @@
 .btn-secondary:hover { background: var(--border); }
 .error-message { padding: 1rem; background: var(--surface); border-radius: 6px; border: 1px solid var(--error); }
 </style>
-{{end}}
