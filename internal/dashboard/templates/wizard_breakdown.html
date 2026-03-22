@@ -1,3 +1,4 @@
+{{define "content"}}
 <div class="wizard-step">
   <h2>Task Breakdown</h2>
   
@@ -20,6 +21,7 @@
   
   <form hx-post="/wizard/create" hx-target="#wizard-modal-content" hx-swap="innerHTML">
     <input type="hidden" name="session_id" value="{{.SessionID}}">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
     
     <div class="form-actions">
       <button type="button" class="btn" onclick="closeWizardModal()">Cancel</button>
@@ -80,3 +82,4 @@
 .htmx-request .spinner { display: inline !important; }
 .htmx-request .label { display: none; }
 </style>
+{{end}}

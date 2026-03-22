@@ -5,6 +5,7 @@
   <form hx-post="/wizard/refine" hx-target="#wizard-modal-content" hx-swap="innerHTML" hx-disabled-elt="button[type='submit']">
     <input type="hidden" name="session_id" value="{{.SessionID}}">
     <input type="hidden" name="wizard_type" value="{{.Type}}">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
     
     <div class="form-group">
       <label for="idea">Describe your {{if eq .Type "bug"}}bug{{else}}feature idea{{end}}:</label>
@@ -46,8 +47,4 @@
 .htmx-request .spinner { display: inline !important; }
 .htmx-request .label { display: none; }
 </style>
-{{end}}
-
-{{define "content"}}
-{{template "wizard-step-content" .}}
 {{end}}

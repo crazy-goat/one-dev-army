@@ -815,9 +815,11 @@ func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		Type      string
 		SessionID string
+		CSRFToken string
 	}{
 		Type:      wizardType,
 		SessionID: session.ID,
+		CSRFToken: s.GetCSRFToken(),
 	}
 
 	s.renderFragment(w, "wizard_new.html", data)
@@ -880,10 +882,12 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 			SessionID          string
 			Type               string
 			RefinedDescription string
+			CSRFToken          string
 		}{
 			SessionID:          session.ID,
 			Type:               string(session.Type),
 			RefinedDescription: mockRefined,
+			CSRFToken:          s.GetCSRFToken(),
 		}
 
 		s.renderFragment(w, "wizard_refine.html", data)
@@ -952,10 +956,12 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		SessionID          string
 		Type               string
 		RefinedDescription string
+		CSRFToken          string
 	}{
 		SessionID:          session.ID,
 		Type:               string(session.Type),
 		RefinedDescription: refinedDesc,
+		CSRFToken:          s.GetCSRFToken(),
 	}
 
 	s.renderFragment(w, "wizard_refine.html", data)
@@ -1026,9 +1032,11 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 		data := struct {
 			SessionID string
 			Tasks     []WizardTask
+			CSRFToken string
 		}{
 			SessionID: session.ID,
 			Tasks:     mockTasks,
+			CSRFToken: s.GetCSRFToken(),
 		}
 
 		s.renderFragment(w, "wizard_breakdown.html", data)
@@ -1078,9 +1086,11 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		SessionID string
 		Tasks     []WizardTask
+		CSRFToken string
 	}{
 		SessionID: session.ID,
 		Tasks:     tasks,
+		CSRFToken: s.GetCSRFToken(),
 	}
 
 	s.renderFragment(w, "wizard_breakdown.html", data)
@@ -1366,10 +1376,12 @@ func (s *Server) handleWizardModal(w http.ResponseWriter, r *http.Request) {
 		Type        string
 		SessionID   string
 		CurrentStep int
+		CSRFToken   string
 	}{
 		Type:        wizardType,
 		SessionID:   session.ID,
 		CurrentStep: 1,
+		CSRFToken:   s.GetCSRFToken(),
 	}
 
 	s.renderFragment(w, "wizard_modal.html", data)
