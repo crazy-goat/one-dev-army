@@ -672,3 +672,68 @@ func TestMiddlewareChain(t *testing.T) {
 		t.Errorf("expected status 200, got %d", rec.Code)
 	}
 }
+
+// TestLayoutNavigationButtons tests that the layout template renders the New Feature and New Bug buttons
+func TestLayoutNavigationButtons(t *testing.T) {
+	// Parse the layout template
+	tmpl, err := template.ParseFiles("templates/layout.html")
+	if err != nil {
+		t.Fatalf("failed to parse layout template: %v", err)
+	}
+
+	// Execute the template with minimal data
+	var buf strings.Builder
+	data := struct {
+		Active string
+	}{
+		Active: "board",
+	}
+
+	// We need to define a content template for the layout to work
+	tmpl, err = tmpl.New("content").Parse("<div>Test Content</div>")
+	if err != nil {
+		t.Fatalf("failed to parse content template: %v", err)
+	}
+
+	err = tmpl.ExecuteTemplate(&buf, "layout", data)
+	if err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	output := buf.String()
+
+	// Check for New Feature button with correct HTMX attributes
+	if !strings.Contains(output, `hx-get="/wizard/new?type=feature"`) {
+		t.Error("layout template missing New Feature button with correct hx-get attribute")
+	}
+	if !strings.Contains(output, "+ New Feature") {
+		t.Error("layout template missing 'New Feature' button text")
+	}
+	if !strings.Contains(output, `hx-target="body"`) {
+		t.Error("layout template missing hx-target='body' attribute")
+	}
+	if !strings.Contains(output, `hx-swap="beforeend"`) {
+		t.Error("layout template missing hx-swap='beforeend' attribute")
+	}
+
+	// Check for New Bug button with correct HTMX attributes
+	if !strings.Contains(output, `hx-get="/wizard/new?type=bug"`) {
+		t.Error("layout template missing New Bug button with correct hx-get attribute")
+	}
+	if !strings.Contains(output, "+ New Bug") {
+		t.Error("layout template missing 'New Bug' button text")
+	}
+
+	// Check for correct CSS classes
+	if !strings.Contains(output, "btn btn-success") {
+		t.Error("layout template missing btn-success class on New Feature button")
+	}
+	if !strings.Contains(output, "btn btn-danger") {
+		t.Error("layout template missing btn-danger class on New Bug button")
+	}
+
+	// Check for nav-actions container
+	if !strings.Contains(output, "nav-actions") {
+		t.Error("layout template missing nav-actions container div")
+	}
+}
