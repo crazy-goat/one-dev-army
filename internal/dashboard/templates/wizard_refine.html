@@ -17,7 +17,7 @@
         <button type="button" class="btn" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}" hx-target="#wizard-modal-content">
           ← Back
         </button>
-        <button type="button" class="btn btn-secondary" hx-post="/wizard/refine-again" hx-target="#wizard-modal-content" hx-disabled-elt="button[type='submit']">
+        <button type="button" class="btn btn-secondary" hx-post="/wizard/refine" hx-target="#wizard-modal-content" hx-disabled-elt="button[type='submit']" hx-vals='{"current_description": "{{.RefinedDescription}}"}'>
           <span class="spinner" style="display:none;">⏳</span>
           <span class="label">Refine Again</span>
         </button>
