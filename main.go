@@ -167,6 +167,16 @@ func runServe() error {
 		return fmt.Errorf("ensuring labels: %w", err)
 	}
 
+	created, err := gh.EnsureMilestone()
+	if err != nil {
+		return fmt.Errorf("ensuring milestone: %w", err)
+	}
+	if created {
+		fmt.Println("  ✓ sprint created (Sprint 1)")
+	} else {
+		fmt.Println("  ✓ sprint found")
+	}
+
 	projectName := cfg.GitHub.Repo
 	if idx := strings.LastIndex(projectName, "/"); idx >= 0 {
 		projectName = projectName[idx+1:]
