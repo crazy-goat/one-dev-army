@@ -553,3 +553,115 @@ func initGitRepo(t *testing.T, dir string) {
 	run("git", "add", ".")
 	run("git", "commit", "-m", "initial")
 }
+
+func TestExtractFullContent(t *testing.T) {
+	tests := []struct {
+		name     string
+		msg      *opencode.Message
+		expected string
+	}{
+		{
+			name:     "nil message",
+			msg:      nil,
+			expected: "",
+		},
+		{
+			name: "text only",
+			msg: &opencode.Message{
+				Parts: []opencode.Part{
+					{Type: "text", Text: "Hello world"},
+				},
+			},
+			expected: "Hello world",
+		},
+		{
+			name: "tool call only",
+			msg: &opencode.Message{
+				Parts: []opencode.Part{
+					{
+						Type: "tool_call",
+						ToolCall: &opencode.ToolCall{
+							ID:        "call-1",
+							Name:      "Edit",
+							Arguments: json.RawMessage(`{"filePath": "test.go", "oldString": "foo", "newString": "bar"}`),
+						},
+					},
+				},
+			},
+			expected: "[Tool Call: Edit]\nArguments: {\n  \"filePath\": \"test.go\",\n  \"oldString\": \"foo\",\n  \"newString\": \"bar\"\n}",
+		},
+		{
+			name: "tool result only",
+			msg: &opencode.Message{
+				Parts: []opencode.Part{
+					{
+						Type: "tool_result",
+						ToolResult: &opencode.ToolResult{
+							ID:     "call-1",
+							Output: "File updated successfully",
+						},
+					},
+				},
+			},
+			expected: "[Tool Result: call-1]\nFile updated successfully",
+		},
+		{
+			name: "tool result with error",
+			msg: &opencode.Message{
+				Parts: []opencode.Part{
+					{
+						Type: "tool_result",
+						ToolResult: &opencode.ToolResult{
+							ID:    "call-1",
+							Error: "file not found",
+						},
+					},
+				},
+			},
+			expected: "[Tool Result: call-1]\nError: file not found",
+		},
+		{
+			name: "mixed content",
+			msg: &opencode.Message{
+				Parts: []opencode.Part{
+					{Type: "text", Text: "I'll help you edit the file."},
+					{
+						Type: "tool_call",
+						ToolCall: &opencode.ToolCall{
+							ID:        "call-1",
+							Name:      "Edit",
+							Arguments: json.RawMessage(`{"filePath": "test.go"}`),
+						},
+					},
+					{
+						Type: "tool_result",
+						ToolResult: &opencode.ToolResult{
+							ID:     "call-1",
+							Output: "Done",
+						},
+					},
+				},
+			},
+			expected: "I'll help you edit the file.\n\n[Tool Call: Edit]\nArguments: {\n  \"filePath\": \"test.go\"\n}\n\n[Tool Result: call-1]\nDone",
+		},
+		{
+			name: "empty text part",
+			msg: &opencode.Message{
+				Parts: []opencode.Part{
+					{Type: "text", Text: ""},
+					{Type: "text", Text: "Second part"},
+				},
+			},
+			expected: "Second part",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := worker.ExtractFullContent(tt.msg)
+			if result != tt.expected {
+				t.Errorf("ExtractFullContent() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
