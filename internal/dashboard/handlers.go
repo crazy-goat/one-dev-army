@@ -346,14 +346,29 @@ func (s *Server) handleRetryFresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.gh.RemoveLabel(issueNum, "failed"); err != nil {
-		log.Printf("[Dashboard] Error removing failed label from #%d: %v", issueNum, err)
-	}
-	if err := s.gh.RemoveLabel(issueNum, "in-progress"); err != nil {
-		log.Printf("[Dashboard] Error removing in-progress label from #%d: %v", issueNum, err)
+	// Close any open PR and delete branch
+	if branch, err := s.gh.FindPRBranch(issueNum); err == nil {
+		log.Printf("[Dashboard] Closing PR for #%d (branch: %s)", issueNum, branch)
+		if closeErr := s.gh.ClosePR(branch); closeErr != nil {
+			log.Printf("[Dashboard] Error closing PR for #%d: %v", issueNum, closeErr)
+		}
 	}
 
-	log.Printf("[Dashboard] Retry fresh #%d — will start from scratch", issueNum)
+	// Remove all workflow labels
+	for _, label := range []string{"failed", "in-progress", "awaiting-approval"} {
+		if err := s.gh.RemoveLabel(issueNum, label); err != nil {
+			log.Printf("[Dashboard] Error removing %s label from #%d: %v", label, issueNum, err)
+		}
+	}
+
+	// Clear DB steps
+	if s.store != nil {
+		if err := s.store.DeleteSteps(issueNum); err != nil {
+			log.Printf("[Dashboard] Error deleting steps for #%d: %v", issueNum, err)
+		}
+	}
+
+	log.Printf("[Dashboard] Retry fresh #%d — PR closed, steps cleared, starting from scratch", issueNum)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
