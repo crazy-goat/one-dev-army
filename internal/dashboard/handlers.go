@@ -1239,6 +1239,14 @@ func (s *Server) handleWizardLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if the session has moved past the expected step
+	// If so, return 204 to stop HTMX polling
+	expectedStep := r.Header.Get("X-Expected-Step")
+	if expectedStep != "" && string(session.CurrentStep) != expectedStep {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	logs := session.GetLogs()
 
 	data := struct {

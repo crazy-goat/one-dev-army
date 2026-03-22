@@ -264,6 +264,31 @@ func TestHandleWizardLogs(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("expected status 404 for invalid session, got %d", rec.Code)
 	}
+
+	// Test with mismatched step - should return 204 to stop polling
+	session.SetStep(WizardStepBreakdown) // Move session to breakdown step
+	req = httptest.NewRequest(http.MethodGet, "/wizard/logs/"+session.ID, nil)
+	req.SetPathValue("sessionId", session.ID)
+	req.Header.Set("X-Expected-Step", "refine") // But expect refine step
+	rec = httptest.NewRecorder()
+
+	srv.handleWizardLogs(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("expected status 204 when step mismatch, got %d", rec.Code)
+	}
+
+	// Test with matching step - should return 200
+	req = httptest.NewRequest(http.MethodGet, "/wizard/logs/"+session.ID, nil)
+	req.SetPathValue("sessionId", session.ID)
+	req.Header.Set("X-Expected-Step", "breakdown") // Expect breakdown step
+	rec = httptest.NewRecorder()
+
+	srv.handleWizardLogs(rec, req)
+
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 200 or 500 when step matches, got %d", rec.Code)
+	}
 }
 
 // TestFullWizardFlow tests the complete wizard flow end-to-end
