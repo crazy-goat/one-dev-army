@@ -117,6 +117,9 @@ func (c *Client) EnsureProjectColumns(projectID string, projectNumber int) error
 		return c.createStatusField(projectID, projectNumber, owner, ProjectColumns)
 	}
 
+	c.StatusFieldID = statusField.ID
+	log.Printf("[GitHub] Status field ID: %s", statusField.ID)
+
 	// Check if options match exactly (same names, same order).
 	if optionsMatch(statusField.Options, ProjectColumns) {
 		return nil
@@ -286,17 +289,22 @@ func (c *Client) MoveItemToColumn(projectNumber int, issueNumber int, column str
 		return fmt.Errorf("project node ID not set — call EnsureProject first")
 	}
 
+	fieldID := c.StatusFieldID
+	if fieldID == "" {
+		fieldID = "Status"
+	}
+
 	_, err = c.ghNoRepo("project", "item-edit",
 		"--id", itemID,
 		"--project-id", projectID,
-		"--field-id", "Status",
+		"--field-id", fieldID,
 		"--single-select-option-id", column)
 	if err != nil {
-		log.Printf("[GitHub] item-edit failed, trying with field name: %v", err)
+		log.Printf("[GitHub] item-edit with option-id failed, trying with --text: %v", err)
 		_, err = c.ghNoRepo("project", "item-edit",
 			"--id", itemID,
 			"--project-id", projectID,
-			"--field-id", "Status",
+			"--field-id", fieldID,
 			"--text", column)
 		if err != nil {
 			return fmt.Errorf("setting item status to %q: %w", column, err)

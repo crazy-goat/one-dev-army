@@ -2,6 +2,7 @@ package mvp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -78,6 +79,24 @@ Respond with a JSON object:
   "verdict": "brief summary of review"
 }`
 
+const maxCRRetries = 3
+
+const fixFromReviewPrompt = `Fix the issues found during code review for GitHub issue #%d: %s
+
+Working directory: %s
+Test command: %s
+
+Code review feedback:
+%s
+
+Instructions:
+- Read the files mentioned in the review
+- Fix ALL issues raised by the reviewer
+- Run the test command and ensure all tests pass
+- Commit your fixes with a descriptive message
+- You are in a fully automated pipeline. NEVER ask questions or wait for input.
+- Make your best judgment and proceed immediately.`
+
 const implementationPrompt = `Implement the following plan for GitHub issue #%d: %s
 
 Implementation plan:
@@ -85,11 +104,14 @@ Implementation plan:
 
 Working directory: %s
 
+Test command: %s
+
 Instructions:
 - Read existing files before modifying them
 - Make all necessary code changes
 - Create new files as needed
-- Run tests after making changes
+- After implementing, run the test command and fix any failures until all tests pass
+- Do NOT proceed until tests pass — iterate on the code until they do
 - Commit your changes with a descriptive message
 - You are in a fully automated pipeline. NEVER ask questions or wait for input.
 - Make your best judgment and proceed immediately.`
@@ -116,9 +138,32 @@ func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Clien
 	}
 }
 
+var stepOrder = []string{"analyze", "plan", "implement", "create-pr", "code-review"}
+
+func stepIndex(name string) int {
+	for i, s := range stepOrder {
+		if s == name {
+			return i
+		}
+	}
+	return -1
+}
+
 func (w *Worker) Process(ctx context.Context, task *Task) error {
 	log.Printf("[Worker %d] ▶ START processing #%d: %s", w.id, task.Issue.Number, task.Issue.Title)
 	start := time.Now()
+
+	resumeFrom := 0
+	if w.store != nil {
+		lastDone, _ := w.store.GetLastCompletedStep(task.Issue.Number)
+		if lastDone != "" {
+			idx := stepIndex(lastDone)
+			if idx >= 0 {
+				resumeFrom = idx + 1
+				log.Printf("[Worker %d] Resuming from step %d (%s completed previously)", w.id, resumeFrom, lastDone)
+			}
+		}
+	}
 
 	task.Status = StatusAnalyzing
 
@@ -136,73 +181,121 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	task.Worktree = wt.Path
 	log.Printf("[Worker %d] Worktree ready at %s", w.id, wt.Path)
 
-	log.Printf("[Worker %d] [1/6] Analyzing #%d...", w.id, task.Issue.Number)
-	stepStart := time.Now()
-	analysis, err := w.analyze(ctx, task)
-	if err != nil {
-		task.Status = StatusFailed
-		task.Result = &TaskResult{Error: fmt.Errorf("analyzing: %w", err)}
-		log.Printf("[Worker %d] ✗ FAILED analyzing: %v", w.id, err)
-		return task.Result.Error
-	}
-	log.Printf("[Worker %d] [1/6] Analysis done (%s, %d chars)", w.id, time.Since(stepStart).Round(time.Second), len(analysis))
+	var analysis, plan, prURL string
 
-	task.Status = StatusPlanning
-	log.Printf("[Worker %d] [2/6] Planning #%d...", w.id, task.Issue.Number)
-	stepStart = time.Now()
-	plan, err := w.plan(ctx, task, analysis)
-	if err != nil {
-		task.Status = StatusFailed
-		task.Result = &TaskResult{Error: fmt.Errorf("planning: %w", err)}
-		log.Printf("[Worker %d] ✗ FAILED planning: %v", w.id, err)
-		return task.Result.Error
+	if resumeFrom <= 0 {
+		log.Printf("[Worker %d] [1/5] Analyzing #%d...", w.id, task.Issue.Number)
+		stepStart := time.Now()
+		analysis, err = w.analyze(ctx, task)
+		if err != nil {
+			task.Status = StatusFailed
+			task.Result = &TaskResult{Error: fmt.Errorf("analyzing: %w", err)}
+			log.Printf("[Worker %d] ✗ FAILED analyzing: %v", w.id, err)
+			return task.Result.Error
+		}
+		log.Printf("[Worker %d] [1/5] Analysis done (%s, %d chars)", w.id, time.Since(stepStart).Round(time.Second), len(analysis))
+	} else {
+		log.Printf("[Worker %d] [1/5] Skipping analyze (completed previously)", w.id)
+		if w.store != nil {
+			analysis, _ = w.store.GetStepResponse(task.Issue.Number, "analyze")
+		}
 	}
-	log.Printf("[Worker %d] [2/6] Planning done (%s, %d chars)", w.id, time.Since(stepStart).Round(time.Second), len(plan))
 
-	task.Status = StatusCoding
-	log.Printf("[Worker %d] [3/6] Implementing #%d...", w.id, task.Issue.Number)
-	stepStart = time.Now()
-	if err := w.implement(ctx, task, plan); err != nil {
-		task.Status = StatusFailed
-		task.Result = &TaskResult{Error: fmt.Errorf("implementing: %w", err)}
-		log.Printf("[Worker %d] ✗ FAILED implementing: %v", w.id, err)
-		return task.Result.Error
+	if resumeFrom <= 1 {
+		task.Status = StatusPlanning
+		log.Printf("[Worker %d] [2/5] Planning #%d...", w.id, task.Issue.Number)
+		stepStart := time.Now()
+		plan, err = w.plan(ctx, task, analysis)
+		if err != nil {
+			task.Status = StatusFailed
+			task.Result = &TaskResult{Error: fmt.Errorf("planning: %w", err)}
+			log.Printf("[Worker %d] ✗ FAILED planning: %v", w.id, err)
+			return task.Result.Error
+		}
+		log.Printf("[Worker %d] [2/5] Planning done (%s, %d chars)", w.id, time.Since(stepStart).Round(time.Second), len(plan))
+	} else {
+		log.Printf("[Worker %d] [2/5] Skipping plan (completed previously)", w.id)
+		if w.store != nil {
+			plan, _ = w.store.GetStepResponse(task.Issue.Number, "plan")
+		}
 	}
-	log.Printf("[Worker %d] [3/6] Implementation done (%s)", w.id, time.Since(stepStart).Round(time.Second))
 
-	task.Status = StatusTesting
-	log.Printf("[Worker %d] [4/6] Testing #%d...", w.id, task.Issue.Number)
-	stepStart = time.Now()
-	if err := w.test(ctx, task); err != nil {
-		task.Status = StatusFailed
-		task.Result = &TaskResult{Error: fmt.Errorf("testing: %w", err)}
-		log.Printf("[Worker %d] ✗ FAILED testing: %v", w.id, err)
-		return task.Result.Error
+	if resumeFrom <= 2 {
+		task.Status = StatusCoding
+		log.Printf("[Worker %d] [3/5] Implementing #%d (includes tests)...", w.id, task.Issue.Number)
+		stepStart := time.Now()
+		if err := w.implement(ctx, task, plan); err != nil {
+			task.Status = StatusFailed
+			task.Result = &TaskResult{Error: fmt.Errorf("implementing: %w", err)}
+			log.Printf("[Worker %d] ✗ FAILED implementing: %v", w.id, err)
+			return task.Result.Error
+		}
+		log.Printf("[Worker %d] [3/5] Implementation done (%s)", w.id, time.Since(stepStart).Round(time.Second))
+	} else {
+		log.Printf("[Worker %d] [3/5] Skipping implement (completed previously)", w.id)
 	}
-	log.Printf("[Worker %d] [4/6] Tests passed (%s)", w.id, time.Since(stepStart).Round(time.Second))
 
-	task.Status = StatusCreatingPR
-	log.Printf("[Worker %d] [5/6] Creating PR for #%d...", w.id, task.Issue.Number)
-	stepStart = time.Now()
-	prURL, err := w.createPR(ctx, task)
-	if err != nil {
-		task.Status = StatusFailed
-		task.Result = &TaskResult{Error: fmt.Errorf("creating PR: %w", err)}
-		log.Printf("[Worker %d] ✗ FAILED creating PR: %v", w.id, err)
-		return task.Result.Error
+	if resumeFrom <= 3 {
+		task.Status = StatusCreatingPR
+		log.Printf("[Worker %d] [4/5] Creating PR for #%d...", w.id, task.Issue.Number)
+		stepStart := time.Now()
+		prURL, err = w.createPR(ctx, task)
+		if err != nil {
+			task.Status = StatusFailed
+			task.Result = &TaskResult{Error: fmt.Errorf("creating PR: %w", err)}
+			log.Printf("[Worker %d] ✗ FAILED creating PR: %v", w.id, err)
+			return task.Result.Error
+		}
+		log.Printf("[Worker %d] [4/5] PR created: %s (%s)", w.id, prURL, time.Since(stepStart).Round(time.Second))
+	} else {
+		log.Printf("[Worker %d] [4/5] Skipping create-pr (completed previously)", w.id)
+		if w.store != nil {
+			prURL, _ = w.store.GetStepResponse(task.Issue.Number, "create-pr")
+		}
 	}
-	log.Printf("[Worker %d] [5/6] PR created: %s (%s)", w.id, prURL, time.Since(stepStart).Round(time.Second))
 
-	task.Status = StatusReviewing
-	log.Printf("[Worker %d] [6/6] Code review #%d (PR: %s)...", w.id, task.Issue.Number, prURL)
-	stepStart = time.Now()
-	if err := w.codeReview(ctx, task, prURL); err != nil {
-		task.Status = StatusFailed
-		task.Result = &TaskResult{Error: fmt.Errorf("code review: %w", err)}
-		log.Printf("[Worker %d] ✗ FAILED code review: %v", w.id, err)
-		return task.Result.Error
+	for attempt := 1; attempt <= maxCRRetries; attempt++ {
+		task.Status = StatusReviewing
+		log.Printf("[Worker %d] [5/5] Code review #%d attempt %d/%d (PR: %s)...", w.id, task.Issue.Number, attempt, maxCRRetries, prURL)
+		stepStart := time.Now()
+		approved, review, crErr := w.codeReview(ctx, task, prURL)
+		if crErr != nil {
+			task.Status = StatusFailed
+			task.Result = &TaskResult{Error: fmt.Errorf("code review: %w", crErr)}
+			log.Printf("[Worker %d] ✗ FAILED code review: %v", w.id, crErr)
+			return task.Result.Error
+		}
+		log.Printf("[Worker %d] [5/5] Code review done (%s, approved=%v)", w.id, time.Since(stepStart).Round(time.Second), approved)
+
+		if approved {
+			break
+		}
+
+		if attempt == maxCRRetries {
+			task.Status = StatusFailed
+			task.Result = &TaskResult{Error: fmt.Errorf("code review not approved after %d attempts", maxCRRetries)}
+			log.Printf("[Worker %d] ✗ FAILED: code review not approved after %d attempts", w.id, maxCRRetries)
+			return task.Result.Error
+		}
+
+		log.Printf("[Worker %d] Code review not approved, fixing (attempt %d/%d)...", w.id, attempt, maxCRRetries)
+		task.Status = StatusCoding
+		stepStart = time.Now()
+		if fixErr := w.fixFromReview(ctx, task, review); fixErr != nil {
+			task.Status = StatusFailed
+			task.Result = &TaskResult{Error: fmt.Errorf("fixing from review: %w", fixErr)}
+			log.Printf("[Worker %d] ✗ FAILED fixing from review: %v", w.id, fixErr)
+			return task.Result.Error
+		}
+		log.Printf("[Worker %d] Fix from review done (%s), pushing...", w.id, time.Since(stepStart).Round(time.Second))
+
+		if pushErr := w.wtMgr.PushBranch(task.Branch); pushErr != nil {
+			task.Status = StatusFailed
+			task.Result = &TaskResult{Error: fmt.Errorf("pushing fixes: %w", pushErr)}
+			log.Printf("[Worker %d] ✗ FAILED pushing fixes: %v", w.id, pushErr)
+			return task.Result.Error
+		}
 	}
-	log.Printf("[Worker %d] [6/6] Code review done (%s)", w.id, time.Since(stepStart).Round(time.Second))
 
 	task.Status = StatusDone
 	task.Result = &TaskResult{
@@ -235,53 +328,60 @@ func (w *Worker) implement(ctx context.Context, task *Task, plan string) error {
 	w.oc.SetDirectory(task.Worktree)
 	defer w.oc.SetDirectory("")
 
-	prompt := fmt.Sprintf(implementationPrompt, task.Issue.Number, task.Issue.Title, plan, task.Worktree)
-	_, err := w.llmStep(ctx, task, "implement", prompt, w.cfg.EpicAnalysis.LLM)
-	return err
-}
-
-func (w *Worker) test(ctx context.Context, task *Task) error {
 	testCmd := w.cfg.Tools.TestCmd
 	if testCmd == "" {
 		testCmd = "go test ./..."
 	}
-
-	var stepID int64
-	if w.store != nil {
-		id, err := w.store.InsertStep(task.Issue.Number, "test", testCmd, "")
-		if err != nil {
-			log.Printf("[Worker %d] failed to insert test step: %v", w.id, err)
-		} else {
-			stepID = id
-		}
-	}
-
-	out, err := git.RunInWorktree(task.Worktree, "sh", "-c", testCmd)
-	if err != nil {
-		if w.store != nil && stepID > 0 {
-			_ = w.store.FailStep(stepID, fmt.Sprintf("%v\n%s", err, out))
-		}
-		return fmt.Errorf("tests failed: %w", err)
-	}
-
-	if w.store != nil && stepID > 0 {
-		_ = w.store.FinishStep(stepID, string(out))
-	}
-	return nil
-}
-
-func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) error {
-	prompt := fmt.Sprintf(codeReviewPrompt, task.Issue.Number, task.Issue.Title, prURL, w.gh.Repo)
-	review, err := w.llmStep(ctx, task, "code-review", prompt, w.cfg.Planning.LLM)
+	prompt := fmt.Sprintf(implementationPrompt, task.Issue.Number, task.Issue.Title, plan, task.Worktree, testCmd)
+	_, err := w.llmStep(ctx, task, "implement", prompt, w.cfg.EpicAnalysis.LLM)
 	if err != nil {
 		return err
 	}
+	w.ensureCommit(task)
+	return nil
+}
+
+func (w *Worker) ensureCommit(task *Task) {
+	git.RunInWorktree(task.Worktree, "git", "add", "-A")
+	out, err := git.RunInWorktree(task.Worktree, "git", "diff", "--cached", "--quiet")
+	if err != nil {
+		msg := fmt.Sprintf("feat: implement #%d %s", task.Issue.Number, task.Issue.Title)
+		git.RunInWorktree(task.Worktree, "git", "commit", "-m", msg)
+		log.Printf("[Worker %d] Auto-committed uncommitted changes", w.id)
+	}
+	_ = out
+}
+
+func (w *Worker) fixFromReview(ctx context.Context, task *Task, review string) error {
+	w.oc.SetDirectory(task.Worktree)
+	defer w.oc.SetDirectory("")
+
+	testCmd := w.cfg.Tools.TestCmd
+	if testCmd == "" {
+		testCmd = "go test ./..."
+	}
+	prompt := fmt.Sprintf(fixFromReviewPrompt, task.Issue.Number, task.Issue.Title, task.Worktree, testCmd, review)
+	_, err := w.llmStep(ctx, task, "fix-from-review", prompt, w.cfg.EpicAnalysis.LLM)
+	if err != nil {
+		return err
+	}
+	w.ensureCommit(task)
+	return nil
+}
+
+func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (approved bool, review string, err error) {
+	prompt := fmt.Sprintf(codeReviewPrompt, task.Issue.Number, task.Issue.Title, prURL, w.gh.Repo)
+	review, err = w.llmStep(ctx, task, "code-review", prompt, w.cfg.Planning.LLM)
+	if err != nil {
+		return false, "", err
+	}
 	if reason := checkAlreadyDone(review); reason != "" {
 		log.Printf("[Worker %d] Code review detected ticket already done: %s", w.id, reason)
-		return fmt.Errorf("%w: %s", ErrAlreadyDone, reason)
+		return false, "", fmt.Errorf("%w: %s", ErrAlreadyDone, reason)
 	}
 	log.Printf("[Worker %d] Code review result: %s", w.id, review)
-	return nil
+	approved = checkCRApproved(review)
+	return approved, review, nil
 }
 
 func (w *Worker) createPR(ctx context.Context, task *Task) (string, error) {
@@ -305,6 +405,13 @@ func (w *Worker) createPR(ctx context.Context, task *Task) (string, error) {
 	body := fmt.Sprintf("Closes #%d\n\n%s", task.Issue.Number, task.Issue.Body)
 	prURL, err := w.gh.CreatePR(task.Branch, task.Issue.Title, body)
 	if err != nil {
+		if existingURL := extractPRURL(err.Error()); existingURL != "" {
+			log.Printf("[Worker %d] PR already exists: %s", w.id, existingURL)
+			if w.store != nil && stepID > 0 {
+				_ = w.store.FinishStep(stepID, existingURL)
+			}
+			return existingURL, nil
+		}
 		if w.store != nil && stepID > 0 {
 			_ = w.store.FailStep(stepID, err.Error())
 		}
@@ -370,6 +477,35 @@ func slug(title string) string {
 		s = strings.TrimRight(s, "-")
 	}
 	return s
+}
+
+var prURLRe = regexp.MustCompile(`https://github\.com/[^\s]+/pull/\d+`)
+
+func extractPRURL(errMsg string) string {
+	match := prURLRe.FindString(errMsg)
+	return match
+}
+
+var jsonBlockRe = regexp.MustCompile("(?s)```(?:json)?\\s*\\n(\\{.*?\\})\\s*```")
+var bareJSONRe = regexp.MustCompile(`(?s)\{[^{}]*"approved"\s*:[^{}]*\}`)
+
+func checkCRApproved(review string) bool {
+	var jsonStr string
+	if m := jsonBlockRe.FindAllStringSubmatch(review, -1); len(m) > 0 {
+		jsonStr = m[len(m)-1][1]
+	} else if m := bareJSONRe.FindAllString(review, -1); len(m) > 0 {
+		jsonStr = m[len(m)-1]
+	}
+	if jsonStr == "" {
+		return false
+	}
+	var result struct {
+		Approved bool `json:"approved"`
+	}
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		return false
+	}
+	return result.Approved
 }
 
 func checkAlreadyDone(response string) string {
