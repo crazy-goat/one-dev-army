@@ -607,7 +607,7 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 
 	isActive := false
 	status := ""
-	issueTitle := fmt.Sprintf("#%d", issueNum)
+	issueTitle := ""
 	if s.orchestrator != nil {
 		if task := s.orchestrator.CurrentTask(); task != nil && task.Issue.Number == issueNum {
 			isActive = true
@@ -616,7 +616,12 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if issueTitle == fmt.Sprintf("#%d", issueNum) && len(steps) > 0 {
+	if issueTitle == "" && s.gh != nil {
+		if issue, err := s.gh.GetIssue(issueNum); err == nil {
+			issueTitle = issue.Title
+		}
+	}
+	if issueTitle == "" {
 		issueTitle = fmt.Sprintf("Issue #%d", issueNum)
 	}
 
@@ -790,9 +795,21 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 
 	sessionID := r.FormValue("session_id")
 	idea := r.FormValue("idea")
+	currentDesc := r.FormValue("current_description")
 
-	if sessionID == "" || idea == "" {
-		http.Error(w, "missing session_id or idea", http.StatusBadRequest)
+	if sessionID == "" {
+		http.Error(w, "missing session_id", http.StatusBadRequest)
+		return
+	}
+
+	// Use current_description if provided (re-refinement), otherwise use idea
+	inputText := currentDesc
+	if inputText == "" {
+		inputText = idea
+	}
+
+	if inputText == "" {
+		http.Error(w, "missing idea or current_description", http.StatusBadRequest)
 		return
 	}
 
@@ -802,21 +819,23 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate idea length to prevent abuse
+	// Validate input length to prevent abuse
 	const maxIdeaLength = 10000
-	if len(idea) > maxIdeaLength {
-		http.Error(w, "idea exceeds maximum length of 10000 characters", http.StatusBadRequest)
+	if len(inputText) > maxIdeaLength {
+		http.Error(w, "input exceeds maximum length of 10000 characters", http.StatusBadRequest)
 		return
 	}
 
-	// Store the idea using thread-safe setter
-	session.SetIdeaText(idea)
+	// Store the idea using thread-safe setter (only if it's a new idea, not re-refinement)
+	if idea != "" {
+		session.SetIdeaText(idea)
+	}
 	session.SetStep(WizardStepRefine)
-	session.AddLog("user", idea)
+	session.AddLog("user", inputText)
 
 	// If no opencode client, return mock response for testing
 	if s.oc == nil {
-		mockRefined := "Refined: " + idea + "\n\nThis feature would allow users to authenticate securely."
+		mockRefined := "Refined: " + inputText + "\n\nThis feature would allow users to authenticate securely."
 		session.SetRefinedDescription(mockRefined)
 		session.AddLog("assistant", mockRefined)
 
@@ -838,7 +857,8 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	llmSession, err := s.oc.CreateSession("Wizard Refinement")
 	if err != nil {
 		log.Printf("[Wizard] Error creating LLM session: %v", err)
-		http.Error(w, "failed to create LLM session", http.StatusInternalServerError)
+		session.AddLog("system", "Error: Failed to create LLM session - "+err.Error())
+		s.renderError(w, "Failed to connect to AI service. Please try again.", session.ID, string(session.Type))
 		return
 	}
 	defer func() {
@@ -849,7 +869,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 
 	// Build refinement prompt with codebase context
 	codebaseContext := GetCodebaseContext()
-	prompt := BuildRefinementPrompt(session.Type, idea, codebaseContext)
+	prompt := BuildRefinementPrompt(session.Type, inputText, codebaseContext)
 	session.AddLog("system", "Sending refinement request to LLM")
 
 	// Send message to LLM with timeout
@@ -862,7 +882,15 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("[Wizard] Error from LLM: %v", err)
 		session.AddLog("system", "LLM error: "+err.Error())
-		http.Error(w, "failed to refine idea", http.StatusInternalServerError)
+
+		errorMsg := "Failed to refine idea. "
+		if ctx.Err() == context.DeadlineExceeded {
+			errorMsg += "The AI service timed out. Please try again with a shorter description."
+		} else {
+			errorMsg += "Please check your connection and try again."
+		}
+
+		s.renderError(w, errorMsg, session.ID, string(session.Type))
 		return
 	}
 
@@ -886,6 +914,22 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, "wizard_refine.html", data)
+}
+
+// renderError renders an error message in the wizard modal
+func (s *Server) renderError(w http.ResponseWriter, errorMsg, sessionID, wizardType string) {
+	data := struct {
+		SessionID string
+		Type      string
+		Error     string
+	}{
+		SessionID: sessionID,
+		Type:      wizardType,
+		Error:     errorMsg,
+	}
+
+	w.WriteHeader(http.StatusOK) // Return 200 so HTMX displays the content
+	s.render(w, "wizard_error.html", data)
 }
 
 // handleWizardBreakdown sends description to LLM and returns task list

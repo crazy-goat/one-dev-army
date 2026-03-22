@@ -40,6 +40,18 @@ func (i Issue) GetLabelNames() []string {
 	return names
 }
 
+func (c *Client) GetIssue(number int) (*Issue, error) {
+	out, err := c.gh("issue", "view", strconv.Itoa(number), "--json", "number,title,body,state,labels,assignees")
+	if err != nil {
+		return nil, fmt.Errorf("getting issue #%d: %w", number, err)
+	}
+	var issue Issue
+	if err := json.Unmarshal(out, &issue); err != nil {
+		return nil, fmt.Errorf("parsing issue #%d: %w", number, err)
+	}
+	return &issue, nil
+}
+
 func (c *Client) CreateIssue(title, body string, labels []string) (int, error) {
 	args := []string{"issue", "create", "--title", title, "--body", body}
 	for _, l := range labels {

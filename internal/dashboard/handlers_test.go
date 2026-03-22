@@ -124,6 +124,71 @@ func TestHandleWizardRefine_MissingIdea(t *testing.T) {
 	}
 }
 
+func TestHandleWizardRefine_WithCurrentDescription(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	// Create a session first
+	session, _ := srv.wizardStore.Create("feature")
+
+	// Test re-refinement with current_description (no idea provided)
+	form := url.Values{}
+	form.Set("session_id", session.ID)
+	form.Set("current_description", "Previous refined description")
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardRefine(rec, req)
+
+	// Should return 200 OK (or 500 if template missing)
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 200 or 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// If successful, verify the response contains the re-refined text
+	if rec.Code == http.StatusOK {
+		body := rec.Body.String()
+		if !strings.Contains(body, "Refined: Previous refined description") {
+			t.Errorf("expected response to contain re-refined text, got: %s", body)
+		}
+
+		// Verify session was updated
+		updatedSession, _ := srv.wizardStore.Get(session.ID)
+		if !strings.Contains(updatedSession.RefinedDescription, "Previous refined description") {
+			t.Errorf("expected session to store re-refined description")
+		}
+	}
+}
+
+func TestHandleWizardRefine_ErrorRendering(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	// Test with invalid session - should return error template
+	form := url.Values{}
+	form.Set("session_id", "invalid-session")
+	form.Set("idea", "test idea")
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardRefine(rec, req)
+
+	// Should return 400 Bad Request for invalid session
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 for invalid session, got %d", rec.Code)
+	}
+}
+
 func TestHandleWizardBreakdown(t *testing.T) {
 	srv := &Server{
 		tmpls:       make(map[string]*template.Template),

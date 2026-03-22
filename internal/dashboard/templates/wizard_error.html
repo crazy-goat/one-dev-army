@@ -1,0 +1,31 @@
+<div class="wizard-step">
+  <h2>Error</h2>
+  
+  <div class="error-container" style="padding: 1.5rem; background: var(--surface); border-radius: 8px; border: 1px solid var(--error); margin: 1rem 0;">
+    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+      <span style="font-size: 1.5rem;">⚠️</span>
+      <strong style="color: var(--error);">Something went wrong</strong>
+    </div>
+    <p style="color: var(--text); margin: 0;">{{.Error}}</p>
+  </div>
+  
+  <div class="form-actions">
+    <button type="button" class="btn" onclick="closeWizardModal()">Cancel</button>
+    <div class="nav-buttons">
+      <button type="button" class="btn" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}" hx-target="#wizard-modal-content">
+        ← Back
+      </button>
+      <button type="button" class="btn btn-primary" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}" hx-target="#wizard-modal-content">
+        Try Again
+      </button>
+    </div>
+  </div>
+</div>
+
+<style>
+.wizard-step { max-width: 800px; margin: 0 auto; }
+.form-actions { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1.5rem; }
+.nav-buttons { display: flex; gap: 0.5rem; }
+.btn-primary { background: var(--accent); color: white; border: none; }
+.btn-primary:hover { background: var(--accent-hover); }
+</style>
