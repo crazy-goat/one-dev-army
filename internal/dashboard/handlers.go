@@ -923,7 +923,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), LLMRequestTimeout)
 	defer cancel()
 
-	model := opencode.ParseModelRef(DefaultLLMModel)
+	model := opencode.ParseModelRef(s.wizardLLM)
 	var output strings.Builder
 	response, err := s.oc.SendMessageStream(ctx, llmSession.ID, prompt, model, &output)
 	if err != nil {
@@ -1075,7 +1075,7 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), LLMRequestTimeout)
 	defer cancel()
 
-	model := opencode.ParseModelRef(DefaultLLMModel)
+	model := opencode.ParseModelRef(s.wizardLLM)
 	var output strings.Builder
 	response, err := s.oc.SendMessageStream(ctx, llmSession.ID, prompt, model, &output)
 	if err != nil {

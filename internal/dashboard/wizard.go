@@ -11,8 +11,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// DefaultLLMModel is the default model used for wizard LLM calls
-const DefaultLLMModel = "claude-3-5-sonnet-20241022"
+// DefaultLLMModel is the fallback model used for wizard LLM calls
+// when no model is configured via config.yaml
+const DefaultLLMModel = "nexos-ai/Kimi K2.5"
 
 // SessionCleanupInterval is how often to check for old sessions
 const SessionCleanupInterval = 5 * time.Minute

@@ -43,6 +43,7 @@ type Server struct {
 	wizardStore   *WizardSessionStore
 	oc            *opencode.Client
 	csrfKey       []byte
+	wizardLLM     string
 }
 
 // generateCSRFToken generates a new random CSRF token
@@ -95,7 +96,7 @@ func chainMiddleware(handler http.HandlerFunc, middlewares ...func(http.HandlerF
 	return handler
 }
 
-func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, projectNumber int, orchestrator *mvp.Orchestrator, oc *opencode.Client) (*Server, error) {
+func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, projectNumber int, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string) (*Server, error) {
 	tmpls, err := parseTemplates()
 	if err != nil {
 		return nil, err
@@ -124,6 +125,10 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 		wizardStore: NewWizardSessionStore(),
 		oc:          oc,
 		csrfKey:     csrfKey,
+		wizardLLM:   wizardLLM,
+	}
+	if s.wizardLLM == "" {
+		s.wizardLLM = DefaultLLMModel
 	}
 	s.routes()
 	return s, nil

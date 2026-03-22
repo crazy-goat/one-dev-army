@@ -511,8 +511,8 @@ func TestValidWizardTypes(t *testing.T) {
 }
 
 func TestDefaultLLMModel(t *testing.T) {
-	if DefaultLLMModel != "claude-3-5-sonnet-20241022" {
-		t.Errorf("expected DefaultLLMModel to be 'claude-3-5-sonnet-20241022', got %q", DefaultLLMModel)
+	if DefaultLLMModel != "nexos-ai/Kimi K2.5" {
+		t.Errorf("expected DefaultLLMModel to be 'nexos-ai/Kimi K2.5', got %q", DefaultLLMModel)
 	}
 }
 

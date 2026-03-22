@@ -245,7 +245,7 @@ func runServe() error {
 		}
 	}()
 
-	srv, err := dashboard.NewServer(cfg.Dashboard.Port, store, pool.Workers, gh, project.Number, orchestrator, oc)
+	srv, err := dashboard.NewServer(cfg.Dashboard.Port, store, pool.Workers, gh, project.Number, orchestrator, oc, cfg.Planning.LLM)
 	if err != nil {
 		return fmt.Errorf("creating dashboard server: %w", err)
 	}
