@@ -24,6 +24,7 @@ type taskCard struct {
 	Worker   string
 	Assignee string
 	Labels   []string
+	PRURL    string
 }
 
 type boardData struct {
@@ -34,8 +35,8 @@ type boardData struct {
 	CurrentIssue string
 	Backlog      []taskCard
 	Progress     []taskCard
-	Review       []taskCard
-	Merging      []taskCard
+	AIReview     []taskCard
+	Approve      []taskCard
 	Done         []taskCard
 	Blocked      []taskCard
 	Failed       []taskCard
@@ -69,10 +70,10 @@ func placeholderBoard() boardData {
 		Progress: []taskCard{
 			{ID: 3, Title: "Implement auth service", Status: "in_progress", Worker: "worker-1"},
 		},
-		Review: []taskCard{
-			{ID: 4, Title: "Database migrations", Status: "review"},
+		AIReview: []taskCard{
+			{ID: 4, Title: "Database migrations", Status: "ai_review"},
 		},
-		Merging: []taskCard{},
+		Approve: []taskCard{},
 		Done: []taskCard{
 			{ID: 5, Title: "Project skeleton", Status: "done"},
 		},
@@ -207,10 +208,10 @@ func inferColumnFromIssue(issue github.Issue) string {
 		return "In Progress"
 	}
 	if labelSet["review"] || labelSet["in-review"] || labelSet["pr-ready"] {
-		return "Review"
+		return "AI Review"
 	}
-	if labelSet["merging"] || labelSet["merge-ready"] {
-		return "Merging"
+	if labelSet["awaiting-approval"] || labelSet["approve"] || labelSet["merge-ready"] {
+		return "Approve"
 	}
 	if labelSet["done"] || labelSet["completed"] || labelSet["finished"] {
 		return "Done"
@@ -238,10 +239,15 @@ func (s *Server) addCardToColumn(data *boardData, col string, issue github.Issue
 		data.Backlog = append(data.Backlog, card)
 	case "In Progress":
 		data.Progress = append(data.Progress, card)
-	case "Review":
-		data.Review = append(data.Review, card)
-	case "Merging":
-		data.Merging = append(data.Merging, card)
+	case "AI Review":
+		data.AIReview = append(data.AIReview, card)
+	case "Approve":
+		if s.store != nil {
+			if prURL, err := s.store.GetStepResponse(issue.Number, "create-pr"); err == nil && prURL != "" {
+				card.PRURL = prURL
+			}
+		}
+		data.Approve = append(data.Approve, card)
 	case "Done":
 		data.Done = append(data.Done, card)
 	case "Blocked":
@@ -348,6 +354,99 @@ func (s *Server) handleRetryFresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("[Dashboard] Retry fresh #%d — will start from scratch", issueNum)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (s *Server) handleDecline(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	issueNum := 0
+	fmt.Sscanf(id, "%d", &issueNum)
+	if issueNum == 0 || s.gh == nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	reason := r.FormValue("reason")
+
+	if err := s.gh.RemoveLabel(issueNum, "awaiting-approval"); err != nil {
+		log.Printf("[Dashboard] Error removing awaiting-approval label from #%d: %v", issueNum, err)
+	}
+
+	if reason != "" {
+		comment := fmt.Sprintf("**Declined** — sent back for fixes.\n\n%s", reason)
+		if err := s.gh.AddComment(issueNum, comment); err != nil {
+			log.Printf("[Dashboard] Error adding decline comment to #%d: %v", issueNum, err)
+		}
+	}
+
+	if s.store != nil {
+		if err := s.store.DeleteSteps(issueNum); err != nil {
+			log.Printf("[Dashboard] Error deleting steps for #%d: %v", issueNum, err)
+		}
+	}
+
+	log.Printf("[Dashboard] Declined #%d — reason: %s", issueNum, reason)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	issueNum := 0
+	fmt.Sscanf(id, "%d", &issueNum)
+	if issueNum == 0 || s.gh == nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	branch, err := s.gh.FindPRBranch(issueNum)
+	if err != nil {
+		log.Printf("[Dashboard] Error finding PR for #%d: %v", issueNum, err)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	log.Printf("[Dashboard] Approving & merging PR for #%d (branch: %s)", issueNum, branch)
+	if err := s.gh.MergePR(branch); err != nil {
+		log.Printf("[Dashboard] ✗ Merge failed for #%d (likely conflict): %v", issueNum, err)
+
+		// Close PR and delete branch
+		if closeErr := s.gh.ClosePR(branch); closeErr != nil {
+			log.Printf("[Dashboard] Error closing PR for #%d: %v", issueNum, closeErr)
+		}
+
+		// Remove labels, clear steps — ticket goes back to backlog for fresh start
+		if rmErr := s.gh.RemoveLabel(issueNum, "awaiting-approval"); rmErr != nil {
+			log.Printf("[Dashboard] Error removing awaiting-approval label from #%d: %v", issueNum, rmErr)
+		}
+		if s.store != nil {
+			if delErr := s.store.DeleteSteps(issueNum); delErr != nil {
+				log.Printf("[Dashboard] Error deleting steps for #%d: %v", issueNum, delErr)
+			}
+		}
+
+		comment := fmt.Sprintf("Merge failed (likely conflict). PR closed, task reset for fresh start.\n\nError: %s", err.Error())
+		if cmtErr := s.gh.AddComment(issueNum, comment); cmtErr != nil {
+			log.Printf("[Dashboard] Error adding comment to #%d: %v", issueNum, cmtErr)
+		}
+
+		if s.projectNumber > 0 {
+			s.gh.MoveItemToColumn(s.projectNumber, issueNum, "Backlog")
+		}
+
+		log.Printf("[Dashboard] ✗ Merge conflict on #%d — PR closed, reset to backlog", issueNum)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	if err := s.gh.RemoveLabel(issueNum, "awaiting-approval"); err != nil {
+		log.Printf("[Dashboard] Error removing awaiting-approval label from #%d: %v", issueNum, err)
+	}
+
+	if s.projectNumber > 0 {
+		s.gh.MoveItemToColumn(s.projectNumber, issueNum, "Done")
+	}
+
+	log.Printf("[Dashboard] ✓ Approved & merged #%d", issueNum)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

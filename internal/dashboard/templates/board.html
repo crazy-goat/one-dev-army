@@ -22,6 +22,11 @@
 .col-blocked .card{border-color:var(--red)}
 .col-failed .card{border-color:#e74c3c;background:rgba(231,76,60,0.05)}
 .col-failed .column-title{color:#e74c3c}
+.col-approve .card{border-color:#9b59b6;background:rgba(155,89,182,0.05)}
+.col-approve .column-title{color:#9b59b6}
+.card .card-pr{margin-top:.3rem}
+.card .card-pr a{color:#9b59b6;font-size:.8rem;font-weight:600;text-decoration:none}
+.card .card-pr a:hover{text-decoration:underline}
 .workers-panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem}
 .workers-panel h2{margin-bottom:.75rem}
 .empty-state{color:var(--muted);font-size:.85rem;text-align:center;padding:2rem 1rem;font-style:italic}
@@ -91,8 +96,8 @@
   </div>
 
   <div class="column">
-    <div class="column-title">Review <span class="count">{{len .Review}}</span></div>
-    {{range .Review}}
+    <div class="column-title">AI Review <span class="count">{{len .AIReview}}</span></div>
+    {{range .AIReview}}
     <div class="card">
       <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
@@ -100,21 +105,26 @@
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
     </div>
     {{else}}
-    <div class="empty-state">No tickets in review</div>
+    <div class="empty-state">No tickets in AI review</div>
     {{end}}
   </div>
 
-  <div class="column">
-    <div class="column-title">Merging <span class="count">{{len .Merging}}</span></div>
-    {{range .Merging}}
+  <div class="column col-approve">
+    <div class="column-title">Approve <span class="count">{{len .Approve}}</span></div>
+    {{range .Approve}}
     <div class="card">
       <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
+      {{if .PRURL}}<div class="card-pr"><a href="{{.PRURL}}" target="_blank">View PR →</a></div>{{end}}
       {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
+      <div class="card-actions">
+        <form method="post" action="/approve-merge/{{.ID}}"><button type="submit" class="btn btn-success">Approve & Merge</button></form>
+        <button type="button" class="btn btn-danger" onclick="openDeclineModal({{.ID}}, '{{.Title}}')">Decline</button>
+      </div>
     </div>
     {{else}}
-    <div class="empty-state">No tickets merging</div>
+    <div class="empty-state">No tickets awaiting approval</div>
     {{end}}
   </div>
 
@@ -174,6 +184,41 @@
     <p style="color:var(--muted);font-size:.85rem">Loading worker status...</p>
   </div>
 </div>
+
+<!-- Decline modal -->
+<div id="decline-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center">
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:1.5rem;width:500px;max-width:90vw">
+    <h3 style="margin-bottom:.25rem">Decline #<span id="decline-issue-id"></span></h3>
+    <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem" id="decline-issue-title"></p>
+    <form method="post" id="decline-form">
+      <label for="decline-reason" style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.4rem">What needs to be fixed?</label>
+      <textarea id="decline-reason" name="reason" rows="5" required
+        style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.85rem;resize:vertical"
+        placeholder="Describe what's wrong and what the AI should fix..."></textarea>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem">
+        <button type="button" class="btn" onclick="closeDeclineModal()">Cancel</button>
+        <button type="submit" class="btn btn-danger">Decline & Send Back</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openDeclineModal(id, title) {
+  document.getElementById('decline-issue-id').textContent = id;
+  document.getElementById('decline-issue-title').textContent = title;
+  document.getElementById('decline-form').action = '/decline/' + id;
+  document.getElementById('decline-reason').value = '';
+  var m = document.getElementById('decline-modal');
+  m.style.display = 'flex';
+}
+function closeDeclineModal() {
+  document.getElementById('decline-modal').style.display = 'none';
+}
+document.getElementById('decline-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeDeclineModal();
+});
+</script>
 
 <!-- Modal container for wizard -->
 <div id="modal-container"></div>

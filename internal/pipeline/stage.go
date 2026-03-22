@@ -20,8 +20,8 @@ type Column string
 const (
 	ColumnBacklog    Column = "Backlog"
 	ColumnInProgress Column = "In Progress"
-	ColumnReview     Column = "Review"
-	ColumnMerging    Column = "Merging"
+	ColumnAIReview   Column = "AI Review"
+	ColumnApprove    Column = "Approve"
 	ColumnDone       Column = "Done"
 	ColumnBlocked    Column = "Blocked"
 )
@@ -45,9 +45,9 @@ func (s Stage) Column() Column {
 	case StageAnalysis, StagePlanning, StageCoding, StageTesting:
 		return ColumnInProgress
 	case StagePlanReview, StageCodeReview:
-		return ColumnReview
+		return ColumnAIReview
 	case StageMerging:
-		return ColumnMerging
+		return ColumnApprove
 	case StageDone:
 		return ColumnDone
 	case StageBlocked:

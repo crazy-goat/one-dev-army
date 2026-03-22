@@ -67,7 +67,7 @@ Check for:
 Set "approved" to true if the code is acceptable, false if changes are required.
 Set "already_done" to true ONLY if the issue was already fully implemented before this PR (extremely rare).`
 
-const maxCRRetries = 3
+const maxCRRetries = 10
 
 const fixFromReviewPrompt = `Fix the issues found during code review for GitHub issue #%d: %s
 
@@ -288,9 +288,9 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	task.Status = StatusDone
 	task.Result = &TaskResult{
 		PRURL:   prURL,
-		Summary: fmt.Sprintf("Implemented #%d: %s", task.Issue.Number, task.Issue.Title),
+		Summary: fmt.Sprintf("Implemented #%d: %s — awaiting manual approval", task.Issue.Number, task.Issue.Title),
 	}
-	log.Printf("[Worker %d] ✓ DONE #%d in %s → %s", w.id, task.Issue.Number, time.Since(start).Round(time.Second), prURL)
+	log.Printf("[Worker %d] ✓ DONE #%d in %s → %s (awaiting approval)", w.id, task.Issue.Number, time.Since(start).Round(time.Second), prURL)
 	return nil
 }
 

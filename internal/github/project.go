@@ -10,8 +10,8 @@ import (
 var ProjectColumns = []string{
 	"Backlog",
 	"In Progress",
-	"Review",
-	"Merging",
+	"AI Review",
+	"Approve",
 	"Done",
 	"Blocked",
 }
@@ -74,6 +74,7 @@ func (c *Client) setupProject(projectNumber int) {
 }
 
 type fieldOption struct {
+	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
@@ -118,15 +119,21 @@ func (c *Client) EnsureProjectColumns(projectID string, projectNumber int) error
 	}
 
 	c.StatusFieldID = statusField.ID
-	log.Printf("[GitHub] Status field ID: %s", statusField.ID)
 
-	// Check if options match exactly (same names, same order).
 	if optionsMatch(statusField.Options, ProjectColumns) {
+		c.StatusOptionIDs = make(map[string]string, len(statusField.Options))
+		for _, opt := range statusField.Options {
+			c.StatusOptionIDs[opt.Name] = opt.ID
+		}
+		log.Printf("[GitHub] Status field ID: %s, options: %v", statusField.ID, c.StatusOptionIDs)
 		return nil
 	}
 
-	// Options differ — overwrite with the canonical set.
-	return c.updateStatusFieldOptions(statusField.ID, ProjectColumns)
+	// Options differ — overwrite with the canonical set, then re-fetch to get new IDs.
+	if err := c.updateStatusFieldOptions(statusField.ID, ProjectColumns); err != nil {
+		return err
+	}
+	return c.refreshStatusOptionIDs(projectNumber, owner)
 }
 
 // optionsMatch returns true if the existing options match the expected list exactly.
@@ -161,8 +168,8 @@ func (c *Client) createStatusField(projectID string, projectNumber int, owner st
 var columnColors = map[string]string{
 	"Backlog":     "GRAY",
 	"In Progress": "BLUE",
-	"Review":      "YELLOW",
-	"Merging":     "PURPLE",
+	"AI Review":   "YELLOW",
+	"Approve":     "PURPLE",
 	"Done":        "GREEN",
 	"Blocked":     "RED",
 }
@@ -186,9 +193,6 @@ func (c *Client) GetProjectItemsByStatus(projectNumber int) (map[string][]Projec
 		return nil, fmt.Errorf("listing project items: %w", err)
 	}
 
-	// Debug: log the raw output
-	log.Printf("[GitHub] Project item-list output: %s", string(out))
-
 	var result struct {
 		Items []struct {
 			ID     string `json:"id"`
@@ -204,8 +208,6 @@ func (c *Client) GetProjectItemsByStatus(projectNumber int) (map[string][]Projec
 		return nil, fmt.Errorf("parsing project items: %w", err)
 	}
 
-	log.Printf("[GitHub] Parsed %d project items", len(result.Items))
-
 	// Group items by status
 	itemsByStatus := make(map[string][]ProjectItem)
 	for _, col := range ProjectColumns {
@@ -213,8 +215,7 @@ func (c *Client) GetProjectItemsByStatus(projectNumber int) (map[string][]Projec
 	}
 
 	for _, item := range result.Items {
-		// Find the Status field
-		status := "Backlog" // Default status
+		status := "Backlog"
 		for _, field := range item.Fields {
 			if field.Name == "Status" && field.Value != "" {
 				status = field.Value
@@ -229,6 +230,12 @@ func (c *Client) GetProjectItemsByStatus(projectNumber int) (map[string][]Projec
 		}
 		itemsByStatus[status] = append(itemsByStatus[status], projectItem)
 	}
+
+	var counts []string
+	for _, col := range ProjectColumns {
+		counts = append(counts, fmt.Sprintf("%s:%d", col, len(itemsByStatus[col])))
+	}
+	log.Printf("[GitHub] Project items: %s", strings.Join(counts, " | "))
 
 	return itemsByStatus, nil
 }
@@ -294,21 +301,20 @@ func (c *Client) MoveItemToColumn(projectNumber int, issueNumber int, column str
 		fieldID = "Status"
 	}
 
+	optionID := column
+	if c.StatusOptionIDs != nil {
+		if id, ok := c.StatusOptionIDs[column]; ok {
+			optionID = id
+		}
+	}
+
 	_, err = c.ghNoRepo("project", "item-edit",
 		"--id", itemID,
 		"--project-id", projectID,
 		"--field-id", fieldID,
-		"--single-select-option-id", column)
+		"--single-select-option-id", optionID)
 	if err != nil {
-		log.Printf("[GitHub] item-edit with option-id failed, trying with --text: %v", err)
-		_, err = c.ghNoRepo("project", "item-edit",
-			"--id", itemID,
-			"--project-id", projectID,
-			"--field-id", fieldID,
-			"--text", column)
-		if err != nil {
-			return fmt.Errorf("setting item status to %q: %w", column, err)
-		}
+		return fmt.Errorf("setting item status to %q: %w", column, err)
 	}
 
 	log.Printf("[GitHub] Moved #%d to %q in project %d", issueNumber, column, projectNumber)
@@ -342,4 +348,30 @@ func (c *Client) updateStatusFieldOptions(fieldID string, options []string) erro
 		return fmt.Errorf("updating Status field options: %w", err)
 	}
 	return nil
+}
+
+func (c *Client) refreshStatusOptionIDs(projectNumber int, owner string) error {
+	out, err := c.ghNoRepo("project", "field-list", fmt.Sprintf("%d", projectNumber),
+		"--owner", owner, "--format", "json")
+	if err != nil {
+		return fmt.Errorf("refreshing status options: %w", err)
+	}
+
+	var fl fieldList
+	if err := json.Unmarshal(out, &fl); err != nil {
+		return fmt.Errorf("parsing refreshed fields: %w", err)
+	}
+
+	for _, f := range fl.Fields {
+		if f.Name == "Status" {
+			c.StatusOptionIDs = make(map[string]string, len(f.Options))
+			for _, opt := range f.Options {
+				c.StatusOptionIDs[opt.Name] = opt.ID
+			}
+			log.Printf("[GitHub] Refreshed Status options: %v", c.StatusOptionIDs)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("Status field not found after update")
 }

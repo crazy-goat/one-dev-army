@@ -262,6 +262,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /reject/{id}", s.handleReject)
 	s.mux.HandleFunc("POST /retry/{id}", s.handleRetry)
 	s.mux.HandleFunc("POST /retry-fresh/{id}", s.handleRetryFresh)
+	s.mux.HandleFunc("POST /approve-merge/{id}", s.handleApproveMerge)
+	s.mux.HandleFunc("POST /decline/{id}", s.handleDecline)
 
 	// Wizard routes - with CSRF and rate limiting protection
 	s.mux.HandleFunc("GET /wizard/new", s.rateLimitMiddleware(s.handleWizardNew))

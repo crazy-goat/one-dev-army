@@ -120,6 +120,27 @@ func (c *Client) MergePR(branch string) error {
 	return nil
 }
 
+func (c *Client) ClosePR(branch string) error {
+	_, err := c.gh("pr", "close", branch, "--delete-branch")
+	if err != nil {
+		return fmt.Errorf("closing PR for branch %s: %w", branch, err)
+	}
+	return nil
+}
+
+func (c *Client) FindPRBranch(issueNumber int) (string, error) {
+	out, err := c.gh("pr", "list", "--json", "headRefName,number",
+		"-q", fmt.Sprintf(".[] | select(.headRefName | startswith(\"oda-%d-\")) | .headRefName", issueNumber))
+	if err != nil {
+		return "", fmt.Errorf("finding PR branch for issue #%d: %w", issueNumber, err)
+	}
+	branch := strings.TrimSpace(string(out))
+	if branch == "" {
+		return "", fmt.Errorf("no open PR found for issue #%d", issueNumber)
+	}
+	return branch, nil
+}
+
 type Milestone struct {
 	Title     string    `json:"title"`
 	Number    int       `json:"number"`
