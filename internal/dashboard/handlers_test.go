@@ -651,6 +651,53 @@ func TestHandleWizardCancel(t *testing.T) {
 	}
 }
 
+// TestHandleWizardPage tests the full page wizard endpoint
+func TestHandleWizardPage(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	// Test creating a feature wizard page
+	req := httptest.NewRequest(http.MethodGet, "/wizard?type=feature", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardPage(rec, req)
+
+	// Should return 200 OK or 500 if template missing
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 200 or 500, got %d", rec.Code)
+	}
+
+	// Check that a session was created
+	if srv.wizardStore.Count() != 1 {
+		t.Errorf("expected 1 session, got %d", srv.wizardStore.Count())
+	}
+
+	// Test creating a bug wizard page
+	req = httptest.NewRequest(http.MethodGet, "/wizard?type=bug", nil)
+	rec = httptest.NewRecorder()
+
+	srv.handleWizardPage(rec, req)
+
+	// Should have 2 sessions now
+	if srv.wizardStore.Count() != 2 {
+		t.Errorf("expected 2 sessions, got %d", srv.wizardStore.Count())
+	}
+
+	// Test default type (should default to feature)
+	req = httptest.NewRequest(http.MethodGet, "/wizard", nil)
+	rec = httptest.NewRecorder()
+
+	srv.handleWizardPage(rec, req)
+
+	// Should have 3 sessions now
+	if srv.wizardStore.Count() != 3 {
+		t.Errorf("expected 3 sessions, got %d", srv.wizardStore.Count())
+	}
+}
+
 // TestHandleWizardModal_CreatesSession tests that modal creates a new session
 func TestHandleWizardModal_CreatesSession(t *testing.T) {
 	srv := &Server{
@@ -859,23 +906,17 @@ func TestLayoutNavigationButtons(t *testing.T) {
 
 	output := buf.String()
 
-	// Check for New Feature button with correct HTMX attributes
-	if !strings.Contains(output, `hx-get="/wizard/modal?type=feature"`) {
-		t.Error("layout template missing New Feature button with correct hx-get attribute")
+	// Check for New Feature button as a link (changed from HTMX to regular links)
+	if !strings.Contains(output, `href="/wizard?type=feature"`) {
+		t.Error("layout template missing New Feature button with correct href attribute")
 	}
 	if !strings.Contains(output, "+ New Feature") {
 		t.Error("layout template missing 'New Feature' button text")
 	}
-	if !strings.Contains(output, `hx-target="body"`) {
-		t.Error("layout template missing hx-target='body' attribute")
-	}
-	if !strings.Contains(output, `hx-swap="beforeend"`) {
-		t.Error("layout template missing hx-swap='beforeend' attribute")
-	}
 
-	// Check for New Bug button with correct HTMX attributes
-	if !strings.Contains(output, `hx-get="/wizard/modal?type=bug"`) {
-		t.Error("layout template missing New Bug button with correct hx-get attribute")
+	// Check for New Bug button as a link (changed from HTMX to regular links)
+	if !strings.Contains(output, `href="/wizard?type=bug"`) {
+		t.Error("layout template missing New Bug button with correct href attribute")
 	}
 	if !strings.Contains(output, "+ New Bug") {
 		t.Error("layout template missing 'New Bug' button text")
