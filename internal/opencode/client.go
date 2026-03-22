@@ -45,10 +45,27 @@ type PermissionRule struct {
 	Action     string `json:"action"`
 }
 
+type OutputFormat struct {
+	Type       string          `json:"type"`
+	Schema     json.RawMessage `json:"schema,omitempty"`
+	RetryCount *int            `json:"retryCount,omitempty"`
+}
+
 type SendMessageRequest struct {
-	Parts  []Part    `json:"parts"`
-	Model  *ModelRef `json:"model,omitempty"`
-	System string    `json:"system,omitempty"`
+	Parts  []Part        `json:"parts"`
+	Model  *ModelRef     `json:"model,omitempty"`
+	System string        `json:"system,omitempty"`
+	Format *OutputFormat `json:"format,omitempty"`
+}
+
+type StructuredResponse struct {
+	Info struct {
+		ID         string          `json:"id"`
+		SessionID  string          `json:"sessionID"`
+		Role       string          `json:"role"`
+		Structured json.RawMessage `json:"structured"`
+	} `json:"info"`
+	Parts []Part `json:"parts"`
 }
 
 const systemPromptNoQuestions = "You are running in a fully automated pipeline with NO human operator. " +
@@ -202,6 +219,56 @@ func (c *Client) SendMessage(sessionID, prompt string, model ModelRef, output io
 	return c.SendMessageStream(context.Background(), sessionID, prompt, model, output)
 }
 
+func (c *Client) SendMessageStructured(ctx context.Context, sessionID, prompt string, model ModelRef, schema json.RawMessage, result any) error {
+	reqBody := SendMessageRequest{
+		Parts:  []Part{{Type: "text", Text: prompt}},
+		Model:  &model,
+		System: systemPromptNoQuestions,
+		Format: &OutputFormat{
+			Type:   "json_schema",
+			Schema: schema,
+		},
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("structured message: marshaling request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.baseURL+"/session/"+sessionID+"/message", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("structured message: creating request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("structured message request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("structured message: status %d: %s", resp.StatusCode, formatAPIError(respBody))
+	}
+
+	var sResp StructuredResponse
+	if err := json.NewDecoder(resp.Body).Decode(&sResp); err != nil {
+		return fmt.Errorf("structured message: decoding response: %w", err)
+	}
+
+	if sResp.Info.Structured == nil {
+		return fmt.Errorf("structured message: no structured data in response")
+	}
+
+	if err := json.Unmarshal(sResp.Info.Structured, result); err != nil {
+		return fmt.Errorf("structured message: unmarshaling structured data: %w", err)
+	}
+
+	return nil
+}
+
 func (c *Client) SendMessageAsync(sessionID, prompt string, model ModelRef) error {
 	reqBody := SendMessageRequest{
 		Parts:  []Part{{Type: "text", Text: prompt}},
@@ -288,10 +355,10 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 
 	connected := make(chan struct{})
 	done := make(chan struct{})
-	var fullText strings.Builder
 	var streamErr error
 	var assistantMsgID string
-	seenParts := make(map[string]int)
+	msgTexts := make(map[string]*strings.Builder)
+	msgRoles := make(map[string]string)
 
 	go func() {
 		defer close(done)
@@ -328,34 +395,14 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 				if props.SessionID != sessionID || props.Field != "text" {
 					continue
 				}
-				fullText.WriteString(props.Delta)
-				seenParts[props.PartID] = fullText.Len()
-				if output != nil {
+				sb, ok := msgTexts[props.MessageID]
+				if !ok {
+					sb = &strings.Builder{}
+					msgTexts[props.MessageID] = sb
+				}
+				sb.WriteString(props.Delta)
+				if output != nil && (msgRoles[props.MessageID] == "assistant" || assistantMsgID == "" || props.MessageID == assistantMsgID) {
 					fmt.Fprint(output, props.Delta)
-				}
-
-			case "message.part.updated":
-				var props partUpdatedProperties
-				if err := json.Unmarshal(evt.Properties, &props); err != nil {
-					continue
-				}
-				if props.Part.SessionID != sessionID || props.Part.Type != "text" {
-					continue
-				}
-				prevLen, seen := seenParts[props.Part.ID]
-				if !seen && props.Part.Text != "" {
-					fullText.WriteString(props.Part.Text)
-					seenParts[props.Part.ID] = fullText.Len()
-					if output != nil {
-						fmt.Fprint(output, props.Part.Text)
-					}
-				} else if seen && len(props.Part.Text) > prevLen {
-					newText := props.Part.Text[prevLen:]
-					fullText.WriteString(newText)
-					seenParts[props.Part.ID] = fullText.Len()
-					if output != nil {
-						fmt.Fprint(output, newText)
-					}
 				}
 
 			case "message.updated":
@@ -363,8 +410,11 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 				if err := json.Unmarshal(evt.Properties, &props); err != nil {
 					continue
 				}
-				if props.Info.SessionID == sessionID && props.Info.Role == "assistant" {
-					assistantMsgID = props.Info.ID
+				if props.Info.SessionID == sessionID {
+					msgRoles[props.Info.ID] = props.Info.Role
+					if props.Info.Role == "assistant" {
+						assistantMsgID = props.Info.ID
+					}
 				}
 
 			case "session.idle":
@@ -424,6 +474,20 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 		return nil, streamErr
 	}
 
+	var assistantText string
+	if assistantMsgID != "" {
+		if sb, ok := msgTexts[assistantMsgID]; ok {
+			assistantText = sb.String()
+		}
+	}
+	if assistantText == "" {
+		for msgID, sb := range msgTexts {
+			if msgRoles[msgID] == "assistant" || msgRoles[msgID] == "" {
+				assistantText = sb.String()
+			}
+		}
+	}
+
 	msg := &Message{
 		Info: MessageInfo{
 			ID:        assistantMsgID,
@@ -431,7 +495,7 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 			Role:      "assistant",
 		},
 		Parts: []Part{
-			{Type: "text", Text: fullText.String()},
+			{Type: "text", Text: assistantText},
 		},
 	}
 

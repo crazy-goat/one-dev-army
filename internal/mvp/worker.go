@@ -56,12 +56,7 @@ const codeReviewPrompt = `You are reviewing code changes for GitHub issue #%d: %
 The changes are in PR %s in repository %s.
 Fetch the PR diff yourself using available tools, then review.
 
-IMPORTANT: If you discover that the issue requirements were ALREADY fully satisfied by existing code
-(before this PR's changes) and the PR is completely unnecessary, respond with a single line starting
-with the exact prefix ALREADY_DONE: followed by concrete evidence (e.g. "method Foo already existed in bar.go:42").
-Do NOT use this if the PR makes any meaningful changes. This should be extremely rare.
-
-Otherwise check for:
+Check for:
 1. Correctness — does the code do what the issue requires?
 2. Code quality — clean, readable, well-structured?
 3. Error handling — are errors handled properly?
@@ -69,15 +64,8 @@ Otherwise check for:
 5. Security — any vulnerabilities introduced?
 6. Performance — any obvious performance issues?
 
-Do NOT ask any questions — just produce the output.
-
-Respond with a JSON object:
-{
-  "approved": true/false,
-  "issues": ["list of issues found, if any"],
-  "suggestions": ["list of improvements, if any"],
-  "verdict": "brief summary of review"
-}`
+Set "approved" to true if the code is acceptable, false if changes are required.
+Set "already_done" to true ONLY if the issue was already fully implemented before this PR (extremely rare).`
 
 const maxCRRetries = 3
 
@@ -369,19 +357,76 @@ func (w *Worker) fixFromReview(ctx context.Context, task *Task, review string) e
 	return nil
 }
 
+var crSchema = json.RawMessage(`{
+	"type": "object",
+	"properties": {
+		"approved":     {"type": "boolean"},
+		"already_done": {"type": "boolean"},
+		"issues":       {"type": "array", "items": {"type": "string"}},
+		"suggestions":  {"type": "array", "items": {"type": "string"}},
+		"verdict":      {"type": "string"}
+	},
+	"required": ["approved", "issues", "suggestions", "verdict"]
+}`)
+
+type crResult struct {
+	Approved    bool     `json:"approved"`
+	AlreadyDone bool     `json:"already_done"`
+	Issues      []string `json:"issues"`
+	Suggestions []string `json:"suggestions"`
+	Verdict     string   `json:"verdict"`
+}
+
 func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (approved bool, review string, err error) {
 	prompt := fmt.Sprintf(codeReviewPrompt, task.Issue.Number, task.Issue.Title, prURL, w.gh.Repo)
-	review, err = w.llmStep(ctx, task, "code-review", prompt, w.cfg.Planning.LLM)
+
+	sessionTitle := fmt.Sprintf("code-review-%d", task.Issue.Number)
+	session, err := w.oc.CreateSession(sessionTitle)
 	if err != nil {
-		return false, "", err
+		return false, "", fmt.Errorf("creating session: %w", err)
 	}
-	if reason := checkAlreadyDone(review); reason != "" {
-		log.Printf("[Worker %d] Code review detected ticket already done: %s", w.id, reason)
-		return false, "", fmt.Errorf("%w: %s", ErrAlreadyDone, reason)
+	task.SetSessionID(session.ID)
+	defer task.SetSessionID("")
+	defer func() {
+		if delErr := w.oc.DeleteSession(session.ID); delErr != nil {
+			log.Printf("[Worker %d] failed to delete session %s: %v", w.id, session.ID, delErr)
+		}
+	}()
+
+	var stepID int64
+	if w.store != nil {
+		id, sErr := w.store.InsertStep(task.Issue.Number, "code-review", prompt, session.ID)
+		if sErr != nil {
+			log.Printf("[Worker %d] failed to insert step: %v", w.id, sErr)
+		} else {
+			stepID = id
+		}
 	}
+
+	model := opencode.ParseModelRef(w.cfg.Planning.LLM)
+	var result crResult
+	if err := w.oc.SendMessageStructured(ctx, session.ID, prompt, model, crSchema, &result); err != nil {
+		if w.store != nil && stepID > 0 {
+			_ = w.store.FailStep(stepID, err.Error())
+		}
+		return false, "", fmt.Errorf("code review: %w", err)
+	}
+
+	reviewJSON, _ := json.Marshal(result)
+	review = string(reviewJSON)
+
+	if w.store != nil && stepID > 0 {
+		_ = w.store.FinishStep(stepID, review)
+	}
+
 	log.Printf("[Worker %d] Code review result: %s", w.id, review)
-	approved = checkCRApproved(review)
-	return approved, review, nil
+
+	if result.AlreadyDone {
+		log.Printf("[Worker %d] Code review detected ticket already done: %s", w.id, result.Verdict)
+		return false, "", fmt.Errorf("%w: %s", ErrAlreadyDone, result.Verdict)
+	}
+
+	return result.Approved, review, nil
 }
 
 func (w *Worker) createPR(ctx context.Context, task *Task) (string, error) {
@@ -484,28 +529,6 @@ var prURLRe = regexp.MustCompile(`https://github\.com/[^\s]+/pull/\d+`)
 func extractPRURL(errMsg string) string {
 	match := prURLRe.FindString(errMsg)
 	return match
-}
-
-var jsonBlockRe = regexp.MustCompile("(?s)```(?:json)?\\s*\\n(\\{.*?\\})\\s*```")
-var bareJSONRe = regexp.MustCompile(`(?s)\{[^{}]*"approved"\s*:[^{}]*\}`)
-
-func checkCRApproved(review string) bool {
-	var jsonStr string
-	if m := jsonBlockRe.FindAllStringSubmatch(review, -1); len(m) > 0 {
-		jsonStr = m[len(m)-1][1]
-	} else if m := bareJSONRe.FindAllString(review, -1); len(m) > 0 {
-		jsonStr = m[len(m)-1]
-	}
-	if jsonStr == "" {
-		return false
-	}
-	var result struct {
-		Approved bool `json:"approved"`
-	}
-	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		return false
-	}
-	return result.Approved
 }
 
 func checkAlreadyDone(response string) string {
