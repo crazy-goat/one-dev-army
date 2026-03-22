@@ -30,8 +30,22 @@ type MessageInfo struct {
 }
 
 type Part struct {
-	Type string `json:"type"`
-	Text string `json:"text,omitempty"`
+	Type       string      `json:"type"`
+	Text       string      `json:"text,omitempty"`
+	ToolCall   *ToolCall   `json:"tool_call,omitempty"`
+	ToolResult *ToolResult `json:"tool_result,omitempty"`
+}
+
+type ToolCall struct {
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
+}
+
+type ToolResult struct {
+	ID     string `json:"id"`
+	Output string `json:"output"`
+	Error  string `json:"error,omitempty"`
 }
 
 type ModelRef struct {
@@ -341,6 +355,38 @@ type sessionIdleProperties struct {
 	SessionID string `json:"sessionID"`
 }
 
+type toolCallStartedProperties struct {
+	SessionID string `json:"sessionID"`
+	MessageID string `json:"messageID"`
+	PartID    string `json:"partID"`
+	ToolCall  struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"toolCall"`
+}
+
+type toolCallCompletedProperties struct {
+	SessionID string `json:"sessionID"`
+	MessageID string `json:"messageID"`
+	PartID    string `json:"partID"`
+	ToolCall  struct {
+		ID        string          `json:"id"`
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+	} `json:"toolCall"`
+}
+
+type toolResultProperties struct {
+	SessionID  string `json:"sessionID"`
+	MessageID  string `json:"messageID"`
+	PartID     string `json:"partID"`
+	ToolResult struct {
+		ID     string `json:"id"`
+		Output string `json:"output"`
+		Error  string `json:"error,omitempty"`
+	} `json:"toolResult"`
+}
+
 func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string, model ModelRef, output io.Writer) (*Message, error) {
 	sseReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/event", nil)
 	if err != nil {
@@ -359,6 +405,8 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 	var assistantMsgID string
 	msgTexts := make(map[string]*strings.Builder)
 	msgRoles := make(map[string]string)
+	msgToolCalls := make(map[string]map[string]Part)
+	msgToolResults := make(map[string]map[string]Part)
 
 	go func() {
 		defer close(done)
@@ -415,6 +463,65 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 					if props.Info.Role == "assistant" {
 						assistantMsgID = props.Info.ID
 					}
+				}
+
+			case "tool_call.started":
+				var props toolCallStartedProperties
+				if err := json.Unmarshal(evt.Properties, &props); err != nil {
+					continue
+				}
+				if props.SessionID != sessionID {
+					continue
+				}
+				if msgToolCalls[props.MessageID] == nil {
+					msgToolCalls[props.MessageID] = make(map[string]Part)
+				}
+				msgToolCalls[props.MessageID][props.PartID] = Part{
+					Type: "tool_call",
+					ToolCall: &ToolCall{
+						ID:   props.ToolCall.ID,
+						Name: props.ToolCall.Name,
+					},
+				}
+
+			case "tool_call.completed":
+				var props toolCallCompletedProperties
+				if err := json.Unmarshal(evt.Properties, &props); err != nil {
+					continue
+				}
+				if props.SessionID != sessionID {
+					continue
+				}
+				if msgToolCalls[props.MessageID] == nil {
+					msgToolCalls[props.MessageID] = make(map[string]Part)
+				}
+				msgToolCalls[props.MessageID][props.PartID] = Part{
+					Type: "tool_call",
+					ToolCall: &ToolCall{
+						ID:        props.ToolCall.ID,
+						Name:      props.ToolCall.Name,
+						Arguments: props.ToolCall.Arguments,
+					},
+				}
+
+			case "tool_result":
+				var props toolResultProperties
+				if err := json.Unmarshal(evt.Properties, &props); err != nil {
+					continue
+				}
+				if props.SessionID != sessionID {
+					continue
+				}
+				if msgToolResults[props.MessageID] == nil {
+					msgToolResults[props.MessageID] = make(map[string]Part)
+				}
+				msgToolResults[props.MessageID][props.PartID] = Part{
+					Type: "tool_result",
+					ToolResult: &ToolResult{
+						ID:     props.ToolResult.ID,
+						Output: props.ToolResult.Output,
+						Error:  props.ToolResult.Error,
+					},
 				}
 
 			case "session.idle":
@@ -488,15 +595,30 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 		}
 	}
 
+	var parts []Part
+	if assistantText != "" {
+		parts = append(parts, Part{Type: "text", Text: assistantText})
+	}
+
+	if toolCalls, ok := msgToolCalls[assistantMsgID]; ok {
+		for _, part := range toolCalls {
+			parts = append(parts, part)
+		}
+	}
+
+	if toolResults, ok := msgToolResults[assistantMsgID]; ok {
+		for _, part := range toolResults {
+			parts = append(parts, part)
+		}
+	}
+
 	msg := &Message{
 		Info: MessageInfo{
 			ID:        assistantMsgID,
 			SessionID: sessionID,
 			Role:      "assistant",
 		},
-		Parts: []Part{
-			{Type: "text", Text: assistantText},
-		},
+		Parts: parts,
 	}
 
 	return msg, nil

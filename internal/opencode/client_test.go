@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -320,5 +321,114 @@ func TestParseModelRef(t *testing.T) {
 				t.Errorf("ParseModelRef(%q).ModelID = %q, want %q", tt.input, ref.ModelID, tt.modelID)
 			}
 		})
+	}
+}
+
+func TestSendMessageStream_WithToolCalls(t *testing.T) {
+	var receivedReq opencode.SendMessageRequest
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/event" && r.Method == http.MethodGet {
+			flusher, ok := w.(http.Flusher)
+			if !ok {
+				http.Error(w, "no flusher", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
+			flusher.Flush()
+
+			time.Sleep(50 * time.Millisecond)
+
+			fmt.Fprintf(w, "data: %s\n\n", `{"type":"message.updated","properties":{"info":{"id":"msg-1","sessionID":"sess-123","role":"assistant"}}}`)
+			flusher.Flush()
+
+			fmt.Fprintf(w, "data: %s\n\n", `{"type":"message.part.delta","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-1","field":"text","delta":"I'll help you with that."}}`)
+			flusher.Flush()
+
+			fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_call.started","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-2","toolCall":{"id":"call-1","name":"Bash"}}}`)
+			flusher.Flush()
+
+			fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_call.completed","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-2","toolCall":{"id":"call-1","name":"Bash","arguments":{"command":"ls -la"}}}}`)
+			flusher.Flush()
+
+			fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_result","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-3","toolResult":{"id":"call-1","output":"total 32\ndrwxr-xr-x  5 user user 4096 Jan 1 12:00 .\n"}}}`)
+			flusher.Flush()
+
+			fmt.Fprintf(w, "data: %s\n\n", `{"type":"session.status","properties":{"sessionID":"sess-123","status":{"type":"idle"}}}`)
+			flusher.Flush()
+
+			<-r.Context().Done()
+			return
+		}
+
+		if r.URL.Path == "/session/sess-123/prompt_async" && r.Method == http.MethodPost {
+			body, _ := io.ReadAll(r.Body)
+			json.Unmarshal(body, &receivedReq)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	client := opencode.NewClient(srv.URL)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	var output strings.Builder
+	msg, err := client.SendMessageStream(ctx, "sess-123", "list files", opencode.ModelRef{ProviderID: "anthropic", ModelID: "claude-sonnet-4"}, &output)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if msg == nil {
+		t.Fatal("expected message, got nil")
+	}
+
+	if msg.Info.ID != "msg-1" {
+		t.Errorf("message ID = %q, want %q", msg.Info.ID, "msg-1")
+	}
+
+	if len(msg.Parts) != 3 {
+		t.Fatalf("expected 3 parts, got %d: %+v", len(msg.Parts), msg.Parts)
+	}
+
+	if msg.Parts[0].Type != "text" {
+		t.Errorf("parts[0].type = %q, want text", msg.Parts[0].Type)
+	}
+	if msg.Parts[0].Text != "I'll help you with that." {
+		t.Errorf("parts[0].text = %q, want 'I'll help you with that.'", msg.Parts[0].Text)
+	}
+
+	if msg.Parts[1].Type != "tool_call" {
+		t.Errorf("parts[1].type = %q, want tool_call", msg.Parts[1].Type)
+	}
+	if msg.Parts[1].ToolCall == nil {
+		t.Fatal("parts[1].tool_call is nil")
+	}
+	if msg.Parts[1].ToolCall.ID != "call-1" {
+		t.Errorf("parts[1].tool_call.id = %q, want call-1", msg.Parts[1].ToolCall.ID)
+	}
+	if msg.Parts[1].ToolCall.Name != "Bash" {
+		t.Errorf("parts[1].tool_call.name = %q, want Bash", msg.Parts[1].ToolCall.Name)
+	}
+
+	if msg.Parts[2].Type != "tool_result" {
+		t.Errorf("parts[2].type = %q, want tool_result", msg.Parts[2].Type)
+	}
+	if msg.Parts[2].ToolResult == nil {
+		t.Fatal("parts[2].tool_result is nil")
+	}
+	if msg.Parts[2].ToolResult.ID != "call-1" {
+		t.Errorf("parts[2].tool_result.id = %q, want call-1", msg.Parts[2].ToolResult.ID)
+	}
+	if !strings.Contains(msg.Parts[2].ToolResult.Output, "total 32") {
+		t.Errorf("parts[2].tool_result.output = %q, should contain 'total 32'", msg.Parts[2].ToolResult.Output)
 	}
 }

@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -326,7 +327,7 @@ func (e *StageExecutor) executeSession(taskID int, stage pipeline.Stage, stageCo
 		return nil, fmt.Errorf("sending message for %s: %w", stage, err)
 	}
 
-	output := extractTextContent(msg)
+	output := ExtractFullContent(msg)
 	duration := time.Since(start)
 
 	e.recordMetric(taskID, stage, llm, duration)
@@ -355,7 +356,7 @@ func (e *StageExecutor) executeReview(taskID int, stage pipeline.Stage, stageCon
 		return nil, fmt.Errorf("sending message for %s: %w", stage, err)
 	}
 
-	output := extractTextContent(msg)
+	output := ExtractFullContent(msg)
 	duration := time.Since(start)
 
 	e.recordMetric(taskID, stage, llm, duration)
@@ -390,7 +391,7 @@ func (e *StageExecutor) executeCoding(taskID int, stage pipeline.Stage, stageCon
 		return nil, fmt.Errorf("sending message for %s: %w", stage, err)
 	}
 
-	output := extractTextContent(msg)
+	output := ExtractFullContent(msg)
 	duration := time.Since(start)
 
 	e.recordMetric(taskID, stage, llm, duration)
@@ -478,4 +479,40 @@ func extractTextContent(msg *opencode.Message) string {
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+func ExtractFullContent(msg *opencode.Message) string {
+	if msg == nil {
+		return ""
+	}
+	var parts []string
+	for _, p := range msg.Parts {
+		switch p.Type {
+		case "text":
+			if p.Text != "" {
+				parts = append(parts, p.Text)
+			}
+		case "tool_call":
+			if p.ToolCall != nil {
+				parts = append(parts, formatToolCall(p.ToolCall))
+			}
+		case "tool_result":
+			if p.ToolResult != nil {
+				parts = append(parts, formatToolResult(p.ToolResult))
+			}
+		}
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+func formatToolCall(tc *opencode.ToolCall) string {
+	args, _ := json.MarshalIndent(tc.Arguments, "", "  ")
+	return fmt.Sprintf("[Tool Call: %s]\nArguments: %s", tc.Name, string(args))
+}
+
+func formatToolResult(tr *opencode.ToolResult) string {
+	if tr.Error != "" {
+		return fmt.Sprintf("[Tool Result: %s]\nError: %s", tr.ID, tr.Error)
+	}
+	return fmt.Sprintf("[Tool Result: %s]\n%s", tr.ID, tr.Output)
 }
