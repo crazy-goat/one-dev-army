@@ -26,6 +26,14 @@ func NewWorktreeManager(repoDir, worktreesDir string) *WorktreeManager {
 	}
 }
 
+func (m *WorktreeManager) WorktreesDir() string {
+	return m.worktreesDir
+}
+
+func (m *WorktreeManager) RepoDir() string {
+	return m.repoDir
+}
+
 func (m *WorktreeManager) Create(workerName, branch string) (*Worktree, error) {
 	wtPath := filepath.Join(m.worktreesDir, workerName)
 
