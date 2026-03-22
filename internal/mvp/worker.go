@@ -126,7 +126,7 @@ func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Clien
 	}
 }
 
-var stepOrder = []string{"analyze", "plan", "implement", "create-pr", "code-review"}
+var stepOrder = []string{"analyze", "plan", "implement", "code-review", "create-pr"}
 
 func stepIndex(name string) int {
 	for i, s := range stepOrder {
@@ -224,8 +224,61 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	}
 
 	if resumeFrom <= 3 {
+		task.Status = StatusReviewing
+		log.Printf("[Worker %d] [4/5] Code review #%d...", w.id, task.Issue.Number)
+		stepStart := time.Now()
+		approved, review, crErr := w.codeReview(ctx, task, "")
+		if crErr != nil {
+			task.Status = StatusFailed
+			task.Result = &TaskResult{Error: fmt.Errorf("code review: %w", crErr)}
+			log.Printf("[Worker %d] ✗ FAILED code review: %v", w.id, crErr)
+			return task.Result.Error
+		}
+		log.Printf("[Worker %d] [4/5] Code review done (%s, approved=%v)", w.id, time.Since(stepStart).Round(time.Second), approved)
+
+		if !approved {
+			// Retry with fixes
+			log.Printf("[Worker %d] Code review not approved, fixing...", w.id)
+			task.Status = StatusCoding
+			stepStart = time.Now()
+			if fixErr := w.fixFromReview(ctx, task, review); fixErr != nil {
+				task.Status = StatusFailed
+				task.Result = &TaskResult{Error: fmt.Errorf("fixing from review: %w", fixErr)}
+				log.Printf("[Worker %d] ✗ FAILED fixing from review: %v", w.id, fixErr)
+				return task.Result.Error
+			}
+			log.Printf("[Worker %d] Fix from review done (%s), pushing...", w.id, time.Since(stepStart).Round(time.Second))
+			if pushErr := w.wtMgr.PushBranch(task.Branch); pushErr != nil {
+				task.Status = StatusFailed
+				task.Result = &TaskResult{Error: fmt.Errorf("pushing fixes: %w", pushErr)}
+				log.Printf("[Worker %d] ✗ FAILED pushing fixes: %v", w.id, pushErr)
+				return task.Result.Error
+			}
+			// Re-run code review after fixes
+			log.Printf("[Worker %d] Re-running code review after fixes...", w.id)
+			stepStart = time.Now()
+			approved, _, crErr = w.codeReview(ctx, task, "")
+			if crErr != nil {
+				task.Status = StatusFailed
+				task.Result = &TaskResult{Error: fmt.Errorf("code review after fixes: %w", crErr)}
+				log.Printf("[Worker %d] ✗ FAILED code review after fixes: %v", w.id, crErr)
+				return task.Result.Error
+			}
+			log.Printf("[Worker %d] Code review after fixes done (%s, approved=%v)", w.id, time.Since(stepStart).Round(time.Second), approved)
+			if !approved {
+				task.Status = StatusFailed
+				task.Result = &TaskResult{Error: fmt.Errorf("code review not approved after fixes")}
+				log.Printf("[Worker %d] ✗ FAILED: code review not approved after fixes", w.id)
+				return task.Result.Error
+			}
+		}
+	} else {
+		log.Printf("[Worker %d] [4/5] Skipping code-review (completed previously)", w.id)
+	}
+
+	if resumeFrom <= 4 {
 		task.Status = StatusCreatingPR
-		log.Printf("[Worker %d] [4/5] Creating PR for #%d...", w.id, task.Issue.Number)
+		log.Printf("[Worker %d] [5/5] Creating PR for #%d...", w.id, task.Issue.Number)
 		stepStart := time.Now()
 		prURL, err = w.createPR(ctx, task)
 		if err != nil {
@@ -234,54 +287,11 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			log.Printf("[Worker %d] ✗ FAILED creating PR: %v", w.id, err)
 			return task.Result.Error
 		}
-		log.Printf("[Worker %d] [4/5] PR created: %s (%s)", w.id, prURL, time.Since(stepStart).Round(time.Second))
+		log.Printf("[Worker %d] [5/5] PR created: %s (%s)", w.id, prURL, time.Since(stepStart).Round(time.Second))
 	} else {
-		log.Printf("[Worker %d] [4/5] Skipping create-pr (completed previously)", w.id)
+		log.Printf("[Worker %d] [5/5] Skipping create-pr (completed previously)", w.id)
 		if w.store != nil {
 			prURL, _ = w.store.GetStepResponse(task.Issue.Number, "create-pr")
-		}
-	}
-
-	for attempt := 1; attempt <= maxCRRetries; attempt++ {
-		task.Status = StatusReviewing
-		log.Printf("[Worker %d] [5/5] Code review #%d attempt %d/%d (PR: %s)...", w.id, task.Issue.Number, attempt, maxCRRetries, prURL)
-		stepStart := time.Now()
-		approved, review, crErr := w.codeReview(ctx, task, prURL)
-		if crErr != nil {
-			task.Status = StatusFailed
-			task.Result = &TaskResult{Error: fmt.Errorf("code review: %w", crErr)}
-			log.Printf("[Worker %d] ✗ FAILED code review: %v", w.id, crErr)
-			return task.Result.Error
-		}
-		log.Printf("[Worker %d] [5/5] Code review done (%s, approved=%v)", w.id, time.Since(stepStart).Round(time.Second), approved)
-
-		if approved {
-			break
-		}
-
-		if attempt == maxCRRetries {
-			task.Status = StatusFailed
-			task.Result = &TaskResult{Error: fmt.Errorf("code review not approved after %d attempts", maxCRRetries)}
-			log.Printf("[Worker %d] ✗ FAILED: code review not approved after %d attempts", w.id, maxCRRetries)
-			return task.Result.Error
-		}
-
-		log.Printf("[Worker %d] Code review not approved, fixing (attempt %d/%d)...", w.id, attempt, maxCRRetries)
-		task.Status = StatusCoding
-		stepStart = time.Now()
-		if fixErr := w.fixFromReview(ctx, task, review); fixErr != nil {
-			task.Status = StatusFailed
-			task.Result = &TaskResult{Error: fmt.Errorf("fixing from review: %w", fixErr)}
-			log.Printf("[Worker %d] ✗ FAILED fixing from review: %v", w.id, fixErr)
-			return task.Result.Error
-		}
-		log.Printf("[Worker %d] Fix from review done (%s), pushing...", w.id, time.Since(stepStart).Round(time.Second))
-
-		if pushErr := w.wtMgr.PushBranch(task.Branch); pushErr != nil {
-			task.Status = StatusFailed
-			task.Result = &TaskResult{Error: fmt.Errorf("pushing fixes: %w", pushErr)}
-			log.Printf("[Worker %d] ✗ FAILED pushing fixes: %v", w.id, pushErr)
-			return task.Result.Error
 		}
 	}
 
@@ -430,6 +440,12 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (appr
 }
 
 func (w *Worker) createPR(ctx context.Context, task *Task) (string, error) {
+	// Check if PR already exists
+	if existingBranch, err := w.gh.FindPRBranch(task.Issue.Number); err == nil && existingBranch != "" {
+		log.Printf("[Worker %d] PR already exists for issue #%d (branch: %s)", w.id, task.Issue.Number, existingBranch)
+		// Return empty - CreatePR below will get the existing PR URL
+	}
+
 	var stepID int64
 	if w.store != nil {
 		id, err := w.store.InsertStep(task.Issue.Number, "create-pr", fmt.Sprintf("push %s + create PR", task.Branch), "")
