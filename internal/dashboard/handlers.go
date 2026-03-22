@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -21,14 +22,17 @@ type taskCard struct {
 }
 
 type boardData struct {
-	Active     string
-	SprintName string
-	Backlog    []taskCard
-	Progress   []taskCard
-	Review     []taskCard
-	Merging    []taskCard
-	Done       []taskCard
-	Blocked    []taskCard
+	Active       string
+	SprintName   string
+	Paused       bool
+	Processing   bool
+	CurrentIssue string
+	Backlog      []taskCard
+	Progress     []taskCard
+	Review       []taskCard
+	Merging      []taskCard
+	Done         []taskCard
+	Blocked      []taskCard
 }
 
 type backlogData struct {
@@ -80,6 +84,15 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 func (s *Server) buildBoardData() boardData {
 	data := boardData{
 		Active: "board",
+		Paused: true,
+	}
+
+	if s.orchestrator != nil {
+		data.Paused = s.orchestrator.IsPaused()
+		data.Processing = s.orchestrator.IsProcessing()
+		if task := s.orchestrator.CurrentTask(); task != nil {
+			data.CurrentIssue = fmt.Sprintf("#%d: %s (%s)", task.Issue.Number, task.Issue.Title, task.Status)
+		}
 	}
 
 	// Get active milestone name
@@ -314,4 +327,60 @@ func placeholderWorkers() []workerCard {
 		{ID: "worker-2", Status: "idle"},
 		{ID: "worker-3", Status: "working", TaskID: 7, Task: "Add unit tests", Stage: "testing", Elapsed: "45s"},
 	}
+}
+
+func (s *Server) handleCurrentTask(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.orchestrator == nil {
+		json.NewEncoder(w).Encode(map[string]any{"active": false})
+		return
+	}
+	task := s.orchestrator.CurrentTask()
+	if task == nil {
+		json.NewEncoder(w).Encode(map[string]any{"active": false})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]any{
+		"active":       true,
+		"issue_number": task.Issue.Number,
+		"issue_title":  task.Issue.Title,
+		"status":       string(task.Status),
+		"milestone":    task.Milestone,
+		"branch":       task.Branch,
+	})
+}
+
+func (s *Server) handleSprintStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.orchestrator == nil {
+		json.NewEncoder(w).Encode(map[string]any{"paused": true, "processing": false})
+		return
+	}
+	resp := map[string]any{
+		"paused":     s.orchestrator.IsPaused(),
+		"processing": s.orchestrator.IsProcessing(),
+	}
+	if task := s.orchestrator.CurrentTask(); task != nil {
+		resp["current_issue"] = task.Issue.Number
+		resp["current_status"] = string(task.Status)
+	}
+	json.NewEncoder(w).Encode(resp)
+}
+
+func (s *Server) handleSprintStart(w http.ResponseWriter, r *http.Request) {
+	if s.orchestrator == nil {
+		http.Error(w, "orchestrator not configured", http.StatusServiceUnavailable)
+		return
+	}
+	s.orchestrator.Start()
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (s *Server) handleSprintPause(w http.ResponseWriter, r *http.Request) {
+	if s.orchestrator == nil {
+		http.Error(w, "orchestrator not configured", http.StatusServiceUnavailable)
+		return
+	}
+	s.orchestrator.Pause()
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/git"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/initialize"
+	"github.com/crazy-goat/one-dev-army/internal/mvp"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"github.com/crazy-goat/one-dev-army/internal/preflight"
 	"github.com/crazy-goat/one-dev-army/internal/setup"
@@ -214,6 +215,8 @@ func runServe() error {
 
 	processor := worker.NewProcessor(cfg, oc, gh, store, wtMgr)
 
+	orchestrator := mvp.NewOrchestrator(cfg, gh, oc, wtMgr)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -224,7 +227,13 @@ func runServe() error {
 	pool := worker.NewPool(cfg.Workers.Count, &worker.EmptyQueue{}, processor)
 	pool.Start(ctx)
 
-	srv, err := dashboard.NewServer(cfg.Dashboard.Port, store, pool.Workers, gh, project.Number)
+	go func() {
+		if err := orchestrator.Run(ctx); err != nil && err != context.Canceled {
+			fmt.Fprintf(os.Stderr, "orchestrator error: %v\n", err)
+		}
+	}()
+
+	srv, err := dashboard.NewServer(cfg.Dashboard.Port, store, pool.Workers, gh, project.Number, orchestrator)
 	if err != nil {
 		return fmt.Errorf("creating dashboard server: %w", err)
 	}
@@ -251,6 +260,7 @@ func runServe() error {
 	case <-sigCh:
 		fmt.Println("\nShutting down... Press Ctrl+C again to force quit.")
 		cancel()
+		orchestrator.Stop()
 
 		go func() {
 			<-sigCh
