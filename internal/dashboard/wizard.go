@@ -1,11 +1,30 @@
 package dashboard
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"regexp"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// DefaultLLMModel is the default model used for wizard LLM calls
+const DefaultLLMModel = "claude-sonnet-4"
+
+// SessionCleanupInterval is how often to check for old sessions
+const SessionCleanupInterval = 5 * time.Minute
+
+// SessionMaxAge is how long sessions can live before being cleaned up
+const SessionMaxAge = 30 * time.Minute
+
+// ValidWizardTypes contains the allowed wizard types
+var ValidWizardTypes = map[WizardType]bool{
+	WizardTypeFeature: true,
+	WizardTypeBug:     true,
+}
 
 // WizardType represents the type of wizard being run
 type WizardType string
@@ -106,17 +125,53 @@ func (s *WizardSession) GetLogs() []LLMLogEntry {
 type WizardSessionStore struct {
 	sessions map[string]*WizardSession
 	mu       sync.RWMutex
+	cancel   context.CancelFunc
 }
 
-// NewWizardSessionStore creates a new session store
+// NewWizardSessionStore creates a new session store with background cleanup
 func NewWizardSessionStore() *WizardSessionStore {
-	return &WizardSessionStore{
+	ctx, cancel := context.WithCancel(context.Background())
+
+	store := &WizardSessionStore{
 		sessions: make(map[string]*WizardSession),
+		cancel:   cancel,
+	}
+
+	// Start background cleanup goroutine
+	go store.cleanupLoop(ctx)
+
+	return store
+}
+
+// Stop stops the background cleanup goroutine
+func (ws *WizardSessionStore) Stop() {
+	if ws.cancel != nil {
+		ws.cancel()
+	}
+}
+
+// cleanupLoop runs periodically to clean up old sessions
+func (ws *WizardSessionStore) cleanupLoop(ctx context.Context) {
+	ticker := time.NewTicker(SessionCleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			ws.CleanupOldSessions(SessionMaxAge)
+		}
 	}
 }
 
 // Create creates a new wizard session and returns it
-func (ws *WizardSessionStore) Create(wizardType string) *WizardSession {
+func (ws *WizardSessionStore) Create(wizardType string) (*WizardSession, error) {
+	// Validate wizard type
+	if !ValidWizardTypes[WizardType(wizardType)] {
+		return nil, fmt.Errorf("invalid wizard type: %q (must be 'feature' or 'bug')", wizardType)
+	}
+
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
 
@@ -130,7 +185,7 @@ func (ws *WizardSessionStore) Create(wizardType string) *WizardSession {
 	}
 
 	ws.sessions[session.ID] = session
-	return session
+	return session, nil
 }
 
 // Get retrieves a session by ID
@@ -161,4 +216,58 @@ func (ws *WizardSessionStore) CleanupOldSessions(maxAge time.Duration) {
 			delete(ws.sessions, id)
 		}
 	}
+}
+
+// Count returns the number of active sessions
+func (ws *WizardSessionStore) Count() int {
+	ws.mu.RLock()
+	defer ws.mu.RUnlock()
+	return len(ws.sessions)
+}
+
+// jsonCodeBlockRegex matches markdown code blocks with json
+var jsonCodeBlockRegex = regexp.MustCompile("(?s)```(?:json)?\\s*([\\s\\S]*?)```")
+
+// parseTaskJSON extracts and parses the JSON task array from LLM response
+// Handles both raw JSON and JSON wrapped in markdown code blocks
+func parseTaskJSON(text string) []WizardTask {
+	// First, try to find JSON in markdown code blocks
+	matches := jsonCodeBlockRegex.FindStringSubmatch(text)
+	if len(matches) > 1 {
+		// Extract content from code block
+		text = matches[1]
+	}
+
+	// Find the JSON array in the response
+	start := -1
+	end := -1
+	depth := 0
+
+	for i, char := range text {
+		if char == '[' {
+			if depth == 0 {
+				start = i
+			}
+			depth++
+		} else if char == ']' {
+			depth--
+			if depth == 0 && start != -1 {
+				end = i
+				break
+			}
+		}
+	}
+
+	if start == -1 || end == -1 || end <= start {
+		return nil
+	}
+
+	jsonStr := text[start : end+1]
+
+	var tasks []WizardTask
+	if err := json.Unmarshal([]byte(jsonStr), &tasks); err != nil {
+		return nil
+	}
+
+	return tasks
 }

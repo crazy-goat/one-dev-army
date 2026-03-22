@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -612,8 +613,13 @@ func (s *Server) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 	// Get wizard type from query param (default to feature)
 	wizardType := r.URL.Query().Get("type")
-	if wizardType != "bug" {
+
+	// Validate wizard type
+	if wizardType == "" {
 		wizardType = "feature"
+	} else if wizardType != "feature" && wizardType != "bug" {
+		http.Error(w, "invalid wizard type: must be 'feature' or 'bug'", http.StatusBadRequest)
+		return
 	}
 
 	// Check for existing session ID (for back navigation)
@@ -629,7 +635,12 @@ func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 
 	// Create new session if not found
 	if session == nil {
-		session = s.wizardStore.Create(wizardType)
+		var err error
+		session, err = s.wizardStore.Create(wizardType)
+		if err != nil {
+			http.Error(w, "invalid wizard type", http.StatusBadRequest)
+			return
+		}
 	}
 
 	data := struct {
@@ -701,10 +712,13 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	prompt := buildRefinementPrompt(session.Type, idea)
 	session.AddLog("system", "Sending refinement request to LLM")
 
-	// Send message to LLM
-	model := opencode.ParseModelRef("claude-sonnet-4")
+	// Send message to LLM with timeout
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+
+	model := opencode.ParseModelRef(DefaultLLMModel)
 	var output strings.Builder
-	response, err := s.oc.SendMessage(llmSession.ID, prompt, model, &output)
+	response, err := s.oc.SendMessageStream(ctx, llmSession.ID, prompt, model, &output)
 	if err != nil {
 		log.Printf("[Wizard] Error from LLM: %v", err)
 		session.AddLog("system", "LLM error: "+err.Error())
@@ -840,10 +854,13 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 	prompt := buildBreakdownPrompt(session.Type, session.RefinedDescription)
 	session.AddLog("system", "Sending breakdown request to LLM")
 
-	// Send message to LLM
-	model := opencode.ParseModelRef("claude-sonnet-4")
+	// Send message to LLM with timeout
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+
+	model := opencode.ParseModelRef(DefaultLLMModel)
 	var output strings.Builder
-	response, err := s.oc.SendMessage(llmSession.ID, prompt, model, &output)
+	response, err := s.oc.SendMessageStream(ctx, llmSession.ID, prompt, model, &output)
 	if err != nil {
 		log.Printf("[Wizard] Error from LLM: %v", err)
 		session.AddLog("system", "LLM error: "+err.Error())
@@ -900,28 +917,6 @@ Return ONLY a JSON array in this exact format:
 No markdown, no explanation, just the JSON array.`, wizardType, description)
 }
 
-// parseTaskJSON extracts and parses the JSON task array from LLM response
-func parseTaskJSON(text string) []WizardTask {
-	// Find JSON array in the response
-	start := strings.Index(text, "[")
-	end := strings.LastIndex(text, "]")
-
-	if start == -1 || end == -1 || end <= start {
-		log.Printf("[Wizard] Could not find JSON array in response")
-		return nil
-	}
-
-	jsonStr := text[start : end+1]
-
-	var tasks []WizardTask
-	if err := json.Unmarshal([]byte(jsonStr), &tasks); err != nil {
-		log.Printf("[Wizard] Error parsing task JSON: %v", err)
-		return nil
-	}
-
-	return tasks
-}
-
 // handleWizardCreate creates GitHub issues and returns confirmation
 func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
@@ -971,6 +966,9 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 			CreatedIssues: mockIssues,
 		}
 
+		// Clean up session after mock creation to free memory
+		s.wizardStore.Delete(sessionID)
+
 		s.render(w, "wizard_create.html", data)
 		return
 	}
@@ -1014,6 +1012,9 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 		CreatedIssues: createdIssues,
 	}
 
+	// Clean up session after successful creation to free memory
+	s.wizardStore.Delete(sessionID)
+
 	s.render(w, "wizard_create.html", data)
 }
 
@@ -1051,7 +1052,11 @@ func (s *Server) handleWizardModal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create new session
-	session := s.wizardStore.Create(wizardType)
+	session, err := s.wizardStore.Create(wizardType)
+	if err != nil {
+		http.Error(w, "invalid wizard type", http.StatusBadRequest)
+		return
+	}
 
 	data := struct {
 		Type        string
