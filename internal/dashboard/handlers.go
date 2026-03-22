@@ -1165,9 +1165,16 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 
 	// If no GitHub client, return mock confirmation for testing
 	if s.gh == nil {
+		mockTitle := session.IdeaText
+		if mockTitle == "" {
+			mockTitle = session.RefinedDescription
+		}
+		if len(mockTitle) > 200 {
+			mockTitle = mockTitle[:197] + "..."
+		}
 		mockEpic := CreatedIssue{
 			Number:  100,
-			Title:   session.RefinedDescription,
+			Title:   mockTitle,
 			URL:     "https://github.com/test/issues/100",
 			IsEpic:  true,
 			Success: true,
@@ -1205,10 +1212,19 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 		epicLabels = append(epicLabels, "bug")
 	}
 
+	epicTitle := session.IdeaText
+	if epicTitle == "" {
+		epicTitle = session.RefinedDescription
+	}
+	// GitHub issue titles have a 256 character limit
+	if len(epicTitle) > 200 {
+		epicTitle = epicTitle[:197] + "..."
+	}
+
 	epicBody := fmt.Sprintf("## Summary\n\n%s\n\n## Sub-tasks\n\n*Sub-tasks will be linked here after creation.*",
 		session.RefinedDescription)
 
-	epicNum, err := s.gh.CreateIssue(session.RefinedDescription, epicBody, epicLabels)
+	epicNum, err := s.gh.CreateIssue(epicTitle, epicBody, epicLabels)
 	if err != nil {
 		log.Printf("[Wizard] Error creating epic: %v", err)
 		session.AddLog("system", fmt.Sprintf("Error creating epic: %v", err))
@@ -1219,7 +1235,7 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 	session.SetEpicNumber(epicNum)
 	epicIssue := CreatedIssue{
 		Number:  epicNum,
-		Title:   session.RefinedDescription,
+		Title:   epicTitle,
 		URL:     fmt.Sprintf("https://github.com/%s/issues/%d", s.gh.Repo, epicNum),
 		IsEpic:  true,
 		Success: true,
