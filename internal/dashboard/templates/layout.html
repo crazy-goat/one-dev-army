@@ -17,6 +17,7 @@ nav .links{display:flex;gap:1rem}
 nav .links a{padding:.4rem .8rem;border-radius:6px;color:var(--muted);font-size:.9rem}
 nav .links a:hover{color:var(--text);background:var(--border);text-decoration:none}
 nav .links a.active{color:var(--text);background:var(--border)}
+nav .nav-actions{display:flex;gap:.5rem;margin-left:auto}
 .container{max-width:1400px;margin:0 auto;padding:1.5rem}
 .btn{display:inline-flex;align-items:center;gap:.4rem;padding:.5rem 1rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.85rem;cursor:pointer;transition:background .15s}
 .btn:hover{background:var(--border)}
@@ -37,6 +38,10 @@ h2{font-size:1.1rem;margin-bottom:.75rem;color:var(--muted)}
     <a href="/" {{if eq .Active "board"}}class="active"{{end}}>Sprint Board</a>
     <a href="/backlog" {{if eq .Active "backlog"}}class="active"{{end}}>Backlog</a>
     <a href="/costs" {{if eq .Active "costs"}}class="active"{{end}}>Costs</a>
+  </div>
+  <div class="nav-actions">
+    <button class="btn btn-success" hx-get="/wizard/new?type=feature" hx-target="body" hx-swap="beforeend">+ New Feature</button>
+    <button class="btn btn-danger" hx-get="/wizard/new?type=bug" hx-target="body" hx-swap="beforeend">+ New Bug</button>
   </div>
 </nav>
 <div class="container">
