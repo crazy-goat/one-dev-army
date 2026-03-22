@@ -161,6 +161,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		var openCount, skippedCount int
 		var inProgressIssue *github.Issue
 		var candidates []github.Issue
+		var awaitingReview []github.Issue
 		for i := range issues {
 			if !strings.EqualFold(issues[i].State, "open") {
 				continue
@@ -177,16 +178,21 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				}
 				continue
 			}
+			if hasLabel(issues[i], "awaiting-review") {
+				awaitingReview = append(awaitingReview, issues[i])
+				log.Printf("[Orchestrator]   skip #%d %q (awaiting-review)", issues[i].Number, issues[i].Title)
+				continue
+			}
 			candidates = append(candidates, issues[i])
 		}
-		log.Printf("[Orchestrator] Found %d issues (%d open, %d failed-skipped, %d candidates)", len(issues), openCount, skippedCount, len(candidates))
+		log.Printf("[Orchestrator] Found %d issues (%d open, %d failed-skipped, %d awaiting-review, %d candidates)", len(issues), openCount, skippedCount, len(awaitingReview), len(candidates))
 
 		var nextIssue *github.Issue
 		if inProgressIssue != nil {
 			nextIssue = inProgressIssue
 			log.Printf("[Orchestrator] Resuming in-progress #%d: %s", nextIssue.Number, nextIssue.Title)
 		} else if len(candidates) > 0 {
-			picked, err := o.pickNextTicket(ctx, candidates)
+			picked, err := o.pickNextTicket(ctx, candidates, awaitingReview)
 			if err != nil {
 				log.Printf("[Orchestrator] Error picking next ticket: %v — falling back to first candidate", err)
 				picked = &candidates[0]
@@ -250,6 +256,12 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				prURL = task.Result.PRURL
 			}
 			log.Printf("[Orchestrator] ✓ Completed #%d: %s", nextIssue.Number, prURL)
+			if err := o.gh.RemoveLabel(nextIssue.Number, "in-progress"); err != nil {
+				log.Printf("[Orchestrator] Error removing in-progress label: %v", err)
+			}
+			if err := o.gh.AddLabel(nextIssue.Number, "awaiting-review"); err != nil {
+				log.Printf("[Orchestrator] Error adding awaiting-review label: %v", err)
+			}
 			o.moveToColumn(nextIssue.Number, "Review")
 			if prURL != "" {
 				comment := fmt.Sprintf("Implemented in %s", prURL)
@@ -265,8 +277,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 var nextTicketRe = regexp.MustCompile(`NEXT:\s*#(\d+)`)
 
-func (o *Orchestrator) pickNextTicket(ctx context.Context, candidates []github.Issue) (*github.Issue, error) {
-	if len(candidates) == 1 {
+func (o *Orchestrator) pickNextTicket(ctx context.Context, candidates []github.Issue, awaitingReview []github.Issue) (*github.Issue, error) {
+	if len(candidates) == 1 && len(awaitingReview) == 0 {
 		return &candidates[0], nil
 	}
 
@@ -275,7 +287,17 @@ func (o *Orchestrator) pickNextTicket(ctx context.Context, candidates []github.I
 		lines = append(lines, fmt.Sprintf("- #%d %s", issue.Number, issue.Title))
 	}
 	ticketList := strings.Join(lines, "\n")
-	prompt := fmt.Sprintf(pickTicketPrompt, o.gh.Repo, o.gh.Repo, ticketList)
+
+	var pendingInfo string
+	if len(awaitingReview) > 0 {
+		var pendingLines []string
+		for _, issue := range awaitingReview {
+			pendingLines = append(pendingLines, fmt.Sprintf("- #%d %s", issue.Number, issue.Title))
+		}
+		pendingInfo = fmt.Sprintf("\n\nTickets awaiting review (PR created but NOT yet merged — treat as NOT DONE, do NOT pick tickets that depend on these):\n%s", strings.Join(pendingLines, "\n"))
+	}
+
+	prompt := fmt.Sprintf(pickTicketPrompt, o.gh.Repo, o.gh.Repo, ticketList) + pendingInfo
 
 	log.Printf("[Orchestrator] Asking LLM to pick next ticket from %d candidates...", len(candidates))
 
