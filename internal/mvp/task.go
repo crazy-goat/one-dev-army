@@ -10,6 +10,7 @@ const (
 	StatusPlanning   TaskStatus = "planning"
 	StatusCoding     TaskStatus = "coding"
 	StatusTesting    TaskStatus = "testing"
+	StatusReviewing  TaskStatus = "reviewing"
 	StatusCreatingPR TaskStatus = "creating_pr"
 	StatusDone       TaskStatus = "done"
 	StatusFailed     TaskStatus = "failed"

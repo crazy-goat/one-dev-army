@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,14 +43,14 @@ func (o *Orchestrator) Start() {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.paused = false
-	log.Println("[Orchestrator] Started")
+	log.Println("[Orchestrator] ▶ Started — polling for issues")
 }
 
 func (o *Orchestrator) Pause() {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.paused = true
-	log.Println("[Orchestrator] Paused (will finish current ticket)")
+	log.Println("[Orchestrator] ⏸ Paused (will finish current ticket)")
 }
 
 func (o *Orchestrator) Stop() {
@@ -118,6 +119,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			continue
 		}
 
+		log.Printf("[Orchestrator] Fetching issues for milestone %q...", milestone.Title)
 		issues, err := o.gh.ListIssuesForMilestone(milestone.Title)
 		if err != nil {
 			log.Printf("[Orchestrator] Error listing issues: %v", err)
@@ -125,25 +127,31 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			continue
 		}
 
+		var openCount, skippedCount int
 		var nextIssue *github.Issue
 		for i := range issues {
-			if issues[i].State != "open" {
+			if !strings.EqualFold(issues[i].State, "open") {
 				continue
 			}
+			openCount++
 			if hasLabel(issues[i], "in-progress") || hasLabel(issues[i], "failed") {
+				skippedCount++
+				log.Printf("[Orchestrator]   skip #%d %q (labels: %v)", issues[i].Number, issues[i].Title, issues[i].GetLabelNames())
 				continue
 			}
-			nextIssue = &issues[i]
-			break
+			if nextIssue == nil {
+				nextIssue = &issues[i]
+			}
 		}
+		log.Printf("[Orchestrator] Found %d issues (%d open, %d skipped)", len(issues), openCount, skippedCount)
 
 		if nextIssue == nil {
-			log.Println("[Orchestrator] No available issues in sprint, waiting...")
+			log.Println("[Orchestrator] No available issues in sprint, waiting 30s...")
 			o.sleep(ctx, 30*time.Second)
 			continue
 		}
 
-		log.Printf("[Orchestrator] Processing #%d: %s", nextIssue.Number, nextIssue.Title)
+		log.Printf("[Orchestrator] ▶ Picking up #%d: %s", nextIssue.Number, nextIssue.Title)
 
 		if err := o.gh.AddLabel(nextIssue.Number, "in-progress"); err != nil {
 			log.Printf("[Orchestrator] Error adding in-progress label: %v", err)
@@ -168,7 +176,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		o.mu.Unlock()
 
 		if processErr != nil {
-			log.Printf("[Orchestrator] Failed #%d: %v", nextIssue.Number, processErr)
+			log.Printf("[Orchestrator] ✗ Failed #%d: %v", nextIssue.Number, processErr)
 			if err := o.gh.AddLabel(nextIssue.Number, "failed"); err != nil {
 				log.Printf("[Orchestrator] Error adding failed label: %v", err)
 			}
@@ -177,7 +185,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if task.Result != nil {
 				prURL = task.Result.PRURL
 			}
-			log.Printf("[Orchestrator] Completed #%d: %s", nextIssue.Number, prURL)
+			log.Printf("[Orchestrator] ✓ Completed #%d: %s", nextIssue.Number, prURL)
 			if prURL != "" {
 				comment := fmt.Sprintf("Implemented in %s", prURL)
 				if err := o.gh.AddComment(nextIssue.Number, comment); err != nil {
