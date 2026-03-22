@@ -397,8 +397,8 @@ func TestValidWizardTypes(t *testing.T) {
 }
 
 func TestDefaultLLMModel(t *testing.T) {
-	if DefaultLLMModel != "claude-sonnet-4" {
-		t.Errorf("expected DefaultLLMModel to be 'claude-sonnet-4', got %q", DefaultLLMModel)
+	if DefaultLLMModel != "claude-3-5-sonnet-20241022" {
+		t.Errorf("expected DefaultLLMModel to be 'claude-3-5-sonnet-20241022', got %q", DefaultLLMModel)
 	}
 }
 

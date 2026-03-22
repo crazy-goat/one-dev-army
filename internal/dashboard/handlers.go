@@ -675,8 +675,15 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store the idea
-	session.IdeaText = idea
+	// Validate idea length to prevent abuse
+	const maxIdeaLength = 10000
+	if len(idea) > maxIdeaLength {
+		http.Error(w, "idea exceeds maximum length of 10000 characters", http.StatusBadRequest)
+		return
+	}
+
+	// Store the idea using thread-safe setter
+	session.SetIdeaText(idea)
 	session.SetStep(WizardStepRefine)
 	session.AddLog("user", idea)
 
@@ -707,6 +714,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to create LLM session", http.StatusInternalServerError)
 		return
 	}
+	defer s.oc.DeleteSession(llmSession.ID) // Ensure cleanup even if errors occur
 
 	// Build refinement prompt
 	prompt := buildRefinementPrompt(session.Type, idea)
@@ -734,9 +742,6 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 
 	session.SetRefinedDescription(refinedDesc)
 	session.AddLog("assistant", refinedDesc)
-
-	// Clean up LLM session
-	s.oc.DeleteSession(llmSession.ID)
 
 	data := struct {
 		SessionID          string
@@ -849,6 +854,7 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to create LLM session", http.StatusInternalServerError)
 		return
 	}
+	defer s.oc.DeleteSession(llmSession.ID) // Ensure cleanup even if errors occur
 
 	// Build breakdown prompt with JSON schema requirement
 	prompt := buildBreakdownPrompt(session.Type, session.RefinedDescription)
@@ -876,9 +882,6 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 
 	session.SetTasks(tasks)
 	session.AddLog("assistant", fmt.Sprintf("Generated %d tasks", len(tasks)))
-
-	// Clean up LLM session
-	s.oc.DeleteSession(llmSession.ID)
 
 	data := struct {
 		SessionID string
@@ -1073,7 +1076,12 @@ func (s *Server) handleWizardModal(w http.ResponseWriter, r *http.Request) {
 
 // handleWizardCancel clears the wizard session and returns empty response
 func (s *Server) handleWizardCancel(w http.ResponseWriter, r *http.Request) {
-	sessionID := r.URL.Query().Get("session_id")
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	sessionID := r.FormValue("session_id")
 	if sessionID != "" {
 		s.wizardStore.Delete(sessionID)
 	}

@@ -119,9 +119,13 @@ func (s *Server) csrfMiddleware(next http.HandlerFunc) http.HandlerFunc {
 				token = r.FormValue("csrf_token")
 			}
 
-			// For now, accept requests without CSRF token in form data
-			// In production, this should be stricter
-			if token != "" && !validateCSRFToken(token, string(s.csrfKey)) {
+			// CSRF token is required for all state-changing requests
+			if token == "" {
+				http.Error(w, "CSRF token required", http.StatusForbidden)
+				return
+			}
+
+			if !validateCSRFToken(token, string(s.csrfKey)) {
 				http.Error(w, "Invalid CSRF token", http.StatusForbidden)
 				return
 			}

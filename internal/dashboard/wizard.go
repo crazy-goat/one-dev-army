@@ -12,13 +12,16 @@ import (
 )
 
 // DefaultLLMModel is the default model used for wizard LLM calls
-const DefaultLLMModel = "claude-sonnet-4"
+const DefaultLLMModel = "claude-3-5-sonnet-20241022"
 
 // SessionCleanupInterval is how often to check for old sessions
 const SessionCleanupInterval = 5 * time.Minute
 
 // SessionMaxAge is how long sessions can live before being cleaned up
 const SessionMaxAge = 30 * time.Minute
+
+// MaxSessions is the maximum number of concurrent wizard sessions allowed
+const MaxSessions = 1000
 
 // ValidWizardTypes contains the allowed wizard types
 var ValidWizardTypes = map[WizardType]bool{
@@ -111,6 +114,14 @@ func (s *WizardSession) SetTasks(tasks []WizardTask) {
 	s.UpdatedAt = time.Now()
 }
 
+// SetIdeaText updates the idea text (thread-safe)
+func (s *WizardSession) SetIdeaText(idea string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.IdeaText = idea
+	s.UpdatedAt = time.Now()
+}
+
 // GetLogs returns a copy of the logs (thread-safe)
 func (s *WizardSession) GetLogs() []LLMLogEntry {
 	s.mu.RLock()
@@ -174,6 +185,11 @@ func (ws *WizardSessionStore) Create(wizardType string) (*WizardSession, error) 
 
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
+
+	// Check session limit to prevent memory exhaustion
+	if len(ws.sessions) >= MaxSessions {
+		return nil, fmt.Errorf("maximum number of sessions (%d) reached, please try again later", MaxSessions)
+	}
 
 	now := time.Now()
 	session := &WizardSession{
