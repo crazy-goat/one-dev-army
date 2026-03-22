@@ -35,7 +35,7 @@
     </div>
   </form>
   
-  <div id="wizard-logs" hx-get="/wizard/logs/{{.SessionID}}" hx-trigger="every 1s" hx-swap="innerHTML" style="margin-top: 1rem; max-height: 200px; overflow-y: auto;"></div>
+  <div id="wizard-logs" hx-get="/wizard/logs/{{.SessionID}}" hx-trigger="every 1s" hx-swap="innerHTML" hx-on::after-swap="this.scrollTop = this.scrollHeight" style="margin-top: 1rem; max-height: 200px; overflow-y: auto;"></div>
 </div>
 
 <style>

@@ -1032,6 +1032,12 @@ func (s *Server) handleWizardLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If session is complete, return 204 No Content to stop HTMX polling
+	if session.IsComplete() {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	logs := session.GetLogs()
 
 	data := struct {

@@ -263,6 +263,18 @@ func TestHandleWizardLogs(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("expected status 404 for invalid session, got %d", rec.Code)
 	}
+
+	// Test polling stops when session is complete (returns 204 No Content)
+	session.SetStep(WizardStepDone)
+	req = httptest.NewRequest(http.MethodGet, "/wizard/logs/"+session.ID, nil)
+	req.SetPathValue("sessionId", session.ID)
+	rec = httptest.NewRecorder()
+
+	srv.handleWizardLogs(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("expected status 204 when session is complete, got %d", rec.Code)
+	}
 }
 
 // TestFullWizardFlow tests the complete wizard flow end-to-end

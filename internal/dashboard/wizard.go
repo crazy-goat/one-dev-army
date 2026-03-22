@@ -121,6 +121,13 @@ func (s *WizardSession) GetLogs() []LLMLogEntry {
 	return logs
 }
 
+// IsComplete returns true if the wizard session is done (thread-safe)
+func (s *WizardSession) IsComplete() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.CurrentStep == WizardStepDone
+}
+
 // WizardSessionStore manages all active wizard sessions in memory
 type WizardSessionStore struct {
 	sessions map[string]*WizardSession
