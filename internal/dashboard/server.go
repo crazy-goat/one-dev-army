@@ -166,6 +166,12 @@ func parseTemplates() (map[string]*template.Template, error) {
 	}
 	tmpls["wizard_modal.html"] = wizardModalTmpl
 
+	wizardPageTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/wizard_page.html", "templates/wizard_new.html")
+	if err != nil {
+		return nil, fmt.Errorf("parsing wizard_page.html: %w", err)
+	}
+	tmpls["wizard_page.html"] = wizardPageTmpl
+
 	// Parse wizard partial templates (no layout)
 	wizardPartials := []string{"wizard_refine.html", "wizard_breakdown.html", "wizard_create.html", "wizard_logs.html"}
 	for _, page := range wizardPartials {
@@ -210,6 +216,7 @@ func (s *Server) routes() {
 	// Wizard routes - with CSRF protection
 	s.mux.HandleFunc("GET /wizard/new", s.handleWizardNew)
 	s.mux.HandleFunc("GET /wizard/modal", s.handleWizardModal)
+	s.mux.HandleFunc("GET /wizard/page", s.handleWizardPage)
 	s.mux.HandleFunc("POST /wizard/cancel", s.csrfMiddleware(s.handleWizardCancel))
 	s.mux.HandleFunc("POST /wizard/refine", s.csrfMiddleware(s.handleWizardRefine))
 	s.mux.HandleFunc("POST /wizard/breakdown", s.csrfMiddleware(s.handleWizardBreakdown))

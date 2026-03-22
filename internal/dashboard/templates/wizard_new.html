@@ -2,7 +2,7 @@
 <div class="wizard-step-content">
   <h1>Create New {{if eq .Type "bug"}}Bug Report{{else}}Feature{{end}}</h1>
   
-  <form hx-post="/wizard/refine" hx-target="#wizard-modal-content" hx-swap="innerHTML" hx-disabled-elt="button[type='submit']">
+  <form hx-post="/wizard/refine" hx-target="closest .wizard-container" hx-swap="innerHTML" hx-disabled-elt="button[type='submit']">
     <input type="hidden" name="session_id" value="{{.SessionID}}">
     <input type="hidden" name="wizard_type" value="{{.Type}}">
     

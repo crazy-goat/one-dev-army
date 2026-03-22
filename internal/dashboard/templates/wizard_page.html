@@ -1,0 +1,147 @@
+{{template "layout" .}}
+{{define "content"}}
+<style>
+.wizard-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.wizard-header {
+  margin-bottom: 2rem;
+}
+
+.wizard-header h1 {
+  font-size: 1.8rem;
+  margin-bottom: 0.5rem;
+}
+
+.wizard-header p {
+  color: var(--muted);
+}
+
+.step-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: var(--surface);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.step.active {
+  opacity: 1;
+}
+
+.step.completed {
+  opacity: 0.8;
+}
+
+.step-number {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: background 0.2s, color 0.2s;
+}
+
+.step.active .step-number {
+  background: var(--accent);
+  color: #fff;
+}
+
+.step.completed .step-number {
+  background: var(--green);
+  color: #fff;
+}
+
+.step-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.step-connector {
+  width: 24px;
+  height: 2px;
+  background: var(--border);
+  margin: 0 0.25rem;
+}
+
+.wizard-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.cancel-link {
+  display: inline-block;
+  margin-top: 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.cancel-link:hover {
+  color: var(--text);
+}
+</style>
+
+<div class="wizard-page">
+  <div class="wizard-header">
+    <h1>Create New {{if eq .Type "bug"}}Bug Report{{else}}Feature{{end}}</h1>
+    <p>Follow the steps below to create a new {{if eq .Type "bug"}}bug report{{else}}feature{{end}} with AI assistance.</p>
+  </div>
+  
+  <div class="step-indicator">
+    <div class="step {{if eq .CurrentStep 1}}active{{end}} {{if gt .CurrentStep 1}}completed{{end}}">
+      <span class="step-number">1</span>
+      <span class="step-label">Idea</span>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step {{if eq .CurrentStep 2}}active{{end}} {{if gt .CurrentStep 2}}completed{{end}}">
+      <span class="step-number">2</span>
+      <span class="step-label">Refine</span>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step {{if eq .CurrentStep 3}}active{{end}} {{if gt .CurrentStep 3}}completed{{end}}">
+      <span class="step-number">3</span>
+      <span class="step-label">Breakdown</span>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step {{if eq .CurrentStep 4}}active{{end}}">
+      <span class="step-number">4</span>
+      <span class="step-label">Create</span>
+    </div>
+  </div>
+  
+  <div class="wizard-container" id="wizard-content" hx-target="this" hx-swap="innerHTML">
+    {{template "wizard-step-content" .}}
+  </div>
+  
+  <a href="/" class="cancel-link">← Cancel and return to dashboard</a>
+</div>
+
+<script>
+// Override closeWizardModal for page mode
+function closeWizardModal() {
+  window.location.href = '/';
+}
+</script>
+{{end}}

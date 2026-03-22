@@ -1375,6 +1375,36 @@ func (s *Server) handleWizardModal(w http.ResponseWriter, r *http.Request) {
 	s.renderFragment(w, "wizard_modal.html", data)
 }
 
+// handleWizardPage returns the wizard on a separate page (not modal)
+func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
+	// Get wizard type from query param (default to feature)
+	wizardType := r.URL.Query().Get("type")
+	if wizardType != "bug" {
+		wizardType = "feature"
+	}
+
+	// Create new session
+	session, err := s.wizardStore.Create(wizardType)
+	if err != nil {
+		http.Error(w, "invalid wizard type", http.StatusBadRequest)
+		return
+	}
+
+	data := struct {
+		Active      string
+		Type        string
+		SessionID   string
+		CurrentStep int
+	}{
+		Active:      "wizard",
+		Type:        wizardType,
+		SessionID:   session.ID,
+		CurrentStep: 1,
+	}
+
+	s.render(w, "wizard_page.html", data)
+}
+
 // handleWizardCancel clears the wizard session and returns empty response
 func (s *Server) handleWizardCancel(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {

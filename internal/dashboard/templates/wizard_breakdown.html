@@ -18,13 +18,13 @@
     {{end}}
   </div>
   
-  <form hx-post="/wizard/create" hx-target="#wizard-modal-content" hx-swap="innerHTML">
+  <form hx-post="/wizard/create" hx-target="closest .wizard-container" hx-swap="innerHTML">
     <input type="hidden" name="session_id" value="{{.SessionID}}">
     
     <div class="form-actions">
       <button type="button" class="btn" onclick="closeWizardModal()">Cancel</button>
       <div class="nav-buttons">
-        <button type="button" class="btn" hx-get="/wizard/refine?session_id={{.SessionID}}" hx-target="#wizard-modal-content">
+        <button type="button" class="btn" hx-get="/wizard/refine?session_id={{.SessionID}}" hx-target="closest .wizard-container">
           ← Back
         </button>
         <button type="submit" class="btn btn-success">
