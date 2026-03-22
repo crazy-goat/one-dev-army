@@ -11,6 +11,98 @@ import (
 	"testing"
 )
 
+// TestHandleBoardData tests the board data API endpoint
+func TestHandleBoardData(t *testing.T) {
+	srv := &Server{
+		tmpls: make(map[string]*template.Template),
+	}
+
+	// Test without template (should return 500)
+	req := httptest.NewRequest(http.MethodGet, "/api/board-data", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleBoardData(rec, req)
+
+	// Should return 500 since template is not loaded
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 500 for missing template, got %d", rec.Code)
+	}
+}
+
+// TestHandleBoardData_WithTemplate tests the endpoint with a loaded template
+func TestHandleBoardData_WithTemplate(t *testing.T) {
+	// Create a minimal template for testing
+	tmplContent := `{{define "content"}}<div>Board Data</div>{{end}}`
+	tmpl, err := template.New("board.html").Parse(tmplContent)
+	if err != nil {
+		t.Fatalf("failed to parse template: %v", err)
+	}
+
+	srv := &Server{
+		tmpls: map[string]*template.Template{
+			"board.html": tmpl,
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/board-data", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleBoardData(rec, req)
+
+	// Should return 200 OK with template loaded
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify content type is HTML
+	contentType := rec.Header().Get("Content-Type")
+	if !strings.Contains(contentType, "text/html") {
+		t.Errorf("expected Content-Type to contain 'text/html', got %s", contentType)
+	}
+}
+
+// TestBuildBoardData tests the board data construction
+func TestBuildBoardData(t *testing.T) {
+	srv := &Server{
+		tmpls: make(map[string]*template.Template),
+	}
+
+	data := srv.buildBoardData()
+
+	// Verify default values
+	if data.Active != "board" {
+		t.Errorf("expected Active to be 'board', got %s", data.Active)
+	}
+
+	// Should be paused by default when no orchestrator
+	if !data.Paused {
+		t.Error("expected Paused to be true by default")
+	}
+
+	// Should not be processing when no orchestrator
+	if data.Processing {
+		t.Error("expected Processing to be false by default")
+	}
+}
+
+// TestHandleBoard tests the main board page handler
+func TestHandleBoard(t *testing.T) {
+	srv := &Server{
+		tmpls: make(map[string]*template.Template),
+	}
+
+	// Test without template (should return 500)
+	req := httptest.NewRequest(http.MethodGet, "/board", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleBoard(rec, req)
+
+	// Should return 500 since template is not loaded
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 500 for missing template, got %d", rec.Code)
+	}
+}
+
 func TestHandleWizardNew(t *testing.T) {
 	// Create server with minimal dependencies
 	srv := &Server{

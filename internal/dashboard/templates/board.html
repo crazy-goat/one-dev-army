@@ -59,13 +59,16 @@
     <form method="post" action="/sync" style="display:inline">
       <button type="submit" class="btn">Sync</button>
     </form>
+    <button type="button" id="autosync-toggle" class="btn" onclick="toggleAutosync()">
+      <span id="autosync-icon">▶</span> <span id="autosync-text">OFF</span>
+    </button>
     <form method="post" action="/plan-sprint" style="display:inline">
       <button type="submit" class="btn btn-primary">Plan Sprint</button>
     </form>
   </div>
 </div>
 
-<div class="board">
+<div class="board" id="board-container" hx-get="/api/board-data" hx-swap="outerHTML">
   <div class="column">
     <div class="column-title">Backlog <span class="count">{{len .Backlog}}</span></div>
     {{range .Backlog}}
@@ -217,6 +220,33 @@ function closeDeclineModal() {
 }
 document.getElementById('decline-modal').addEventListener('click', function(e) {
   if (e.target === this) closeDeclineModal();
+});
+
+// Autosync functionality
+function toggleAutosync() {
+	const board = document.getElementById('board-container');
+	const icon = document.getElementById('autosync-icon');
+	const text = document.getElementById('autosync-text');
+	const isEnabled = board.getAttribute('hx-trigger') === 'every 10s';
+	
+	if (isEnabled) {
+		board.removeAttribute('hx-trigger');
+		icon.textContent = '▶';
+		text.textContent = 'OFF';
+		localStorage.setItem('autosync', 'false');
+	} else {
+		board.setAttribute('hx-trigger', 'every 10s');
+		icon.textContent = '⏸';
+		text.textContent = 'ON';
+		localStorage.setItem('autosync', 'true');
+	}
+}
+
+// Restore preference on page load
+document.addEventListener('DOMContentLoaded', function() {
+	if (localStorage.getItem('autosync') === 'true') {
+		toggleAutosync();
+	}
 });
 </script>
 

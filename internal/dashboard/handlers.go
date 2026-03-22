@@ -88,6 +88,11 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "board.html", data)
 }
 
+func (s *Server) handleBoardData(w http.ResponseWriter, r *http.Request) {
+	data := s.buildBoardData()
+	s.renderFragment(w, "board.html", data)
+}
+
 func (s *Server) buildBoardData() boardData {
 	data := boardData{
 		Active: "board",
