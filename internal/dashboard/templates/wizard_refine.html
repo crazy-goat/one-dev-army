@@ -1,12 +1,15 @@
 <div class="wizard-step">
   <h2>Refined Description</h2>
   
-  <div class="refined-content">
-    <p class="description">{{.RefinedDescription}}</p>
-  </div>
-  
-  <form hx-post="/wizard/breakdown" hx-target="#wizard-modal-content" hx-swap="innerHTML">
+  <form hx-post="/wizard/breakdown" hx-target="#wizard-modal-content" hx-swap="innerHTML" hx-disabled-elt="button[type='submit']">
     <input type="hidden" name="session_id" value="{{.SessionID}}">
+    
+    <div class="form-group">
+      <label for="refined_description">Refined Description (edit if needed):</label>
+      <textarea id="refined_description" name="refined_description" rows="8">{{.RefinedDescription}}</textarea>
+    </div>
+    
+    <div id="refine-error" class="error-message" style="display:none; color: var(--error); margin: 1rem 0;"></div>
     
     <div class="form-actions">
       <button type="button" class="btn" onclick="closeWizardModal()">Cancel</button>
@@ -14,9 +17,13 @@
         <button type="button" class="btn" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}" hx-target="#wizard-modal-content">
           ← Back
         </button>
+        <button type="button" class="btn btn-secondary" hx-post="/wizard/refine-again" hx-target="#wizard-modal-content" hx-disabled-elt="button[type='submit']">
+          <span class="spinner" style="display:none;">⏳</span>
+          <span class="label">Refine Again</span>
+        </button>
         <button type="submit" class="btn btn-primary">
           <span class="spinner" style="display:none;">⏳</span>
-          <span class="label">Break Down into Tasks</span>
+          <span class="label">Accept &amp; Continue</span>
         </button>
       </div>
     </div>
@@ -27,20 +34,28 @@
 
 <style>
 .wizard-step { max-width: 800px; margin: 0 auto; }
-.refined-content {
-  background: var(--surface);
+.form-group { margin-bottom: 1rem; }
+.form-group label { display: block; margin-bottom: 0.5rem; color: var(--muted); }
+.form-group textarea {
+  width: 100%;
+  padding: 0.75rem;
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 1rem;
-  margin: 1rem 0;
-  white-space: pre-wrap;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
 }
-.refined-content .description {
-  margin: 0;
-  line-height: 1.6;
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 .form-actions { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1.5rem; }
 .nav-buttons { display: flex; gap: 0.5rem; }
 .htmx-request .spinner { display: inline !important; }
 .htmx-request .label { display: none; }
+.btn-secondary { background: var(--surface); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--border); }
+.error-message { padding: 1rem; background: var(--surface); border-radius: 6px; border: 1px solid var(--error); }
 </style>
