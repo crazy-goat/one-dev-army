@@ -929,7 +929,15 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	// Extract refined description from response
 	var refinedDesc string
 	if len(response.Parts) > 0 {
-		refinedDesc = response.Parts[0].Text
+		refinedDesc = strings.TrimSpace(response.Parts[0].Text)
+	}
+
+	// Validate that we got a non-empty response
+	if refinedDesc == "" {
+		log.Printf("[Wizard] LLM returned empty response for session %s", session.ID)
+		session.AddLog("system", "Error: LLM returned empty response")
+		s.renderError(w, "The AI returned an empty response. Please try again with a more detailed description.", session.ID, string(session.Type))
+		return
 	}
 
 	session.SetRefinedDescription(refinedDesc)
