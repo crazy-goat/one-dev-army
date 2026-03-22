@@ -151,7 +151,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 		},
 	}
 
-	pages := []string{"board.html", "backlog.html", "costs.html", "task.html", "wizard_new.html"}
+	pages := []string{"board.html", "backlog.html", "costs.html", "task.html"}
 	for _, page := range pages {
 		t, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/"+page)
 		if err != nil {
@@ -160,20 +160,20 @@ func parseTemplates() (map[string]*template.Template, error) {
 		tmpls[page] = t
 	}
 
-	wizardPageTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/wizard_page.html", "templates/wizard_new.html")
+	wizardPageTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/wizard_new.html", "templates/wizard_page.html")
 	if err != nil {
 		return nil, fmt.Errorf("parsing wizard_page.html: %w", err)
 	}
 	tmpls["wizard_page.html"] = wizardPageTmpl
 
-	wizardModalTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/wizard_modal.html", "templates/wizard_new.html")
+	wizardModalTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/wizard_new.html", "templates/wizard_modal.html")
 	if err != nil {
 		return nil, fmt.Errorf("parsing wizard_modal.html: %w", err)
 	}
 	tmpls["wizard_modal.html"] = wizardModalTmpl
 
 	// Parse wizard partial templates (no layout)
-	wizardPartials := []string{"wizard_refine.html", "wizard_breakdown.html", "wizard_create.html", "wizard_logs.html"}
+	wizardPartials := []string{"wizard_new.html", "wizard_refine.html", "wizard_breakdown.html", "wizard_create.html", "wizard_error.html", "wizard_logs.html"}
 	for _, page := range wizardPartials {
 		t, err := template.ParseFS(templateFS, "templates/"+page)
 		if err != nil {
@@ -217,10 +217,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /wizard", s.handleWizardPage)
 	s.mux.HandleFunc("GET /wizard/new", s.handleWizardNew)
 	s.mux.HandleFunc("GET /wizard/modal", s.handleWizardModal)
-	s.mux.HandleFunc("POST /wizard/cancel", s.csrfMiddleware(s.handleWizardCancel))
-	s.mux.HandleFunc("POST /wizard/refine", s.csrfMiddleware(s.handleWizardRefine))
-	s.mux.HandleFunc("POST /wizard/breakdown", s.csrfMiddleware(s.handleWizardBreakdown))
-	s.mux.HandleFunc("POST /wizard/create", s.csrfMiddleware(s.handleWizardCreate))
+	s.mux.HandleFunc("POST /wizard/cancel", s.handleWizardCancel)
+	s.mux.HandleFunc("POST /wizard/refine", s.handleWizardRefine)
+	s.mux.HandleFunc("POST /wizard/breakdown", s.handleWizardBreakdown)
+	s.mux.HandleFunc("POST /wizard/create", s.handleWizardCreate)
 	s.mux.HandleFunc("GET /wizard/logs/{sessionId}", s.handleWizardLogs)
 }
 
