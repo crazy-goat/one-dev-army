@@ -29,6 +29,18 @@
     {{if .SprintName}}<p style="color:var(--muted);font-size:.9rem;margin-top:.25rem">{{.SprintName}}</p>{{end}}
   </div>
   <div class="board-actions">
+    {{if .Paused}}
+    <form method="post" action="/api/sprint/start" style="display:inline">
+      <button type="submit" class="btn btn-success">Start Sprint</button>
+    </form>
+    {{else}}
+    <form method="post" action="/api/sprint/pause" style="display:inline">
+      <button type="submit" class="btn btn-danger">Pause Sprint</button>
+    </form>
+    {{end}}
+    {{if .Processing}}<span style="color:var(--green);font-size:.85rem;margin-left:.5rem">{{.CurrentIssue}}</span>{{end}}
+    {{if and (not .Paused) (not .Processing)}}<span style="color:var(--green);font-size:.85rem;margin-left:.5rem">Running</span>{{end}}
+    {{if .Paused}}<span style="color:var(--muted);font-size:.85rem;margin-left:.5rem">Paused</span>{{end}}
     <form method="post" action="/sync" style="display:inline">
       <button type="submit" class="btn">Sync</button>
     </form>

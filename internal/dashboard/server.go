@@ -9,6 +9,7 @@ import (
 
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/mvp"
 	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
 
@@ -22,11 +23,12 @@ type Server struct {
 	pool          func() []worker.WorkerInfo
 	gh            *github.Client
 	projectNumber int
+	orchestrator  *mvp.Orchestrator
 	mux           *http.ServeMux
 	httpSrv       *http.Server
 }
 
-func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, projectNumber int) (*Server, error) {
+func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, projectNumber int, orchestrator *mvp.Orchestrator) (*Server, error) {
 	tmpls, err := parseTemplates()
 	if err != nil {
 		return nil, err
@@ -40,6 +42,7 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 		pool:          pool,
 		gh:            gh,
 		projectNumber: projectNumber,
+		orchestrator:  orchestrator,
 		mux:           mux,
 		httpSrv: &http.Server{
 			Addr:    fmt.Sprintf(":%d", port),
@@ -76,6 +79,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /backlog", s.handleBacklog)
 	s.mux.HandleFunc("GET /costs", s.handleCosts)
 	s.mux.HandleFunc("GET /api/workers", s.handleWorkers)
+	s.mux.HandleFunc("GET /api/current-task", s.handleCurrentTask)
+	s.mux.HandleFunc("GET /api/sprint/status", s.handleSprintStatus)
+	s.mux.HandleFunc("POST /api/sprint/start", s.handleSprintStart)
+	s.mux.HandleFunc("POST /api/sprint/pause", s.handleSprintPause)
 	s.mux.HandleFunc("POST /epic", s.handleAddEpic)
 	s.mux.HandleFunc("POST /sync", s.handleSync)
 	s.mux.HandleFunc("POST /plan-sprint", s.handlePlanSprint)
