@@ -138,3 +138,13 @@ func RunInWorktree(wtPath, name string, args ...string) ([]byte, error) {
 	}
 	return out, nil
 }
+
+func (m *WorktreeManager) PushBranch(branch string) error {
+	cmd := exec.Command("git", "push", "-u", "origin", branch)
+	cmd.Dir = m.repoDir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git push -u origin %s: %w\n%s", branch, err, out)
+	}
+	return nil
+}
