@@ -13,6 +13,8 @@ type Label struct {
 var RequiredLabels = []Label{
 	{Name: "sprint", Color: "0E8A16"},
 	{Name: "insight", Color: "D93F0B"},
+	{Name: "in-progress", Color: "FBCA04"},
+	{Name: "failed", Color: "D93F0B"},
 	{Name: "size:S", Color: "C2E0C6"},
 	{Name: "size:M", Color: "BFDADC"},
 	{Name: "size:L", Color: "BFD4F2"},
