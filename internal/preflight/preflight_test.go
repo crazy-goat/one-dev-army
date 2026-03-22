@@ -110,9 +110,15 @@ func TestRunAll_CollectsAllResults(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	results := preflight.RunAll(dir, srv.URL)
+	progressCalls := 0
+	results := preflight.RunAll(dir, srv.URL, func(name string, index, total int, status string) {
+		progressCalls++
+	})
 	if len(results) != 6 {
 		t.Fatalf("expected 6 results, got %d", len(results))
+	}
+	if progressCalls != 12 {
+		t.Fatalf("expected 12 progress calls (2 per check), got %d", progressCalls)
 	}
 
 	names := map[string]bool{}
@@ -131,5 +137,85 @@ func TestRunAll_CollectsAllResults(t *testing.T) {
 		if !names[name] {
 			t.Errorf("missing check result for %q", name)
 		}
+	}
+}
+
+func TestRunAll_ProgressCallback(t *testing.T) {
+	dir := t.TempDir()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	var calls []struct {
+		name   string
+		index  int
+		total  int
+		status string
+	}
+
+	preflight.RunAll(dir, srv.URL, func(name string, index, total int, status string) {
+		calls = append(calls, struct {
+			name   string
+			index  int
+			total  int
+			status string
+		}{name, index, total, status})
+	})
+
+	if len(calls) != 12 {
+		t.Fatalf("expected 12 progress calls, got %d", len(calls))
+	}
+
+	for i := 0; i < 6; i++ {
+		if calls[i*2].status != "running" {
+			t.Errorf("call %d: expected status 'running', got %q", i*2, calls[i*2].status)
+		}
+		if calls[i*2+1].status != "ok" && calls[i*2+1].status != "failed" {
+			t.Errorf("call %d: expected status 'ok' or 'failed', got %q", i*2+1, calls[i*2+1].status)
+		}
+		if calls[i*2].index != i+1 || calls[i*2+1].index != i+1 {
+			t.Errorf("call %d: expected index %d", i, i+1)
+		}
+		if calls[i*2].total != 6 || calls[i*2+1].total != 6 {
+			t.Errorf("call %d: expected total 6", i)
+		}
+	}
+}
+
+func TestRunAll_NilProgressCallback(t *testing.T) {
+	dir := t.TempDir()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	results := preflight.RunAll(dir, srv.URL, nil)
+	if len(results) != 6 {
+		t.Fatalf("expected 6 results, got %d", len(results))
+	}
+}
+
+func TestGetCheckDescription(t *testing.T) {
+	tests := []struct {
+		name     string
+		expected string
+	}{
+		{"git-repo", "verifying git repository initialized"},
+		{"gh-cli", "checking GitHub CLI installed"},
+		{"gh-auth", "verifying GitHub authentication"},
+		{"opencode", "checking opencode server reachable"},
+		{"opencode-dir", "verifying correct working directory"},
+		{"config", "checking ODA configuration exists"},
+		{"unknown", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc := preflight.GetCheckDescription(tt.name)
+			if desc != tt.expected {
+				t.Errorf("GetCheckDescription(%q) = %q, want %q", tt.name, desc, tt.expected)
+			}
+		})
 	}
 }

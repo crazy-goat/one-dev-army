@@ -152,7 +152,18 @@ func CheckConfig(dir string) error {
 	return nil
 }
 
-func RunAll(projectDir, opencodeURL string) []CheckResult {
+type ProgressFunc func(checkName string, index, total int, status string)
+
+var checkDescriptions = map[string]string{
+	"git-repo":     "verifying git repository initialized",
+	"gh-cli":       "checking GitHub CLI installed",
+	"gh-auth":      "verifying GitHub authentication",
+	"opencode":     "checking opencode server reachable",
+	"opencode-dir": "verifying correct working directory",
+	"config":       "checking ODA configuration exists",
+}
+
+func RunAll(projectDir, opencodeURL string, onProgress ProgressFunc) []CheckResult {
 	checks := []struct {
 		name string
 		fn   func() error
@@ -166,15 +177,32 @@ func RunAll(projectDir, opencodeURL string) []CheckResult {
 	}
 
 	results := make([]CheckResult, 0, len(checks))
-	for _, c := range checks {
+	for i, c := range checks {
+		if onProgress != nil {
+			onProgress(c.name, i+1, len(checks), "running")
+		}
 		r := CheckResult{Name: c.name, OK: true, Message: "ok"}
 		if err := c.fn(); err != nil {
 			r.OK = false
 			r.Message = err.Error()
 		}
 		results = append(results, r)
+		if onProgress != nil {
+			status := "ok"
+			if !r.OK {
+				status = "failed"
+			}
+			onProgress(c.name, i+1, len(checks), status)
+		}
 	}
 	return results
+}
+
+func GetCheckDescription(name string) string {
+	if desc, ok := checkDescriptions[name]; ok {
+		return desc
+	}
+	return ""
 }
 
 func ghInstallInstructions() string {

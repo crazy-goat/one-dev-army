@@ -82,13 +82,19 @@ func runServe() error {
 	const opencodeURL = "http://localhost:4096"
 
 	fmt.Println("Running preflight checks...")
-	results := preflight.RunAll(dir, opencodeURL)
+	results := preflight.RunAll(dir, opencodeURL, func(name string, index, total int, status string) {
+		desc := preflight.GetCheckDescription(name)
+		if status == "running" {
+			fmt.Printf("  [%d/%d] → %s — %s\n", index, total, name, desc)
+		} else if status == "ok" {
+			fmt.Printf("  [%d/%d] ✓ %s\n", index, total, name)
+		} else {
+			fmt.Printf("  [%d/%d] ✗ %s\n", index, total, name)
+		}
+	})
 	allOK := true
 	for _, r := range results {
-		if r.OK {
-			fmt.Printf("  ✓ %s\n", r.Name)
-		} else {
-			fmt.Printf("  ✗ %s: %s\n", r.Name, r.Message)
+		if !r.OK {
 			allOK = false
 		}
 	}
@@ -118,13 +124,19 @@ func runServe() error {
 			fmt.Println("  ✓ opencode serve started")
 
 			// Re-run preflight now that opencode is up.
-			results = preflight.RunAll(dir, opencodeURL)
+			results = preflight.RunAll(dir, opencodeURL, func(name string, index, total int, status string) {
+				desc := preflight.GetCheckDescription(name)
+				if status == "running" {
+					fmt.Printf("  [%d/%d] → %s — %s\n", index, total, name, desc)
+				} else if status == "ok" {
+					fmt.Printf("  [%d/%d] ✓ %s\n", index, total, name)
+				} else {
+					fmt.Printf("  [%d/%d] ✗ %s\n", index, total, name)
+				}
+			})
 			allOK = true
 			for _, r := range results {
-				if r.OK {
-					fmt.Printf("  ✓ %s\n", r.Name)
-				} else {
-					fmt.Printf("  ✗ %s: %s\n", r.Name, r.Message)
+				if !r.OK {
 					allOK = false
 				}
 			}
