@@ -399,31 +399,42 @@ func placeholderWorkers() []workerCard {
 	}
 }
 
+// LLMRequestTimeout is the timeout for LLM API requests
+const LLMRequestTimeout = 60 * time.Second
+
 func (s *Server) handleCurrentTask(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if s.orchestrator == nil {
-		json.NewEncoder(w).Encode(map[string]any{"active": false})
+		if err := json.NewEncoder(w).Encode(map[string]any{"active": false}); err != nil {
+			log.Printf("[Dashboard] Error encoding JSON: %v", err)
+		}
 		return
 	}
 	task := s.orchestrator.CurrentTask()
 	if task == nil {
-		json.NewEncoder(w).Encode(map[string]any{"active": false})
+		if err := json.NewEncoder(w).Encode(map[string]any{"active": false}); err != nil {
+			log.Printf("[Dashboard] Error encoding JSON: %v", err)
+		}
 		return
 	}
-	json.NewEncoder(w).Encode(map[string]any{
+	if err := json.NewEncoder(w).Encode(map[string]any{
 		"active":       true,
 		"issue_number": task.Issue.Number,
 		"issue_title":  task.Issue.Title,
 		"status":       string(task.Status),
 		"milestone":    task.Milestone,
 		"branch":       task.Branch,
-	})
+	}); err != nil {
+		log.Printf("[Dashboard] Error encoding JSON: %v", err)
+	}
 }
 
 func (s *Server) handleSprintStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if s.orchestrator == nil {
-		json.NewEncoder(w).Encode(map[string]any{"paused": true, "processing": false})
+		if err := json.NewEncoder(w).Encode(map[string]any{"paused": true, "processing": false}); err != nil {
+			log.Printf("[Dashboard] Error encoding JSON: %v", err)
+		}
 		return
 	}
 	resp := map[string]any{
@@ -434,7 +445,9 @@ func (s *Server) handleSprintStatus(w http.ResponseWriter, r *http.Request) {
 		resp["current_issue"] = task.Issue.Number
 		resp["current_status"] = string(task.Status)
 	}
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("[Dashboard] Error encoding JSON: %v", err)
+	}
 }
 
 func (s *Server) handleSprintStart(w http.ResponseWriter, r *http.Request) {
@@ -714,14 +727,18 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to create LLM session", http.StatusInternalServerError)
 		return
 	}
-	defer s.oc.DeleteSession(llmSession.ID) // Ensure cleanup even if errors occur
+	defer func() {
+		if err := s.oc.DeleteSession(llmSession.ID); err != nil {
+			log.Printf("[Wizard] Error deleting LLM session %s: %v", llmSession.ID, err)
+		}
+	}()
 
 	// Build refinement prompt
 	prompt := buildRefinementPrompt(session.Type, idea)
 	session.AddLog("system", "Sending refinement request to LLM")
 
 	// Send message to LLM with timeout
-	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), LLMRequestTimeout)
 	defer cancel()
 
 	model := opencode.ParseModelRef(DefaultLLMModel)
@@ -854,14 +871,18 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to create LLM session", http.StatusInternalServerError)
 		return
 	}
-	defer s.oc.DeleteSession(llmSession.ID) // Ensure cleanup even if errors occur
+	defer func() {
+		if err := s.oc.DeleteSession(llmSession.ID); err != nil {
+			log.Printf("[Wizard] Error deleting LLM session %s: %v", llmSession.ID, err)
+		}
+	}()
 
 	// Build breakdown prompt with JSON schema requirement
 	prompt := buildBreakdownPrompt(session.Type, session.RefinedDescription)
 	session.AddLog("system", "Sending breakdown request to LLM")
 
 	// Send message to LLM with timeout
-	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), LLMRequestTimeout)
 	defer cancel()
 
 	model := opencode.ParseModelRef(DefaultLLMModel)

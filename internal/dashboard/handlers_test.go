@@ -284,22 +284,15 @@ func TestFullWizardFlow(t *testing.T) {
 	}
 
 	// Get the session ID from the store (should have 1 session)
-	sessions := make([]string, 0, srv.wizardStore.Count())
-	for i := 0; i < 1000; i++ {
-		session, _ := srv.wizardStore.Create("feature")
-		if session != nil {
-			sessions = append(sessions, session.ID)
-		}
-	}
-
-	// Get the first session ID we created
-	var sessionID string
-	if len(sessions) > 0 {
-		sessionID = sessions[0]
-	}
-	if sessionID == "" {
+	// We need to get the first session that was created by handleWizardNew
+	// Since we can't access the internal map, we'll use the Count to verify
+	if srv.wizardStore.Count() < 1 {
 		t.Fatal("No session created in step 1")
 	}
+
+	// Create a new session for testing the flow
+	testSession, _ := srv.wizardStore.Create("feature")
+	sessionID := testSession.ID
 
 	// Step 2: Refine idea (POST /wizard/refine)
 	formData := url.Values{}
