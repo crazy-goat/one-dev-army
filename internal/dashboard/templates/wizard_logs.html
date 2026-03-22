@@ -1,5 +1,5 @@
 {{if .Logs}}
-<div class="log-container">
+<div class="log-container" hx-on::after-swap="this.scrollTop = this.scrollHeight">
   {{range .Logs}}
   <div class="log-entry log-{{.Role}}">
     <span class="log-timestamp">{{.Timestamp.Format "15:04:05"}}</span>
