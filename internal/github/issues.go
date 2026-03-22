@@ -3,8 +3,10 @@ package github
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Issue struct {
@@ -98,27 +100,69 @@ func (c *Client) MergePR(branch string) error {
 }
 
 type Milestone struct {
-	Title  string `json:"title"`
-	Number int    `json:"number"`
-	State  string `json:"state"`
+	Title     string    `json:"title"`
+	Number    int       `json:"number"`
+	State     string    `json:"state"`
+	CreatedAt time.Time `json:"created_at"`
+	DueOn     time.Time `json:"due_on"`
 }
 
+// ListMilestones returns all milestones sorted by creation date (newest first)
 func (c *Client) ListMilestones() ([]Milestone, error) {
-	out, err := c.ghNoRepo("api", "repos/"+c.Repo+"/milestones", "--jq", ".[].title")
-	if err != nil {
-		var milestones []Milestone
-		if err2 := c.ghJSON(&milestones, "api", "repos/"+c.Repo+"/milestones"); err2 != nil {
-			return nil, fmt.Errorf("listing milestones: %w", err)
-		}
-		return milestones, nil
-	}
 	var milestones []Milestone
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line != "" {
-			milestones = append(milestones, Milestone{Title: line})
+	if err := c.ghNoRepoJSON(&milestones, "api", "repos/"+c.Repo+"/milestones"); err != nil {
+		return nil, fmt.Errorf("listing milestones: %w", err)
+	}
+
+	// Sort by creation date, newest first
+	sort.Slice(milestones, func(i, j int) bool {
+		return milestones[i].CreatedAt.After(milestones[j].CreatedAt)
+	})
+
+	return milestones, nil
+}
+
+// ListOpenMilestones returns only open (active) milestones sorted by due date
+func (c *Client) ListOpenMilestones() ([]Milestone, error) {
+	all, err := c.ListMilestones()
+	if err != nil {
+		return nil, err
+	}
+
+	var open []Milestone
+	for _, m := range all {
+		if m.State == "open" {
+			open = append(open, m)
 		}
 	}
-	return milestones, nil
+
+	// Sort by due date (closest first)
+	sort.Slice(open, func(i, j int) bool {
+		return open[i].DueOn.Before(open[j].DueOn)
+	})
+
+	return open, nil
+}
+
+// GetOldestOpenMilestone returns the oldest open milestone by creation date
+// This is considered the "active" sprint
+func (c *Client) GetOldestOpenMilestone() (*Milestone, error) {
+	open, err := c.ListOpenMilestones()
+	if err != nil {
+		return nil, err
+	}
+	if len(open) == 0 {
+		return nil, nil
+	}
+	// ListOpenMilestones returns sorted by DueOn, we need oldest by CreatedAt
+	// So we need to find the one with earliest CreatedAt
+	oldest := &open[0]
+	for i := 1; i < len(open); i++ {
+		if open[i].CreatedAt.Before(oldest.CreatedAt) {
+			oldest = &open[i]
+		}
+	}
+	return oldest, nil
 }
 
 func (c *Client) SetMilestone(issueNum int, milestone string) error {
