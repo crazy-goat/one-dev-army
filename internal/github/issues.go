@@ -58,7 +58,7 @@ func (c *Client) AddComment(issueNum int, body string) error {
 }
 
 func (c *Client) CreateMilestone(title string) error {
-	_, err := c.gh("api", "repos/{owner}/{repo}/milestones", "-f", "title="+title)
+	_, err := c.ghNoRepo("api", "repos/"+c.Repo+"/milestones", "-f", "title="+title)
 	if err != nil {
 		return fmt.Errorf("creating milestone %s: %w", title, err)
 	}
@@ -104,10 +104,10 @@ type Milestone struct {
 }
 
 func (c *Client) ListMilestones() ([]Milestone, error) {
-	out, err := c.gh("api", "repos/{owner}/{repo}/milestones", "--jq", ".[].title")
+	out, err := c.ghNoRepo("api", "repos/"+c.Repo+"/milestones", "--jq", ".[].title")
 	if err != nil {
 		var milestones []Milestone
-		if err2 := c.ghJSON(&milestones, "api", "repos/{owner}/{repo}/milestones"); err2 != nil {
+		if err2 := c.ghJSON(&milestones, "api", "repos/"+c.Repo+"/milestones"); err2 != nil {
 			return nil, fmt.Errorf("listing milestones: %w", err)
 		}
 		return milestones, nil
