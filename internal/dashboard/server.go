@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/crazy-goat/one-dev-army/internal/db"
+	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
 
@@ -15,15 +16,17 @@ import (
 var templateFS embed.FS
 
 type Server struct {
-	port    int
-	tmpls   map[string]*template.Template
-	store   *db.Store
-	pool    func() []worker.WorkerInfo
-	mux     *http.ServeMux
-	httpSrv *http.Server
+	port          int
+	tmpls         map[string]*template.Template
+	store         *db.Store
+	pool          func() []worker.WorkerInfo
+	gh            *github.Client
+	projectNumber int
+	mux           *http.ServeMux
+	httpSrv       *http.Server
 }
 
-func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo) (*Server, error) {
+func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, projectNumber int) (*Server, error) {
 	tmpls, err := parseTemplates()
 	if err != nil {
 		return nil, err
@@ -31,11 +34,13 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo) (*Ser
 
 	mux := http.NewServeMux()
 	s := &Server{
-		port:  port,
-		tmpls: tmpls,
-		store: store,
-		pool:  pool,
-		mux:   mux,
+		port:          port,
+		tmpls:         tmpls,
+		store:         store,
+		pool:          pool,
+		gh:            gh,
+		projectNumber: projectNumber,
+		mux:           mux,
 		httpSrv: &http.Server{
 			Addr:    fmt.Sprintf(":%d", port),
 			Handler: mux,

@@ -2,27 +2,33 @@ package dashboard
 
 import (
 	"fmt"
+	"log"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
 
 type taskCard struct {
-	ID     int
-	Title  string
-	Status string
-	Worker string
+	ID       int
+	Title    string
+	Status   string
+	Worker   string
+	Assignee string
+	Labels   []string
 }
 
 type boardData struct {
-	Active   string
-	Backlog  []taskCard
-	Progress []taskCard
-	Review   []taskCard
-	Merging  []taskCard
-	Done     []taskCard
-	Blocked  []taskCard
+	Active     string
+	SprintName string
+	Backlog    []taskCard
+	Progress   []taskCard
+	Review     []taskCard
+	Merging    []taskCard
+	Done       []taskCard
+	Blocked    []taskCard
 }
 
 type backlogData struct {
@@ -67,8 +73,149 @@ func placeholderBoard() boardData {
 }
 
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
-	data := placeholderBoard()
+	data := s.buildBoardData()
 	s.render(w, "board.html", data)
+}
+
+func (s *Server) buildBoardData() boardData {
+	data := boardData{
+		Active: "board",
+	}
+
+	// Get active milestone name
+	if s.gh != nil && s.gh.GetActiveMilestone() != nil {
+		data.SprintName = s.gh.GetActiveMilestone().Title
+		log.Printf("[Dashboard] Active milestone: %s", data.SprintName)
+	} else {
+		log.Printf("[Dashboard] No active milestone set (gh=%v)", s.gh != nil)
+	}
+
+	// If no GitHub client or no active milestone, return empty board
+	if s.gh == nil || s.gh.GetActiveMilestone() == nil {
+		return data
+	}
+
+	milestone := s.gh.GetActiveMilestone().Title
+
+	// Fetch issues from the active milestone
+	issues, err := s.gh.ListIssuesForMilestone(milestone)
+	if err != nil {
+		log.Printf("[Dashboard] Error fetching issues for milestone %s: %v", milestone, err)
+		return data
+	}
+	log.Printf("[Dashboard] Found %d issues in milestone %s", len(issues), milestone)
+
+	// Fetch project items with their status
+	itemsByStatus, err := s.gh.GetProjectItemsByStatus(s.projectNumber)
+	if err != nil {
+		log.Printf("[Dashboard] Error fetching project items for project %d: %v", s.projectNumber, err)
+		itemsByStatus = make(map[string][]github.ProjectItem)
+		for _, col := range github.ProjectColumns {
+			itemsByStatus[col] = []github.ProjectItem{}
+		}
+	} else {
+		totalItems := 0
+		for _, items := range itemsByStatus {
+			totalItems += len(items)
+		}
+		log.Printf("[Dashboard] Found %d items in project %d", totalItems, s.projectNumber)
+
+		// If project is empty, we'll map issues to columns based on their state/labels
+		if totalItems == 0 {
+			itemsByStatus = nil // Signal that we need to infer status from issues
+		}
+	}
+
+	// Create a map of issue number to issue for quick lookup
+	issueMap := make(map[int]github.Issue)
+	for _, issue := range issues {
+		issueMap[issue.Number] = issue
+	}
+
+	// Build task cards for each column
+	if itemsByStatus != nil {
+		// Use project items to determine column
+		for _, col := range github.ProjectColumns {
+			items := itemsByStatus[col]
+			for _, item := range items {
+				issue, exists := issueMap[item.Number]
+				if !exists {
+					issue = github.Issue{
+						Number: item.Number,
+						Title:  item.Title,
+					}
+				}
+				s.addCardToColumn(&data, col, issue)
+			}
+		}
+	} else {
+		// Infer column from issue state and labels
+		for _, issue := range issues {
+			col := inferColumnFromIssue(issue)
+			s.addCardToColumn(&data, col, issue)
+		}
+	}
+
+	return data
+}
+
+func inferColumnFromIssue(issue github.Issue) string {
+	// Check labels first
+	labels := issue.GetLabelNames()
+	labelSet := make(map[string]bool)
+	for _, l := range labels {
+		labelSet[strings.ToLower(l)] = true
+	}
+
+	// Map labels to columns
+	if labelSet["blocked"] || labelSet["blocker"] {
+		return "Blocked"
+	}
+	if labelSet["in-progress"] || labelSet["in progress"] || labelSet["wip"] || labelSet["working"] {
+		return "In Progress"
+	}
+	if labelSet["review"] || labelSet["in-review"] || labelSet["pr-ready"] {
+		return "Review"
+	}
+	if labelSet["merging"] || labelSet["merge-ready"] {
+		return "Merging"
+	}
+	if labelSet["done"] || labelSet["completed"] || labelSet["finished"] {
+		return "Done"
+	}
+
+	// Check state
+	if issue.State == "CLOSED" {
+		return "Done"
+	}
+
+	// Default to Backlog
+	return "Backlog"
+}
+
+func (s *Server) addCardToColumn(data *boardData, col string, issue github.Issue) {
+	card := taskCard{
+		ID:       issue.Number,
+		Title:    issue.Title,
+		Status:   col,
+		Assignee: issue.GetAssignee(),
+		Labels:   issue.GetLabelNames(),
+	}
+
+	switch col {
+	case "Backlog":
+		data.Backlog = append(data.Backlog, card)
+	case "In Progress":
+		data.Progress = append(data.Progress, card)
+	case "Review":
+		data.Review = append(data.Review, card)
+	case "Merging":
+		data.Merging = append(data.Merging, card)
+	case "Done":
+		data.Done = append(data.Done, card)
+	case "Blocked":
+		data.Blocked = append(data.Blocked, card)
+	}
 }
 
 func (s *Server) handleBacklog(w http.ResponseWriter, r *http.Request) {

@@ -3,6 +3,7 @@ package github
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -10,13 +11,33 @@ import (
 )
 
 type Issue struct {
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	Body   string `json:"body"`
-	State  string `json:"state"`
+	Number    int    `json:"number"`
+	Title     string `json:"title"`
+	Body      string `json:"body"`
+	State     string `json:"state"`
+	Assignees []struct {
+		Login string `json:"login"`
+	} `json:"assignees"`
 	Labels []struct {
 		Name string `json:"name"`
 	} `json:"labels"`
+}
+
+// GetAssignee returns the first assignee's login or empty string if unassigned
+func (i Issue) GetAssignee() string {
+	if len(i.Assignees) > 0 {
+		return i.Assignees[0].Login
+	}
+	return ""
+}
+
+// GetLabelNames returns a slice of label names
+func (i Issue) GetLabelNames() []string {
+	var names []string
+	for _, l := range i.Labels {
+		names = append(names, l.Name)
+	}
+	return names
 }
 
 func (c *Client) CreateIssue(title, body string, labels []string) (int, error) {
@@ -189,11 +210,31 @@ func (c *Client) ListComments(issueNum int) ([]Comment, error) {
 }
 
 func (c *Client) ListOpenIssues() ([]Issue, error) {
-	args := []string{"issue", "list", "--state", "open", "--json", "number,title,body,state,labels", "--limit", "500"}
+	args := []string{"issue", "list", "--state", "open", "--json", "number,title,body,state,assignees,labels", "--limit", "500"}
 	var issues []Issue
 	if err := c.ghJSON(&issues, args...); err != nil {
 		return nil, fmt.Errorf("listing open issues: %w", err)
 	}
+	return issues, nil
+}
+
+// ListIssuesForMilestone fetches all issues assigned to a specific milestone with full details
+func (c *Client) ListIssuesForMilestone(milestone string) ([]Issue, error) {
+	args := []string{"issue", "list", "--state", "all", "--json", "number,title,body,state,assignees,labels", "--milestone", milestone, "--limit", "500"}
+
+	out, err := c.gh(args...)
+	if err != nil {
+		return nil, fmt.Errorf("listing issues for milestone %s: %w", milestone, err)
+	}
+
+	log.Printf("[GitHub] Issue list for milestone '%s' output: %s", milestone, string(out))
+
+	var issues []Issue
+	if err := json.Unmarshal(out, &issues); err != nil {
+		return nil, fmt.Errorf("parsing issues for milestone %s: %w", milestone, err)
+	}
+
+	log.Printf("[GitHub] Parsed %d issues for milestone '%s'", len(issues), milestone)
 	return issues, nil
 }
 

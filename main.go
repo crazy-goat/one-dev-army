@@ -224,7 +224,7 @@ func runServe() error {
 	pool := worker.NewPool(cfg.Workers.Count, &worker.EmptyQueue{}, processor)
 	pool.Start(ctx)
 
-	srv, err := dashboard.NewServer(cfg.Dashboard.Port, store, pool.Workers)
+	srv, err := dashboard.NewServer(cfg.Dashboard.Port, store, pool.Workers, gh, project.Number)
 	if err != nil {
 		return fmt.Errorf("creating dashboard server: %w", err)
 	}

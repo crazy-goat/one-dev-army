@@ -3,6 +3,7 @@ package github
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 )
 
@@ -160,6 +161,72 @@ var columnColors = map[string]string{
 	"Merging":     "PURPLE",
 	"Done":        "GREEN",
 	"Blocked":     "RED",
+}
+
+// ProjectItem represents an item in a GitHub Project with its status
+type ProjectItem struct {
+	ID     string `json:"id"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	Status string `json:"status"`
+}
+
+// GetProjectItemsByStatus fetches all items from a project and groups them by status
+func (c *Client) GetProjectItemsByStatus(projectNumber int) (map[string][]ProjectItem, error) {
+	owner := strings.Split(c.Repo, "/")[0]
+
+	// Fetch project items with their fields
+	out, err := c.ghNoRepo("project", "item-list", fmt.Sprintf("%d", projectNumber),
+		"--owner", owner, "--format", "json")
+	if err != nil {
+		return nil, fmt.Errorf("listing project items: %w", err)
+	}
+
+	// Debug: log the raw output
+	log.Printf("[GitHub] Project item-list output: %s", string(out))
+
+	var result struct {
+		Items []struct {
+			ID     string `json:"id"`
+			Number int    `json:"number"`
+			Title  string `json:"title"`
+			Fields []struct {
+				Name  string `json:"name"`
+				Value string `json:"value"`
+			} `json:"fields"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(out, &result); err != nil {
+		return nil, fmt.Errorf("parsing project items: %w", err)
+	}
+
+	log.Printf("[GitHub] Parsed %d project items", len(result.Items))
+
+	// Group items by status
+	itemsByStatus := make(map[string][]ProjectItem)
+	for _, col := range ProjectColumns {
+		itemsByStatus[col] = []ProjectItem{}
+	}
+
+	for _, item := range result.Items {
+		// Find the Status field
+		status := "Backlog" // Default status
+		for _, field := range item.Fields {
+			if field.Name == "Status" && field.Value != "" {
+				status = field.Value
+				break
+			}
+		}
+
+		projectItem := ProjectItem{
+			Number: item.Number,
+			Title:  item.Title,
+			Status: status,
+		}
+		itemsByStatus[status] = append(itemsByStatus[status], projectItem)
+	}
+
+	return itemsByStatus, nil
 }
 
 // updateStatusFieldOptions replaces all options on the Status field in one GraphQL call.
