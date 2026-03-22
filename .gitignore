@@ -22,8 +22,13 @@ Thumbs.db
 .oda/metrics.db
 .oda/metrics.db-shm
 .oda/metrics.db-wal
+.oda/oda.db
 .oda/worktrees/
 one-dev-army
+
+# API specs (generated/downloaded)
+api/opencode.json
+api/opencode.yaml
 
 # Git worktrees
 .worktrees/
