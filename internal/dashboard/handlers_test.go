@@ -290,3 +290,77 @@ func TestFullWizardFlow(t *testing.T) {
 	t.Logf("Full wizard flow completed successfully with %d tasks and %d log entries",
 		len(session.Tasks), len(session.LLMLogs))
 }
+
+// TestHandleWizardCancel tests the cancel handler
+func TestHandleWizardCancel(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+
+	// Create a session
+	session := srv.wizardStore.Create("feature")
+
+	// Test cancel with valid session
+	formData := url.Values{}
+	formData.Set("session_id", session.ID)
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/cancel", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardCancel(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify session was deleted
+	_, ok := srv.wizardStore.Get(session.ID)
+	if ok {
+		t.Error("expected session to be deleted after cancel")
+	}
+
+	// Test cancel without session_id (should still return 200)
+	req = httptest.NewRequest(http.MethodPost, "/wizard/cancel", nil)
+	rec = httptest.NewRecorder()
+
+	srv.handleWizardCancel(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200 for empty request, got %d", rec.Code)
+	}
+}
+
+// TestHandleWizardCancel_InvalidSession tests cancel with invalid session
+func TestHandleWizardCancel_InvalidSession(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+
+	// Create a session first
+	session := srv.wizardStore.Create("feature")
+	sessionID := session.ID
+
+	// Test cancel with invalid session ID
+	formData := url.Values{}
+	formData.Set("session_id", "invalid-session-id")
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/cancel", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardCancel(rec, req)
+
+	// Should still return 200 (idempotent operation)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	// Original session should still exist (only invalid ID was "deleted")
+	_, ok := srv.wizardStore.Get(sessionID)
+	if !ok {
+		t.Error("expected original session to still exist")
+	}
+}

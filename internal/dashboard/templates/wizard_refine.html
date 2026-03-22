@@ -1,5 +1,8 @@
-<div class="wizard-step">
+{{template "wizard_modal" .}}
+{{define "wizard_content"}}
+<div class="wizard-step-content">
   <h2>Refined Description</h2>
+  <p class="step-description">Review the AI-refined description of your {{if eq .Type "bug"}}bug report{{else}}feature{{end}}:</p>
   
   <div class="refined-content">
     <p class="description">{{.RefinedDescription}}</p>
@@ -12,9 +15,10 @@
       <button type="button" class="btn" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}" hx-target="#wizard-content">
         ← Back
       </button>
+      <button type="button" class="btn" hx-post="/wizard/cancel" hx-target="#wizard-modal" hx-swap="delete">Cancel</button>
       <button type="submit" class="btn btn-primary">
         <span class="spinner" style="display:none;">⏳</span>
-        <span class="label">Break Down into Tasks</span>
+        <span class="label">Break Down into Tasks →</span>
       </button>
     </div>
   </form>
@@ -23,14 +27,17 @@
 </div>
 
 <style>
-.wizard-step { max-width: 800px; margin: 0 auto; }
+.wizard-step-content { max-width: 100%; }
+.step-description { color: var(--muted); margin-bottom: 1rem; font-size: .9rem; }
 .refined-content {
-  background: var(--surface);
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 1rem;
   margin: 1rem 0;
   white-space: pre-wrap;
+  max-height: 300px;
+  overflow-y: auto;
 }
 .refined-content .description {
   margin: 0;
@@ -40,3 +47,4 @@
 .htmx-request .spinner { display: inline !important; }
 .htmx-request .label { display: none; }
 </style>
+{{end}}

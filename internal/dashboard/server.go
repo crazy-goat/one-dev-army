@@ -83,17 +83,17 @@ func parseTemplates() (map[string]*template.Template, error) {
 
 	pages := []string{"board.html", "backlog.html", "costs.html", "task.html", "wizard_new.html"}
 	for _, page := range pages {
-		t, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/"+page)
+		t, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/wizard_modal.html", "templates/"+page)
 		if err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", page, err)
 		}
 		tmpls[page] = t
 	}
 
-	// Parse wizard partial templates (no layout)
+	// Parse wizard partial templates (no layout, but include modal shell)
 	wizardPartials := []string{"wizard_refine.html", "wizard_breakdown.html", "wizard_create.html", "wizard_logs.html"}
 	for _, page := range wizardPartials {
-		t, err := template.ParseFS(templateFS, "templates/"+page)
+		t, err := template.ParseFS(templateFS, "templates/wizard_modal.html", "templates/"+page)
 		if err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", page, err)
 		}
@@ -134,6 +134,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /wizard/breakdown", s.handleWizardBreakdown)
 	s.mux.HandleFunc("POST /wizard/create", s.handleWizardCreate)
 	s.mux.HandleFunc("GET /wizard/logs/{sessionId}", s.handleWizardLogs)
+	s.mux.HandleFunc("POST /wizard/cancel", s.handleWizardCancel)
 }
 
 func (s *Server) Start() error {

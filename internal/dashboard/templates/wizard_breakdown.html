@@ -1,7 +1,8 @@
-<div class="wizard-step">
+{{template "wizard_modal" .}}
+{{define "wizard_content"}}
+<div class="wizard-step-content">
   <h2>Task Breakdown</h2>
-  
-  <p class="subtitle">Review the tasks that will be created:</p>
+  <p class="step-description">Review the tasks that will be created as GitHub issues:</p>
   
   <div class="task-list">
     {{range .Tasks}}
@@ -25,9 +26,10 @@
       <button type="button" class="btn" hx-get="/wizard/refine?session_id={{.SessionID}}" hx-target="#wizard-content">
         ← Back
       </button>
+      <button type="button" class="btn" hx-post="/wizard/cancel" hx-target="#wizard-modal" hx-swap="delete">Cancel</button>
       <button type="submit" class="btn btn-success">
         <span class="spinner" style="display:none;">⏳</span>
-        <span class="label">Create GitHub Issues</span>
+        <span class="label">Create GitHub Issues →</span>
       </button>
     </div>
   </form>
@@ -36,11 +38,11 @@
 </div>
 
 <style>
-.wizard-step { max-width: 800px; margin: 0 auto; }
-.subtitle { color: var(--muted); margin-bottom: 1rem; }
-.task-list { display: flex; flex-direction: column; gap: 0.75rem; margin: 1rem 0; }
+.wizard-step-content { max-width: 100%; }
+.step-description { color: var(--muted); margin-bottom: 1rem; font-size: .9rem; }
+.task-list { display: flex; flex-direction: column; gap: 0.75rem; margin: 1rem 0; max-height: 300px; overflow-y: auto; }
 .task-card {
-  background: var(--surface);
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 1rem;
@@ -76,3 +78,4 @@
 .htmx-request .spinner { display: inline !important; }
 .htmx-request .label { display: none; }
 </style>
+{{end}}

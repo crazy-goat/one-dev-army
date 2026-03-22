@@ -635,9 +635,11 @@ func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		Type      string
 		SessionID string
+		Step      int
 	}{
 		Type:      wizardType,
 		SessionID: session.ID,
+		Step:      1,
 	}
 
 	s.render(w, "wizard_new.html", data)
@@ -679,10 +681,12 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 			SessionID          string
 			Type               string
 			RefinedDescription string
+			Step               int
 		}{
 			SessionID:          session.ID,
 			Type:               string(session.Type),
 			RefinedDescription: mockRefined,
+			Step:               2,
 		}
 
 		s.render(w, "wizard_refine.html", data)
@@ -728,10 +732,12 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		SessionID          string
 		Type               string
 		RefinedDescription string
+		Step               int
 	}{
 		SessionID:          session.ID,
 		Type:               string(session.Type),
 		RefinedDescription: refinedDesc,
+		Step:               2,
 	}
 
 	s.render(w, "wizard_refine.html", data)
@@ -819,9 +825,11 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 		data := struct {
 			SessionID string
 			Tasks     []WizardTask
+			Step      int
 		}{
 			SessionID: session.ID,
 			Tasks:     mockTasks,
+			Step:      3,
 		}
 
 		s.render(w, "wizard_breakdown.html", data)
@@ -866,9 +874,11 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		SessionID string
 		Tasks     []WizardTask
+		Step      int
 	}{
 		SessionID: session.ID,
 		Tasks:     tasks,
+		Step:      3,
 	}
 
 	s.render(w, "wizard_breakdown.html", data)
@@ -967,8 +977,10 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 				Title  string
 				URL    string
 			}
+			Step int
 		}{
 			CreatedIssues: mockIssues,
+			Step:          3,
 		}
 
 		s.render(w, "wizard_create.html", data)
@@ -1010,8 +1022,10 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 
 	data := struct {
 		CreatedIssues []createdIssue
+		Step          int
 	}{
 		CreatedIssues: createdIssues,
+		Step:          3,
 	}
 
 	s.render(w, "wizard_create.html", data)
@@ -1040,4 +1054,22 @@ func (s *Server) handleWizardLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, "wizard_logs.html", data)
+}
+
+// handleWizardCancel closes the wizard modal and optionally cleans up the session
+func (s *Server) handleWizardCancel(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		// Return empty response for HTMX to delete the modal
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	sessionID := r.FormValue("session_id")
+	if sessionID != "" {
+		// Optionally delete the session or just leave it to be cleaned up later
+		s.wizardStore.Delete(sessionID)
+	}
+
+	// Return empty response - HTMX will delete the modal via hx-swap="delete"
+	w.WriteHeader(http.StatusOK)
 }

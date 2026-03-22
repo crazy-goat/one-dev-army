@@ -1,0 +1,28 @@
+{{define "wizard_modal"}}
+<div class="modal-overlay" id="wizard-modal" hx-on:click="if(event.target === this) { this.remove(); }">
+  <div class="modal-container">
+    <div class="modal-header">
+      <div class="step-indicator">
+        <div class="step {{if eq .Step 1}}active{{end}} {{if gt .Step 1}}completed{{end}}">
+          <span class="step-number">1</span>
+          <span class="step-label">Idea</span>
+        </div>
+        <div class="step-connector {{if gt .Step 1}}completed{{end}}"></div>
+        <div class="step {{if eq .Step 2}}active{{end}} {{if gt .Step 2}}completed{{end}}">
+          <span class="step-number">2</span>
+          <span class="step-label">Breakdown</span>
+        </div>
+        <div class="step-connector {{if gt .Step 2}}completed{{end}}"></div>
+        <div class="step {{if eq .Step 3}}active{{end}} {{if gt .Step 3}}completed{{end}}">
+          <span class="step-number">3</span>
+          <span class="step-label">Confirmation</span>
+        </div>
+      </div>
+      <button class="modal-close" hx-post="/wizard/cancel" hx-target="#wizard-modal" hx-swap="delete" title="Close wizard">&times;</button>
+    </div>
+    <div class="modal-body" id="wizard-content">
+      {{template "wizard_content" .}}
+    </div>
+  </div>
+</div>
+{{end}}

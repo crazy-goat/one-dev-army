@@ -1,20 +1,23 @@
-{{define "content"}}
-<div class="wizard-modal">
-  <h1>Create New {{if eq .Type "bug"}}Bug Report{{else}}Feature{{end}}</h1>
+{{template "wizard_modal" .}}
+{{define "wizard_content"}}
+<div class="wizard-step-content">
+  <h2>Create New {{if eq .Type "bug"}}Bug Report{{else}}Feature{{end}}</h2>
+  <p class="step-description">Describe your {{if eq .Type "bug"}}bug{{else}}feature idea{{end}} and we'll help refine it into actionable tasks.</p>
   
   <form hx-post="/wizard/refine" hx-target="#wizard-content" hx-swap="innerHTML">
     <input type="hidden" name="session_id" value="{{.SessionID}}">
     <input type="hidden" name="wizard_type" value="{{.Type}}">
     
     <div class="form-group">
-      <label for="idea">Describe your {{if eq .Type "bug"}}bug{{else}}feature idea{{end}}:</label>
+      <label for="idea">Description:</label>
       <textarea id="idea" name="idea" rows="6" placeholder="{{if eq .Type "bug"}}Describe the bug, steps to reproduce, and expected behavior...{{else}}Describe the feature, who it's for, and what problem it solves...{{end}}" required></textarea>
     </div>
     
     <div class="form-actions">
+      <button type="button" class="btn" hx-post="/wizard/cancel" hx-target="#wizard-modal" hx-swap="delete">Cancel</button>
       <button type="submit" class="btn btn-primary">
         <span class="spinner" style="display:none;">⏳</span>
-        <span class="label">Refine with AI</span>
+        <span class="label">Refine with AI →</span>
       </button>
     </div>
   </form>
@@ -23,15 +26,16 @@
 </div>
 
 <style>
-.wizard-modal { max-width: 800px; margin: 0 auto; }
+.wizard-step-content { max-width: 100%; }
+.step-description { color: var(--muted); margin-bottom: 1rem; font-size: .9rem; }
 .form-group { margin-bottom: 1rem; }
-.form-group label { display: block; margin-bottom: 0.5rem; color: var(--muted); }
+.form-group label { display: block; margin-bottom: 0.5rem; color: var(--muted); font-size: .9rem; }
 .form-group textarea {
   width: 100%;
   padding: 0.75rem;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--surface);
+  background: var(--bg);
   color: var(--text);
   font-family: inherit;
   font-size: 0.9rem;
@@ -41,7 +45,7 @@
   outline: none;
   border-color: var(--accent);
 }
-.form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem; }
+.form-actions { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1.5rem; }
 .htmx-request .spinner { display: inline !important; }
 .htmx-request .label { display: none; }
 </style>

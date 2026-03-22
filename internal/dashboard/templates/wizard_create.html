@@ -1,12 +1,13 @@
-<div class="wizard-step">
+{{template "wizard_modal" .}}
+{{define "wizard_content"}}
+<div class="wizard-step-content">
   <h2>✅ Issues Created Successfully</h2>
-  
-  <p class="subtitle">The following GitHub issues have been created:</p>
+  <p class="step-description">The following GitHub issues have been created:</p>
   
   <div class="issue-list">
     {{range .CreatedIssues}}
     <div class="issue-card">
-      <a href="{{.URL}}" target="_blank" class="issue-link">
+      <a href="{{.URL}}" target="blank" class="issue-link">
         <span class="issue-number">#{{.Number}}</span>
         <span class="issue-title">{{.Title}}</span>
       </a>
@@ -15,29 +16,17 @@
   </div>
   
   <div class="form-actions">
-    <button type="button" class="btn btn-primary" onclick="closeWizard()">
-      Close Wizard
-    </button>
-    <a href="/backlog" class="btn">View Backlog →</a>
+    <button type="button" class="btn" hx-post="/wizard/cancel" hx-target="#wizard-modal" hx-swap="delete">Close Wizard</button>
+    <a href="/backlog" class="btn btn-primary">View Backlog →</a>
   </div>
 </div>
 
-<script>
-function closeWizard() {
-  // Trigger modal close - depends on how modal is implemented
-  const modal = document.getElementById('wizard-modal');
-  if (modal) modal.style.display = 'none';
-  // Or use HTMX to swap content
-  document.getElementById('wizard-content').innerHTML = '';
-}
-</script>
-
 <style>
-.wizard-step { max-width: 800px; margin: 0 auto; }
-.subtitle { color: var(--muted); margin-bottom: 1rem; }
+.wizard-step-content { max-width: 100%; }
+.step-description { color: var(--muted); margin-bottom: 1rem; font-size: .9rem; }
 .issue-list { display: flex; flex-direction: column; gap: 0.5rem; margin: 1rem 0; }
 .issue-card {
-  background: var(--surface);
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.75rem 1rem;
@@ -56,3 +45,4 @@ function closeWizard() {
 }
 .form-actions { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1.5rem; }
 </style>
+{{end}}
