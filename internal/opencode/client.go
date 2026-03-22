@@ -11,47 +11,23 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/crazy-goat/one-dev-army/internal/opencode/gen"
 )
 
-type Session struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-}
+// Type aliases for backward compatibility
+type Session = gen.Session
+type Message = gen.Message
+type MessageInfo = gen.MessageInfo
+type Part = gen.Part
+type ModelRef = gen.ModelRef
+type PermissionRule = gen.PermissionRule
+type SendMessageRequest = gen.SendMessageRequest
+type ProviderModel = gen.ProviderModel
+type Provider = gen.Provider
+type ProvidersResponse = gen.ProvidersResponse
 
-type Message struct {
-	Info  MessageInfo `json:"info"`
-	Parts []Part      `json:"parts"`
-}
-
-type MessageInfo struct {
-	ID        string `json:"id"`
-	SessionID string `json:"sessionID"`
-	Role      string `json:"role"`
-}
-
-type Part struct {
-	Type string `json:"type"`
-	Text string `json:"text,omitempty"`
-}
-
-type ModelRef struct {
-	ProviderID string `json:"providerID"`
-	ModelID    string `json:"modelID"`
-}
-
-type PermissionRule struct {
-	Permission string `json:"permission"`
-	Pattern    string `json:"pattern"`
-	Action     string `json:"action"`
-}
-
-type SendMessageRequest struct {
-	Parts  []Part    `json:"parts"`
-	Model  *ModelRef `json:"model,omitempty"`
-	System string    `json:"system,omitempty"`
-}
-
-const systemPromptNoQuestions = "You are running in a fully automated pipeline with NO human operator. " +
+var systemPromptNoQuestions = "You are running in a fully automated pipeline with NO human operator. " +
 	"NEVER ask questions, request clarification, or wait for input - nobody will answer and the pipeline will hang forever. " +
 	"Make your best judgment and produce output immediately."
 
@@ -199,10 +175,11 @@ func (c *Client) SendMessage(sessionID, prompt string, model ModelRef, output io
 }
 
 func (c *Client) SendMessageAsync(sessionID, prompt string, model ModelRef) error {
+	text := prompt
 	reqBody := SendMessageRequest{
-		Parts:  []Part{{Type: "text", Text: prompt}},
+		Parts:  []Part{{Type: "text", Text: &text}},
 		Model:  &model,
-		System: systemPromptNoQuestions,
+		System: &systemPromptNoQuestions,
 	}
 
 	body, err := json.Marshal(reqBody)
@@ -420,14 +397,15 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 		return nil, streamErr
 	}
 
+	fullTextStr := fullText.String()
 	msg := &Message{
 		Info: MessageInfo{
-			ID:        assistantMsgID,
+			Id:        assistantMsgID,
 			SessionID: sessionID,
 			Role:      "assistant",
 		},
 		Parts: []Part{
-			{Type: "text", Text: fullText.String()},
+			{Type: "text", Text: &fullTextStr},
 		},
 	}
 
@@ -510,23 +488,6 @@ func (c *Client) GetMessages(sessionID string) ([]Message, error) {
 	return messages, nil
 }
 
-type ProviderModel struct {
-	ID         string `json:"id"`
-	ProviderID string `json:"providerID"`
-	Name       string `json:"name"`
-}
-
-type Provider struct {
-	ID     string                   `json:"id"`
-	Name   string                   `json:"name"`
-	Models map[string]ProviderModel `json:"models"`
-}
-
-type ProvidersResponse struct {
-	All       []Provider `json:"all"`
-	Connected []string   `json:"connected"`
-}
-
 func (c *Client) ListProviders() (*ProvidersResponse, error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/provider")
 	if err != nil {
@@ -560,14 +521,14 @@ func (c *Client) ValidateModels(models []ModelRef) error {
 
 	available := make(map[string]map[string]bool)
 	for _, p := range providers.All {
-		if !connectedSet[p.ID] {
+		if !connectedSet[p.Id] {
 			continue
 		}
 		modelSet := make(map[string]bool, len(p.Models))
 		for modelKey := range p.Models {
 			modelSet[modelKey] = true
 		}
-		available[p.ID] = modelSet
+		available[p.Id] = modelSet
 	}
 
 	var errs []string

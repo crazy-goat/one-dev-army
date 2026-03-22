@@ -13,6 +13,10 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
+func strPtr(s string) *string {
+	return &s
+}
+
 func TestHealthCheck(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/global/health" {
@@ -83,7 +87,7 @@ func TestCreateSession(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(opencode.Session{
-			ID:    "sess-123",
+			Id:    "sess-123",
 			Title: "test-session",
 		})
 	}))
@@ -94,8 +98,8 @@ func TestCreateSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if session.ID != "sess-123" {
-		t.Errorf("session.ID = %q, want %q", session.ID, "sess-123")
+	if session.Id != "sess-123" {
+		t.Errorf("session.Id = %q, want %q", session.Id, "sess-123")
 	}
 	if session.Title != "test-session" {
 		t.Errorf("session.Title = %q, want %q", session.Title, "test-session")
@@ -147,8 +151,8 @@ func TestSendMessage(t *testing.T) {
 	if len(receivedReq.Parts) != 1 {
 		t.Fatalf("parts length = %d, want 1", len(receivedReq.Parts))
 	}
-	if receivedReq.Parts[0].Text != "hello world" {
-		t.Errorf("parts[0].text = %q, want %q", receivedReq.Parts[0].Text, "hello world")
+	if receivedReq.Parts[0].Text == nil || *receivedReq.Parts[0].Text != "hello world" {
+		t.Errorf("parts[0].text = %q, want %q", *receivedReq.Parts[0].Text, "hello world")
 	}
 	if receivedReq.Model == nil || receivedReq.Model.ProviderID != "anthropic" || receivedReq.Model.ModelID != "claude-sonnet-4" {
 		t.Errorf("model = %+v, want {anthropic claude-sonnet-4}", receivedReq.Model)
@@ -173,8 +177,8 @@ func TestSendMessageAsync(t *testing.T) {
 		if err := json.Unmarshal(body, &req); err != nil {
 			t.Fatalf("unmarshaling request: %v", err)
 		}
-		if req.Parts[0].Text != "do something" {
-			t.Errorf("parts[0].text = %q, want %q", req.Parts[0].Text, "do something")
+		if req.Parts[0].Text == nil || *req.Parts[0].Text != "do something" {
+			t.Errorf("parts[0].text = %q, want %q", *req.Parts[0].Text, "do something")
 		}
 
 		w.WriteHeader(http.StatusAccepted)
@@ -235,12 +239,12 @@ func TestGetMessages(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]opencode.Message{
 			{
-				Info:  opencode.MessageInfo{ID: "msg-1", SessionID: "sess-123", Role: "user"},
-				Parts: []opencode.Part{{Type: "text", Text: "hello"}},
+				Info:  opencode.MessageInfo{Id: "msg-1", SessionID: "sess-123", Role: "user"},
+				Parts: []opencode.Part{{Type: "text", Text: strPtr("hello")}},
 			},
 			{
-				Info:  opencode.MessageInfo{ID: "msg-2", SessionID: "sess-123", Role: "assistant"},
-				Parts: []opencode.Part{{Type: "text", Text: "hi there"}},
+				Info:  opencode.MessageInfo{Id: "msg-2", SessionID: "sess-123", Role: "assistant"},
+				Parts: []opencode.Part{{Type: "text", Text: strPtr("hi there")}},
 			},
 		})
 	}))
@@ -260,8 +264,8 @@ func TestGetMessages(t *testing.T) {
 	if messages[1].Info.Role != "assistant" {
 		t.Errorf("messages[1].info.role = %q, want %q", messages[1].Info.Role, "assistant")
 	}
-	if messages[1].Parts[0].Text != "hi there" {
-		t.Errorf("messages[1].parts[0].text = %q, want %q", messages[1].Parts[0].Text, "hi there")
+	if messages[1].Parts[0].Text == nil || *messages[1].Parts[0].Text != "hi there" {
+		t.Errorf("messages[1].parts[0].text = %q, want %q", *messages[1].Parts[0].Text, "hi there")
 	}
 }
 

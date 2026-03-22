@@ -9,6 +9,10 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
+func strPtr(s string) *string {
+	return &s
+}
+
 func TestCheckAgentsMD_Exists(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("# Agents"), 0o644); err != nil {
@@ -50,7 +54,7 @@ func TestCheckGitHubActions_Exists(t *testing.T) {
 func TestExtractContent_PlainText(t *testing.T) {
 	msg := &opencode.Message{
 		Parts: []opencode.Part{
-			{Type: "text", Text: "Hello world"},
+			{Type: "text", Text: strPtr("Hello world")},
 		},
 	}
 
@@ -63,7 +67,7 @@ func TestExtractContent_PlainText(t *testing.T) {
 func TestExtractContent_CodeBlock(t *testing.T) {
 	msg := &opencode.Message{
 		Parts: []opencode.Part{
-			{Type: "text", Text: "Here is the file:\n```markdown\n# My Project\nSome content\n```\nDone."},
+			{Type: "text", Text: strPtr("Here is the file:\n```markdown\n# My Project\nSome content\n```\nDone.")},
 		},
 	}
 
@@ -88,7 +92,7 @@ func TestExtractContent_EmptyParts(t *testing.T) {
 func TestExtractContent_NonTextPart(t *testing.T) {
 	msg := &opencode.Message{
 		Parts: []opencode.Part{
-			{Type: "tool_use", Text: "something"},
+			{Type: "tool_use", Text: strPtr("something")},
 		},
 	}
 

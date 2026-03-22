@@ -54,7 +54,7 @@ func (s *Setup) checkAgentsMD() error {
 	}
 
 	model := opencode.ParseModelRef(s.cfg.Planning.LLM)
-	if err := s.oc.InitSession(session.ID, model); err != nil {
+	if err := s.oc.InitSession(session.Id, model); err != nil {
 		return fmt.Errorf("generating AGENTS.md: %w", err)
 	}
 
@@ -105,7 +105,7 @@ func (s *Setup) generateWithLLM(title, prompt string) (string, error) {
 		return "", fmt.Errorf("creating session: %w", err)
 	}
 
-	msg, err := s.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(s.cfg.Planning.LLM), os.Stdout)
+	msg, err := s.oc.SendMessage(session.Id, prompt, opencode.ParseModelRef(s.cfg.Planning.LLM), os.Stdout)
 	if err != nil {
 		return "", fmt.Errorf("sending message: %w", err)
 	}
@@ -115,11 +115,11 @@ func (s *Setup) generateWithLLM(title, prompt string) (string, error) {
 
 func extractContent(msg *opencode.Message) string {
 	for _, part := range msg.Parts {
-		if part.Type == "text" && part.Text != "" {
-			if matches := codeBlockRe.FindStringSubmatch(part.Text); len(matches) > 1 {
+		if part.Type == "text" && part.Text != nil && *part.Text != "" {
+			if matches := codeBlockRe.FindStringSubmatch(*part.Text); len(matches) > 1 {
 				return matches[1]
 			}
-			return part.Text
+			return *part.Text
 		}
 	}
 	return ""

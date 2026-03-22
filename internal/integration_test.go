@@ -155,7 +155,7 @@ func startMockOpencode(t *testing.T) (*httptest.Server, *requestLog) {
 			log.sessions = append(log.sessions, req["title"])
 			log.mu.Unlock()
 
-			json.NewEncoder(w).Encode(opencode.Session{ID: sessID, Title: req["title"]})
+			json.NewEncoder(w).Encode(opencode.Session{Id: sessID, Title: req["title"]})
 			return
 		}
 
@@ -168,8 +168,8 @@ func startMockOpencode(t *testing.T) (*httptest.Server, *requestLog) {
 			json.Unmarshal(body, &req)
 
 			content := ""
-			if len(req.Parts) > 0 {
-				content = req.Parts[0].Text
+			if len(req.Parts) > 0 && req.Parts[0].Text != nil {
+				content = *req.Parts[0].Text
 			}
 
 			model := ""
@@ -463,7 +463,7 @@ func TestConfigToProcessorWiring(t *testing.T) {
 			sessID := fmt.Sprintf("sess-%d", sessionCounter)
 			counterMu.Unlock()
 
-			json.NewEncoder(w).Encode(opencode.Session{ID: sessID, Title: req["title"]})
+			json.NewEncoder(w).Encode(opencode.Session{Id: sessID, Title: req["title"]})
 			return
 		}
 

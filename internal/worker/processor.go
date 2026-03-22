@@ -321,7 +321,7 @@ func (e *StageExecutor) executeSession(taskID int, stage pipeline.Stage, stageCo
 	}
 
 	prompt := automatedPipelineNotice + fmt.Sprintf(promptTpl, e.task.IssueNumber, e.task.Title, e.task.Body, stageContext)
-	msg, err := e.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(llm), os.Stdout)
+	msg, err := e.oc.SendMessage(session.Id, prompt, opencode.ParseModelRef(llm), os.Stdout)
 	if err != nil {
 		return nil, fmt.Errorf("sending message for %s: %w", stage, err)
 	}
@@ -350,7 +350,7 @@ func (e *StageExecutor) executeReview(taskID int, stage pipeline.Stage, stageCon
 	}
 
 	prompt := automatedPipelineNotice + fmt.Sprintf(promptTpl, e.task.IssueNumber, e.task.Title, e.task.Body, stageContext)
-	msg, err := e.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(llm), os.Stdout)
+	msg, err := e.oc.SendMessage(session.Id, prompt, opencode.ParseModelRef(llm), os.Stdout)
 	if err != nil {
 		return nil, fmt.Errorf("sending message for %s: %w", stage, err)
 	}
@@ -385,7 +385,7 @@ func (e *StageExecutor) executeCoding(taskID int, stage pipeline.Stage, stageCon
 		stageContext,
 		e.cfg.Tools.LintCmd, e.cfg.Tools.TestCmd,
 	)
-	msg, err := e.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(llm), os.Stdout)
+	msg, err := e.oc.SendMessage(session.Id, prompt, opencode.ParseModelRef(llm), os.Stdout)
 	if err != nil {
 		return nil, fmt.Errorf("sending message for %s: %w", stage, err)
 	}
@@ -473,8 +473,8 @@ func extractTextContent(msg *opencode.Message) string {
 	}
 	var parts []string
 	for _, p := range msg.Parts {
-		if p.Type == "text" && p.Text != "" {
-			parts = append(parts, p.Text)
+		if p.Type == "text" && p.Text != nil && *p.Text != "" {
+			parts = append(parts, *p.Text)
 		}
 	}
 	return strings.Join(parts, "\n")

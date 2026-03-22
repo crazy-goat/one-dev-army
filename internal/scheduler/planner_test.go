@@ -173,7 +173,7 @@ func TestPlanSprint_Integration(t *testing.T) {
 
 		switch {
 		case r.URL.Path == "/session" && r.Method == http.MethodPost:
-			json.NewEncoder(w).Encode(opencode.Session{ID: "sess-plan", Title: "sprint-planning"})
+			json.NewEncoder(w).Encode(opencode.Session{Id: "sess-plan", Title: "sprint-planning"})
 
 		case strings.HasSuffix(r.URL.Path, "/prompt_async") && r.Method == http.MethodPost:
 			callCount++
@@ -212,7 +212,7 @@ func TestPlanSprint_Integration(t *testing.T) {
 		{Number: 5, Title: "Task B", Labels: []label{{Name: "size:M"}}},
 	}, cfg.Sprint.TasksPerSprint)
 
-	msg, err := planner.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(cfg.Planning.LLM), nil)
+	msg, err := planner.oc.SendMessage(session.Id, prompt, opencode.ParseModelRef(cfg.Planning.LLM), nil)
 	if err != nil {
 		t.Fatalf("sending message: %v", err)
 	}

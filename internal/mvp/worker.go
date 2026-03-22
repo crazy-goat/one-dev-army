@@ -141,15 +141,15 @@ func (w *Worker) analyze(ctx context.Context, task *Task) (string, error) {
 		return "", fmt.Errorf("creating session: %w", err)
 	}
 	defer func() {
-		if delErr := w.oc.DeleteSession(session.ID); delErr != nil {
-			log.Printf("[Worker %d] failed to delete session %s: %v", w.id, session.ID, delErr)
+		if delErr := w.oc.DeleteSession(session.Id); delErr != nil {
+			log.Printf("[Worker %d] failed to delete session %s: %v", w.id, session.Id, delErr)
 		}
 	}()
 
 	prompt := fmt.Sprintf(analysisPrompt, task.Issue.Number, task.Issue.Title, task.Issue.Body)
 	model := opencode.ParseModelRef(w.cfg.Planning.LLM)
 
-	msg, err := w.oc.SendMessage(session.ID, prompt, model, nil)
+	msg, err := w.oc.SendMessage(session.Id, prompt, model, nil)
 	if err != nil {
 		return "", fmt.Errorf("sending message: %w", err)
 	}
@@ -164,15 +164,15 @@ func (w *Worker) plan(ctx context.Context, task *Task, analysis string) (string,
 		return "", fmt.Errorf("creating session: %w", err)
 	}
 	defer func() {
-		if delErr := w.oc.DeleteSession(session.ID); delErr != nil {
-			log.Printf("[Worker %d] failed to delete session %s: %v", w.id, session.ID, delErr)
+		if delErr := w.oc.DeleteSession(session.Id); delErr != nil {
+			log.Printf("[Worker %d] failed to delete session %s: %v", w.id, session.Id, delErr)
 		}
 	}()
 
 	prompt := fmt.Sprintf(planningPrompt, task.Issue.Number, task.Issue.Title, analysis)
 	model := opencode.ParseModelRef(w.cfg.Planning.LLM)
 
-	msg, err := w.oc.SendMessage(session.ID, prompt, model, nil)
+	msg, err := w.oc.SendMessage(session.Id, prompt, model, nil)
 	if err != nil {
 		return "", fmt.Errorf("sending message: %w", err)
 	}
@@ -190,15 +190,15 @@ func (w *Worker) implement(ctx context.Context, task *Task, plan string) error {
 		return fmt.Errorf("creating session: %w", err)
 	}
 	defer func() {
-		if delErr := w.oc.DeleteSession(session.ID); delErr != nil {
-			log.Printf("[Worker %d] failed to delete session %s: %v", w.id, session.ID, delErr)
+		if delErr := w.oc.DeleteSession(session.Id); delErr != nil {
+			log.Printf("[Worker %d] failed to delete session %s: %v", w.id, session.Id, delErr)
 		}
 	}()
 
 	prompt := fmt.Sprintf(implementationPrompt, task.Issue.Number, task.Issue.Title, plan, task.Worktree)
 	model := opencode.ParseModelRef(w.cfg.EpicAnalysis.LLM)
 
-	_, err = w.oc.SendMessage(session.ID, prompt, model, nil)
+	_, err = w.oc.SendMessage(session.Id, prompt, model, nil)
 	if err != nil {
 		return fmt.Errorf("sending message: %w", err)
 	}
@@ -253,8 +253,8 @@ func extractText(msg *opencode.Message) string {
 	}
 	var sb strings.Builder
 	for _, p := range msg.Parts {
-		if p.Type == "text" {
-			sb.WriteString(p.Text)
+		if p.Type == "text" && p.Text != nil {
+			sb.WriteString(*p.Text)
 		}
 	}
 	return sb.String()

@@ -179,7 +179,7 @@ func mockOpenCodeServer(t *testing.T, log *requestLog) *httptest.Server {
 			log.mu.Unlock()
 
 			json.NewEncoder(w).Encode(opencode.Session{
-				ID:    sessID,
+				Id:    sessID,
 				Title: req["title"],
 			})
 			return
@@ -195,8 +195,8 @@ func mockOpenCodeServer(t *testing.T, log *requestLog) *httptest.Server {
 
 			log.mu.Lock()
 			content := ""
-			if len(req.Parts) > 0 {
-				content = req.Parts[0].Text
+			if len(req.Parts) > 0 && req.Parts[0].Text != nil {
+				content = *req.Parts[0].Text
 			}
 			model := ""
 			if req.Model != nil {

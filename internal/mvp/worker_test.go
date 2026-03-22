@@ -6,6 +6,10 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
+func strPtr(s string) *string {
+	return &s
+}
+
 func TestSlug(t *testing.T) {
 	tests := []struct {
 		input string
@@ -71,7 +75,7 @@ func TestExtractText(t *testing.T) {
 			name: "single text part",
 			msg: &opencode.Message{
 				Parts: []opencode.Part{
-					{Type: "text", Text: "hello world"},
+					{Type: "text", Text: strPtr("hello world")},
 				},
 			},
 			want: "hello world",
@@ -80,8 +84,8 @@ func TestExtractText(t *testing.T) {
 			name: "multiple text parts",
 			msg: &opencode.Message{
 				Parts: []opencode.Part{
-					{Type: "text", Text: "part1"},
-					{Type: "text", Text: "part2"},
+					{Type: "text", Text: strPtr("part1")},
+					{Type: "text", Text: strPtr("part2")},
 				},
 			},
 			want: "part1part2",
@@ -90,9 +94,9 @@ func TestExtractText(t *testing.T) {
 			name: "mixed part types",
 			msg: &opencode.Message{
 				Parts: []opencode.Part{
-					{Type: "text", Text: "hello"},
-					{Type: "tool_use", Text: "ignored"},
-					{Type: "text", Text: " world"},
+					{Type: "text", Text: strPtr("hello")},
+					{Type: "tool_use", Text: strPtr("ignored")},
+					{Type: "text", Text: strPtr(" world")},
 				},
 			},
 			want: "hello world",
@@ -101,7 +105,7 @@ func TestExtractText(t *testing.T) {
 			name: "no text parts",
 			msg: &opencode.Message{
 				Parts: []opencode.Part{
-					{Type: "tool_use", Text: "ignored"},
+					{Type: "tool_use", Text: strPtr("ignored")},
 				},
 			},
 			want: "",

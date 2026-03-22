@@ -37,7 +37,7 @@ func (ea *EpicAnalyzer) Analyze(description string) ([]TaskSpec, error) {
 	}
 
 	prompt := buildEpicPrompt(description)
-	msg, err := ea.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(ea.cfg.EpicAnalysis.LLM), os.Stdout)
+	msg, err := ea.oc.SendMessage(session.Id, prompt, opencode.ParseModelRef(ea.cfg.EpicAnalysis.LLM), os.Stdout)
 	if err != nil {
 		return nil, fmt.Errorf("sending epic analysis prompt: %w", err)
 	}
@@ -141,8 +141,8 @@ func buildTaskLabels(task TaskSpec) []string {
 
 func extractTextContent(msg *opencode.Message) string {
 	for _, part := range msg.Parts {
-		if part.Type == "text" && part.Text != "" {
-			return part.Text
+		if part.Type == "text" && part.Text != nil && *part.Text != "" {
+			return *part.Text
 		}
 	}
 	return ""

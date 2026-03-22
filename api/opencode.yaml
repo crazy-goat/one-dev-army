@@ -1,0 +1,341 @@
+openapi: 3.1.0
+info:
+  title: OpenCode API
+  description: API for OpenCode serve
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /global/health:
+    get:
+      operationId: healthCheck
+      summary: Health check endpoint
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /session:
+    post:
+      operationId: createSession
+      summary: Create a new session
+      parameters:
+        - name: directory
+          in: query
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '200':
+          description: Session created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '201':
+          description: Session created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+
+  /session/{sessionID}:
+    delete:
+      operationId: deleteSession
+      summary: Delete a session
+      parameters:
+        - name: sessionID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Session deleted successfully
+        '204':
+          description: Session deleted successfully
+
+  /session/{sessionID}/init:
+    post:
+      operationId: initSession
+      summary: Initialize a session with a model
+      parameters:
+        - name: sessionID
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: directory
+          in: query
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitSessionRequest'
+      responses:
+        '200':
+          description: Session initialized successfully
+
+  /session/{sessionID}/abort:
+    post:
+      operationId: abortSession
+      summary: Abort a session
+      parameters:
+        - name: sessionID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Session aborted successfully
+
+  /session/{sessionID}/message:
+    get:
+      operationId: getMessages
+      summary: Get all messages in a session
+      parameters:
+        - name: sessionID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Message'
+
+  /session/{sessionID}/prompt_async:
+    post:
+      operationId: sendMessageAsync
+      summary: Send a message asynchronously
+      parameters:
+        - name: sessionID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '200':
+          description: Message accepted
+        '202':
+          description: Message accepted
+        '204':
+          description: Message accepted
+
+  /event:
+    get:
+      operationId: getEvents
+      summary: Get SSE events stream
+      responses:
+        '200':
+          description: SSE event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /provider:
+    get:
+      operationId: listProviders
+      summary: List all providers and their models
+      responses:
+        '200':
+          description: List of providers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvidersResponse'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        healthy:
+          type: boolean
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+      required:
+        - id
+        - title
+
+    CreateSessionRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        permission:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionRule'
+      required:
+        - title
+
+    PermissionRule:
+      type: object
+      properties:
+        permission:
+          type: string
+        pattern:
+          type: string
+        action:
+          type: string
+      required:
+        - permission
+        - pattern
+        - action
+
+    InitSessionRequest:
+      type: object
+      properties:
+        providerID:
+          type: string
+        modelID:
+          type: string
+        messageID:
+          type: string
+      required:
+        - providerID
+        - modelID
+        - messageID
+
+    Message:
+      type: object
+      properties:
+        info:
+          $ref: '#/components/schemas/MessageInfo'
+        parts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Part'
+      required:
+        - info
+        - parts
+
+    MessageInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        sessionID:
+          type: string
+        role:
+          type: string
+      required:
+        - id
+        - sessionID
+        - role
+
+    Part:
+      type: object
+      properties:
+        type:
+          type: string
+        text:
+          type: string
+      required:
+        - type
+
+    SendMessageRequest:
+      type: object
+      properties:
+        parts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Part'
+        model:
+          $ref: '#/components/schemas/ModelRef'
+        system:
+          type: string
+      required:
+        - parts
+
+    ModelRef:
+      type: object
+      properties:
+        providerID:
+          type: string
+        modelID:
+          type: string
+      required:
+        - providerID
+        - modelID
+
+    Provider:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        models:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ProviderModel'
+      required:
+        - id
+        - name
+        - models
+
+    ProviderModel:
+      type: object
+      properties:
+        id:
+          type: string
+        providerID:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - providerID
+        - name
+
+    ProvidersResponse:
+      type: object
+      properties:
+        all:
+          type: array
+          items:
+            $ref: '#/components/schemas/Provider'
+        connected:
+          type: array
+          items:
+            type: string
+      required:
+        - all
+        - connected

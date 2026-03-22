@@ -14,6 +14,10 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
+func strPtr(s string) *string {
+	return &s
+}
+
 func TestEpicAnalyzer_ParseResponse(t *testing.T) {
 	tasks := []TaskSpec{
 		{
@@ -83,7 +87,7 @@ func TestEpicAnalyzer_ParseResponse(t *testing.T) {
 
 		switch {
 		case r.URL.Path == "/session" && r.Method == http.MethodPost:
-			json.NewEncoder(w).Encode(opencode.Session{ID: "sess-epic", Title: "epic-analysis"})
+			json.NewEncoder(w).Encode(opencode.Session{Id: "sess-epic", Title: "epic-analysis"})
 
 		case strings.HasSuffix(r.URL.Path, "/prompt_async") && r.Method == http.MethodPost:
 			callCount++
@@ -95,7 +99,7 @@ func TestEpicAnalyzer_ParseResponse(t *testing.T) {
 			if req.Model == nil || req.Model.ModelID != "test-model" {
 				t.Errorf("model = %+v, want modelID=test-model", req.Model)
 			}
-			if !strings.Contains(req.Parts[0].Text, "Build a user management system") {
+			if req.Parts[0].Text == nil || !strings.Contains(*req.Parts[0].Text, "Build a user management system") {
 				t.Errorf("prompt should contain epic description")
 			}
 
@@ -287,8 +291,8 @@ func TestExtractJSON_NoJSON(t *testing.T) {
 func TestExtractTextContent(t *testing.T) {
 	msg := &opencode.Message{
 		Parts: []opencode.Part{
-			{Type: "tool_call", Text: ""},
-			{Type: "text", Text: "hello world"},
+			{Type: "tool_call", Text: strPtr("")},
+			{Type: "text", Text: strPtr("hello world")},
 		},
 	}
 	result := extractTextContent(msg)
@@ -300,7 +304,7 @@ func TestExtractTextContent(t *testing.T) {
 func TestExtractTextContent_Empty(t *testing.T) {
 	msg := &opencode.Message{
 		Parts: []opencode.Part{
-			{Type: "tool_call", Text: "something"},
+			{Type: "tool_call", Text: strPtr("something")},
 		},
 	}
 	result := extractTextContent(msg)

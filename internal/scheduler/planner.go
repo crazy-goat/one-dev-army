@@ -50,7 +50,7 @@ func (p *Planner) PlanSprint() (*Sprint, error) {
 	}
 
 	prompt := automatedPipelineNotice + buildSprintPrompt(issues, p.cfg.Sprint.TasksPerSprint)
-	msg, err := p.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(p.cfg.Planning.LLM), os.Stdout)
+	msg, err := p.oc.SendMessage(session.Id, prompt, opencode.ParseModelRef(p.cfg.Planning.LLM), os.Stdout)
 	if err != nil {
 		return nil, fmt.Errorf("sending planning prompt: %w", err)
 	}
@@ -124,7 +124,7 @@ func (p *Planner) AnalyzeInsights(sprintID int) error {
 	}
 
 	prompt := buildInsightPrompt(allInsights)
-	msg, err := p.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(p.cfg.Planning.LLM), os.Stdout)
+	msg, err := p.oc.SendMessage(session.Id, prompt, opencode.ParseModelRef(p.cfg.Planning.LLM), os.Stdout)
 	if err != nil {
 		return fmt.Errorf("sending insight prompt: %w", err)
 	}
