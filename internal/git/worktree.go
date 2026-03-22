@@ -140,11 +140,11 @@ func RunInWorktree(wtPath, name string, args ...string) ([]byte, error) {
 }
 
 func (m *WorktreeManager) PushBranch(branch string) error {
-	cmd := exec.Command("git", "push", "-u", "origin", branch)
+	cmd := exec.Command("git", "push", "-u", "--force-with-lease", "origin", branch)
 	cmd.Dir = m.repoDir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("git push -u origin %s: %w\n%s", branch, err, out)
+		return fmt.Errorf("git push -u --force-with-lease origin %s: %w\n%s", branch, err, out)
 	}
 	return nil
 }

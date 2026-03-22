@@ -1,0 +1,49 @@
+{{define "content"}}
+<div class="wizard-step-content">
+  <h1>Create New {{if eq .Type "bug"}}Bug Report{{else}}Feature{{end}}</h1>
+  
+  <form hx-post="/wizard/refine" hx-target="#wizard-modal-content" hx-swap="innerHTML">
+    <input type="hidden" name="session_id" value="{{.SessionID}}">
+    <input type="hidden" name="wizard_type" value="{{.Type}}">
+    
+    <div class="form-group">
+      <label for="idea">Describe your {{if eq .Type "bug"}}bug{{else}}feature idea{{end}}:</label>
+      <textarea id="idea" name="idea" rows="6" placeholder="{{if eq .Type "bug"}}Describe the bug, steps to reproduce, and expected behavior...{{else}}Describe the feature, who it's for, and what problem it solves...{{end}}" required></textarea>
+    </div>
+    
+    <div class="form-actions">
+      <button type="button" class="btn" onclick="closeWizardModal()">Cancel</button>
+      <button type="submit" class="btn btn-primary">
+        <span class="spinner" style="display:none;">⏳</span>
+        <span class="label">Refine with AI</span>
+      </button>
+    </div>
+  </form>
+  
+  <div id="wizard-logs" style="margin-top: 1rem;"></div>
+</div>
+
+<style>
+.wizard-step-content { max-width: 800px; margin: 0 auto; }
+.form-group { margin-bottom: 1rem; }
+.form-group label { display: block; margin-bottom: 0.5rem; color: var(--muted); }
+.form-group textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.form-actions { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1.5rem; }
+.htmx-request .spinner { display: inline !important; }
+.htmx-request .label { display: none; }
+</style>
+{{end}}

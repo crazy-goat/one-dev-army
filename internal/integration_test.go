@@ -582,7 +582,7 @@ func TestDashboardRendering(t *testing.T) {
 		}
 	}
 
-	srv, err := dashboard.NewServer(0, store, poolFn, nil, 0, nil)
+	srv, err := dashboard.NewServer(0, store, poolFn, nil, 0, nil, nil)
 	if err != nil {
 		t.Fatalf("creating dashboard server: %v", err)
 	}

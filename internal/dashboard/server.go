@@ -2,20 +2,35 @@ package dashboard
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
 	"embed"
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/mvp"
+	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
 
 //go:embed templates/*.html
 var templateFS embed.FS
+
+// CSRFTokenLength is the length of CSRF tokens in bytes
+const CSRFTokenLength = 32
+
+// RateLimitRequests is the maximum number of requests per window
+const RateLimitRequests = 10
+
+// RateLimitWindow is the time window for rate limiting
+const RateLimitWindow = time.Minute
 
 type Server struct {
 	port          int
@@ -27,12 +42,133 @@ type Server struct {
 	orchestrator  *mvp.Orchestrator
 	mux           *http.ServeMux
 	httpSrv       *http.Server
+	wizardStore   *WizardSessionStore
+	oc            *opencode.Client
+	csrfKey       []byte
+	rateLimiter   *RateLimiter
 }
 
-func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, projectNumber int, orchestrator *mvp.Orchestrator) (*Server, error) {
+// RateLimiter implements simple per-IP rate limiting
+type RateLimiter struct {
+	requests map[string][]time.Time
+	mu       sync.RWMutex
+	window   time.Duration
+	limit    int
+}
+
+// NewRateLimiter creates a new rate limiter
+func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
+	return &RateLimiter{
+		requests: make(map[string][]time.Time),
+		window:   window,
+		limit:    limit,
+	}
+}
+
+// Allow checks if a request from the given IP should be allowed
+func (rl *RateLimiter) Allow(ip string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	now := time.Now()
+	cutoff := now.Add(-rl.window)
+
+	// Clean old requests
+	var valid []time.Time
+	for _, t := range rl.requests[ip] {
+		if t.After(cutoff) {
+			valid = append(valid, t)
+		}
+	}
+
+	// Check limit
+	if len(valid) >= rl.limit {
+		rl.requests[ip] = valid
+		return false
+	}
+
+	// Add new request
+	rl.requests[ip] = append(valid, now)
+	return true
+}
+
+// generateCSRFToken generates a new random CSRF token
+func generateCSRFToken() (string, error) {
+	bytes := make([]byte, CSRFTokenLength)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(bytes), nil
+}
+
+// validateCSRFToken validates a CSRF token against the expected value
+func validateCSRFToken(token, expected string) bool {
+	if token == "" || expected == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1
+}
+
+// csrfMiddleware adds CSRF protection to POST requests
+func (s *Server) csrfMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Only validate POST, PUT, DELETE requests
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			token := r.Header.Get("X-CSRF-Token")
+			if token == "" {
+				token = r.FormValue("csrf_token")
+			}
+
+			// CSRF token is required for all state-changing requests
+			if token == "" {
+				http.Error(w, "CSRF token required", http.StatusForbidden)
+				return
+			}
+
+			if !validateCSRFToken(token, string(s.csrfKey)) {
+				http.Error(w, "Invalid CSRF token", http.StatusForbidden)
+				return
+			}
+		}
+		next(w, r)
+	}
+}
+
+// rateLimitMiddleware adds rate limiting per IP
+func (s *Server) rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get client IP
+		ip := r.RemoteAddr
+		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+			ip = strings.Split(forwarded, ",")[0]
+		}
+
+		if !s.rateLimiter.Allow(ip) {
+			http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// chainMiddleware chains multiple middleware functions
+func chainMiddleware(handler http.HandlerFunc, middlewares ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
+	for i := len(middlewares) - 1; i >= 0; i-- {
+		handler = middlewares[i](handler)
+	}
+	return handler
+}
+
+func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, projectNumber int, orchestrator *mvp.Orchestrator, oc *opencode.Client) (*Server, error) {
 	tmpls, err := parseTemplates()
 	if err != nil {
 		return nil, err
+	}
+
+	// Generate CSRF key
+	csrfKey := make([]byte, CSRFTokenLength)
+	if _, err := rand.Read(csrfKey); err != nil {
+		return nil, fmt.Errorf("generating CSRF key: %w", err)
 	}
 
 	mux := http.NewServeMux()
@@ -49,6 +185,10 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 			Addr:    fmt.Sprintf(":%d", port),
 			Handler: mux,
 		},
+		wizardStore: NewWizardSessionStore(),
+		oc:          oc,
+		csrfKey:     csrfKey,
+		rateLimiter: NewRateLimiter(RateLimitRequests, RateLimitWindow),
 	}
 	s.routes()
 	return s, nil
@@ -76,9 +216,19 @@ func parseTemplates() (map[string]*template.Template, error) {
 		},
 	}
 
-	pages := []string{"board.html", "backlog.html", "costs.html", "task.html"}
+	pages := []string{"board.html", "backlog.html", "costs.html", "task.html", "wizard_new.html", "wizard_modal.html"}
 	for _, page := range pages {
 		t, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/"+page)
+		if err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", page, err)
+		}
+		tmpls[page] = t
+	}
+
+	// Parse wizard partial templates (no layout)
+	wizardPartials := []string{"wizard_refine.html", "wizard_breakdown.html", "wizard_create.html", "wizard_logs.html"}
+	for _, page := range wizardPartials {
+		t, err := template.ParseFS(templateFS, "templates/"+page)
 		if err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", page, err)
 		}
@@ -112,6 +262,15 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /reject/{id}", s.handleReject)
 	s.mux.HandleFunc("POST /retry/{id}", s.handleRetry)
 	s.mux.HandleFunc("POST /retry-fresh/{id}", s.handleRetryFresh)
+
+	// Wizard routes - with CSRF and rate limiting protection
+	s.mux.HandleFunc("GET /wizard/new", s.rateLimitMiddleware(s.handleWizardNew))
+	s.mux.HandleFunc("GET /wizard/modal", s.rateLimitMiddleware(s.handleWizardModal))
+	s.mux.HandleFunc("POST /wizard/cancel", chainMiddleware(s.handleWizardCancel, s.rateLimitMiddleware, s.csrfMiddleware))
+	s.mux.HandleFunc("POST /wizard/refine", chainMiddleware(s.handleWizardRefine, s.rateLimitMiddleware, s.csrfMiddleware))
+	s.mux.HandleFunc("POST /wizard/breakdown", chainMiddleware(s.handleWizardBreakdown, s.rateLimitMiddleware, s.csrfMiddleware))
+	s.mux.HandleFunc("POST /wizard/create", chainMiddleware(s.handleWizardCreate, s.rateLimitMiddleware, s.csrfMiddleware))
+	s.mux.HandleFunc("GET /wizard/logs/{sessionId}", s.rateLimitMiddleware(s.handleWizardLogs))
 }
 
 func (s *Server) Start() error {

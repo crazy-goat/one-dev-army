@@ -1,0 +1,48 @@
+<div class="wizard-step">
+  <h2>✅ Issues Created Successfully</h2>
+  
+  <p class="subtitle">The following GitHub issues have been created:</p>
+  
+  <div class="issue-list">
+    {{range .CreatedIssues}}
+    <div class="issue-card">
+      <a href="{{.URL}}" target="_blank" class="issue-link">
+        <span class="issue-number">#{{.Number}}</span>
+        <span class="issue-title">{{.Title}}</span>
+      </a>
+    </div>
+    {{end}}
+  </div>
+  
+  <div class="form-actions">
+    <button type="button" class="btn btn-primary" onclick="closeWizardModal()">
+      Close Wizard
+    </button>
+    <a href="/backlog" class="btn" onclick="closeWizardModal()">View Backlog →</a>
+  </div>
+</div>
+
+<style>
+.wizard-step { max-width: 800px; margin: 0 auto; }
+.subtitle { color: var(--muted); margin-bottom: 1rem; }
+.issue-list { display: flex; flex-direction: column; gap: 0.5rem; margin: 1rem 0; }
+.issue-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+}
+.issue-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.issue-number {
+  color: var(--accent);
+  font-weight: 600;
+}
+.issue-title {
+  color: var(--text);
+}
+.form-actions { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1.5rem; }
+</style>

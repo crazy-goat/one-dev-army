@@ -161,6 +161,36 @@ func (s *Store) GetSteps(issueNumber int) ([]TaskStep, error) {
 	return steps, rows.Err()
 }
 
+func (s *Store) GetLastCompletedStep(issueNumber int) (string, error) {
+	var stepName sql.NullString
+	err := s.db.QueryRow(
+		`SELECT step_name FROM task_steps WHERE issue_number = ? AND status = 'done' ORDER BY id DESC LIMIT 1`,
+		issueNumber,
+	).Scan(&stepName)
+	if err == sql.ErrNoRows || !stepName.Valid {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("querying last completed step: %w", err)
+	}
+	return stepName.String, nil
+}
+
+func (s *Store) GetStepResponse(issueNumber int, stepName string) (string, error) {
+	var response sql.NullString
+	err := s.db.QueryRow(
+		`SELECT response FROM task_steps WHERE issue_number = ? AND step_name = ? AND status = 'done' ORDER BY id DESC LIMIT 1`,
+		issueNumber, stepName,
+	).Scan(&response)
+	if err == sql.ErrNoRows || !response.Valid {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("querying step response: %w", err)
+	}
+	return response.String, nil
+}
+
 func (s *Store) DeleteSteps(issueNumber int) error {
 	_, err := s.db.Exec(`DELETE FROM task_steps WHERE issue_number = ?`, issueNumber)
 	if err != nil {

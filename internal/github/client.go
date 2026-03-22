@@ -11,6 +11,7 @@ type Client struct {
 	Repo            string
 	ActiveMilestone *Milestone
 	ProjectID       string
+	StatusFieldID   string
 }
 
 func NewClient(repo string) *Client {

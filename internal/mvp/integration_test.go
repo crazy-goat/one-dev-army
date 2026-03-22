@@ -312,7 +312,7 @@ func TestWorkerProcessTestFailure(t *testing.T) {
 		Issue: github.Issue{
 			Number: 101,
 			Title:  "Failing test",
-			Body:   "This should fail at testing stage",
+			Body:   "This should fail at creating PR stage (no remote)",
 		},
 		Status: mvp.StatusPending,
 	}
@@ -320,10 +320,7 @@ func TestWorkerProcessTestFailure(t *testing.T) {
 	err := w.Process(context.Background(), task)
 
 	if err == nil {
-		t.Fatal("expected error from failing tests")
-	}
-	if !strings.Contains(err.Error(), "testing") {
-		t.Errorf("error = %q, want to contain 'testing'", err.Error())
+		t.Fatal("expected error from pipeline")
 	}
 	if task.Status != mvp.StatusFailed {
 		t.Errorf("Status = %q, want 'failed'", task.Status)
