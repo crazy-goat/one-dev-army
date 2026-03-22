@@ -60,7 +60,7 @@
       <button type="submit" class="btn">Sync</button>
     </form>
     <button type="button" id="autosync-toggle" class="btn" onclick="toggleAutosync()">
-      <span id="autosync-icon">⏸</span> Autosync
+      <span id="autosync-icon">▶</span> <span id="autosync-text">OFF</span>
     </button>
     <form method="post" action="/plan-sprint" style="display:inline">
       <button type="submit" class="btn btn-primary">Plan Sprint</button>
@@ -226,15 +226,18 @@ document.getElementById('decline-modal').addEventListener('click', function(e) {
 function toggleAutosync() {
 	const board = document.getElementById('board-container');
 	const icon = document.getElementById('autosync-icon');
+	const text = document.getElementById('autosync-text');
 	const isEnabled = board.getAttribute('hx-trigger') === 'every 10s';
 	
 	if (isEnabled) {
 		board.removeAttribute('hx-trigger');
-		icon.textContent = '⏸';
+		icon.textContent = '▶';
+		text.textContent = 'OFF';
 		localStorage.setItem('autosync', 'false');
 	} else {
 		board.setAttribute('hx-trigger', 'every 10s');
-		icon.textContent = '▶';
+		icon.textContent = '⏸';
+		text.textContent = 'ON';
 		localStorage.setItem('autosync', 'true');
 	}
 }
