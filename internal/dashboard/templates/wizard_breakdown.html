@@ -1,0 +1,78 @@
+<div class="wizard-step">
+  <h2>Task Breakdown</h2>
+  
+  <p class="subtitle">Review the tasks that will be created:</p>
+  
+  <div class="task-list">
+    {{range .Tasks}}
+    <div class="task-card">
+      <div class="task-header">
+        <span class="task-title">{{.Title}}</span>
+        <div class="task-meta">
+          <span class="badge priority-{{.Priority}}">{{.Priority}}</span>
+          <span class="badge complexity-{{.Complexity}}">{{.Complexity}}</span>
+        </div>
+      </div>
+      <p class="task-description">{{.Description}}</p>
+    </div>
+    {{end}}
+  </div>
+  
+  <form hx-post="/wizard/create" hx-target="#wizard-content" hx-swap="innerHTML">
+    <input type="hidden" name="session_id" value="{{.SessionID}}">
+    
+    <div class="form-actions">
+      <button type="button" class="btn" hx-get="/wizard/refine?session_id={{.SessionID}}" hx-target="#wizard-content">
+        ← Back
+      </button>
+      <button type="submit" class="btn btn-success">
+        <span class="spinner" style="display:none;">⏳</span>
+        <span class="label">Create GitHub Issues</span>
+      </button>
+    </div>
+  </form>
+  
+  <div id="wizard-logs" hx-get="/wizard/logs/{{.SessionID}}" hx-trigger="every 1s" hx-swap="innerHTML" style="margin-top: 1rem; max-height: 200px; overflow-y: auto;"></div>
+</div>
+
+<style>
+.wizard-step { max-width: 800px; margin: 0 auto; }
+.subtitle { color: var(--muted); margin-bottom: 1rem; }
+.task-list { display: flex; flex-direction: column; gap: 0.75rem; margin: 1rem 0; }
+.task-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem;
+}
+.task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.task-title { font-weight: 600; }
+.task-meta { display: flex; gap: 0.5rem; }
+.badge {
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+.priority-critical { background: var(--red); color: #fff; }
+.priority-high { background: var(--orange); color: #000; }
+.priority-medium { background: var(--accent); color: #fff; }
+.priority-low { background: var(--muted); color: #fff; }
+.complexity-XL { background: var(--purple); color: #fff; }
+.complexity-L { background: var(--orange); color: #000; }
+.complexity-M { background: var(--accent); color: #fff; }
+.complexity-S { background: var(--green); color: #fff; }
+.task-description {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+.form-actions { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1.5rem; }
+.htmx-request .spinner { display: inline !important; }
+.htmx-request .label { display: none; }
+</style>

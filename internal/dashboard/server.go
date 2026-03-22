@@ -11,6 +11,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/mvp"
+	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
 
@@ -27,9 +28,11 @@ type Server struct {
 	orchestrator  *mvp.Orchestrator
 	mux           *http.ServeMux
 	httpSrv       *http.Server
+	wizardStore   *WizardSessionStore
+	oc            *opencode.Client
 }
 
-func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, projectNumber int, orchestrator *mvp.Orchestrator) (*Server, error) {
+func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, projectNumber int, orchestrator *mvp.Orchestrator, oc *opencode.Client) (*Server, error) {
 	tmpls, err := parseTemplates()
 	if err != nil {
 		return nil, err
@@ -49,6 +52,8 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 			Addr:    fmt.Sprintf(":%d", port),
 			Handler: mux,
 		},
+		wizardStore: NewWizardSessionStore(),
+		oc:          oc,
 	}
 	s.routes()
 	return s, nil
@@ -76,9 +81,19 @@ func parseTemplates() (map[string]*template.Template, error) {
 		},
 	}
 
-	pages := []string{"board.html", "backlog.html", "costs.html", "task.html"}
+	pages := []string{"board.html", "backlog.html", "costs.html", "task.html", "wizard_new.html"}
 	for _, page := range pages {
 		t, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/"+page)
+		if err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", page, err)
+		}
+		tmpls[page] = t
+	}
+
+	// Parse wizard partial templates (no layout)
+	wizardPartials := []string{"wizard_refine.html", "wizard_breakdown.html", "wizard_create.html", "wizard_logs.html"}
+	for _, page := range wizardPartials {
+		t, err := template.ParseFS(templateFS, "templates/"+page)
 		if err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", page, err)
 		}
@@ -112,6 +127,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /reject/{id}", s.handleReject)
 	s.mux.HandleFunc("POST /retry/{id}", s.handleRetry)
 	s.mux.HandleFunc("POST /retry-fresh/{id}", s.handleRetryFresh)
+
+	// Wizard routes
+	s.mux.HandleFunc("GET /wizard/new", s.handleWizardNew)
+	s.mux.HandleFunc("POST /wizard/refine", s.handleWizardRefine)
+	s.mux.HandleFunc("POST /wizard/breakdown", s.handleWizardBreakdown)
+	s.mux.HandleFunc("POST /wizard/create", s.handleWizardCreate)
+	s.mux.HandleFunc("GET /wizard/logs/{sessionId}", s.handleWizardLogs)
 }
 
 func (s *Server) Start() error {

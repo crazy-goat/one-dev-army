@@ -12,6 +12,7 @@ import (
 
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
 
@@ -605,4 +606,438 @@ func (s *Server) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+// handleWizardNew returns the initial wizard modal form
+func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
+	// Get wizard type from query param (default to feature)
+	wizardType := r.URL.Query().Get("type")
+	if wizardType != "bug" {
+		wizardType = "feature"
+	}
+
+	// Check for existing session ID (for back navigation)
+	sessionID := r.URL.Query().Get("session_id")
+	var session *WizardSession
+
+	if sessionID != "" {
+		// Try to get existing session
+		if existing, ok := s.wizardStore.Get(sessionID); ok {
+			session = existing
+		}
+	}
+
+	// Create new session if not found
+	if session == nil {
+		session = s.wizardStore.Create(wizardType)
+	}
+
+	data := struct {
+		Type      string
+		SessionID string
+	}{
+		Type:      wizardType,
+		SessionID: session.ID,
+	}
+
+	s.render(w, "wizard_new.html", data)
+}
+
+// handleWizardRefine sends the idea to LLM and returns refined description
+func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	sessionID := r.FormValue("session_id")
+	idea := r.FormValue("idea")
+
+	if sessionID == "" || idea == "" {
+		http.Error(w, "missing session_id or idea", http.StatusBadRequest)
+		return
+	}
+
+	session, ok := s.wizardStore.Get(sessionID)
+	if !ok {
+		http.Error(w, "session not found", http.StatusBadRequest)
+		return
+	}
+
+	// Store the idea
+	session.IdeaText = idea
+	session.SetStep(WizardStepRefine)
+	session.AddLog("user", idea)
+
+	// If no opencode client, return mock response for testing
+	if s.oc == nil {
+		mockRefined := "Refined: " + idea + "\n\nThis feature would allow users to authenticate securely."
+		session.SetRefinedDescription(mockRefined)
+		session.AddLog("assistant", mockRefined)
+
+		data := struct {
+			SessionID          string
+			Type               string
+			RefinedDescription string
+		}{
+			SessionID:          session.ID,
+			Type:               string(session.Type),
+			RefinedDescription: mockRefined,
+		}
+
+		s.render(w, "wizard_refine.html", data)
+		return
+	}
+
+	// Create LLM session for refinement
+	llmSession, err := s.oc.CreateSession("Wizard Refinement")
+	if err != nil {
+		log.Printf("[Wizard] Error creating LLM session: %v", err)
+		http.Error(w, "failed to create LLM session", http.StatusInternalServerError)
+		return
+	}
+
+	// Build refinement prompt
+	prompt := buildRefinementPrompt(session.Type, idea)
+	session.AddLog("system", "Sending refinement request to LLM")
+
+	// Send message to LLM
+	model := opencode.ParseModelRef("claude-sonnet-4")
+	var output strings.Builder
+	response, err := s.oc.SendMessage(llmSession.ID, prompt, model, &output)
+	if err != nil {
+		log.Printf("[Wizard] Error from LLM: %v", err)
+		session.AddLog("system", "LLM error: "+err.Error())
+		http.Error(w, "failed to refine idea", http.StatusInternalServerError)
+		return
+	}
+
+	// Extract refined description from response
+	var refinedDesc string
+	if len(response.Parts) > 0 {
+		refinedDesc = response.Parts[0].Text
+	}
+
+	session.SetRefinedDescription(refinedDesc)
+	session.AddLog("assistant", refinedDesc)
+
+	// Clean up LLM session
+	s.oc.DeleteSession(llmSession.ID)
+
+	data := struct {
+		SessionID          string
+		Type               string
+		RefinedDescription string
+	}{
+		SessionID:          session.ID,
+		Type:               string(session.Type),
+		RefinedDescription: refinedDesc,
+	}
+
+	s.render(w, "wizard_refine.html", data)
+}
+
+// buildRefinementPrompt creates the prompt for idea refinement
+func buildRefinementPrompt(wizardType WizardType, idea string) string {
+	if wizardType == WizardTypeBug {
+		return fmt.Sprintf(`You are a technical product manager helping to refine a bug report.
+
+Original bug description:
+%s
+
+Please refine this bug report to include:
+1. Clear description of the issue
+2. Steps to reproduce
+3. Expected vs actual behavior
+4. Impact/severity assessment
+5. Any additional context that would help developers
+
+Return a well-structured, professional bug description.`, idea)
+	}
+
+	return fmt.Sprintf(`You are a technical product manager helping to refine a feature idea.
+
+Original idea:
+%s
+
+Please refine this feature description to include:
+1. Clear problem statement
+2. Target users/personas
+3. Proposed solution overview
+4. Key acceptance criteria
+5. Any technical considerations or constraints
+
+Return a well-structured, professional feature description suitable for a GitHub issue.`, idea)
+}
+
+// handleWizardBreakdown sends description to LLM and returns task list
+func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	sessionID := r.FormValue("session_id")
+	if sessionID == "" {
+		http.Error(w, "missing session_id", http.StatusBadRequest)
+		return
+	}
+
+	session, ok := s.wizardStore.Get(sessionID)
+	if !ok {
+		http.Error(w, "session not found", http.StatusBadRequest)
+		return
+	}
+
+	if session.RefinedDescription == "" {
+		http.Error(w, "no refined description found", http.StatusBadRequest)
+		return
+	}
+
+	session.SetStep(WizardStepBreakdown)
+	session.AddLog("system", "Starting task breakdown")
+
+	// If no opencode client, return mock tasks for testing
+	if s.oc == nil {
+		mockTasks := []WizardTask{
+			{
+				Title:       "Set up authentication database schema",
+				Description: "Create tables for users, sessions, and credentials",
+				Priority:    "high",
+				Complexity:  "M",
+			},
+			{
+				Title:       "Implement login form UI",
+				Description: "Create HTML/CSS form with email and password fields",
+				Priority:    "medium",
+				Complexity:  "S",
+			},
+		}
+		session.SetTasks(mockTasks)
+		session.AddLog("assistant", "Generated 2 tasks")
+
+		data := struct {
+			SessionID string
+			Tasks     []WizardTask
+		}{
+			SessionID: session.ID,
+			Tasks:     mockTasks,
+		}
+
+		s.render(w, "wizard_breakdown.html", data)
+		return
+	}
+
+	// Create LLM session for breakdown
+	llmSession, err := s.oc.CreateSession("Wizard Breakdown")
+	if err != nil {
+		log.Printf("[Wizard] Error creating LLM session: %v", err)
+		http.Error(w, "failed to create LLM session", http.StatusInternalServerError)
+		return
+	}
+
+	// Build breakdown prompt with JSON schema requirement
+	prompt := buildBreakdownPrompt(session.Type, session.RefinedDescription)
+	session.AddLog("system", "Sending breakdown request to LLM")
+
+	// Send message to LLM
+	model := opencode.ParseModelRef("claude-sonnet-4")
+	var output strings.Builder
+	response, err := s.oc.SendMessage(llmSession.ID, prompt, model, &output)
+	if err != nil {
+		log.Printf("[Wizard] Error from LLM: %v", err)
+		session.AddLog("system", "LLM error: "+err.Error())
+		http.Error(w, "failed to break down tasks", http.StatusInternalServerError)
+		return
+	}
+
+	// Parse JSON response into tasks
+	var tasks []WizardTask
+	if len(response.Parts) > 0 {
+		tasks = parseTaskJSON(response.Parts[0].Text)
+	}
+
+	session.SetTasks(tasks)
+	session.AddLog("assistant", fmt.Sprintf("Generated %d tasks", len(tasks)))
+
+	// Clean up LLM session
+	s.oc.DeleteSession(llmSession.ID)
+
+	data := struct {
+		SessionID string
+		Tasks     []WizardTask
+	}{
+		SessionID: session.ID,
+		Tasks:     tasks,
+	}
+
+	s.render(w, "wizard_breakdown.html", data)
+}
+
+// buildBreakdownPrompt creates the prompt for task breakdown
+func buildBreakdownPrompt(wizardType WizardType, description string) string {
+	return fmt.Sprintf(`You are a technical project manager breaking down work into GitHub issues.
+
+%s description:
+%s
+
+Break this down into 3-7 specific, actionable tasks. For each task provide:
+- title: concise task title (max 80 chars)
+- description: detailed technical description
+- priority: one of [low, medium, high, critical]
+- complexity: one of [S, M, L, XL] (S=1-2 hours, M=half day, L=1-2 days, XL=3+ days)
+
+Return ONLY a JSON array in this exact format:
+[
+  {
+    "title": "Task title",
+    "description": "Task description",
+    "priority": "high",
+    "complexity": "M"
+  }
+]
+
+No markdown, no explanation, just the JSON array.`, wizardType, description)
+}
+
+// parseTaskJSON extracts and parses the JSON task array from LLM response
+func parseTaskJSON(text string) []WizardTask {
+	// Find JSON array in the response
+	start := strings.Index(text, "[")
+	end := strings.LastIndex(text, "]")
+
+	if start == -1 || end == -1 || end <= start {
+		log.Printf("[Wizard] Could not find JSON array in response")
+		return nil
+	}
+
+	jsonStr := text[start : end+1]
+
+	var tasks []WizardTask
+	if err := json.Unmarshal([]byte(jsonStr), &tasks); err != nil {
+		log.Printf("[Wizard] Error parsing task JSON: %v", err)
+		return nil
+	}
+
+	return tasks
+}
+
+// handleWizardCreate creates GitHub issues and returns confirmation
+func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	sessionID := r.FormValue("session_id")
+	if sessionID == "" {
+		http.Error(w, "missing session_id", http.StatusBadRequest)
+		return
+	}
+
+	session, ok := s.wizardStore.Get(sessionID)
+	if !ok {
+		http.Error(w, "session not found", http.StatusBadRequest)
+		return
+	}
+
+	if len(session.Tasks) == 0 {
+		http.Error(w, "no tasks to create", http.StatusBadRequest)
+		return
+	}
+
+	session.SetStep(WizardStepCreate)
+	session.AddLog("system", fmt.Sprintf("Creating %d GitHub issues", len(session.Tasks)))
+
+	// If no GitHub client, return mock confirmation for testing
+	if s.gh == nil {
+		mockIssues := []struct {
+			Number int
+			Title  string
+			URL    string
+		}{
+			{Number: 101, Title: session.Tasks[0].Title, URL: "https://github.com/test/issues/101"},
+			{Number: 102, Title: session.Tasks[1].Title, URL: "https://github.com/test/issues/102"},
+		}
+		session.AddLog("system", "Mock: Created 2 issues")
+
+		data := struct {
+			CreatedIssues []struct {
+				Number int
+				Title  string
+				URL    string
+			}
+		}{
+			CreatedIssues: mockIssues,
+		}
+
+		s.render(w, "wizard_create.html", data)
+		return
+	}
+
+	// Create GitHub issues for each task
+	type createdIssue struct {
+		Number int
+		Title  string
+		URL    string
+	}
+	var createdIssues []createdIssue
+
+	for _, task := range session.Tasks {
+		// Build issue body
+		body := fmt.Sprintf("## Description\n\n%s\n\n## Priority\n%s\n\n## Complexity\n%s",
+			task.Description,
+			task.Priority,
+			task.Complexity,
+		)
+
+		// Create the issue
+		issueNum, err := s.gh.CreateIssue(task.Title, body, []string{"wizard"})
+		if err != nil {
+			log.Printf("[Wizard] Error creating issue for task %q: %v", task.Title, err)
+			session.AddLog("system", fmt.Sprintf("Error creating issue: %v", err))
+			continue
+		}
+
+		createdIssues = append(createdIssues, createdIssue{
+			Number: issueNum,
+			Title:  task.Title,
+			URL:    fmt.Sprintf("https://github.com/%s/issues/%d", s.gh.Repo, issueNum),
+		})
+
+		session.AddLog("system", fmt.Sprintf("Created issue #%d: %s", issueNum, task.Title))
+	}
+
+	data := struct {
+		CreatedIssues []createdIssue
+	}{
+		CreatedIssues: createdIssues,
+	}
+
+	s.render(w, "wizard_create.html", data)
+}
+
+// handleWizardLogs returns current LLM log entries for polling
+func (s *Server) handleWizardLogs(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("sessionId")
+	if sessionID == "" {
+		http.Error(w, "missing session ID", http.StatusBadRequest)
+		return
+	}
+
+	session, ok := s.wizardStore.Get(sessionID)
+	if !ok {
+		http.Error(w, "session not found", http.StatusNotFound)
+		return
+	}
+
+	logs := session.GetLogs()
+
+	data := struct {
+		Logs []LLMLogEntry
+	}{
+		Logs: logs,
+	}
+
+	s.render(w, "wizard_logs.html", data)
 }
