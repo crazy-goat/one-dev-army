@@ -177,6 +177,18 @@ func runServe() error {
 		fmt.Println("  ✓ sprint found")
 	}
 
+	// Detect and set the active sprint (oldest open milestone)
+	activeMilestone, err := gh.GetOldestOpenMilestone()
+	if err != nil {
+		return fmt.Errorf("detecting active sprint: %w", err)
+	}
+	if activeMilestone != nil {
+		gh.SetActiveMilestone(activeMilestone)
+		fmt.Printf("  ✓ active sprint: %s (due: %s)\n", activeMilestone.Title, activeMilestone.DueOn.Format("2006-01-02"))
+	} else {
+		fmt.Println("  ! no active sprint found")
+	}
+
 	projectName := cfg.GitHub.Repo
 	if idx := strings.LastIndex(projectName, "/"); idx >= 0 {
 		projectName = projectName[idx+1:]

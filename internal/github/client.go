@@ -8,11 +8,22 @@ import (
 )
 
 type Client struct {
-	Repo string
+	Repo            string
+	ActiveMilestone *Milestone
 }
 
 func NewClient(repo string) *Client {
 	return &Client{Repo: repo}
+}
+
+// SetActiveMilestone sets the currently active milestone (oldest open sprint)
+func (c *Client) SetActiveMilestone(m *Milestone) {
+	c.ActiveMilestone = m
+}
+
+// GetActiveMilestone returns the currently active milestone or nil if none set
+func (c *Client) GetActiveMilestone() *Milestone {
+	return c.ActiveMilestone
 }
 
 func (c *Client) gh(args ...string) ([]byte, error) {
@@ -37,6 +48,18 @@ func (c *Client) ghNoRepo(args ...string) ([]byte, error) {
 
 func (c *Client) ghJSON(result interface{}, args ...string) error {
 	out, err := c.gh(args...)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(out, result); err != nil {
+		return fmt.Errorf("parsing gh JSON output: %w", err)
+	}
+	return nil
+}
+
+// ghNoRepoJSON runs gh without -R flag and parses JSON output
+func (c *Client) ghNoRepoJSON(result interface{}, args ...string) error {
+	out, err := c.ghNoRepo(args...)
 	if err != nil {
 		return err
 	}
