@@ -1,26 +1,30 @@
 <div class="wizard-step">
-  <h2>Refined Description</h2>
+  <h2>Refined Description {{if gt .RefinementIteration 0}}(Iteration {{.RefinementIteration}}){{end}}</h2>
   
   <div class="refined-content">
     <p class="description">{{.RefinedDescription}}</p>
   </div>
   
-  <form hx-post="/wizard/breakdown" hx-target="#wizard-modal-content" hx-swap="innerHTML">
-    <input type="hidden" name="session_id" value="{{.SessionID}}">
-    
-    <div class="form-actions">
-      <button type="button" class="btn" onclick="closeWizardModal()">Cancel</button>
-      <div class="nav-buttons">
-        <button type="button" class="btn" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}" hx-target="#wizard-modal-content">
-          ← Back
-        </button>
-        <button type="submit" class="btn btn-primary">
+  <div class="form-actions">
+    <button type="button" class="btn" onclick="closeWizardModal()">Cancel</button>
+    <div class="nav-buttons">
+      <form hx-post="/wizard/refine" hx-target="#wizard-modal-content" hx-swap="innerHTML" style="display: inline;">
+        <input type="hidden" name="session_id" value="{{.SessionID}}">
+        <input type="hidden" name="refined_text" value="{{.RefinedDescription}}">
+        <button type="submit" class="btn" id="refine-again-btn">
           <span class="spinner" style="display:none;">⏳</span>
-          <span class="label">Break Down into Tasks</span>
+          <span class="label">↻ Refine Again</span>
         </button>
-      </div>
+      </form>
+      <form hx-post="/wizard/breakdown" hx-target="#wizard-modal-content" hx-swap="innerHTML" style="display: inline;">
+        <input type="hidden" name="session_id" value="{{.SessionID}}">
+        <button type="submit" class="btn btn-primary" id="accept-continue-btn">
+          <span class="spinner" style="display:none;">⏳</span>
+          <span class="label">Accept & Continue →</span>
+        </button>
+      </form>
     </div>
-  </form>
+  </div>
   
   <div id="wizard-logs" hx-get="/wizard/logs/{{.SessionID}}" hx-trigger="every 1s" hx-swap="innerHTML" style="margin-top: 1rem; max-height: 200px; overflow-y: auto;"></div>
 </div>
@@ -43,4 +47,5 @@
 .nav-buttons { display: flex; gap: 0.5rem; }
 .htmx-request .spinner { display: inline !important; }
 .htmx-request .label { display: none; }
+.htmx-request .btn { opacity: 0.7; pointer-events: none; }
 </style>

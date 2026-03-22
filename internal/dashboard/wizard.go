@@ -62,16 +62,17 @@ type WizardTask struct {
 
 // WizardSession holds the state for a single wizard instance
 type WizardSession struct {
-	ID                 string        `json:"id"`
-	Type               WizardType    `json:"type"`
-	CurrentStep        WizardStep    `json:"current_step"`
-	IdeaText           string        `json:"idea_text"`
-	RefinedDescription string        `json:"refined_description"`
-	Tasks              []WizardTask  `json:"tasks"`
-	LLMLogs            []LLMLogEntry `json:"llm_logs"`
-	CreatedAt          time.Time     `json:"created_at"`
-	UpdatedAt          time.Time     `json:"updated_at"`
-	mu                 sync.RWMutex  `json:"-"`
+	ID                  string        `json:"id"`
+	Type                WizardType    `json:"type"`
+	CurrentStep         WizardStep    `json:"current_step"`
+	IdeaText            string        `json:"idea_text"`
+	RefinedDescription  string        `json:"refined_description"`
+	RefinementIteration int           `json:"refinement_iteration"`
+	Tasks               []WizardTask  `json:"tasks"`
+	LLMLogs             []LLMLogEntry `json:"llm_logs"`
+	CreatedAt           time.Time     `json:"created_at"`
+	UpdatedAt           time.Time     `json:"updated_at"`
+	mu                  sync.RWMutex  `json:"-"`
 }
 
 // AddLog adds a new log entry to the session (thread-safe)
@@ -100,6 +101,7 @@ func (s *WizardSession) SetRefinedDescription(desc string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.RefinedDescription = desc
+	s.RefinementIteration++
 	s.UpdatedAt = time.Now()
 }
 

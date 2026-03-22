@@ -646,9 +646,11 @@ func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		Type      string
 		SessionID string
+		IdeaText  string
 	}{
 		Type:      wizardType,
 		SessionID: session.ID,
+		IdeaText:  session.IdeaText,
 	}
 
 	s.render(w, "wizard_new.html", data)
@@ -663,9 +665,21 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 
 	sessionID := r.FormValue("session_id")
 	idea := r.FormValue("idea")
+	refinedText := r.FormValue("refined_text")
 
-	if sessionID == "" || idea == "" {
-		http.Error(w, "missing session_id or idea", http.StatusBadRequest)
+	if sessionID == "" {
+		http.Error(w, "missing session_id", http.StatusBadRequest)
+		return
+	}
+
+	// Use refined_text if provided (for iterations), otherwise use idea
+	inputText := idea
+	if refinedText != "" {
+		inputText = refinedText
+	}
+
+	if inputText == "" {
+		http.Error(w, "missing idea or refined_text", http.StatusBadRequest)
 		return
 	}
 
@@ -675,25 +689,30 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store the idea
-	session.IdeaText = idea
+	// Store the idea (only on first iteration)
+	if idea != "" {
+		session.IdeaText = idea
+	}
 	session.SetStep(WizardStepRefine)
-	session.AddLog("user", idea)
+	session.AddLog("user", inputText)
 
 	// If no opencode client, return mock response for testing
 	if s.oc == nil {
-		mockRefined := "Refined: " + idea + "\n\nThis feature would allow users to authenticate securely."
+		iteration := session.RefinementIteration
+		mockRefined := fmt.Sprintf("Refined (iteration %d): %s\n\nThis feature would allow users to authenticate securely.", iteration+1, inputText)
 		session.SetRefinedDescription(mockRefined)
 		session.AddLog("assistant", mockRefined)
 
 		data := struct {
-			SessionID          string
-			Type               string
-			RefinedDescription string
+			SessionID           string
+			Type                string
+			RefinedDescription  string
+			RefinementIteration int
 		}{
-			SessionID:          session.ID,
-			Type:               string(session.Type),
-			RefinedDescription: mockRefined,
+			SessionID:           session.ID,
+			Type:                string(session.Type),
+			RefinedDescription:  mockRefined,
+			RefinementIteration: session.RefinementIteration,
 		}
 
 		s.render(w, "wizard_refine.html", data)
@@ -709,8 +728,8 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build refinement prompt
-	prompt := buildRefinementPrompt(session.Type, idea)
-	session.AddLog("system", "Sending refinement request to LLM")
+	prompt := buildRefinementPrompt(session.Type, inputText)
+	session.AddLog("system", "Sending refinement request to LLM (iteration "+fmt.Sprintf("%d", session.RefinementIteration+1)+")")
 
 	// Send message to LLM with timeout
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
@@ -739,13 +758,15 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	s.oc.DeleteSession(llmSession.ID)
 
 	data := struct {
-		SessionID          string
-		Type               string
-		RefinedDescription string
+		SessionID           string
+		Type                string
+		RefinedDescription  string
+		RefinementIteration int
 	}{
-		SessionID:          session.ID,
-		Type:               string(session.Type),
-		RefinedDescription: refinedDesc,
+		SessionID:           session.ID,
+		Type:                string(session.Type),
+		RefinedDescription:  refinedDesc,
+		RefinementIteration: session.RefinementIteration,
 	}
 
 	s.render(w, "wizard_refine.html", data)

@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -184,6 +185,15 @@ func TestWizardSession_SetRefinedDescription(t *testing.T) {
 	session.SetRefinedDescription("Refined description")
 	if session.RefinedDescription != "Refined description" {
 		t.Errorf("expected refined description, got %q", session.RefinedDescription)
+	}
+	if session.RefinementIteration != 1 {
+		t.Errorf("expected refinement iteration 1, got %d", session.RefinementIteration)
+	}
+
+	// Second refinement should increment counter
+	session.SetRefinedDescription("Further refined description")
+	if session.RefinementIteration != 2 {
+		t.Errorf("expected refinement iteration 2, got %d", session.RefinementIteration)
 	}
 }
 
@@ -393,6 +403,51 @@ func TestValidWizardTypes(t *testing.T) {
 	}
 	if ValidWizardTypes["invalid"] {
 		t.Error("'invalid' should not be a valid wizard type")
+	}
+}
+
+func TestWizardSession_RefinementIteration(t *testing.T) {
+	session := &WizardSession{
+		ID:   "test-id",
+		Type: "feature",
+	}
+
+	// Initially should be 0
+	if session.RefinementIteration != 0 {
+		t.Errorf("expected initial iteration 0, got %d", session.RefinementIteration)
+	}
+
+	// Increment through refinements
+	for i := 1; i <= 5; i++ {
+		session.SetRefinedDescription(fmt.Sprintf("Refined version %d", i))
+		if session.RefinementIteration != i {
+			t.Errorf("expected iteration %d, got %d", i, session.RefinementIteration)
+		}
+	}
+}
+
+func TestWizardSession_ConcurrentRefinement(t *testing.T) {
+	session := &WizardSession{
+		ID:   "test-id",
+		Type: "feature",
+	}
+
+	var wg sync.WaitGroup
+
+	// Concurrent refinements
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			session.SetRefinedDescription(fmt.Sprintf("Refined %d", i))
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Should have exactly 100 iterations
+	if session.RefinementIteration != 100 {
+		t.Errorf("expected 100 refinement iterations, got %d", session.RefinementIteration)
 	}
 }
 

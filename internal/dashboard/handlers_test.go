@@ -667,3 +667,153 @@ func TestMiddlewareChain(t *testing.T) {
 		t.Errorf("expected status 200, got %d", rec.Code)
 	}
 }
+
+// TestHandleWizardRefine_MultipleIterations tests that refined text can be re-refined
+func TestHandleWizardRefine_MultipleIterations(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	// Create a session
+	session, _ := srv.wizardStore.Create("feature")
+
+	// First refinement with initial idea
+	formData := url.Values{}
+	formData.Set("session_id", session.ID)
+	formData.Set("idea", "Create a login page")
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardRefine(rec, req)
+
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Fatalf("First refinement failed: expected status 200 or 500, got %d", rec.Code)
+	}
+
+	// Verify first refinement worked
+	session, _ = srv.wizardStore.Get(session.ID)
+	if session.RefinementIteration != 1 {
+		t.Errorf("Expected iteration 1 after first refinement, got %d", session.RefinementIteration)
+	}
+	if session.IdeaText != "Create a login page" {
+		t.Errorf("Expected idea text to be preserved, got %q", session.IdeaText)
+	}
+
+	// Second refinement with refined_text (iteration)
+	firstRefined := session.RefinedDescription
+	formData = url.Values{}
+	formData.Set("session_id", session.ID)
+	formData.Set("refined_text", firstRefined)
+
+	req = httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+
+	srv.handleWizardRefine(rec, req)
+
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Fatalf("Second refinement failed: expected status 200 or 500, got %d", rec.Code)
+	}
+
+	// Verify second refinement worked
+	session, _ = srv.wizardStore.Get(session.ID)
+	if session.RefinementIteration != 2 {
+		t.Errorf("Expected iteration 2 after second refinement, got %d", session.RefinementIteration)
+	}
+	if session.IdeaText != "Create a login page" {
+		t.Errorf("Expected original idea text to be preserved, got %q", session.IdeaText)
+	}
+
+	// Verify logs were added for both iterations
+	logs := session.GetLogs()
+	if len(logs) < 4 { // Should have: user (idea), system, assistant, user (refined), system, assistant
+		t.Errorf("Expected at least 4 log entries, got %d", len(logs))
+	}
+}
+
+// TestHandleWizardRefine_RefinedTextOnly tests refinement with only refined_text (no idea)
+func TestHandleWizardRefine_RefinedTextOnly(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	// Create a session with existing idea
+	session, _ := srv.wizardStore.Create("feature")
+	session.IdeaText = "Original idea"
+
+	// Refinement with only refined_text
+	formData := url.Values{}
+	formData.Set("session_id", session.ID)
+	formData.Set("refined_text", "Already refined description")
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardRefine(rec, req)
+
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status 200 or 500, got %d", rec.Code)
+	}
+
+	// Verify original idea is preserved
+	session, _ = srv.wizardStore.Get(session.ID)
+	if session.IdeaText != "Original idea" {
+		t.Errorf("Expected original idea to be preserved, got %q", session.IdeaText)
+	}
+}
+
+// TestHandleWizardRefine_MissingSessionID tests error handling for missing session_id
+func TestHandleWizardRefine_MissingSessionID(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	// Test with missing session_id but with idea
+	formData := url.Values{}
+	formData.Set("idea", "Some idea")
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardRefine(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected status 400 for missing session_id, got %d", rec.Code)
+	}
+}
+
+// TestHandleWizardRefine_MissingBothIdeaAndRefinedText tests error handling when both idea and refined_text are missing
+func TestHandleWizardRefine_MissingBothIdeaAndRefinedText(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	// Create a session
+	session, _ := srv.wizardStore.Create("feature")
+
+	// Test with session_id but no idea or refined_text
+	formData := url.Values{}
+	formData.Set("session_id", session.ID)
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardRefine(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected status 400 for missing idea and refined_text, got %d", rec.Code)
+	}
+}

@@ -8,19 +8,19 @@
     
     <div class="form-group">
       <label for="idea">Describe your {{if eq .Type "bug"}}bug{{else}}feature idea{{end}}:</label>
-      <textarea id="idea" name="idea" rows="6" placeholder="{{if eq .Type "bug"}}Describe the bug, steps to reproduce, and expected behavior...{{else}}Describe the feature, who it's for, and what problem it solves...{{end}}" required></textarea>
+      <textarea id="idea" name="idea" rows="6" placeholder="{{if eq .Type "bug"}}Describe the bug, steps to reproduce, and expected behavior...{{else}}Describe the feature, who it's for, and what problem it solves...{{end}}" required>{{.IdeaText}}</textarea>
     </div>
     
     <div class="form-actions">
       <button type="button" class="btn" onclick="closeWizardModal()">Cancel</button>
-      <button type="submit" class="btn btn-primary">
+      <button type="submit" class="btn btn-primary" id="refine-btn">
         <span class="spinner" style="display:none;">⏳</span>
         <span class="label">Refine with AI</span>
       </button>
     </div>
   </form>
   
-  <div id="wizard-logs" style="margin-top: 1rem;"></div>
+  <div id="wizard-logs" hx-get="/wizard/logs/{{.SessionID}}" hx-trigger="every 1s" hx-swap="innerHTML" style="margin-top: 1rem; max-height: 200px; overflow-y: auto;"></div>
 </div>
 
 <style>
@@ -45,5 +45,6 @@
 .form-actions { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1.5rem; }
 .htmx-request .spinner { display: inline !important; }
 .htmx-request .label { display: none; }
+.htmx-request .btn { opacity: 0.7; pointer-events: none; }
 </style>
 {{end}}
