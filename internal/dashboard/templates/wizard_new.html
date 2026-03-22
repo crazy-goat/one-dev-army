@@ -1,4 +1,4 @@
-{{define "content"}}
+{{define "wizard-step-content"}}
 <div class="wizard-step-content">
   <h1>Create New {{if eq .Type "bug"}}Bug Report{{else}}Feature{{end}}</h1>
   
@@ -46,4 +46,8 @@
 .htmx-request .spinner { display: inline !important; }
 .htmx-request .label { display: none; }
 </style>
+{{end}}
+
+{{define "content"}}
+{{template "wizard-step-content" .}}
 {{end}}

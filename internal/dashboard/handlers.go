@@ -372,6 +372,18 @@ func (s *Server) handleRetryFresh(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
+func (s *Server) recordStep(issueNum int, stepName, response string) {
+	if s.store == nil {
+		return
+	}
+	id, err := s.store.InsertStep(issueNum, stepName, stepName, "")
+	if err != nil {
+		log.Printf("[Dashboard] failed to insert %s step for #%d: %v", stepName, issueNum, err)
+		return
+	}
+	_ = s.store.FinishStep(id, response)
+}
+
 func (s *Server) handleDecline(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	issueNum := 0
@@ -382,6 +394,8 @@ func (s *Server) handleDecline(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reason := r.FormValue("reason")
+
+	s.recordStep(issueNum, "declined", reason)
 
 	if err := s.gh.RemoveLabel(issueNum, "awaiting-approval"); err != nil {
 		log.Printf("[Dashboard] Error removing awaiting-approval label from #%d: %v", issueNum, err)
@@ -420,16 +434,17 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.recordStep(issueNum, "approved", "Manual approval granted")
+
 	log.Printf("[Dashboard] Approving & merging PR for #%d (branch: %s)", issueNum, branch)
 	if err := s.gh.MergePR(branch); err != nil {
 		log.Printf("[Dashboard] ✗ Merge failed for #%d (likely conflict): %v", issueNum, err)
+		s.recordStep(issueNum, "merge-failed", err.Error())
 
-		// Close PR and delete branch
 		if closeErr := s.gh.ClosePR(branch); closeErr != nil {
 			log.Printf("[Dashboard] Error closing PR for #%d: %v", issueNum, closeErr)
 		}
 
-		// Remove labels, clear steps — ticket goes back to backlog for fresh start
 		if rmErr := s.gh.RemoveLabel(issueNum, "awaiting-approval"); rmErr != nil {
 			log.Printf("[Dashboard] Error removing awaiting-approval label from #%d: %v", issueNum, rmErr)
 		}
@@ -453,6 +468,8 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.recordStep(issueNum, "merged", "PR merged successfully")
+
 	if err := s.gh.RemoveLabel(issueNum, "awaiting-approval"); err != nil {
 		log.Printf("[Dashboard] Error removing awaiting-approval label from #%d: %v", issueNum, err)
 	}
@@ -460,6 +477,8 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 	if s.projectNumber > 0 {
 		s.gh.MoveItemToColumn(s.projectNumber, issueNum, "Done")
 	}
+
+	s.recordStep(issueNum, "done", "Moved to Done")
 
 	log.Printf("[Dashboard] ✓ Approved & merged #%d", issueNum)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -477,6 +496,19 @@ func (s *Server) render(w http.ResponseWriter, name string, data any) {
 		execName = "workers.html"
 	}
 	if err := t.ExecuteTemplate(w, execName, data); err != nil {
+		http.Error(w, "template error", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) renderFragment(w http.ResponseWriter, name string, data any) {
+	t, ok := s.tmpls[name]
+	if !ok {
+		http.Error(w, "template not found", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := t.ExecuteTemplate(w, "content", data); err != nil {
+		log.Printf("[Dashboard] Error rendering fragment %s: %v", name, err)
 		http.Error(w, "template error", http.StatusInternalServerError)
 	}
 }
@@ -783,7 +815,7 @@ func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 		SessionID: session.ID,
 	}
 
-	s.render(w, "wizard_new.html", data)
+	s.renderFragment(w, "wizard_new.html", data)
 }
 
 // handleWizardRefine sends the idea to LLM and returns refined description
@@ -849,7 +881,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 			RefinedDescription: mockRefined,
 		}
 
-		s.render(w, "wizard_refine.html", data)
+		s.renderFragment(w, "wizard_refine.html", data)
 		return
 	}
 
@@ -913,7 +945,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		RefinedDescription: refinedDesc,
 	}
 
-	s.render(w, "wizard_refine.html", data)
+	s.renderFragment(w, "wizard_refine.html", data)
 }
 
 // renderError renders an error message in the wizard modal
@@ -929,7 +961,7 @@ func (s *Server) renderError(w http.ResponseWriter, errorMsg, sessionID, wizardT
 	}
 
 	w.WriteHeader(http.StatusOK) // Return 200 so HTMX displays the content
-	s.render(w, "wizard_error.html", data)
+	s.renderFragment(w, "wizard_error.html", data)
 }
 
 // handleWizardBreakdown sends description to LLM and returns task list
@@ -986,7 +1018,7 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 			Tasks:     mockTasks,
 		}
 
-		s.render(w, "wizard_breakdown.html", data)
+		s.renderFragment(w, "wizard_breakdown.html", data)
 		return
 	}
 
@@ -1038,7 +1070,7 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 		Tasks:     tasks,
 	}
 
-	s.render(w, "wizard_breakdown.html", data)
+	s.renderFragment(w, "wizard_breakdown.html", data)
 }
 
 // buildBreakdownPrompt creates the prompt for task breakdown
@@ -1122,7 +1154,7 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 		}
 
 		s.wizardStore.Delete(sessionID)
-		s.render(w, "wizard_create.html", data)
+		s.renderFragment(w, "wizard_create.html", data)
 		return
 	}
 
@@ -1266,7 +1298,7 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 	// Clean up session after creation to free memory
 	s.wizardStore.Delete(sessionID)
 
-	s.render(w, "wizard_create.html", data)
+	s.renderFragment(w, "wizard_create.html", data)
 }
 
 // handleWizardLogs returns current LLM log entries for polling
@@ -1299,7 +1331,7 @@ func (s *Server) handleWizardLogs(w http.ResponseWriter, r *http.Request) {
 		Logs: logs,
 	}
 
-	s.render(w, "wizard_logs.html", data)
+	s.renderFragment(w, "wizard_logs.html", data)
 }
 
 // handleWizardModal returns the full modal shell with step 1 loaded
@@ -1327,7 +1359,7 @@ func (s *Server) handleWizardModal(w http.ResponseWriter, r *http.Request) {
 		CurrentStep: 1,
 	}
 
-	s.render(w, "wizard_modal.html", data)
+	s.renderFragment(w, "wizard_modal.html", data)
 }
 
 // handleWizardCancel clears the wizard session and returns empty response

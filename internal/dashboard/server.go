@@ -216,7 +216,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 		},
 	}
 
-	pages := []string{"board.html", "backlog.html", "costs.html", "task.html", "wizard_new.html", "wizard_modal.html"}
+	pages := []string{"board.html", "backlog.html", "costs.html", "task.html", "wizard_new.html"}
 	for _, page := range pages {
 		t, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/"+page)
 		if err != nil {
@@ -224,6 +224,12 @@ func parseTemplates() (map[string]*template.Template, error) {
 		}
 		tmpls[page] = t
 	}
+
+	wizardModalTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/wizard_modal.html", "templates/wizard_new.html")
+	if err != nil {
+		return nil, fmt.Errorf("parsing wizard_modal.html: %w", err)
+	}
+	tmpls["wizard_modal.html"] = wizardModalTmpl
 
 	// Parse wizard partial templates (no layout)
 	wizardPartials := []string{"wizard_refine.html", "wizard_breakdown.html", "wizard_create.html", "wizard_logs.html"}

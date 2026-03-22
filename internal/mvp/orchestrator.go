@@ -233,6 +233,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		if processErr != nil && errors.Is(processErr, ErrAlreadyDone) {
 			log.Printf("[Orchestrator] ✓ Already done #%d: %v", nextIssue.Number, processErr)
+			o.recordStep(nextIssue.Number, "already-done", processErr.Error())
 			comment := fmt.Sprintf("Ticket already done — closing automatically.\n\n%s", processErr.Error())
 			if err := o.gh.AddComment(nextIssue.Number, comment); err != nil {
 				log.Printf("[Orchestrator] Error adding comment: %v", err)
@@ -244,18 +245,24 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				log.Printf("[Orchestrator] Error closing issue: %v", err)
 			}
 			o.moveToColumn(nextIssue.Number, "Done")
+			o.recordStep(nextIssue.Number, "done", "Closed as already done")
 		} else if processErr != nil {
 			log.Printf("[Orchestrator] ✗ Failed #%d: %v", nextIssue.Number, processErr)
-			o.moveToColumn(nextIssue.Number, "Blocked")
+			o.recordStep(nextIssue.Number, "failed", processErr.Error())
+			if err := o.gh.RemoveLabel(nextIssue.Number, "in-progress"); err != nil {
+				log.Printf("[Orchestrator] Error removing in-progress label: %v", err)
+			}
 			if err := o.gh.AddLabel(nextIssue.Number, "failed"); err != nil {
 				log.Printf("[Orchestrator] Error adding failed label: %v", err)
 			}
+			o.moveToColumn(nextIssue.Number, "Blocked")
 		} else {
 			prURL := ""
 			if task.Result != nil {
 				prURL = task.Result.PRURL
 			}
 			log.Printf("[Orchestrator] ✓ Completed #%d → awaiting approval: %s", nextIssue.Number, prURL)
+			o.recordStep(nextIssue.Number, "waiting-for-approval", prURL)
 			if err := o.gh.RemoveLabel(nextIssue.Number, "in-progress"); err != nil {
 				log.Printf("[Orchestrator] Error removing in-progress label: %v", err)
 			}
@@ -338,6 +345,18 @@ func (o *Orchestrator) pickNextTicket(ctx context.Context, candidates []github.I
 	}
 
 	return nil, fmt.Errorf("LLM picked #%d which is not in candidate list", num)
+}
+
+func (o *Orchestrator) recordStep(issueNumber int, stepName, response string) {
+	if o.store == nil {
+		return
+	}
+	id, err := o.store.InsertStep(issueNumber, stepName, stepName, "")
+	if err != nil {
+		log.Printf("[Orchestrator] failed to insert %s step for #%d: %v", stepName, issueNumber, err)
+		return
+	}
+	_ = o.store.FinishStep(id, response)
 }
 
 func (o *Orchestrator) moveToColumn(issueNumber int, column string) {
