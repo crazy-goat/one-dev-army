@@ -284,6 +284,19 @@ func (s *Server) handleAddEpic(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
+	if s.gh != nil {
+		m, err := s.gh.GetOldestOpenMilestone()
+		if err != nil {
+			log.Printf("[Dashboard] Sync error: %v", err)
+		} else {
+			s.gh.SetActiveMilestone(m)
+			if m != nil {
+				log.Printf("[Dashboard] Synced active milestone: %s", m.Title)
+			} else {
+				log.Printf("[Dashboard] Synced: no active milestone")
+			}
+		}
+	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

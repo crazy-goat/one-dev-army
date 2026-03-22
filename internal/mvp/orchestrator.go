@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +17,25 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
+
+const pickTicketPrompt = `You are a sprint planner for repository %s.
+
+Here are the open tickets in the current sprint milestone. Each ticket has a number and title.
+Use the gh CLI tool to read ticket details: gh issue view <number> -R %s
+
+Tickets:
+%s
+
+Your task:
+1. Read each ticket using gh issue view to understand what it does
+2. Analyze dependencies between tickets — which tickets must be done before others
+3. Pick the ONE ticket that should be done NEXT based on these criteria:
+   - First priority: the ticket that has the MOST other tickets depending on it (i.e. it unblocks the most work)
+   - Second priority: highest priority label (priority:high > priority:medium > priority:low > no label)
+   - Do NOT pick tickets labeled "epic" — those are tracking issues, not implementation tasks
+
+Respond with ONLY this format on the last line:
+NEXT: #<number>`
 
 type Orchestrator struct {
 	cfg           *config.Config
@@ -139,7 +160,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		var openCount, skippedCount int
 		var inProgressIssue *github.Issue
-		var freshIssue *github.Issue
+		var candidates []github.Issue
 		for i := range issues {
 			if !strings.EqualFold(issues[i].State, "open") {
 				continue
@@ -156,19 +177,22 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				}
 				continue
 			}
-			if freshIssue == nil {
-				freshIssue = &issues[i]
-			}
+			candidates = append(candidates, issues[i])
 		}
+		log.Printf("[Orchestrator] Found %d issues (%d open, %d failed-skipped, %d candidates)", len(issues), openCount, skippedCount, len(candidates))
 
 		var nextIssue *github.Issue
 		if inProgressIssue != nil {
 			nextIssue = inProgressIssue
 			log.Printf("[Orchestrator] Resuming in-progress #%d: %s", nextIssue.Number, nextIssue.Title)
-		} else {
-			nextIssue = freshIssue
+		} else if len(candidates) > 0 {
+			picked, err := o.pickNextTicket(ctx, candidates)
+			if err != nil {
+				log.Printf("[Orchestrator] Error picking next ticket: %v — falling back to first candidate", err)
+				picked = &candidates[0]
+			}
+			nextIssue = picked
 		}
-		log.Printf("[Orchestrator] Found %d issues (%d open, %d failed-skipped)", len(issues), openCount, skippedCount)
 
 		if nextIssue == nil {
 			log.Println("[Orchestrator] No available issues in sprint, waiting 30s...")
@@ -237,6 +261,61 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		o.sleep(ctx, 5*time.Second)
 	}
+}
+
+var nextTicketRe = regexp.MustCompile(`NEXT:\s*#(\d+)`)
+
+func (o *Orchestrator) pickNextTicket(ctx context.Context, candidates []github.Issue) (*github.Issue, error) {
+	if len(candidates) == 1 {
+		return &candidates[0], nil
+	}
+
+	var lines []string
+	for _, issue := range candidates {
+		lines = append(lines, fmt.Sprintf("- #%d %s", issue.Number, issue.Title))
+	}
+	ticketList := strings.Join(lines, "\n")
+	prompt := fmt.Sprintf(pickTicketPrompt, o.gh.Repo, o.gh.Repo, ticketList)
+
+	log.Printf("[Orchestrator] Asking LLM to pick next ticket from %d candidates...", len(candidates))
+
+	session, err := o.oc.CreateSession("pick-ticket")
+	if err != nil {
+		return nil, fmt.Errorf("creating session: %w", err)
+	}
+	defer func() {
+		if delErr := o.oc.DeleteSession(session.ID); delErr != nil {
+			log.Printf("[Orchestrator] failed to delete pick-ticket session: %v", delErr)
+		}
+	}()
+
+	model := opencode.ParseModelRef(o.cfg.Planning.LLM)
+	msg, err := o.oc.SendMessage(session.ID, prompt, model, nil)
+	if err != nil {
+		return nil, fmt.Errorf("sending pick-ticket message: %w", err)
+	}
+
+	response := extractText(msg)
+	log.Printf("[Orchestrator] LLM pick-ticket response: %s", response)
+
+	match := nextTicketRe.FindStringSubmatch(response)
+	if match == nil {
+		return nil, fmt.Errorf("LLM did not return NEXT: #N format")
+	}
+
+	num, err := strconv.Atoi(match[1])
+	if err != nil {
+		return nil, fmt.Errorf("parsing ticket number %q: %w", match[1], err)
+	}
+
+	for i := range candidates {
+		if candidates[i].Number == num {
+			log.Printf("[Orchestrator] LLM picked #%d: %s", candidates[i].Number, candidates[i].Title)
+			return &candidates[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("LLM picked #%d which is not in candidate list", num)
 }
 
 func (o *Orchestrator) moveToColumn(issueNumber int, column string) {

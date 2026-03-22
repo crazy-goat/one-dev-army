@@ -37,10 +37,12 @@ Analysis from previous step:
 %s
 
 IMPORTANT: First check if this feature/fix is ALREADY IMPLEMENTED in the codebase.
-If the code already satisfies the issue requirements, respond with ONLY:
-ALREADY_DONE: <brief explanation of why the ticket is already done>
+Read the relevant source files and verify. If and ONLY if the existing code already fully satisfies
+all issue requirements with no changes needed, respond with a single line starting with the
+exact prefix ALREADY_DONE: followed by your concrete evidence (e.g. "method Foo already exists in bar.go:42").
+Do NOT use this if the feature is only partially implemented or needs any modifications.
 
-Otherwise, create a concrete, actionable plan covering:
+If changes ARE needed (which is the expected case), create a concrete, actionable plan covering:
 1. Which files to create or modify (exact paths)
 2. What code changes to make in each file
 3. What tests to add or update
@@ -53,9 +55,10 @@ const codeReviewPrompt = `You are reviewing code changes for GitHub issue #%d: %
 The changes are in PR %s in repository %s.
 Fetch the PR diff yourself using available tools, then review.
 
-IMPORTANT: If you discover that the issue requirements were ALREADY satisfied by existing code
-(before this PR's changes), and the PR is unnecessary, respond with ONLY:
-ALREADY_DONE: <brief explanation of why the ticket was already done>
+IMPORTANT: If you discover that the issue requirements were ALREADY fully satisfied by existing code
+(before this PR's changes) and the PR is completely unnecessary, respond with a single line starting
+with the exact prefix ALREADY_DONE: followed by concrete evidence (e.g. "method Foo already existed in bar.go:42").
+Do NOT use this if the PR makes any meaningful changes. This should be extremely rare.
 
 Otherwise check for:
 1. Correctness — does the code do what the issue requires?
