@@ -15,22 +15,12 @@
   </div>
   
   <div class="form-actions">
-    <button type="button" class="btn btn-primary" onclick="closeWizard()">
+    <button type="button" class="btn btn-primary" onclick="closeWizardModal()">
       Close Wizard
     </button>
-    <a href="/backlog" class="btn">View Backlog →</a>
+    <a href="/backlog" class="btn" onclick="closeWizardModal()">View Backlog →</a>
   </div>
 </div>
-
-<script>
-function closeWizard() {
-  // Trigger modal close - depends on how modal is implemented
-  const modal = document.getElementById('wizard-modal');
-  if (modal) modal.style.display = 'none';
-  // Or use HTMX to swap content
-  document.getElementById('wizard-content').innerHTML = '';
-}
-</script>
 
 <style>
 .wizard-step { max-width: 800px; margin: 0 auto; }

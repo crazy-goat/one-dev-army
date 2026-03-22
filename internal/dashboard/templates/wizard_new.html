@@ -1,8 +1,8 @@
 {{define "content"}}
-<div class="wizard-modal">
+<div class="wizard-step-content">
   <h1>Create New {{if eq .Type "bug"}}Bug Report{{else}}Feature{{end}}</h1>
   
-  <form hx-post="/wizard/refine" hx-target="#wizard-content" hx-swap="innerHTML">
+  <form hx-post="/wizard/refine" hx-target="#wizard-modal-content" hx-swap="innerHTML">
     <input type="hidden" name="session_id" value="{{.SessionID}}">
     <input type="hidden" name="wizard_type" value="{{.Type}}">
     
@@ -12,6 +12,7 @@
     </div>
     
     <div class="form-actions">
+      <button type="button" class="btn" onclick="closeWizardModal()">Cancel</button>
       <button type="submit" class="btn btn-primary">
         <span class="spinner" style="display:none;">⏳</span>
         <span class="label">Refine with AI</span>
@@ -23,7 +24,7 @@
 </div>
 
 <style>
-.wizard-modal { max-width: 800px; margin: 0 auto; }
+.wizard-step-content { max-width: 800px; margin: 0 auto; }
 .form-group { margin-bottom: 1rem; }
 .form-group label { display: block; margin-bottom: 0.5rem; color: var(--muted); }
 .form-group textarea {
@@ -41,7 +42,7 @@
   outline: none;
   border-color: var(--accent);
 }
-.form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem; }
+.form-actions { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1.5rem; }
 .htmx-request .spinner { display: inline !important; }
 .htmx-request .label { display: none; }
 </style>

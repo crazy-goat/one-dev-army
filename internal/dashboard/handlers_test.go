@@ -290,3 +290,108 @@ func TestFullWizardFlow(t *testing.T) {
 	t.Logf("Full wizard flow completed successfully with %d tasks and %d log entries",
 		len(session.Tasks), len(session.LLMLogs))
 }
+
+// TestHandleWizardModal tests the modal endpoint
+func TestHandleWizardModal(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+
+	// Test creating a feature wizard modal
+	req := httptest.NewRequest(http.MethodGet, "/wizard/modal?type=feature", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardModal(rec, req)
+
+	// Should return 200 OK or 500 if template missing
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 200 or 500, got %d", rec.Code)
+	}
+
+	// Check that a session was created
+	if len(srv.wizardStore.sessions) != 1 {
+		t.Errorf("expected 1 session, got %d", len(srv.wizardStore.sessions))
+	}
+
+	// Test creating a bug wizard modal
+	req = httptest.NewRequest(http.MethodGet, "/wizard/modal?type=bug", nil)
+	rec = httptest.NewRecorder()
+
+	srv.handleWizardModal(rec, req)
+
+	// Should have 2 sessions now
+	if len(srv.wizardStore.sessions) != 2 {
+		t.Errorf("expected 2 sessions, got %d", len(srv.wizardStore.sessions))
+	}
+}
+
+// TestHandleWizardCancel tests the cancel endpoint
+func TestHandleWizardCancel(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+
+	// Create a session first
+	session := srv.wizardStore.Create("feature")
+
+	// Verify session exists
+	if len(srv.wizardStore.sessions) != 1 {
+		t.Fatalf("expected 1 session before cancel, got %d", len(srv.wizardStore.sessions))
+	}
+
+	// Cancel the session
+	req := httptest.NewRequest(http.MethodPost, "/wizard/cancel?session_id="+session.ID, nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardCancel(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify session was deleted
+	if len(srv.wizardStore.sessions) != 0 {
+		t.Errorf("expected 0 sessions after cancel, got %d", len(srv.wizardStore.sessions))
+	}
+
+	// Test cancel with no session_id (should not panic)
+	req = httptest.NewRequest(http.MethodPost, "/wizard/cancel", nil)
+	rec = httptest.NewRecorder()
+
+	srv.handleWizardCancel(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200 for empty session_id, got %d", rec.Code)
+	}
+}
+
+// TestHandleWizardModal_CreatesSession tests that modal creates a new session
+func TestHandleWizardModal_CreatesSession(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/wizard/modal?type=bug", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardModal(rec, req)
+
+	// Check that a session was created with correct type
+	if len(srv.wizardStore.sessions) != 1 {
+		t.Errorf("expected 1 session, got %d", len(srv.wizardStore.sessions))
+	}
+
+	// Verify the session is a bug type
+	for _, session := range srv.wizardStore.sessions {
+		if session.Type != WizardTypeBug {
+			t.Errorf("expected session type 'bug', got %q", session.Type)
+		}
+		if session.CurrentStep != WizardStepNew {
+			t.Errorf("expected step 'new', got %q", session.CurrentStep)
+		}
+	}
+}
+// Test file updated

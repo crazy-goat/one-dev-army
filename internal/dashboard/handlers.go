@@ -1041,3 +1041,36 @@ func (s *Server) handleWizardLogs(w http.ResponseWriter, r *http.Request) {
 
 	s.render(w, "wizard_logs.html", data)
 }
+
+// handleWizardModal returns the full modal shell with step 1 loaded
+func (s *Server) handleWizardModal(w http.ResponseWriter, r *http.Request) {
+	// Get wizard type from query param (default to feature)
+	wizardType := r.URL.Query().Get("type")
+	if wizardType != "bug" {
+		wizardType = "feature"
+	}
+
+	// Create new session
+	session := s.wizardStore.Create(wizardType)
+
+	data := struct {
+		Type        string
+		SessionID   string
+		CurrentStep int
+	}{
+		Type:        wizardType,
+		SessionID:   session.ID,
+		CurrentStep: 1,
+	}
+
+	s.render(w, "wizard_modal.html", data)
+}
+
+// handleWizardCancel clears the wizard session and returns empty response
+func (s *Server) handleWizardCancel(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.URL.Query().Get("session_id")
+	if sessionID != "" {
+		s.wizardStore.Delete(sessionID)
+	}
+	w.WriteHeader(http.StatusOK)
+}

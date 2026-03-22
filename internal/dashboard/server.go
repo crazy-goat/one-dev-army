@@ -81,7 +81,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 		},
 	}
 
-	pages := []string{"board.html", "backlog.html", "costs.html", "task.html", "wizard_new.html"}
+	pages := []string{"board.html", "backlog.html", "costs.html", "task.html", "wizard_new.html", "wizard_modal.html"}
 	for _, page := range pages {
 		t, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/"+page)
 		if err != nil {
@@ -130,6 +130,8 @@ func (s *Server) routes() {
 
 	// Wizard routes
 	s.mux.HandleFunc("GET /wizard/new", s.handleWizardNew)
+	s.mux.HandleFunc("GET /wizard/modal", s.handleWizardModal)
+	s.mux.HandleFunc("POST /wizard/cancel", s.handleWizardCancel)
 	s.mux.HandleFunc("POST /wizard/refine", s.handleWizardRefine)
 	s.mux.HandleFunc("POST /wizard/breakdown", s.handleWizardBreakdown)
 	s.mux.HandleFunc("POST /wizard/create", s.handleWizardCreate)

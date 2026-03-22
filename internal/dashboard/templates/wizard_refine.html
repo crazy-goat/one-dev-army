@@ -5,17 +5,20 @@
     <p class="description">{{.RefinedDescription}}</p>
   </div>
   
-  <form hx-post="/wizard/breakdown" hx-target="#wizard-content" hx-swap="innerHTML">
+  <form hx-post="/wizard/breakdown" hx-target="#wizard-modal-content" hx-swap="innerHTML">
     <input type="hidden" name="session_id" value="{{.SessionID}}">
     
     <div class="form-actions">
-      <button type="button" class="btn" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}" hx-target="#wizard-content">
-        ← Back
-      </button>
-      <button type="submit" class="btn btn-primary">
-        <span class="spinner" style="display:none;">⏳</span>
-        <span class="label">Break Down into Tasks</span>
-      </button>
+      <button type="button" class="btn" onclick="closeWizardModal()">Cancel</button>
+      <div class="nav-buttons">
+        <button type="button" class="btn" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}" hx-target="#wizard-modal-content">
+          ← Back
+        </button>
+        <button type="submit" class="btn btn-primary">
+          <span class="spinner" style="display:none;">⏳</span>
+          <span class="label">Break Down into Tasks</span>
+        </button>
+      </div>
     </div>
   </form>
   
@@ -37,6 +40,7 @@
   line-height: 1.6;
 }
 .form-actions { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1.5rem; }
+.nav-buttons { display: flex; gap: 0.5rem; }
 .htmx-request .spinner { display: inline !important; }
 .htmx-request .label { display: none; }
 </style>
