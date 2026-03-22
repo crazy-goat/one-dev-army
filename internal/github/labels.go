@@ -27,6 +27,10 @@ var RequiredLabels = []Label{
 	{Name: "stage:code-review", Color: "1D76DB"},
 	{Name: "stage:needs-user", Color: "B60205"},
 	{Name: "stage:cancelled", Color: "EEEEEE"},
+	{Name: "priority:high", Color: "B60205"},
+	{Name: "priority:medium", Color: "FBCA04"},
+	{Name: "priority:low", Color: "0E8A16"},
+	{Name: "epic", Color: "5319E7"},
 }
 
 func (c *Client) EnsureLabels() error {
