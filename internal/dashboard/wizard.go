@@ -63,18 +63,30 @@ type WizardTask struct {
 	Complexity  string `json:"complexity"` // "S", "M", "L", "XL"
 }
 
+// CreatedIssue tracks a GitHub issue created by the wizard
+type CreatedIssue struct {
+	Number  int    `json:"number"`
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	IsEpic  bool   `json:"is_epic"`
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
 // WizardSession holds the state for a single wizard instance
 type WizardSession struct {
-	ID                 string        `json:"id"`
-	Type               WizardType    `json:"type"`
-	CurrentStep        WizardStep    `json:"current_step"`
-	IdeaText           string        `json:"idea_text"`
-	RefinedDescription string        `json:"refined_description"`
-	Tasks              []WizardTask  `json:"tasks"`
-	LLMLogs            []LLMLogEntry `json:"llm_logs"`
-	CreatedAt          time.Time     `json:"created_at"`
-	UpdatedAt          time.Time     `json:"updated_at"`
-	mu                 sync.RWMutex  `json:"-"`
+	ID                 string         `json:"id"`
+	Type               WizardType     `json:"type"`
+	CurrentStep        WizardStep     `json:"current_step"`
+	IdeaText           string         `json:"idea_text"`
+	RefinedDescription string         `json:"refined_description"`
+	Tasks              []WizardTask   `json:"tasks"`
+	CreatedIssues      []CreatedIssue `json:"created_issues"`
+	EpicNumber         int            `json:"epic_number"`
+	LLMLogs            []LLMLogEntry  `json:"llm_logs"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
+	mu                 sync.RWMutex   `json:"-"`
 }
 
 // AddLog adds a new log entry to the session (thread-safe)
@@ -119,6 +131,30 @@ func (s *WizardSession) SetIdeaText(idea string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.IdeaText = idea
+	s.UpdatedAt = time.Now()
+}
+
+// SetCreatedIssues updates the created issues list (thread-safe)
+func (s *WizardSession) SetCreatedIssues(issues []CreatedIssue) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.CreatedIssues = issues
+	s.UpdatedAt = time.Now()
+}
+
+// AddCreatedIssue appends a single created issue (thread-safe)
+func (s *WizardSession) AddCreatedIssue(issue CreatedIssue) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.CreatedIssues = append(s.CreatedIssues, issue)
+	s.UpdatedAt = time.Now()
+}
+
+// SetEpicNumber sets the epic issue number (thread-safe)
+func (s *WizardSession) SetEpicNumber(num int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.EpicNumber = num
 	s.UpdatedAt = time.Now()
 }
 

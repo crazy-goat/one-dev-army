@@ -238,6 +238,15 @@ func (c *Client) CloseIssue(issueNum int) error {
 	return nil
 }
 
+// UpdateIssueBody updates the body of an existing issue
+func (c *Client) UpdateIssueBody(issueNum int, body string) error {
+	_, err := c.gh("issue", "edit", strconv.Itoa(issueNum), "--body", body)
+	if err != nil {
+		return fmt.Errorf("updating body of issue #%d: %w", issueNum, err)
+	}
+	return nil
+}
+
 func (c *Client) ListOpenIssues() ([]Issue, error) {
 	args := []string{"issue", "list", "--state", "open", "--json", "number,title,body,state,assignees,labels", "--limit", "500"}
 	var issues []Issue

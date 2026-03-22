@@ -1008,7 +1008,7 @@ Return ONLY a JSON array in this exact format:
 No markdown, no explanation, just the JSON array.`, wizardType, description)
 }
 
-// handleWizardCreate creates GitHub issues and returns confirmation
+// handleWizardCreate creates GitHub issues with epic + sub-task structure
 func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form data", http.StatusBadRequest)
@@ -1033,77 +1033,178 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	session.SetStep(WizardStepCreate)
-	session.AddLog("system", fmt.Sprintf("Creating %d GitHub issues", len(session.Tasks)))
+	session.AddLog("system", fmt.Sprintf("Creating epic + %d sub-tasks", len(session.Tasks)))
 
 	// If no GitHub client, return mock confirmation for testing
 	if s.gh == nil {
-		mockIssues := []struct {
-			Number int
-			Title  string
-			URL    string
-		}{
-			{Number: 101, Title: session.Tasks[0].Title, URL: "https://github.com/test/issues/101"},
-			{Number: 102, Title: session.Tasks[1].Title, URL: "https://github.com/test/issues/102"},
+		mockEpic := CreatedIssue{
+			Number:  100,
+			Title:   session.RefinedDescription,
+			URL:     "https://github.com/test/issues/100",
+			IsEpic:  true,
+			Success: true,
 		}
-		session.AddLog("system", "Mock: Created 2 issues")
+		mockSubTasks := []CreatedIssue{
+			{Number: 101, Title: session.Tasks[0].Title, URL: "https://github.com/test/issues/101", IsEpic: false, Success: true},
+			{Number: 102, Title: session.Tasks[1].Title, URL: "https://github.com/test/issues/102", IsEpic: false, Success: true},
+		}
+		session.SetCreatedIssues(append([]CreatedIssue{mockEpic}, mockSubTasks...))
+		session.SetEpicNumber(100)
+		session.AddLog("system", "Mock: Created epic #100 with 2 sub-tasks")
 
 		data := struct {
-			CreatedIssues []struct {
-				Number int
-				Title  string
-				URL    string
-			}
+			Epic      CreatedIssue
+			SubTasks  []CreatedIssue
+			HasErrors bool
 		}{
-			CreatedIssues: mockIssues,
+			Epic:      mockEpic,
+			SubTasks:  mockSubTasks,
+			HasErrors: false,
 		}
 
-		// Clean up session after mock creation to free memory
 		s.wizardStore.Delete(sessionID)
-
 		s.render(w, "wizard_create.html", data)
 		return
 	}
 
-	// Create GitHub issues for each task
-	type createdIssue struct {
-		Number int
-		Title  string
-		URL    string
+	// Step 1: Create Epic First (abort on failure)
+	epicLabels := []string{"epic"}
+	if session.Type == WizardTypeFeature {
+		epicLabels = append(epicLabels, "enhancement")
+	} else if session.Type == WizardTypeBug {
+		epicLabels = append(epicLabels, "bug")
 	}
-	var createdIssues []createdIssue
 
+	epicBody := fmt.Sprintf("## Summary\n\n%s\n\n## Sub-tasks\n\n*Sub-tasks will be linked here after creation.*",
+		session.RefinedDescription)
+
+	epicNum, err := s.gh.CreateIssue(session.RefinedDescription, epicBody, epicLabels)
+	if err != nil {
+		log.Printf("[Wizard] Error creating epic: %v", err)
+		session.AddLog("system", fmt.Sprintf("Error creating epic: %v", err))
+		http.Error(w, fmt.Sprintf("Failed to create epic: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	session.SetEpicNumber(epicNum)
+	epicIssue := CreatedIssue{
+		Number:  epicNum,
+		Title:   session.RefinedDescription,
+		URL:     fmt.Sprintf("https://github.com/%s/issues/%d", s.gh.Repo, epicNum),
+		IsEpic:  true,
+		Success: true,
+	}
+	session.AddCreatedIssue(epicIssue)
+	session.AddLog("system", fmt.Sprintf("Created epic #%d", epicNum))
+
+	// Step 2: Create Sub-tasks (continue on individual failures)
+	var subTaskLinks []string
 	for _, task := range session.Tasks {
-		// Build issue body
-		body := fmt.Sprintf("## Description\n\n%s\n\n## Priority\n%s\n\n## Complexity\n%s",
+		// Map priority to label
+		priorityLabel := ""
+		switch strings.ToLower(task.Priority) {
+		case "critical", "high":
+			priorityLabel = "priority:high"
+		case "medium":
+			priorityLabel = "priority:medium"
+		case "low":
+			priorityLabel = "priority:low"
+		}
+
+		// Map complexity to size label
+		sizeLabel := ""
+		switch strings.ToUpper(task.Complexity) {
+		case "S":
+			sizeLabel = "size:S"
+		case "M":
+			sizeLabel = "size:M"
+		case "L":
+			sizeLabel = "size:L"
+		case "XL":
+			sizeLabel = "size:XL"
+		}
+
+		// Build labels array
+		labels := []string{"wizard"}
+		if priorityLabel != "" {
+			labels = append(labels, priorityLabel)
+		}
+		if sizeLabel != "" {
+			labels = append(labels, sizeLabel)
+		}
+
+		// Build sub-task body with parent reference
+		body := fmt.Sprintf("## Description\n\n%s\n\n---\n\n**Parent Epic:** #%d\n**Priority:** %s\n**Complexity:** %s",
 			task.Description,
+			epicNum,
 			task.Priority,
 			task.Complexity,
 		)
 
-		// Create the issue
-		issueNum, err := s.gh.CreateIssue(task.Title, body, []string{"wizard"})
+		// Create the sub-task issue
+		issueNum, err := s.gh.CreateIssue(task.Title, body, labels)
 		if err != nil {
-			log.Printf("[Wizard] Error creating issue for task %q: %v", task.Title, err)
-			session.AddLog("system", fmt.Sprintf("Error creating issue: %v", err))
+			log.Printf("[Wizard] Error creating sub-task %q: %v", task.Title, err)
+			session.AddLog("system", fmt.Sprintf("Error creating sub-task %q: %v", task.Title, err))
+			session.AddCreatedIssue(CreatedIssue{
+				Title:   task.Title,
+				IsEpic:  false,
+				Success: false,
+				Error:   err.Error(),
+			})
 			continue
 		}
 
-		createdIssues = append(createdIssues, createdIssue{
-			Number: issueNum,
-			Title:  task.Title,
-			URL:    fmt.Sprintf("https://github.com/%s/issues/%d", s.gh.Repo, issueNum),
-		})
+		issueURL := fmt.Sprintf("https://github.com/%s/issues/%d", s.gh.Repo, issueNum)
+		subTaskLinks = append(subTaskLinks, fmt.Sprintf("- #%d: %s", issueNum, task.Title))
 
-		session.AddLog("system", fmt.Sprintf("Created issue #%d: %s", issueNum, task.Title))
+		session.AddCreatedIssue(CreatedIssue{
+			Number:  issueNum,
+			Title:   task.Title,
+			URL:     issueURL,
+			IsEpic:  false,
+			Success: true,
+		})
+		session.AddLog("system", fmt.Sprintf("Created sub-task #%d: %s", issueNum, task.Title))
+	}
+
+	// Step 3: Update Epic Body with sub-task links
+	if len(subTaskLinks) > 0 {
+		updatedEpicBody := fmt.Sprintf("## Summary\n\n%s\n\n## Sub-tasks\n\n%s",
+			session.RefinedDescription,
+			strings.Join(subTaskLinks, "\n"),
+		)
+		if err := s.gh.UpdateIssueBody(epicNum, updatedEpicBody); err != nil {
+			log.Printf("[Wizard] Error updating epic body: %v", err)
+			session.AddLog("system", fmt.Sprintf("Error updating epic body: %v", err))
+		} else {
+			session.AddLog("system", fmt.Sprintf("Updated epic #%d with %d sub-task links", epicNum, len(subTaskLinks)))
+		}
+	}
+
+	// Prepare data for template
+	var subTasks []CreatedIssue
+	hasErrors := false
+	for _, issue := range session.CreatedIssues {
+		if !issue.IsEpic {
+			subTasks = append(subTasks, issue)
+			if !issue.Success {
+				hasErrors = true
+			}
+		}
 	}
 
 	data := struct {
-		CreatedIssues []createdIssue
+		Epic      CreatedIssue
+		SubTasks  []CreatedIssue
+		HasErrors bool
 	}{
-		CreatedIssues: createdIssues,
+		Epic:      epicIssue,
+		SubTasks:  subTasks,
+		HasErrors: hasErrors,
 	}
 
-	// Clean up session after successful creation to free memory
+	// Clean up session after creation to free memory
 	s.wizardStore.Delete(sessionID)
 
 	s.render(w, "wizard_create.html", data)
