@@ -151,7 +151,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 		},
 	}
 
-	pages := []string{"board.html", "backlog.html", "costs.html", "task.html", "wizard_new.html"}
+	pages := []string{"board.html", "backlog.html", "costs.html", "task.html", "wizard_new.html", "wizard_page.html"}
 	for _, page := range pages {
 		t, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/"+page)
 		if err != nil {
@@ -208,6 +208,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /decline/{id}", s.handleDecline)
 
 	// Wizard routes - with CSRF protection
+	s.mux.HandleFunc("GET /wizard", s.handleWizardPage)
 	s.mux.HandleFunc("GET /wizard/new", s.handleWizardNew)
 	s.mux.HandleFunc("GET /wizard/modal", s.handleWizardModal)
 	s.mux.HandleFunc("POST /wizard/cancel", s.csrfMiddleware(s.handleWizardCancel))

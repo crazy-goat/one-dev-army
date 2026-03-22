@@ -41,10 +41,15 @@
   </div>
   
   <div class="form-actions">
+    {{if .IsPage}}
+    <a href="/" class="btn btn-primary">Close Wizard</a>
+    <a href="/backlog" class="btn">View Backlog →</a>
+    {{else}}
     <button type="button" class="btn btn-primary" onclick="closeWizardModal()">
       Close Wizard
     </button>
     <a href="/backlog" class="btn" onclick="closeWizardModal()">View Backlog →</a>
+    {{end}}
   </div>
 </div>
 

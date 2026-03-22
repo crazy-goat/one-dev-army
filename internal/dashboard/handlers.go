@@ -791,6 +791,9 @@ func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check for page mode
+	isPage := r.URL.Query().Get("page") == "1"
+
 	// Check for existing session ID (for back navigation)
 	sessionID := r.URL.Query().Get("session_id")
 	var session *WizardSession
@@ -815,9 +818,11 @@ func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		Type      string
 		SessionID string
+		IsPage    bool
 	}{
 		Type:      wizardType,
 		SessionID: session.ID,
+		IsPage:    isPage,
 	}
 
 	s.renderFragment(w, "wizard_new.html", data)
@@ -838,6 +843,9 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing session_id", http.StatusBadRequest)
 		return
 	}
+
+	// Check for page mode
+	isPage := r.FormValue("page") == "1" || r.URL.Query().Get("page") == "1"
 
 	// Use current_description if provided (re-refinement), otherwise use idea
 	inputText := currentDesc
@@ -880,10 +888,12 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 			SessionID          string
 			Type               string
 			RefinedDescription string
+			IsPage             bool
 		}{
 			SessionID:          session.ID,
 			Type:               string(session.Type),
 			RefinedDescription: mockRefined,
+			IsPage:             isPage,
 		}
 
 		s.renderFragment(w, "wizard_refine.html", data)
@@ -895,7 +905,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("[Wizard] Error creating LLM session: %v", err)
 		session.AddLog("system", "Error: Failed to create LLM session - "+err.Error())
-		s.renderError(w, "Failed to connect to AI service. Please try again.", session.ID, string(session.Type))
+		s.renderError(w, "Failed to connect to AI service. Please try again.", session.ID, string(session.Type), isPage)
 		return
 	}
 	defer func() {
@@ -927,7 +937,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 			errorMsg += "Please check your connection and try again."
 		}
 
-		s.renderError(w, errorMsg, session.ID, string(session.Type))
+		s.renderError(w, errorMsg, session.ID, string(session.Type), isPage)
 		return
 	}
 
@@ -941,7 +951,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	if refinedDesc == "" {
 		log.Printf("[Wizard] LLM returned empty response for session %s", session.ID)
 		session.AddLog("system", "Error: LLM returned empty response")
-		s.renderError(w, "The AI returned an empty response. Please try again with a more detailed description.", session.ID, string(session.Type))
+		s.renderError(w, "The AI returned an empty response. Please try again with a more detailed description.", session.ID, string(session.Type), isPage)
 		return
 	}
 
@@ -952,25 +962,29 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		SessionID          string
 		Type               string
 		RefinedDescription string
+		IsPage             bool
 	}{
 		SessionID:          session.ID,
 		Type:               string(session.Type),
 		RefinedDescription: refinedDesc,
+		IsPage:             isPage,
 	}
 
 	s.renderFragment(w, "wizard_refine.html", data)
 }
 
 // renderError renders an error message in the wizard modal
-func (s *Server) renderError(w http.ResponseWriter, errorMsg, sessionID, wizardType string) {
+func (s *Server) renderError(w http.ResponseWriter, errorMsg, sessionID, wizardType string, isPage bool) {
 	data := struct {
 		SessionID string
 		Type      string
 		Error     string
+		IsPage    bool
 	}{
 		SessionID: sessionID,
 		Type:      wizardType,
 		Error:     errorMsg,
+		IsPage:    isPage,
 	}
 
 	w.WriteHeader(http.StatusOK) // Return 200 so HTMX displays the content
@@ -989,6 +1003,9 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing session_id", http.StatusBadRequest)
 		return
 	}
+
+	// Check for page mode
+	isPage := r.FormValue("page") == "1" || r.URL.Query().Get("page") == "1"
 
 	session, ok := s.wizardStore.Get(sessionID)
 	if !ok {
@@ -1026,9 +1043,11 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 		data := struct {
 			SessionID string
 			Tasks     []WizardTask
+			IsPage    bool
 		}{
 			SessionID: session.ID,
 			Tasks:     mockTasks,
+			IsPage:    isPage,
 		}
 
 		s.renderFragment(w, "wizard_breakdown.html", data)
@@ -1078,9 +1097,11 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		SessionID string
 		Tasks     []WizardTask
+		IsPage    bool
 	}{
 		SessionID: session.ID,
 		Tasks:     tasks,
+		IsPage:    isPage,
 	}
 
 	s.renderFragment(w, "wizard_breakdown.html", data)
@@ -1125,6 +1146,9 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check for page mode
+	isPage := r.FormValue("page") == "1" || r.URL.Query().Get("page") == "1"
+
 	session, ok := s.wizardStore.Get(sessionID)
 	if !ok {
 		http.Error(w, "session not found", http.StatusBadRequest)
@@ -1160,10 +1184,12 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 			Epic      CreatedIssue
 			SubTasks  []CreatedIssue
 			HasErrors bool
+			IsPage    bool
 		}{
 			Epic:      mockEpic,
 			SubTasks:  mockSubTasks,
 			HasErrors: false,
+			IsPage:    isPage,
 		}
 
 		s.wizardStore.Delete(sessionID)
@@ -1302,10 +1328,12 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 		Epic      CreatedIssue
 		SubTasks  []CreatedIssue
 		HasErrors bool
+		IsPage    bool
 	}{
 		Epic:      epicIssue,
 		SubTasks:  subTasks,
 		HasErrors: hasErrors,
+		IsPage:    isPage,
 	}
 
 	// Clean up session after creation to free memory
@@ -1345,6 +1373,38 @@ func (s *Server) handleWizardLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.renderFragment(w, "wizard_logs.html", data)
+}
+
+// handleWizardPage returns the full wizard page (not modal)
+func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
+	// Get wizard type from query param (default to feature)
+	wizardType := r.URL.Query().Get("type")
+	if wizardType != "bug" {
+		wizardType = "feature"
+	}
+
+	// Create new session
+	session, err := s.wizardStore.Create(wizardType)
+	if err != nil {
+		http.Error(w, "invalid wizard type", http.StatusBadRequest)
+		return
+	}
+
+	data := struct {
+		Active      string
+		Type        string
+		SessionID   string
+		CurrentStep int
+		IsPage      bool
+	}{
+		Active:      "wizard",
+		Type:        wizardType,
+		SessionID:   session.ID,
+		CurrentStep: 1,
+		IsPage:      true,
+	}
+
+	s.render(w, "wizard_page.html", data)
 }
 
 // handleWizardModal returns the full modal shell with step 1 loaded

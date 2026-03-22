@@ -38,12 +38,8 @@
     {{if .SprintName}}<p style="color:var(--muted);font-size:.9rem;margin-top:.25rem">{{.SprintName}}</p>{{end}}
   </div>
   <div class="board-actions">
-    <button class="btn btn-primary" hx-get="/wizard/modal?type=feature" hx-target="#modal-container" hx-swap="innerHTML">
-      + Feature
-    </button>
-    <button class="btn" hx-get="/wizard/modal?type=bug" hx-target="#modal-container" hx-swap="innerHTML">
-      + Bug
-    </button>
+    <a href="/wizard?type=feature" class="btn btn-primary">+ Feature</a>
+    <a href="/wizard?type=bug" class="btn">+ Bug</a>
     {{if .Paused}}
     <form method="post" action="/api/sprint/start" style="display:inline">
       <button type="submit" class="btn btn-success">Start Sprint</button>

@@ -1,8 +1,9 @@
 <div class="wizard-step">
   <h2>Refined Description</h2>
   
-  <form hx-post="/wizard/breakdown" hx-target="#wizard-modal-content" hx-swap="innerHTML" hx-disabled-elt="button[type='submit']">
+  <form hx-post="/wizard/breakdown{{if .IsPage}}?page=1{{end}}" hx-target="#wizard-content" hx-swap="innerHTML" hx-disabled-elt="button[type='submit']">
     <input type="hidden" name="session_id" value="{{.SessionID}}">
+    {{if .IsPage}}<input type="hidden" name="page" value="1">{{end}}
     
     <div class="form-group">
       <label for="refined_description">Refined Description (edit if needed):</label>
@@ -12,12 +13,16 @@
     <div id="refine-error" class="error-message" style="display:none; color: var(--error); margin: 1rem 0;"></div>
     
     <div class="form-actions">
+      {{if .IsPage}}
+      <a href="/" class="btn">Cancel</a>
+      {{else}}
       <button type="button" class="btn" onclick="closeWizardModal()">Cancel</button>
+      {{end}}
       <div class="nav-buttons">
-        <button type="button" class="btn" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}" hx-target="#wizard-modal-content">
+        <button type="button" class="btn" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}{{if .IsPage}}&amp;page=1{{end}}" hx-target="#wizard-content">
           ← Back
         </button>
-        <button type="button" class="btn btn-secondary" hx-post="/wizard/refine" hx-target="#wizard-modal-content" hx-disabled-elt="button[type='submit']" hx-vals='{"current_description": "{{.RefinedDescription}}"}'>
+        <button type="button" class="btn btn-secondary" hx-post="/wizard/refine{{if .IsPage}}?page=1{{end}}" hx-target="#wizard-content" hx-disabled-elt="button[type='submit']" hx-vals='{"current_description": "{{.RefinedDescription}}"}'>
           <span class="spinner" style="display:none;">⏳</span>
           <span class="label">Refine Again</span>
         </button>

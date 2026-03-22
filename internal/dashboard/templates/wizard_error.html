@@ -10,12 +10,16 @@
   </div>
   
   <div class="form-actions">
+    {{if .IsPage}}
+    <a href="/" class="btn">Cancel</a>
+    {{else}}
     <button type="button" class="btn" onclick="closeWizardModal()">Cancel</button>
+    {{end}}
     <div class="nav-buttons">
-      <button type="button" class="btn" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}" hx-target="#wizard-modal-content">
+      <button type="button" class="btn" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}{{if .IsPage}}&amp;page=1{{end}}" hx-target="#wizard-content">
         ← Back
       </button>
-      <button type="button" class="btn btn-primary" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}" hx-target="#wizard-modal-content">
+      <button type="button" class="btn btn-primary" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}{{if .IsPage}}&amp;page=1{{end}}" hx-target="#wizard-content">
         Try Again
       </button>
     </div>

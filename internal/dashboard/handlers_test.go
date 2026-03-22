@@ -859,23 +859,17 @@ func TestLayoutNavigationButtons(t *testing.T) {
 
 	output := buf.String()
 
-	// Check for New Feature button with correct HTMX attributes
-	if !strings.Contains(output, `hx-get="/wizard/modal?type=feature"`) {
-		t.Error("layout template missing New Feature button with correct hx-get attribute")
+	// Check for New Feature button as a link (changed from HTMX to regular links)
+	if !strings.Contains(output, `href="/wizard?type=feature"`) {
+		t.Error("layout template missing New Feature button with correct href attribute")
 	}
 	if !strings.Contains(output, "+ New Feature") {
 		t.Error("layout template missing 'New Feature' button text")
 	}
-	if !strings.Contains(output, `hx-target="body"`) {
-		t.Error("layout template missing hx-target='body' attribute")
-	}
-	if !strings.Contains(output, `hx-swap="beforeend"`) {
-		t.Error("layout template missing hx-swap='beforeend' attribute")
-	}
 
-	// Check for New Bug button with correct HTMX attributes
-	if !strings.Contains(output, `hx-get="/wizard/modal?type=bug"`) {
-		t.Error("layout template missing New Bug button with correct hx-get attribute")
+	// Check for New Bug button as a link (changed from HTMX to regular links)
+	if !strings.Contains(output, `href="/wizard?type=bug"`) {
+		t.Error("layout template missing New Bug button with correct href attribute")
 	}
 	if !strings.Contains(output, "+ New Bug") {
 		t.Error("layout template missing 'New Bug' button text")
