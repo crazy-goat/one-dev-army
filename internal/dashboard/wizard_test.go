@@ -282,27 +282,51 @@ func TestParseTaskJSON_MultipleTasks(t *testing.T) {
 }
 
 func TestBuildRefinementPrompt_Feature(t *testing.T) {
-	prompt := buildRefinementPrompt(WizardTypeFeature, "Create a login page")
+	codebaseContext := "Project uses Go with standard layout"
+	prompt := BuildRefinementPrompt(WizardTypeFeature, "Create a login page", codebaseContext)
 	if !strings.Contains(prompt, "feature idea") {
 		t.Error("expected prompt to mention 'feature idea'")
 	}
 	if !strings.Contains(prompt, "Create a login page") {
 		t.Error("expected prompt to contain the original idea")
 	}
+	if !strings.Contains(prompt, codebaseContext) {
+		t.Error("expected prompt to contain codebase context")
+	}
+	if !strings.Contains(prompt, "EXISTING CODEBASE CONTEXT") {
+		t.Error("expected prompt to contain codebase context section header")
+	}
+	if !strings.Contains(prompt, "how this fits with existing codebase patterns") {
+		t.Error("expected prompt to instruct analyzing codebase patterns")
+	}
 }
 
 func TestBuildRefinementPrompt_Bug(t *testing.T) {
-	prompt := buildRefinementPrompt(WizardTypeBug, "Login is broken")
+	codebaseContext := "Project uses Go with standard layout"
+	prompt := BuildRefinementPrompt(WizardTypeBug, "Login is broken", codebaseContext)
 	if !strings.Contains(prompt, "bug report") {
 		t.Error("expected prompt to mention 'bug report'")
 	}
 	if !strings.Contains(prompt, "Steps to reproduce") {
 		t.Error("expected prompt to ask for steps to reproduce")
 	}
+	if !strings.Contains(prompt, codebaseContext) {
+		t.Error("expected prompt to contain codebase context")
+	}
+	if !strings.Contains(prompt, "EXISTING CODEBASE CONTEXT") {
+		t.Error("expected prompt to contain codebase context section header")
+	}
+}
+
+func TestBuildRefinementPrompt_EmptyCodebaseContext(t *testing.T) {
+	prompt := BuildRefinementPrompt(WizardTypeFeature, "Create a login page", "")
+	if !strings.Contains(prompt, "No codebase context provided") {
+		t.Error("expected prompt to handle empty codebase context gracefully")
+	}
 }
 
 func TestBuildBreakdownPrompt(t *testing.T) {
-	prompt := buildBreakdownPrompt(WizardTypeFeature, "A feature description")
+	prompt := BuildBreakdownPrompt(WizardTypeFeature, "A feature description")
 	if !strings.Contains(prompt, "JSON array") {
 		t.Error("expected prompt to mention JSON array")
 	}
@@ -311,6 +335,96 @@ func TestBuildBreakdownPrompt(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "A feature description") {
 		t.Error("expected prompt to contain the description")
+	}
+	if !strings.Contains(prompt, "DO NOT include implementation details") {
+		t.Error("expected prompt to explicitly forbid implementation details")
+	}
+	if !strings.Contains(prompt, "Acceptance Criteria:") {
+		t.Error("expected prompt to require acceptance criteria")
+	}
+	if !strings.Contains(prompt, "WHAT needs to be done") {
+		t.Error("expected prompt to focus on WHAT not HOW")
+	}
+}
+
+func TestBuildBreakdownPrompt_BugType(t *testing.T) {
+	prompt := BuildBreakdownPrompt(WizardTypeBug, "A bug description")
+	if !strings.Contains(prompt, "Bug fix description") {
+		t.Error("expected prompt to use 'Bug fix' label for bug type")
+	}
+	if !strings.Contains(prompt, "DO NOT include implementation details") {
+		t.Error("expected prompt to explicitly forbid implementation details")
+	}
+}
+
+func TestBuildBreakdownPrompt_ForbidsImplementationDetails(t *testing.T) {
+	prompt := BuildBreakdownPrompt(WizardTypeFeature, "Some feature")
+
+	// Check for explicit prohibition
+	if !strings.Contains(prompt, "DO NOT include implementation details") {
+		t.Error("expected prompt to explicitly forbid implementation details")
+	}
+	if !strings.Contains(prompt, "code snippets") {
+		t.Error("expected prompt to forbid code snippets")
+	}
+	if !strings.Contains(prompt, "specific technical solutions") {
+		t.Error("expected prompt to forbid specific technical solutions")
+	}
+
+	// Check for focus on WHAT not HOW
+	if !strings.Contains(prompt, "WHAT needs to be done") {
+		t.Error("expected prompt to focus on WHAT")
+	}
+	if !strings.Contains(prompt, "NOT HOW to do it") {
+		t.Error("expected prompt to explicitly say NOT HOW")
+	}
+}
+
+func TestBuildBreakdownPrompt_RequiresAcceptanceCriteria(t *testing.T) {
+	prompt := BuildBreakdownPrompt(WizardTypeFeature, "Some feature")
+
+	if !strings.Contains(prompt, "Acceptance Criteria:") {
+		t.Error("expected prompt to require acceptance criteria section")
+	}
+	if !strings.Contains(prompt, "MUST include clear acceptance criteria") {
+		t.Error("expected prompt to require acceptance criteria in description")
+	}
+	if !strings.Contains(prompt, "what \"done\" looks like") {
+		t.Error("expected prompt to define what done looks like")
+	}
+}
+
+func TestBuildBreakdownPrompt_ValidJSONStructure(t *testing.T) {
+	prompt := BuildBreakdownPrompt(WizardTypeFeature, "Some feature")
+
+	// Check for JSON format requirements
+	if !strings.Contains(prompt, "Return ONLY a JSON array") {
+		t.Error("expected prompt to require JSON array output")
+	}
+	if !strings.Contains(prompt, `"title"`) {
+		t.Error("expected prompt to specify title field in JSON")
+	}
+	if !strings.Contains(prompt, `"description"`) {
+		t.Error("expected prompt to specify description field in JSON")
+	}
+	if !strings.Contains(prompt, `"priority"`) {
+		t.Error("expected prompt to specify priority field in JSON")
+	}
+	if !strings.Contains(prompt, `"complexity"`) {
+		t.Error("expected prompt to specify complexity field in JSON")
+	}
+	if !strings.Contains(prompt, "No markdown, no explanation, just the JSON array") {
+		t.Error("expected prompt to forbid markdown and explanations")
+	}
+}
+
+func TestGetCodebaseContext(t *testing.T) {
+	context := GetCodebaseContext()
+	if context == "" {
+		t.Error("expected non-empty codebase context")
+	}
+	if !strings.Contains(context, "Project Structure") {
+		t.Error("expected context to mention project structure")
 	}
 }
 

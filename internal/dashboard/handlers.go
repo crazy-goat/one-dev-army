@@ -733,8 +733,9 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// Build refinement prompt
-	prompt := buildRefinementPrompt(session.Type, idea)
+	// Build refinement prompt with codebase context
+	codebaseContext := GetCodebaseContext()
+	prompt := BuildRefinementPrompt(session.Type, idea, codebaseContext)
 	session.AddLog("system", "Sending refinement request to LLM")
 
 	// Send message to LLM with timeout
@@ -771,39 +772,6 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, "wizard_refine.html", data)
-}
-
-// buildRefinementPrompt creates the prompt for idea refinement
-func buildRefinementPrompt(wizardType WizardType, idea string) string {
-	if wizardType == WizardTypeBug {
-		return fmt.Sprintf(`You are a technical product manager helping to refine a bug report.
-
-Original bug description:
-%s
-
-Please refine this bug report to include:
-1. Clear description of the issue
-2. Steps to reproduce
-3. Expected vs actual behavior
-4. Impact/severity assessment
-5. Any additional context that would help developers
-
-Return a well-structured, professional bug description.`, idea)
-	}
-
-	return fmt.Sprintf(`You are a technical product manager helping to refine a feature idea.
-
-Original idea:
-%s
-
-Please refine this feature description to include:
-1. Clear problem statement
-2. Target users/personas
-3. Proposed solution overview
-4. Key acceptance criteria
-5. Any technical considerations or constraints
-
-Return a well-structured, professional feature description suitable for a GitHub issue.`, idea)
 }
 
 // handleWizardBreakdown sends description to LLM and returns task list
@@ -878,7 +846,7 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// Build breakdown prompt with JSON schema requirement
-	prompt := buildBreakdownPrompt(session.Type, session.RefinedDescription)
+	prompt := BuildBreakdownPrompt(session.Type, session.RefinedDescription)
 	session.AddLog("system", "Sending breakdown request to LLM")
 
 	// Send message to LLM with timeout
