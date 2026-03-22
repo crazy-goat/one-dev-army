@@ -1,6 +1,10 @@
 package mvp
 
-import "github.com/crazy-goat/one-dev-army/internal/github"
+import (
+	"sync"
+
+	"github.com/crazy-goat/one-dev-army/internal/github"
+)
 
 type TaskStatus string
 
@@ -23,6 +27,21 @@ type Task struct {
 	Worktree  string
 	Status    TaskStatus
 	Result    *TaskResult
+
+	mu        sync.Mutex
+	sessionID string
+}
+
+func (t *Task) SetSessionID(id string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.sessionID = id
+}
+
+func (t *Task) SessionID() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.sessionID
 }
 
 type TaskResult struct {

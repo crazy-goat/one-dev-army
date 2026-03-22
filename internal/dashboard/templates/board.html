@@ -3,12 +3,14 @@
 <style>
 .board-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
 .board-actions{display:flex;gap:.5rem}
-.board{display:grid;grid-template-columns:repeat(6,1fr);gap:1rem;margin-bottom:2rem}
+.board{display:grid;grid-template-columns:repeat(7,1fr);gap:1rem;margin-bottom:2rem}
 .column{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem;min-height:300px}
 .column-title{font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.75rem;display:flex;justify-content:space-between;align-items:center}
 .column-title .count{background:var(--border);padding:.1rem .5rem;border-radius:10px;font-size:.75rem}
 .card{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.6rem .75rem;margin-bottom:.5rem;font-size:.85rem}
 .card .card-id{color:var(--muted);font-size:.75rem}
+.card .card-id a{color:var(--muted);text-decoration:none}
+.card .card-id a:hover{color:var(--accent);text-decoration:underline}
 .card .card-title{margin-top:.2rem}
 .card .card-meta{display:flex;gap:.5rem;margin-top:.3rem;flex-wrap:wrap}
 .card .card-assignee{color:var(--accent);font-size:.75rem}
@@ -18,6 +20,8 @@
 .card-actions{display:flex;gap:.3rem;margin-top:.4rem}
 .card-actions .btn{padding:.2rem .5rem;font-size:.75rem}
 .col-blocked .card{border-color:var(--red)}
+.col-failed .card{border-color:#e74c3c;background:rgba(231,76,60,0.05)}
+.col-failed .column-title{color:#e74c3c}
 .workers-panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem}
 .workers-panel h2{margin-bottom:.75rem}
 .empty-state{color:var(--muted);font-size:.85rem;text-align:center;padding:2rem 1rem;font-style:italic}
@@ -55,7 +59,7 @@
     <div class="column-title">Backlog <span class="count">{{len .Backlog}}</span></div>
     {{range .Backlog}}
     <div class="card">
-      <div class="card-id">#{{.ID}}</div>
+      <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
       {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
@@ -69,7 +73,7 @@
     <div class="column-title">In Progress <span class="count">{{len .Progress}}</span></div>
     {{range .Progress}}
     <div class="card">
-      <div class="card-id">#{{.ID}}</div>
+      <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
       {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
@@ -84,7 +88,7 @@
     <div class="column-title">Review <span class="count">{{len .Review}}</span></div>
     {{range .Review}}
     <div class="card">
-      <div class="card-id">#{{.ID}}</div>
+      <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
       {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
@@ -98,7 +102,7 @@
     <div class="column-title">Merging <span class="count">{{len .Merging}}</span></div>
     {{range .Merging}}
     <div class="card">
-      <div class="card-id">#{{.ID}}</div>
+      <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
       {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
@@ -112,7 +116,7 @@
     <div class="column-title">Done <span class="count">{{len .Done}}</span></div>
     {{range .Done}}
     <div class="card">
-      <div class="card-id">#{{.ID}}</div>
+      <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
       {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
@@ -126,7 +130,7 @@
     <div class="column-title">Blocked <span class="count">{{len .Blocked}}</span></div>
     {{range .Blocked}}
     <div class="card">
-      <div class="card-id">#{{.ID}}</div>
+      <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
       {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
@@ -137,6 +141,23 @@
     </div>
     {{else}}
     <div class="empty-state">No blocked tickets</div>
+    {{end}}
+  </div>
+
+  <div class="column col-failed">
+    <div class="column-title">Failed <span class="count">{{len .Failed}}</span></div>
+    {{range .Failed}}
+    <div class="card">
+      <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
+      <div class="card-title">{{.Title}}</div>
+      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
+      <div class="card-actions">
+        <form method="post" action="/retry/{{.ID}}"><button type="submit" class="btn btn-success">Retry</button></form>
+        <form method="post" action="/retry-fresh/{{.ID}}"><button type="submit" class="btn btn-primary">Retry Fresh</button></form>
+      </div>
+    </div>
+    {{else}}
+    <div class="empty-state">No failed tickets</div>
     {{end}}
   </div>
 </div>

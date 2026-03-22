@@ -2,6 +2,7 @@ package mvp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -9,33 +10,38 @@ import (
 	"time"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
+	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/git"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
 type Orchestrator struct {
-	cfg         *config.Config
-	worker      *Worker
-	gh          *github.Client
-	oc          *opencode.Client
-	wtMgr       *git.WorktreeManager
-	running     bool
-	paused      bool
-	processing  bool
-	currentTask *Task
-	mu          sync.Mutex
+	cfg           *config.Config
+	worker        *Worker
+	gh            *github.Client
+	oc            *opencode.Client
+	wtMgr         *git.WorktreeManager
+	store         *db.Store
+	projectNumber int
+	running       bool
+	paused        bool
+	processing    bool
+	currentTask   *Task
+	mu            sync.Mutex
 }
 
-func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client, wtMgr *git.WorktreeManager) *Orchestrator {
+func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client, wtMgr *git.WorktreeManager, store *db.Store, projectNumber int) *Orchestrator {
 	o := &Orchestrator{
-		cfg:    cfg,
-		gh:     gh,
-		oc:     oc,
-		wtMgr:  wtMgr,
-		paused: true,
+		cfg:           cfg,
+		gh:            gh,
+		oc:            oc,
+		wtMgr:         wtMgr,
+		store:         store,
+		projectNumber: projectNumber,
+		paused:        true,
 	}
-	o.worker = NewWorker(1, cfg, oc, gh, wtMgr)
+	o.worker = NewWorker(1, cfg, oc, gh, wtMgr, store)
 	return o
 }
 
@@ -57,6 +63,10 @@ func (o *Orchestrator) Stop() {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.running = false
+}
+
+func (o *Orchestrator) OpenCodeURL() string {
+	return o.oc.BaseURL()
 }
 
 func (o *Orchestrator) IsPaused() bool {
@@ -128,22 +138,37 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		}
 
 		var openCount, skippedCount int
-		var nextIssue *github.Issue
+		var inProgressIssue *github.Issue
+		var freshIssue *github.Issue
 		for i := range issues {
 			if !strings.EqualFold(issues[i].State, "open") {
 				continue
 			}
 			openCount++
-			if hasLabel(issues[i], "in-progress") || hasLabel(issues[i], "failed") {
+			if hasLabel(issues[i], "failed") {
 				skippedCount++
-				log.Printf("[Orchestrator]   skip #%d %q (labels: %v)", issues[i].Number, issues[i].Title, issues[i].GetLabelNames())
+				log.Printf("[Orchestrator]   skip #%d %q (failed)", issues[i].Number, issues[i].Title)
 				continue
 			}
-			if nextIssue == nil {
-				nextIssue = &issues[i]
+			if hasLabel(issues[i], "in-progress") {
+				if inProgressIssue == nil {
+					inProgressIssue = &issues[i]
+				}
+				continue
+			}
+			if freshIssue == nil {
+				freshIssue = &issues[i]
 			}
 		}
-		log.Printf("[Orchestrator] Found %d issues (%d open, %d skipped)", len(issues), openCount, skippedCount)
+
+		var nextIssue *github.Issue
+		if inProgressIssue != nil {
+			nextIssue = inProgressIssue
+			log.Printf("[Orchestrator] Resuming in-progress #%d: %s", nextIssue.Number, nextIssue.Title)
+		} else {
+			nextIssue = freshIssue
+		}
+		log.Printf("[Orchestrator] Found %d issues (%d open, %d failed-skipped)", len(issues), openCount, skippedCount)
 
 		if nextIssue == nil {
 			log.Println("[Orchestrator] No available issues in sprint, waiting 30s...")
@@ -156,6 +181,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		if err := o.gh.AddLabel(nextIssue.Number, "in-progress"); err != nil {
 			log.Printf("[Orchestrator] Error adding in-progress label: %v", err)
 		}
+		o.moveToColumn(nextIssue.Number, "In Progress")
 
 		task := &Task{
 			Issue:     *nextIssue,
@@ -175,8 +201,22 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		o.currentTask = nil
 		o.mu.Unlock()
 
-		if processErr != nil {
+		if processErr != nil && errors.Is(processErr, ErrAlreadyDone) {
+			log.Printf("[Orchestrator] ✓ Already done #%d: %v", nextIssue.Number, processErr)
+			comment := fmt.Sprintf("Ticket already done — closing automatically.\n\n%s", processErr.Error())
+			if err := o.gh.AddComment(nextIssue.Number, comment); err != nil {
+				log.Printf("[Orchestrator] Error adding comment: %v", err)
+			}
+			if err := o.gh.RemoveLabel(nextIssue.Number, "in-progress"); err != nil {
+				log.Printf("[Orchestrator] Error removing in-progress label: %v", err)
+			}
+			if err := o.gh.CloseIssue(nextIssue.Number); err != nil {
+				log.Printf("[Orchestrator] Error closing issue: %v", err)
+			}
+			o.moveToColumn(nextIssue.Number, "Done")
+		} else if processErr != nil {
 			log.Printf("[Orchestrator] ✗ Failed #%d: %v", nextIssue.Number, processErr)
+			o.moveToColumn(nextIssue.Number, "Blocked")
 			if err := o.gh.AddLabel(nextIssue.Number, "failed"); err != nil {
 				log.Printf("[Orchestrator] Error adding failed label: %v", err)
 			}
@@ -186,6 +226,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				prURL = task.Result.PRURL
 			}
 			log.Printf("[Orchestrator] ✓ Completed #%d: %s", nextIssue.Number, prURL)
+			o.moveToColumn(nextIssue.Number, "Review")
 			if prURL != "" {
 				comment := fmt.Sprintf("Implemented in %s", prURL)
 				if err := o.gh.AddComment(nextIssue.Number, comment); err != nil {
@@ -195,6 +236,15 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		}
 
 		o.sleep(ctx, 5*time.Second)
+	}
+}
+
+func (o *Orchestrator) moveToColumn(issueNumber int, column string) {
+	if o.projectNumber == 0 {
+		return
+	}
+	if err := o.gh.MoveItemToColumn(o.projectNumber, issueNumber, column); err != nil {
+		log.Printf("[Orchestrator] Error moving #%d to %q: %v", issueNumber, column, err)
 	}
 }
 

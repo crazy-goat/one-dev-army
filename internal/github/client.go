@@ -10,6 +10,7 @@ import (
 type Client struct {
 	Repo            string
 	ActiveMilestone *Milestone
+	ProjectID       string
 }
 
 func NewClient(repo string) *Client {

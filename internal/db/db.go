@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -87,6 +88,85 @@ func (s *Store) GetTaskMetrics(taskID int) ([]StageMetric, error) {
 		return nil, fmt.Errorf("iterating task metrics: %w", err)
 	}
 	return metrics, nil
+}
+
+type TaskStep struct {
+	ID          int64
+	IssueNumber int
+	StepName    string
+	Status      string
+	Prompt      string
+	Response    string
+	ErrorMsg    string
+	SessionID   string
+	StartedAt   *time.Time
+	FinishedAt  *time.Time
+}
+
+func (s *Store) InsertStep(issueNumber int, stepName, prompt, sessionID string) (int64, error) {
+	now := time.Now()
+	res, err := s.db.Exec(
+		`INSERT INTO task_steps (issue_number, step_name, status, prompt, session_id, started_at)
+		 VALUES (?, ?, 'running', ?, ?, ?)`,
+		issueNumber, stepName, prompt, sessionID, now,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("inserting task step: %w", err)
+	}
+	return res.LastInsertId()
+}
+
+func (s *Store) FinishStep(id int64, response string) error {
+	now := time.Now()
+	_, err := s.db.Exec(
+		`UPDATE task_steps SET status = 'done', response = ?, finished_at = ? WHERE id = ?`,
+		response, now, id,
+	)
+	if err != nil {
+		return fmt.Errorf("finishing task step: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) FailStep(id int64, errMsg string) error {
+	now := time.Now()
+	_, err := s.db.Exec(
+		`UPDATE task_steps SET status = 'failed', error_msg = ?, finished_at = ? WHERE id = ?`,
+		errMsg, now, id,
+	)
+	if err != nil {
+		return fmt.Errorf("failing task step: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) GetSteps(issueNumber int) ([]TaskStep, error) {
+	rows, err := s.db.Query(
+		`SELECT id, issue_number, step_name, status, prompt, response, error_msg, session_id, started_at, finished_at
+		 FROM task_steps WHERE issue_number = ? ORDER BY id`, issueNumber,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying task steps: %w", err)
+	}
+	defer rows.Close()
+
+	var steps []TaskStep
+	for rows.Next() {
+		var st TaskStep
+		if err := rows.Scan(&st.ID, &st.IssueNumber, &st.StepName, &st.Status, &st.Prompt, &st.Response, &st.ErrorMsg, &st.SessionID, &st.StartedAt, &st.FinishedAt); err != nil {
+			return nil, fmt.Errorf("scanning task step: %w", err)
+		}
+		steps = append(steps, st)
+	}
+	return steps, rows.Err()
+}
+
+func (s *Store) DeleteSteps(issueNumber int) error {
+	_, err := s.db.Exec(`DELETE FROM task_steps WHERE issue_number = ?`, issueNumber)
+	if err != nil {
+		return fmt.Errorf("deleting task steps: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) GetSprintCost(sprintID int) (float64, error) {

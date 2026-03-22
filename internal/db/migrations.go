@@ -17,6 +17,19 @@ var migrations = []string{
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_stage_metrics_task_id ON stage_metrics(task_id)`,
 	`CREATE INDEX IF NOT EXISTS idx_stage_metrics_sprint_id ON stage_metrics(sprint_id)`,
+	`CREATE TABLE IF NOT EXISTS task_steps (
+		id           INTEGER PRIMARY KEY AUTOINCREMENT,
+		issue_number INTEGER NOT NULL,
+		step_name    TEXT    NOT NULL,
+		status       TEXT    NOT NULL DEFAULT 'pending',
+		prompt       TEXT    NOT NULL DEFAULT '',
+		response     TEXT    NOT NULL DEFAULT '',
+		error_msg    TEXT    NOT NULL DEFAULT '',
+		session_id   TEXT    NOT NULL DEFAULT '',
+		started_at   DATETIME,
+		finished_at  DATETIME
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_task_steps_issue ON task_steps(issue_number)`,
 }
 
 func migrate(db *sql.DB) error {

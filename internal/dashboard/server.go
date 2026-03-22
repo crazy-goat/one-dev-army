@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"time"
 
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
@@ -56,9 +57,28 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 func parseTemplates() (map[string]*template.Template, error) {
 	tmpls := make(map[string]*template.Template)
 
-	pages := []string{"board.html", "backlog.html", "costs.html"}
+	funcMap := template.FuncMap{
+		"duration": func(start, end *time.Time) string {
+			if start == nil || end == nil {
+				return ""
+			}
+			d := end.Sub(*start).Round(time.Second)
+			if d < time.Minute {
+				return fmt.Sprintf("%ds", int(d.Seconds()))
+			}
+			return fmt.Sprintf("%dm%ds", int(d.Minutes()), int(d.Seconds())%60)
+		},
+		"truncate": func(s string, n int) string {
+			if len(s) <= n {
+				return s
+			}
+			return s[:n] + "\n... (truncated)"
+		},
+	}
+
+	pages := []string{"board.html", "backlog.html", "costs.html", "task.html"}
 	for _, page := range pages {
-		t, err := template.ParseFS(templateFS, "templates/layout.html", "templates/"+page)
+		t, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/"+page)
 		if err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", page, err)
 		}
@@ -86,8 +106,12 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /epic", s.handleAddEpic)
 	s.mux.HandleFunc("POST /sync", s.handleSync)
 	s.mux.HandleFunc("POST /plan-sprint", s.handlePlanSprint)
+	s.mux.HandleFunc("GET /task/{id}", s.handleTaskDetail)
+	s.mux.HandleFunc("GET /api/task/{id}/stream", s.handleTaskStream)
 	s.mux.HandleFunc("POST /approve/{id}", s.handleApprove)
 	s.mux.HandleFunc("POST /reject/{id}", s.handleReject)
+	s.mux.HandleFunc("POST /retry/{id}", s.handleRetry)
+	s.mux.HandleFunc("POST /retry-fresh/{id}", s.handleRetryFresh)
 }
 
 func (s *Server) Start() error {

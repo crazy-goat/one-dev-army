@@ -209,6 +209,14 @@ func (c *Client) ListComments(issueNum int) ([]Comment, error) {
 	return comments, nil
 }
 
+func (c *Client) CloseIssue(issueNum int) error {
+	_, err := c.gh("issue", "close", strconv.Itoa(issueNum))
+	if err != nil {
+		return fmt.Errorf("closing issue #%d: %w", issueNum, err)
+	}
+	return nil
+}
+
 func (c *Client) ListOpenIssues() ([]Issue, error) {
 	args := []string{"issue", "list", "--state", "open", "--json", "number,title,body,state,assignees,labels", "--limit", "500"}
 	var issues []Issue

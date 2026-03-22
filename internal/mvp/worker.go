@@ -2,6 +2,7 @@ package mvp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"regexp"
@@ -9,10 +10,13 @@ import (
 	"time"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
+	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/git"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
+
+var ErrAlreadyDone = errors.New("ticket already done")
 
 const analysisPrompt = `Analyze GitHub issue #%d: %s
 
@@ -32,7 +36,11 @@ const planningPrompt = `Create a step-by-step implementation plan for GitHub iss
 Analysis from previous step:
 %s
 
-Create a concrete, actionable plan covering:
+IMPORTANT: First check if this feature/fix is ALREADY IMPLEMENTED in the codebase.
+If the code already satisfies the issue requirements, respond with ONLY:
+ALREADY_DONE: <brief explanation of why the ticket is already done>
+
+Otherwise, create a concrete, actionable plan covering:
 1. Which files to create or modify (exact paths)
 2. What code changes to make in each file
 3. What tests to add or update
@@ -42,13 +50,14 @@ Be specific and actionable. Do NOT ask questions. Output the plan directly.`
 
 const codeReviewPrompt = `You are reviewing code changes for GitHub issue #%d: %s
 
-## Diff
+The changes are in PR %s in repository %s.
+Fetch the PR diff yourself using available tools, then review.
 
-%s
+IMPORTANT: If you discover that the issue requirements were ALREADY satisfied by existing code
+(before this PR's changes), and the PR is unnecessary, respond with ONLY:
+ALREADY_DONE: <brief explanation of why the ticket was already done>
 
-## Instructions
-
-Review these code changes. Check for:
+Otherwise check for:
 1. Correctness — does the code do what the issue requires?
 2. Code quality — clean, readable, well-structured?
 3. Error handling — are errors handled properly?
@@ -88,16 +97,18 @@ type Worker struct {
 	oc      *opencode.Client
 	gh      *github.Client
 	wtMgr   *git.WorktreeManager
+	store   *db.Store
 	baseDir string
 }
 
-func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Client, wtMgr *git.WorktreeManager) *Worker {
+func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Client, wtMgr *git.WorktreeManager, store *db.Store) *Worker {
 	return &Worker{
 		id:      id,
 		cfg:     cfg,
 		oc:      oc,
 		gh:      gh,
 		wtMgr:   wtMgr,
+		store:   store,
 		baseDir: wtMgr.WorktreesDir(),
 	}
 }
@@ -167,19 +178,8 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	}
 	log.Printf("[Worker %d] [4/6] Tests passed (%s)", w.id, time.Since(stepStart).Round(time.Second))
 
-	task.Status = StatusReviewing
-	log.Printf("[Worker %d] [5/6] Code review #%d...", w.id, task.Issue.Number)
-	stepStart = time.Now()
-	if err := w.codeReview(ctx, task); err != nil {
-		task.Status = StatusFailed
-		task.Result = &TaskResult{Error: fmt.Errorf("code review: %w", err)}
-		log.Printf("[Worker %d] ✗ FAILED code review: %v", w.id, err)
-		return task.Result.Error
-	}
-	log.Printf("[Worker %d] [5/6] Code review passed (%s)", w.id, time.Since(stepStart).Round(time.Second))
-
 	task.Status = StatusCreatingPR
-	log.Printf("[Worker %d] [6/6] Creating PR for #%d...", w.id, task.Issue.Number)
+	log.Printf("[Worker %d] [5/6] Creating PR for #%d...", w.id, task.Issue.Number)
 	stepStart = time.Now()
 	prURL, err := w.createPR(ctx, task)
 	if err != nil {
@@ -188,7 +188,18 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		log.Printf("[Worker %d] ✗ FAILED creating PR: %v", w.id, err)
 		return task.Result.Error
 	}
-	log.Printf("[Worker %d] [6/6] PR created: %s (%s)", w.id, prURL, time.Since(stepStart).Round(time.Second))
+	log.Printf("[Worker %d] [5/6] PR created: %s (%s)", w.id, prURL, time.Since(stepStart).Round(time.Second))
+
+	task.Status = StatusReviewing
+	log.Printf("[Worker %d] [6/6] Code review #%d (PR: %s)...", w.id, task.Issue.Number, prURL)
+	stepStart = time.Now()
+	if err := w.codeReview(ctx, task, prURL); err != nil {
+		task.Status = StatusFailed
+		task.Result = &TaskResult{Error: fmt.Errorf("code review: %w", err)}
+		log.Printf("[Worker %d] ✗ FAILED code review: %v", w.id, err)
+		return task.Result.Error
+	}
+	log.Printf("[Worker %d] [6/6] Code review done (%s)", w.id, time.Since(stepStart).Round(time.Second))
 
 	task.Status = StatusDone
 	task.Result = &TaskResult{
@@ -200,75 +211,30 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 }
 
 func (w *Worker) analyze(ctx context.Context, task *Task) (string, error) {
-	sessionTitle := fmt.Sprintf("analyze-%d", task.Issue.Number)
-	session, err := w.oc.CreateSession(sessionTitle)
-	if err != nil {
-		return "", fmt.Errorf("creating session: %w", err)
-	}
-	defer func() {
-		if delErr := w.oc.DeleteSession(session.ID); delErr != nil {
-			log.Printf("[Worker %d] failed to delete session %s: %v", w.id, session.ID, delErr)
-		}
-	}()
-
 	prompt := fmt.Sprintf(analysisPrompt, task.Issue.Number, task.Issue.Title, task.Issue.Body)
-	model := opencode.ParseModelRef(w.cfg.Planning.LLM)
-
-	msg, err := w.oc.SendMessage(session.ID, prompt, model, nil)
-	if err != nil {
-		return "", fmt.Errorf("sending message: %w", err)
-	}
-
-	return extractText(msg), nil
+	return w.llmStep(ctx, task, "analyze", prompt, w.cfg.Planning.LLM)
 }
 
 func (w *Worker) plan(ctx context.Context, task *Task, analysis string) (string, error) {
-	sessionTitle := fmt.Sprintf("plan-%d", task.Issue.Number)
-	session, err := w.oc.CreateSession(sessionTitle)
-	if err != nil {
-		return "", fmt.Errorf("creating session: %w", err)
-	}
-	defer func() {
-		if delErr := w.oc.DeleteSession(session.ID); delErr != nil {
-			log.Printf("[Worker %d] failed to delete session %s: %v", w.id, session.ID, delErr)
-		}
-	}()
-
 	prompt := fmt.Sprintf(planningPrompt, task.Issue.Number, task.Issue.Title, analysis)
-	model := opencode.ParseModelRef(w.cfg.Planning.LLM)
-
-	msg, err := w.oc.SendMessage(session.ID, prompt, model, nil)
+	result, err := w.llmStep(ctx, task, "plan", prompt, w.cfg.Planning.LLM)
 	if err != nil {
-		return "", fmt.Errorf("sending message: %w", err)
+		return "", err
 	}
-
-	return extractText(msg), nil
+	if reason := checkAlreadyDone(result); reason != "" {
+		log.Printf("[Worker %d] Planning detected ticket already done: %s", w.id, reason)
+		return "", fmt.Errorf("%w: %s", ErrAlreadyDone, reason)
+	}
+	return result, nil
 }
 
 func (w *Worker) implement(ctx context.Context, task *Task, plan string) error {
-	sessionTitle := fmt.Sprintf("implement-%d", task.Issue.Number)
 	w.oc.SetDirectory(task.Worktree)
 	defer w.oc.SetDirectory("")
 
-	session, err := w.oc.CreateSession(sessionTitle)
-	if err != nil {
-		return fmt.Errorf("creating session: %w", err)
-	}
-	defer func() {
-		if delErr := w.oc.DeleteSession(session.ID); delErr != nil {
-			log.Printf("[Worker %d] failed to delete session %s: %v", w.id, session.ID, delErr)
-		}
-	}()
-
 	prompt := fmt.Sprintf(implementationPrompt, task.Issue.Number, task.Issue.Title, plan, task.Worktree)
-	model := opencode.ParseModelRef(w.cfg.EpicAnalysis.LLM)
-
-	_, err = w.oc.SendMessage(session.ID, prompt, model, nil)
-	if err != nil {
-		return fmt.Errorf("sending message: %w", err)
-	}
-
-	return nil
+	_, err := w.llmStep(ctx, task, "implement", prompt, w.cfg.EpicAnalysis.LLM)
+	return err
 }
 
 func (w *Worker) test(ctx context.Context, task *Task) error {
@@ -277,69 +243,117 @@ func (w *Worker) test(ctx context.Context, task *Task) error {
 		testCmd = "go test ./..."
 	}
 
-	_, err := git.RunInWorktree(task.Worktree, "sh", "-c", testCmd)
+	var stepID int64
+	if w.store != nil {
+		id, err := w.store.InsertStep(task.Issue.Number, "test", testCmd, "")
+		if err != nil {
+			log.Printf("[Worker %d] failed to insert test step: %v", w.id, err)
+		} else {
+			stepID = id
+		}
+	}
+
+	out, err := git.RunInWorktree(task.Worktree, "sh", "-c", testCmd)
 	if err != nil {
+		if w.store != nil && stepID > 0 {
+			_ = w.store.FailStep(stepID, fmt.Sprintf("%v\n%s", err, out))
+		}
 		return fmt.Errorf("tests failed: %w", err)
 	}
 
+	if w.store != nil && stepID > 0 {
+		_ = w.store.FinishStep(stepID, string(out))
+	}
 	return nil
 }
 
-func (w *Worker) codeReview(ctx context.Context, task *Task) error {
-	diff, err := git.RunInWorktree(task.Worktree, "git", "diff", "HEAD~1")
+func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) error {
+	prompt := fmt.Sprintf(codeReviewPrompt, task.Issue.Number, task.Issue.Title, prURL, w.gh.Repo)
+	review, err := w.llmStep(ctx, task, "code-review", prompt, w.cfg.Planning.LLM)
 	if err != nil {
-		diffOut, logErr := git.RunInWorktree(task.Worktree, "git", "log", "--oneline", "-5")
-		if logErr == nil {
-			log.Printf("[Worker %d] git log in worktree: %s", w.id, diffOut)
-		}
-		diff, err = git.RunInWorktree(task.Worktree, "git", "diff", "master")
-		if err != nil {
-			return fmt.Errorf("getting diff: %w", err)
-		}
+		return err
 	}
-
-	if len(diff) == 0 {
-		log.Printf("[Worker %d] No diff found, skipping code review", w.id)
-		return nil
+	if reason := checkAlreadyDone(review); reason != "" {
+		log.Printf("[Worker %d] Code review detected ticket already done: %s", w.id, reason)
+		return fmt.Errorf("%w: %s", ErrAlreadyDone, reason)
 	}
-
-	sessionTitle := fmt.Sprintf("code-review-%d", task.Issue.Number)
-	session, err := w.oc.CreateSession(sessionTitle)
-	if err != nil {
-		return fmt.Errorf("creating session: %w", err)
-	}
-	defer func() {
-		if delErr := w.oc.DeleteSession(session.ID); delErr != nil {
-			log.Printf("[Worker %d] failed to delete session %s: %v", w.id, session.ID, delErr)
-		}
-	}()
-
-	prompt := fmt.Sprintf(codeReviewPrompt, task.Issue.Number, task.Issue.Title, string(diff))
-	model := opencode.ParseModelRef(w.cfg.Planning.LLM)
-
-	msg, err := w.oc.SendMessage(session.ID, prompt, model, nil)
-	if err != nil {
-		return fmt.Errorf("sending message: %w", err)
-	}
-
-	review := extractText(msg)
 	log.Printf("[Worker %d] Code review result: %s", w.id, review)
-
 	return nil
 }
 
 func (w *Worker) createPR(ctx context.Context, task *Task) (string, error) {
+	var stepID int64
+	if w.store != nil {
+		id, err := w.store.InsertStep(task.Issue.Number, "create-pr", fmt.Sprintf("push %s + create PR", task.Branch), "")
+		if err != nil {
+			log.Printf("[Worker %d] failed to insert create-pr step: %v", w.id, err)
+		} else {
+			stepID = id
+		}
+	}
+
 	if err := w.wtMgr.PushBranch(task.Branch); err != nil {
+		if w.store != nil && stepID > 0 {
+			_ = w.store.FailStep(stepID, err.Error())
+		}
 		return "", fmt.Errorf("pushing branch: %w", err)
 	}
 
 	body := fmt.Sprintf("Closes #%d\n\n%s", task.Issue.Number, task.Issue.Body)
 	prURL, err := w.gh.CreatePR(task.Branch, task.Issue.Title, body)
 	if err != nil {
+		if w.store != nil && stepID > 0 {
+			_ = w.store.FailStep(stepID, err.Error())
+		}
 		return "", fmt.Errorf("creating PR: %w", err)
 	}
 
+	if w.store != nil && stepID > 0 {
+		_ = w.store.FinishStep(stepID, prURL)
+	}
 	return prURL, nil
+}
+
+func (w *Worker) llmStep(ctx context.Context, task *Task, stepName, prompt, llm string) (string, error) {
+	sessionTitle := fmt.Sprintf("%s-%d", stepName, task.Issue.Number)
+	session, err := w.oc.CreateSession(sessionTitle)
+	if err != nil {
+		return "", fmt.Errorf("creating session: %w", err)
+	}
+
+	task.SetSessionID(session.ID)
+	defer task.SetSessionID("")
+	defer func() {
+		if delErr := w.oc.DeleteSession(session.ID); delErr != nil {
+			log.Printf("[Worker %d] failed to delete session %s: %v", w.id, session.ID, delErr)
+		}
+	}()
+
+	var stepID int64
+	if w.store != nil {
+		id, sErr := w.store.InsertStep(task.Issue.Number, stepName, prompt, session.ID)
+		if sErr != nil {
+			log.Printf("[Worker %d] failed to insert step: %v", w.id, sErr)
+		} else {
+			stepID = id
+		}
+	}
+
+	model := opencode.ParseModelRef(llm)
+	msg, err := w.oc.SendMessage(session.ID, prompt, model, nil)
+	if err != nil {
+		if w.store != nil && stepID > 0 {
+			_ = w.store.FailStep(stepID, err.Error())
+		}
+		return "", fmt.Errorf("sending message: %w", err)
+	}
+
+	response := extractText(msg)
+	if w.store != nil && stepID > 0 {
+		_ = w.store.FinishStep(stepID, response)
+	}
+
+	return response, nil
 }
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
@@ -353,6 +367,16 @@ func slug(title string) string {
 		s = strings.TrimRight(s, "-")
 	}
 	return s
+}
+
+func checkAlreadyDone(response string) string {
+	for _, line := range strings.Split(response, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "ALREADY_DONE:") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "ALREADY_DONE:"))
+		}
+	}
+	return ""
 }
 
 func extractText(msg *opencode.Message) string {

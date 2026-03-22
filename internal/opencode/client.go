@@ -101,6 +101,10 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
+func (c *Client) BaseURL() string {
+	return c.baseURL
+}
+
 func (c *Client) SetDirectory(dir string) {
 	c.directory = dir
 }
@@ -294,7 +298,7 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 		defer sseResp.Body.Close()
 
 		scanner := bufio.NewScanner(sseResp.Body)
-		scanner.Buffer(make([]byte, 0, 256*1024), 256*1024)
+		scanner.Buffer(make([]byte, 0, 4*1024*1024), 4*1024*1024)
 
 		connectedSent := false
 		for scanner.Scan() {

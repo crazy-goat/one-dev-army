@@ -1,0 +1,118 @@
+{{template "layout" .}}
+{{define "content"}}
+<style>
+.task-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem}
+.task-header h1{font-size:1.3rem}
+.task-status{padding:.3rem .8rem;border-radius:4px;font-size:.85rem;font-weight:600}
+.task-status.active{background:var(--green);color:#fff}
+.task-status.done{background:var(--muted);color:#fff}
+.steps{display:flex;flex-direction:column;gap:1rem}
+.step{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.step-header{display:flex;justify-content:space-between;align-items:center;padding:.75rem 1rem;cursor:pointer;user-select:none}
+.step-header:hover{background:rgba(255,255,255,0.02)}
+.step-name{font-weight:600;font-size:.9rem}
+.step-badge{padding:.15rem .5rem;border-radius:4px;font-size:.75rem;font-weight:600}
+.step-badge.running{background:#f39c12;color:#fff}
+.step-badge.done{background:var(--green);color:#fff}
+.step-badge.failed{background:#e74c3c;color:#fff}
+.step-badge.pending{background:var(--muted);color:#fff}
+.step-duration{color:var(--muted);font-size:.8rem;margin-left:.5rem}
+.step-body{display:none;padding:0 1rem 1rem;border-top:1px solid var(--border)}
+.step.open .step-body{display:block}
+.step-section{margin-top:.75rem}
+.step-section h4{font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.4rem}
+.step-content{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:.75rem;font-size:.85rem;white-space:pre-wrap;word-break:break-word;max-height:400px;overflow-y:auto;font-family:monospace}
+.step-content.error{border-color:#e74c3c;color:#e74c3c}
+.stream-box{background:#1a1a2e;border:1px solid var(--border);border-radius:4px;padding:.75rem;font-size:.85rem;white-space:pre-wrap;word-break:break-word;min-height:100px;max-height:500px;overflow-y:auto;font-family:monospace;color:#e0e0e0}
+.stream-cursor{display:inline-block;width:8px;height:1em;background:var(--accent);animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+</style>
+
+<div class="task-header">
+  <div>
+    <a href="/" style="color:var(--muted);text-decoration:none;font-size:.85rem">&larr; Back to board</a>
+    <h1>#{{.IssueNumber}}: {{.IssueTitle}}</h1>
+  </div>
+  {{if .IsActive}}<span class="task-status active">{{.Status}}</span>{{end}}
+</div>
+
+<div class="steps">
+  {{range .Steps}}
+  <div class="step{{if eq .Status "running"}} open{{end}}">
+    <div class="step-header" onclick="this.parentElement.classList.toggle('open')">
+      <div>
+        <span class="step-name">{{.StepName}}</span>
+        {{if and .StartedAt .FinishedAt}}<span class="step-duration">{{duration .StartedAt .FinishedAt}}</span>{{end}}
+      </div>
+      <span class="step-badge {{.Status}}">{{.Status}}</span>
+    </div>
+    <div class="step-body">
+      {{if .Prompt}}
+      <div class="step-section">
+        <h4>Prompt</h4>
+        <div class="step-content">{{truncate .Prompt 2000}}</div>
+      </div>
+      {{end}}
+      {{if .Response}}
+      <div class="step-section">
+        <h4>Response</h4>
+        <div class="step-content">{{truncate .Response 5000}}</div>
+      </div>
+      {{end}}
+      {{if .ErrorMsg}}
+      <div class="step-section">
+        <h4>Error</h4>
+        <div class="step-content error">{{.ErrorMsg}}</div>
+      </div>
+      {{end}}
+      {{if eq .Status "running"}}
+      <div class="step-section">
+        <h4>Live Output</h4>
+        <div class="stream-box" id="stream-{{.ID}}"><span class="stream-cursor"></span></div>
+      </div>
+      {{end}}
+    </div>
+  </div>
+  {{else}}
+  <div style="color:var(--muted);text-align:center;padding:3rem;font-style:italic">No steps recorded yet</div>
+  {{end}}
+</div>
+
+{{if .IsActive}}
+<script>
+(function() {
+  var streamBoxes = document.querySelectorAll('[id^="stream-"]');
+  if (streamBoxes.length === 0) return;
+  var box = streamBoxes[streamBoxes.length - 1];
+  var es = new EventSource('/api/task/{{.IssueNumber}}/stream');
+  es.onmessage = function(e) {
+    var data = JSON.parse(e.data);
+    if (data.done) {
+      es.close();
+      setTimeout(function(){ location.reload(); }, 1000);
+      return;
+    }
+    if (data.delta) {
+      var cursor = box.querySelector('.stream-cursor');
+      if (cursor) cursor.remove();
+      box.appendChild(document.createTextNode(data.delta));
+      box.scrollTop = box.scrollHeight;
+      var c = document.createElement('span');
+      c.className = 'stream-cursor';
+      box.appendChild(c);
+    }
+  };
+  es.onerror = function() {
+    es.close();
+    setTimeout(function(){ location.reload(); }, 3000);
+  };
+})();
+</script>
+{{end}}
+
+{{if not .IsActive}}
+<script>
+setTimeout(function(){ location.reload(); }, 5000);
+</script>
+{{end}}
+{{end}}

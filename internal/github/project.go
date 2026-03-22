@@ -42,6 +42,7 @@ func (c *Client) EnsureProject(name string) (Project, error) {
 
 	for _, p := range projects {
 		if p.Title == name {
+			c.ProjectID = p.ID
 			c.setupProject(p.Number)
 			return p, nil
 		}
@@ -57,7 +58,7 @@ func (c *Client) EnsureProject(name string) (Project, error) {
 		return Project{}, err
 	}
 
-	// Link the new project to the repo and make it public.
+	c.ProjectID = created.ID
 	c.setupProject(created.Number)
 
 	return created, nil
@@ -227,6 +228,83 @@ func (c *Client) GetProjectItemsByStatus(projectNumber int) (map[string][]Projec
 	}
 
 	return itemsByStatus, nil
+}
+
+// MoveItemToColumn moves an issue to a specific column in the project board.
+// It first ensures the issue is added to the project, then sets its Status field.
+func (c *Client) MoveItemToColumn(projectNumber int, issueNumber int, column string) error {
+	owner := strings.Split(c.Repo, "/")[0]
+	num := fmt.Sprintf("%d", projectNumber)
+
+	repo := strings.Split(c.Repo, "/")
+	if len(repo) != 2 {
+		return fmt.Errorf("invalid repo format: %s", c.Repo)
+	}
+
+	issueURL := fmt.Sprintf("https://github.com/%s/issues/%d", c.Repo, issueNumber)
+
+	out, err := c.ghNoRepo("project", "item-add", num,
+		"--owner", owner,
+		"--url", issueURL,
+		"--format", "json")
+	if err != nil {
+		log.Printf("[GitHub] item-add may have failed (item might already exist): %v", err)
+	}
+
+	var addResult struct {
+		ID string `json:"id"`
+	}
+	if out != nil {
+		json.Unmarshal(out, &addResult)
+	}
+
+	itemID := addResult.ID
+	if itemID == "" {
+		items, err := c.GetProjectItemsByStatus(projectNumber)
+		if err != nil {
+			return fmt.Errorf("getting project items: %w", err)
+		}
+		for _, colItems := range items {
+			for _, item := range colItems {
+				if item.Number == issueNumber {
+					itemID = item.ID
+					break
+				}
+			}
+			if itemID != "" {
+				break
+			}
+		}
+	}
+
+	if itemID == "" {
+		return fmt.Errorf("could not find project item for issue #%d", issueNumber)
+	}
+
+	projectID := c.ProjectID
+	if projectID == "" {
+		return fmt.Errorf("project node ID not set — call EnsureProject first")
+	}
+
+	_, err = c.ghNoRepo("project", "item-edit",
+		"--id", itemID,
+		"--project-id", projectID,
+		"--field-id", "Status",
+		"--single-select-option-id", column)
+	if err != nil {
+		log.Printf("[GitHub] item-edit failed, trying with field name: %v", err)
+		_, err = c.ghNoRepo("project", "item-edit",
+			"--id", itemID,
+			"--project-id", projectID,
+			"--field-id", "Status",
+			"--text", column)
+		if err != nil {
+			return fmt.Errorf("setting item status to %q: %w", column, err)
+		}
+	}
+
+	log.Printf("[GitHub] Moved #%d to %q in project %d", issueNumber, column, projectNumber)
+	return nil
 }
 
 // updateStatusFieldOptions replaces all options on the Status field in one GraphQL call.

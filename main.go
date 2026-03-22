@@ -215,7 +215,7 @@ func runServe() error {
 
 	processor := worker.NewProcessor(cfg, oc, gh, store, wtMgr)
 
-	orchestrator := mvp.NewOrchestrator(cfg, gh, oc, wtMgr)
+	orchestrator := mvp.NewOrchestrator(cfg, gh, oc, wtMgr, store, project.Number)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -1,13 +1,16 @@
 package dashboard
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
@@ -33,6 +36,7 @@ type boardData struct {
 	Merging      []taskCard
 	Done         []taskCard
 	Blocked      []taskCard
+	Failed       []taskCard
 }
 
 type backlogData struct {
@@ -147,10 +151,14 @@ func (s *Server) buildBoardData() boardData {
 
 	// Build task cards for each column
 	if itemsByStatus != nil {
-		// Use project items to determine column
+		seen := make(map[int]bool)
 		for _, col := range github.ProjectColumns {
 			items := itemsByStatus[col]
 			for _, item := range items {
+				if item.Number == 0 {
+					continue
+				}
+				seen[item.Number] = true
 				issue, exists := issueMap[item.Number]
 				if !exists {
 					issue = github.Issue{
@@ -161,8 +169,14 @@ func (s *Server) buildBoardData() boardData {
 				s.addCardToColumn(&data, col, issue)
 			}
 		}
+		for _, issue := range issues {
+			if seen[issue.Number] {
+				continue
+			}
+			col := inferColumnFromIssue(issue)
+			s.addCardToColumn(&data, col, issue)
+		}
 	} else {
-		// Infer column from issue state and labels
 		for _, issue := range issues {
 			col := inferColumnFromIssue(issue)
 			s.addCardToColumn(&data, col, issue)
@@ -181,6 +195,9 @@ func inferColumnFromIssue(issue github.Issue) string {
 	}
 
 	// Map labels to columns
+	if labelSet["failed"] {
+		return "Failed"
+	}
 	if labelSet["blocked"] || labelSet["blocker"] {
 		return "Blocked"
 	}
@@ -197,8 +214,7 @@ func inferColumnFromIssue(issue github.Issue) string {
 		return "Done"
 	}
 
-	// Check state
-	if issue.State == "CLOSED" {
+	if strings.EqualFold(issue.State, "CLOSED") {
 		return "Done"
 	}
 
@@ -228,6 +244,8 @@ func (s *Server) addCardToColumn(data *boardData, col string, issue github.Issue
 		data.Done = append(data.Done, card)
 	case "Blocked":
 		data.Blocked = append(data.Blocked, card)
+	case "Failed":
+		data.Failed = append(data.Failed, card)
 	}
 }
 
@@ -278,6 +296,43 @@ func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleReject(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (s *Server) handleRetry(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	issueNum := 0
+	fmt.Sscanf(id, "%d", &issueNum)
+	if issueNum == 0 || s.gh == nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	if err := s.gh.RemoveLabel(issueNum, "failed"); err != nil {
+		log.Printf("[Dashboard] Error removing failed label from #%d: %v", issueNum, err)
+	}
+
+	log.Printf("[Dashboard] Retry #%d — will resume from last step", issueNum)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (s *Server) handleRetryFresh(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	issueNum := 0
+	fmt.Sscanf(id, "%d", &issueNum)
+	if issueNum == 0 || s.gh == nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	if err := s.gh.RemoveLabel(issueNum, "failed"); err != nil {
+		log.Printf("[Dashboard] Error removing failed label from #%d: %v", issueNum, err)
+	}
+	if err := s.gh.RemoveLabel(issueNum, "in-progress"); err != nil {
+		log.Printf("[Dashboard] Error removing in-progress label from #%d: %v", issueNum, err)
+	}
+
+	log.Printf("[Dashboard] Retry fresh #%d — will start from scratch", issueNum)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -383,4 +438,158 @@ func (s *Server) handleSprintPause(w http.ResponseWriter, r *http.Request) {
 	}
 	s.orchestrator.Pause()
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+type taskDetailData struct {
+	Active      string
+	IssueNumber int
+	IssueTitle  string
+	Steps       []db.TaskStep
+	IsActive    bool
+	Status      string
+}
+
+func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	issueNum, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "invalid issue number", http.StatusBadRequest)
+		return
+	}
+
+	steps, err := s.store.GetSteps(issueNum)
+	if err != nil {
+		log.Printf("[Dashboard] Error getting steps for #%d: %v", issueNum, err)
+		steps = nil
+	}
+
+	isActive := false
+	status := ""
+	issueTitle := fmt.Sprintf("#%d", issueNum)
+	if s.orchestrator != nil {
+		if task := s.orchestrator.CurrentTask(); task != nil && task.Issue.Number == issueNum {
+			isActive = true
+			status = string(task.Status)
+			issueTitle = task.Issue.Title
+		}
+	}
+
+	if issueTitle == fmt.Sprintf("#%d", issueNum) && len(steps) > 0 {
+		issueTitle = fmt.Sprintf("Issue #%d", issueNum)
+	}
+
+	data := taskDetailData{
+		Active:      "task",
+		IssueNumber: issueNum,
+		IssueTitle:  issueTitle,
+		Steps:       steps,
+		IsActive:    isActive,
+		Status:      status,
+	}
+	s.render(w, "task.html", data)
+}
+
+func (s *Server) handleTaskStream(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	issueNum, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "invalid issue number", http.StatusBadRequest)
+		return
+	}
+
+	if s.orchestrator == nil {
+		http.Error(w, "orchestrator not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	task := s.orchestrator.CurrentTask()
+	if task == nil || task.Issue.Number != issueNum {
+		http.Error(w, "task not active", http.StatusNotFound)
+		return
+	}
+
+	sessionID := task.SessionID()
+	if sessionID == "" {
+		http.Error(w, "no active LLM session", http.StatusNotFound)
+		return
+	}
+
+	opencodeURL := s.orchestrator.OpenCodeURL() + "/event"
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, opencodeURL, nil)
+	if err != nil {
+		http.Error(w, "failed to create request", http.StatusInternalServerError)
+		return
+	}
+	req.Header.Set("Accept", "text/event-stream")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "failed to connect to opencode", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 256*1024), 256*1024)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		data := line[6:]
+
+		var evt struct {
+			Type       string          `json:"type"`
+			Properties json.RawMessage `json:"properties"`
+		}
+		if err := json.Unmarshal([]byte(data), &evt); err != nil {
+			continue
+		}
+
+		switch evt.Type {
+		case "message.part.delta":
+			var props struct {
+				SessionID string `json:"sessionID"`
+				Delta     string `json:"delta"`
+				Field     string `json:"field"`
+			}
+			if err := json.Unmarshal(evt.Properties, &props); err != nil {
+				continue
+			}
+			if props.SessionID != sessionID || props.Field != "text" {
+				continue
+			}
+			deltaJSON, _ := json.Marshal(map[string]string{"delta": props.Delta})
+			fmt.Fprintf(w, "data: %s\n\n", deltaJSON)
+			flusher.Flush()
+
+		case "session.status":
+			var props struct {
+				SessionID string `json:"sessionID"`
+				Status    struct {
+					Type string `json:"type"`
+				} `json:"status"`
+			}
+			if err := json.Unmarshal(evt.Properties, &props); err != nil {
+				continue
+			}
+			if props.SessionID == sessionID && props.Status.Type == "idle" {
+				fmt.Fprintf(w, "data: {\"done\":true}\n\n")
+				flusher.Flush()
+				return
+			}
+		}
+	}
 }

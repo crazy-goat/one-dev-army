@@ -203,7 +203,7 @@ func TestWorkerProcessEndToEnd(t *testing.T) {
 		Tools:        config.Tools{TestCmd: "echo test-ok"},
 	}
 
-	w := mvp.NewWorker(1, cfg, oc, gh, wtMgr)
+	w := mvp.NewWorker(1, cfg, oc, gh, wtMgr, nil)
 
 	task := &mvp.Task{
 		Issue: github.Issue{
@@ -271,7 +271,7 @@ func TestWorkerProcessStatusTransitions(t *testing.T) {
 		Tools:        config.Tools{TestCmd: "echo ok"},
 	}
 
-	w := mvp.NewWorker(1, cfg, oc, gh, wtMgr)
+	w := mvp.NewWorker(1, cfg, oc, gh, wtMgr, nil)
 
 	task := &mvp.Task{
 		Issue: github.Issue{
@@ -306,7 +306,7 @@ func TestWorkerProcessTestFailure(t *testing.T) {
 		Tools:        config.Tools{TestCmd: "exit 1"},
 	}
 
-	w := mvp.NewWorker(1, cfg, oc, gh, wtMgr)
+	w := mvp.NewWorker(1, cfg, oc, gh, wtMgr, nil)
 
 	task := &mvp.Task{
 		Issue: github.Issue{
