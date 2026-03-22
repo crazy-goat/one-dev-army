@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 )
 
 func TestHandleWizardNew(t *testing.T) {
@@ -559,55 +558,6 @@ func TestHandleWizardModal_CreatesSession(t *testing.T) {
 	// Since we can't access unexported fields, we verify through the Count
 	if srv.wizardStore.Count() != 1 {
 		t.Errorf("expected 1 session, got %d", srv.wizardStore.Count())
-	}
-}
-
-// TestRateLimiter tests the rate limiter functionality
-func TestRateLimiter(t *testing.T) {
-	limiter := NewRateLimiter(3, time.Minute)
-
-	// Should allow first 3 requests
-	if !limiter.Allow("192.168.1.1") {
-		t.Error("expected first request to be allowed")
-	}
-	if !limiter.Allow("192.168.1.1") {
-		t.Error("expected second request to be allowed")
-	}
-	if !limiter.Allow("192.168.1.1") {
-		t.Error("expected third request to be allowed")
-	}
-
-	// Fourth request should be denied
-	if limiter.Allow("192.168.1.1") {
-		t.Error("expected fourth request to be denied")
-	}
-
-	// Different IP should still be allowed
-	if !limiter.Allow("192.168.1.2") {
-		t.Error("expected request from different IP to be allowed")
-	}
-}
-
-// TestRateLimiter_Cleanup tests that old requests are cleaned up
-func TestRateLimiter_Cleanup(t *testing.T) {
-	// Create a rate limiter with a very short window
-	limiter := NewRateLimiter(2, 100*time.Millisecond)
-
-	// Use up the limit
-	limiter.Allow("192.168.1.1")
-	limiter.Allow("192.168.1.1")
-
-	// Should be denied
-	if limiter.Allow("192.168.1.1") {
-		t.Error("expected request to be denied")
-	}
-
-	// Wait for window to expire
-	time.Sleep(150 * time.Millisecond)
-
-	// Should be allowed again after cleanup
-	if !limiter.Allow("192.168.1.1") {
-		t.Error("expected request to be allowed after window expires")
 	}
 }
 

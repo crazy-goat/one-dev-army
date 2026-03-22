@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/crazy-goat/one-dev-army/internal/db"
@@ -26,12 +24,6 @@ var templateFS embed.FS
 // CSRFTokenLength is the length of CSRF tokens in bytes
 const CSRFTokenLength = 32
 
-// RateLimitRequests is the maximum number of requests per window
-const RateLimitRequests = 10
-
-// RateLimitWindow is the time window for rate limiting
-const RateLimitWindow = time.Minute
-
 type Server struct {
 	port          int
 	tmpls         map[string]*template.Template
@@ -45,51 +37,6 @@ type Server struct {
 	wizardStore   *WizardSessionStore
 	oc            *opencode.Client
 	csrfKey       []byte
-	rateLimiter   *RateLimiter
-}
-
-// RateLimiter implements simple per-IP rate limiting
-type RateLimiter struct {
-	requests map[string][]time.Time
-	mu       sync.RWMutex
-	window   time.Duration
-	limit    int
-}
-
-// NewRateLimiter creates a new rate limiter
-func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
-	return &RateLimiter{
-		requests: make(map[string][]time.Time),
-		window:   window,
-		limit:    limit,
-	}
-}
-
-// Allow checks if a request from the given IP should be allowed
-func (rl *RateLimiter) Allow(ip string) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	now := time.Now()
-	cutoff := now.Add(-rl.window)
-
-	// Clean old requests
-	var valid []time.Time
-	for _, t := range rl.requests[ip] {
-		if t.After(cutoff) {
-			valid = append(valid, t)
-		}
-	}
-
-	// Check limit
-	if len(valid) >= rl.limit {
-		rl.requests[ip] = valid
-		return false
-	}
-
-	// Add new request
-	rl.requests[ip] = append(valid, now)
-	return true
 }
 
 // generateCSRFToken generates a new random CSRF token
@@ -134,23 +81,6 @@ func (s *Server) csrfMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// rateLimitMiddleware adds rate limiting per IP
-func (s *Server) rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Get client IP
-		ip := r.RemoteAddr
-		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-			ip = strings.Split(forwarded, ",")[0]
-		}
-
-		if !s.rateLimiter.Allow(ip) {
-			http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
-			return
-		}
-		next(w, r)
-	}
-}
-
 // chainMiddleware chains multiple middleware functions
 func chainMiddleware(handler http.HandlerFunc, middlewares ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
 	for i := len(middlewares) - 1; i >= 0; i-- {
@@ -188,7 +118,6 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 		wizardStore: NewWizardSessionStore(),
 		oc:          oc,
 		csrfKey:     csrfKey,
-		rateLimiter: NewRateLimiter(RateLimitRequests, RateLimitWindow),
 	}
 	s.routes()
 	return s, nil
@@ -271,14 +200,14 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /approve-merge/{id}", s.handleApproveMerge)
 	s.mux.HandleFunc("POST /decline/{id}", s.handleDecline)
 
-	// Wizard routes - with CSRF and rate limiting protection
-	s.mux.HandleFunc("GET /wizard/new", s.rateLimitMiddleware(s.handleWizardNew))
-	s.mux.HandleFunc("GET /wizard/modal", s.rateLimitMiddleware(s.handleWizardModal))
-	s.mux.HandleFunc("POST /wizard/cancel", chainMiddleware(s.handleWizardCancel, s.rateLimitMiddleware, s.csrfMiddleware))
-	s.mux.HandleFunc("POST /wizard/refine", chainMiddleware(s.handleWizardRefine, s.rateLimitMiddleware, s.csrfMiddleware))
-	s.mux.HandleFunc("POST /wizard/breakdown", chainMiddleware(s.handleWizardBreakdown, s.rateLimitMiddleware, s.csrfMiddleware))
-	s.mux.HandleFunc("POST /wizard/create", chainMiddleware(s.handleWizardCreate, s.rateLimitMiddleware, s.csrfMiddleware))
-	s.mux.HandleFunc("GET /wizard/logs/{sessionId}", s.rateLimitMiddleware(s.handleWizardLogs))
+	// Wizard routes - with CSRF protection
+	s.mux.HandleFunc("GET /wizard/new", s.handleWizardNew)
+	s.mux.HandleFunc("GET /wizard/modal", s.handleWizardModal)
+	s.mux.HandleFunc("POST /wizard/cancel", s.csrfMiddleware(s.handleWizardCancel))
+	s.mux.HandleFunc("POST /wizard/refine", s.csrfMiddleware(s.handleWizardRefine))
+	s.mux.HandleFunc("POST /wizard/breakdown", s.csrfMiddleware(s.handleWizardBreakdown))
+	s.mux.HandleFunc("POST /wizard/create", s.csrfMiddleware(s.handleWizardCreate))
+	s.mux.HandleFunc("GET /wizard/logs/{sessionId}", s.handleWizardLogs)
 }
 
 func (s *Server) Start() error {
