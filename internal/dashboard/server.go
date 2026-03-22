@@ -270,6 +270,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /wizard/modal", s.rateLimitMiddleware(s.handleWizardModal))
 	s.mux.HandleFunc("POST /wizard/cancel", chainMiddleware(s.handleWizardCancel, s.rateLimitMiddleware, s.csrfMiddleware))
 	s.mux.HandleFunc("POST /wizard/refine", chainMiddleware(s.handleWizardRefine, s.rateLimitMiddleware, s.csrfMiddleware))
+	s.mux.HandleFunc("POST /wizard/refine-again", chainMiddleware(s.handleWizardRefineAgain, s.rateLimitMiddleware, s.csrfMiddleware))
 	s.mux.HandleFunc("POST /wizard/breakdown", chainMiddleware(s.handleWizardBreakdown, s.rateLimitMiddleware, s.csrfMiddleware))
 	s.mux.HandleFunc("POST /wizard/create", chainMiddleware(s.handleWizardCreate, s.rateLimitMiddleware, s.csrfMiddleware))
 	s.mux.HandleFunc("GET /wizard/logs/{sessionId}", s.rateLimitMiddleware(s.handleWizardLogs))

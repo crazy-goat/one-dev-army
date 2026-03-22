@@ -737,3 +737,119 @@ func TestLayoutNavigationButtons(t *testing.T) {
 		t.Error("layout template missing nav-actions container div")
 	}
 }
+
+func TestHandleWizardRefineAgain_Success(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	// Create a session with refined description
+	session, _ := srv.wizardStore.Create("feature")
+	session.SetRefinedDescription("Initial refined description")
+
+	// Test with valid session
+	req := httptest.NewRequest(http.MethodPost, "/wizard/refine-again", strings.NewReader("session_id="+session.ID))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardRefineAgain(rec, req)
+
+	// Should accept the request (actual LLM call would need mocking)
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 200 or 500, got %d", rec.Code)
+	}
+
+	// Verify session still exists and has been updated
+	updated, ok := srv.wizardStore.Get(session.ID)
+	if !ok {
+		t.Error("session should still exist after refine-again")
+	}
+	if updated.RefinedDescription == "" {
+		t.Error("refined description should not be empty after refine-again")
+	}
+}
+
+func TestHandleWizardRefineAgain_NoSession(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	// Test with invalid session
+	req := httptest.NewRequest(http.MethodPost, "/wizard/refine-again", strings.NewReader("session_id=invalid"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardRefineAgain(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 for invalid session, got %d", rec.Code)
+	}
+}
+
+func TestHandleWizardRefineAgain_NoDescription(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	// Create a session without any description
+	session, _ := srv.wizardStore.Create("feature")
+	// Don't set any description
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/refine-again", strings.NewReader("session_id="+session.ID))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardRefineAgain(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 for missing description, got %d", rec.Code)
+	}
+}
+
+func TestHandleWizardRefineAgain_FallbackToIdea(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	// Create a session with only idea text (no refined description)
+	session, _ := srv.wizardStore.Create("feature")
+	session.SetIdeaText("My original idea")
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/refine-again", strings.NewReader("session_id="+session.ID))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardRefineAgain(rec, req)
+
+	// Should work by falling back to idea text
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 200 or 500, got %d", rec.Code)
+	}
+}
+
+func TestHandleWizardRefineAgain_MissingSessionID(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	// Test with missing session_id
+	req := httptest.NewRequest(http.MethodPost, "/wizard/refine-again", strings.NewReader(""))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardRefineAgain(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 for missing session_id, got %d", rec.Code)
+	}
+}

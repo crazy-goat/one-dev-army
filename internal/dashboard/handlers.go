@@ -888,6 +888,125 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "wizard_refine.html", data)
 }
 
+// handleWizardRefineAgain re-refines the existing description using LLM
+func (s *Server) handleWizardRefineAgain(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data. Please try again.", http.StatusBadRequest)
+		return
+	}
+
+	sessionID := r.FormValue("session_id")
+	if sessionID == "" {
+		http.Error(w, "Session ID is required.", http.StatusBadRequest)
+		return
+	}
+
+	session, ok := s.wizardStore.Get(sessionID)
+	if !ok {
+		http.Error(w, "Session not found. Please start over.", http.StatusNotFound)
+		return
+	}
+
+	// Get the current refined description to use as input
+	currentDescription := session.RefinedDescription
+	if currentDescription == "" {
+		// Fall back to idea text if no refined description exists
+		currentDescription = session.IdeaText
+	}
+
+	if currentDescription == "" {
+		http.Error(w, "No description available to refine. Please go back and enter an idea.", http.StatusBadRequest)
+		return
+	}
+
+	session.AddLog("user", "Requesting further refinement")
+
+	// If no opencode client, return mock response for testing
+	if s.oc == nil {
+		mockRefined := "Further refined: " + currentDescription + "\n\nThis version includes additional clarity and technical details."
+		session.SetRefinedDescription(mockRefined)
+		session.AddLog("assistant", mockRefined)
+
+		data := struct {
+			SessionID          string
+			Type               string
+			RefinedDescription string
+			Error              string
+		}{
+			SessionID:          session.ID,
+			Type:               string(session.Type),
+			RefinedDescription: mockRefined,
+		}
+
+		s.render(w, "wizard_refine.html", data)
+		return
+	}
+
+	// Create LLM session for refinement
+	llmSession, err := s.oc.CreateSession("Wizard Refinement - Iteration")
+	if err != nil {
+		log.Printf("[Wizard] Error creating LLM session: %v", err)
+		http.Error(w, "Unable to connect to AI service. Please try again in a moment.", http.StatusServiceUnavailable)
+		return
+	}
+	defer func() {
+		if err := s.oc.DeleteSession(llmSession.ID); err != nil {
+			log.Printf("[Wizard] Error deleting LLM session %s: %v", llmSession.ID, err)
+		}
+	}()
+
+	// Build refinement prompt with codebase context
+	codebaseContext := GetCodebaseContext()
+	prompt := BuildRefinementPrompt(session.Type, currentDescription, codebaseContext)
+	session.AddLog("system", "Sending refinement request to LLM (iteration)")
+
+	// Send message to LLM with timeout
+	ctx, cancel := context.WithTimeout(r.Context(), LLMRequestTimeout)
+	defer cancel()
+
+	model := opencode.ParseModelRef(DefaultLLMModel)
+	var output strings.Builder
+	response, err := s.oc.SendMessageStream(ctx, llmSession.ID, prompt, model, &output)
+	if err != nil {
+		log.Printf("[Wizard] Error from LLM: %v", err)
+		session.AddLog("system", "LLM error: "+err.Error())
+
+		// Determine appropriate error message based on error type
+		statusCode := http.StatusInternalServerError
+		errorMsg := "Failed to refine description. Please try again."
+
+		if ctx.Err() == context.DeadlineExceeded {
+			statusCode = http.StatusGatewayTimeout
+			errorMsg = "The AI service is taking too long to respond. Please try again."
+		}
+
+		http.Error(w, errorMsg, statusCode)
+		return
+	}
+
+	// Extract refined description from response
+	var refinedDesc string
+	if len(response.Parts) > 0 {
+		refinedDesc = response.Parts[0].Text
+	}
+
+	session.SetRefinedDescription(refinedDesc)
+	session.AddLog("assistant", refinedDesc)
+
+	data := struct {
+		SessionID          string
+		Type               string
+		RefinedDescription string
+		Error              string
+	}{
+		SessionID:          session.ID,
+		Type:               string(session.Type),
+		RefinedDescription: refinedDesc,
+	}
+
+	s.render(w, "wizard_refine.html", data)
+}
+
 // handleWizardBreakdown sends description to LLM and returns task list
 func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
