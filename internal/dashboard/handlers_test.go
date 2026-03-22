@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"fmt"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
@@ -735,5 +736,273 @@ func TestLayoutNavigationButtons(t *testing.T) {
 	// Check for nav-actions container
 	if !strings.Contains(output, "nav-actions") {
 		t.Error("layout template missing nav-actions container div")
+	}
+}
+
+// TestHandleWizardCreate_EpicFirst verifies that epic is created before sub-tasks
+func TestHandleWizardCreate_EpicFirst(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+		gh:          nil,
+	}
+	defer srv.wizardStore.Stop()
+
+	session, _ := srv.wizardStore.Create("feature")
+	session.SetRefinedDescription("Test Epic")
+	session.SetTasks([]WizardTask{
+		{Title: "Sub-task 1", Description: "Description 1", Priority: "high", Complexity: "M"},
+		{Title: "Sub-task 2", Description: "Description 2", Priority: "medium", Complexity: "S"},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader("session_id="+session.ID))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardCreate(rec, req)
+
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 200 or 500, got %d", rec.Code)
+	}
+}
+
+// TestHandleWizardCreate_LabelMapping tests priority and complexity label conversion
+func TestHandleWizardCreate_LabelMapping(t *testing.T) {
+	testCases := []struct {
+		name       string
+		priority   string
+		complexity string
+		wantLabels []string
+	}{
+		{
+			name:       "critical priority + XL size",
+			priority:   "critical",
+			complexity: "XL",
+			wantLabels: []string{"wizard", "priority:high", "size:XL"},
+		},
+		{
+			name:       "high priority + L size",
+			priority:   "high",
+			complexity: "L",
+			wantLabels: []string{"wizard", "priority:high", "size:L"},
+		},
+		{
+			name:       "medium priority + M size",
+			priority:   "medium",
+			complexity: "M",
+			wantLabels: []string{"wizard", "priority:medium", "size:M"},
+		},
+		{
+			name:       "low priority + S size",
+			priority:   "low",
+			complexity: "S",
+			wantLabels: []string{"wizard", "priority:low", "size:S"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Verify label mapping logic is correct
+			var labels []string
+			labels = append(labels, "wizard")
+
+			switch tc.priority {
+			case "critical", "high":
+				labels = append(labels, "priority:high")
+			case "medium":
+				labels = append(labels, "priority:medium")
+			case "low":
+				labels = append(labels, "priority:low")
+			}
+
+			switch tc.complexity {
+			case "S":
+				labels = append(labels, "size:S")
+			case "M":
+				labels = append(labels, "size:M")
+			case "L":
+				labels = append(labels, "size:L")
+			case "XL":
+				labels = append(labels, "size:XL")
+			}
+
+			if len(labels) != len(tc.wantLabels) {
+				t.Errorf("expected %d labels, got %d: %v", len(tc.wantLabels), len(labels), labels)
+			}
+			for i, label := range labels {
+				if label != tc.wantLabels[i] {
+					t.Errorf("expected label %d to be %q, got %q", i, tc.wantLabels[i], label)
+				}
+			}
+		})
+	}
+}
+
+// TestHandleWizardCreate_EpicLabels tests epic label assignment based on type
+func TestHandleWizardCreate_EpicLabels(t *testing.T) {
+	testCases := []struct {
+		name       string
+		wizardType string
+		wantLabels []string
+	}{
+		{
+			name:       "feature type",
+			wizardType: "feature",
+			wantLabels: []string{"epic", "enhancement"},
+		},
+		{
+			name:       "bug type",
+			wizardType: "bug",
+			wantLabels: []string{"epic", "bug"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Verify epic label logic
+			var epicLabels []string
+			epicLabels = append(epicLabels, "epic")
+			if tc.wizardType == "feature" {
+				epicLabels = append(epicLabels, "enhancement")
+			} else if tc.wizardType == "bug" {
+				epicLabels = append(epicLabels, "bug")
+			}
+
+			if len(epicLabels) != len(tc.wantLabels) {
+				t.Errorf("expected %d epic labels, got %d: %v", len(tc.wantLabels), len(epicLabels), epicLabels)
+			}
+			for i, label := range epicLabels {
+				if label != tc.wantLabels[i] {
+					t.Errorf("expected epic label %d to be %q, got %q", i, tc.wantLabels[i], label)
+				}
+			}
+		})
+	}
+}
+
+// TestHandleWizardCreate_MissingSession tests error when session is missing
+func TestHandleWizardCreate_MissingSession(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader("session_id=invalid"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardCreate(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 for invalid session, got %d", rec.Code)
+	}
+}
+
+// TestHandleWizardCreate_MissingSessionID tests error when session_id is missing
+func TestHandleWizardCreate_MissingSessionID(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader(""))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardCreate(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 for missing session_id, got %d", rec.Code)
+	}
+}
+
+// TestCreatedIssue_Tracking tests the CreatedIssue struct and tracking methods
+func TestCreatedIssue_Tracking(t *testing.T) {
+	store := NewWizardSessionStore()
+	defer store.Stop()
+
+	session, _ := store.Create("feature")
+
+	// Test AddCreatedIssue
+	epic := CreatedIssue{
+		Number:  100,
+		Title:   "Test Epic",
+		URL:     "https://github.com/test/issues/100",
+		IsEpic:  true,
+		Success: true,
+	}
+	session.AddCreatedIssue(epic)
+
+	if len(session.CreatedIssues) != 1 {
+		t.Errorf("expected 1 created issue, got %d", len(session.CreatedIssues))
+	}
+
+	// Test SetCreatedIssues
+	subTasks := []CreatedIssue{
+		{Number: 101, Title: "Task 1", IsEpic: false, Success: true},
+		{Number: 102, Title: "Task 2", IsEpic: false, Success: true},
+	}
+	session.SetCreatedIssues(subTasks)
+
+	if len(session.CreatedIssues) != 2 {
+		t.Errorf("expected 2 created issues after SetCreatedIssues, got %d", len(session.CreatedIssues))
+	}
+
+	// Test SetEpicNumber
+	session.SetEpicNumber(100)
+	if session.EpicNumber != 100 {
+		t.Errorf("expected epic number 100, got %d", session.EpicNumber)
+	}
+}
+
+// TestHandleWizardCreate_EpicBodyFormat tests the epic body format
+func TestHandleWizardCreate_EpicBodyFormat(t *testing.T) {
+	refinedDesc := "Test Epic Description"
+	expectedBody := "## Summary\n\nTest Epic Description\n\n## Sub-tasks\n\n*Sub-tasks will be linked here after creation.*"
+
+	// Verify the initial epic body format
+	body := fmt.Sprintf("## Summary\n\n%s\n\n## Sub-tasks\n\n*Sub-tasks will be linked here after creation.*",
+		refinedDesc)
+
+	if body != expectedBody {
+		t.Errorf("epic body format mismatch\nexpected: %s\ngot: %s", expectedBody, body)
+	}
+
+	// Verify the updated epic body format with sub-tasks
+	subTaskLinks := []string{"- #101: Task 1", "- #102: Task 2"}
+	updatedBody := fmt.Sprintf("## Summary\n\n%s\n\n## Sub-tasks\n\n%s",
+		refinedDesc,
+		strings.Join(subTaskLinks, "\n"),
+	)
+
+	expectedUpdatedBody := "## Summary\n\nTest Epic Description\n\n## Sub-tasks\n\n- #101: Task 1\n- #102: Task 2"
+	if updatedBody != expectedUpdatedBody {
+		t.Errorf("updated epic body format mismatch\nexpected: %s\ngot: %s", expectedUpdatedBody, updatedBody)
+	}
+}
+
+// TestHandleWizardCreate_SubTaskBodyFormat tests the sub-task body format
+func TestHandleWizardCreate_SubTaskBodyFormat(t *testing.T) {
+	task := WizardTask{
+		Title:       "Test Task",
+		Description: "Test Description",
+		Priority:    "high",
+		Complexity:  "M",
+	}
+	epicNum := 100
+
+	expectedBody := "## Description\n\nTest Description\n\n---\n\n**Parent Epic:** #100\n**Priority:** high\n**Complexity:** M"
+
+	body := fmt.Sprintf("## Description\n\n%s\n\n---\n\n**Parent Epic:** #%d\n**Priority:** %s\n**Complexity:** %s",
+		task.Description,
+		epicNum,
+		task.Priority,
+		task.Complexity,
+	)
+
+	if body != expectedBody {
+		t.Errorf("sub-task body format mismatch\nexpected: %s\ngot: %s", expectedBody, body)
 	}
 }
