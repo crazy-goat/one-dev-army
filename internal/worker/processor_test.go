@@ -63,7 +63,7 @@ func TestBranchName(t *testing.T) {
 }
 
 func testConfig() *config.Config {
-	return &config.Config{
+	cfg := &config.Config{
 		GitHub:   config.GitHub{Repo: "owner/repo"},
 		OpenCode: config.OpenCode{URL: "http://localhost:4096"},
 		Tools: config.Tools{
@@ -73,14 +73,11 @@ func testConfig() *config.Config {
 		},
 		Pipeline: config.Pipeline{
 			MaxRetries: 3,
-			Stages: []config.Stage{
-				{Name: "analysis", LLM: "claude-sonnet-4"},
-				{Name: "coding", LLM: "claude-sonnet-4"},
-				{Name: "code-review", LLM: "claude-opus-4"},
-				{Name: "merge", ManualApproval: false},
-			},
 		},
 	}
+	// Apply default LLM configuration
+	cfg.LLM = config.DefaultLLMConfig()
+	return cfg
 }
 
 type requestLog struct {
@@ -298,8 +295,10 @@ func TestStageExecutor_Analysis(t *testing.T) {
 	if len(log.messages) != 1 {
 		t.Fatalf("expected 1 message sent, got %d", len(log.messages))
 	}
-	if log.messages[0].model != "claude-sonnet-4" {
-		t.Errorf("model = %q, want %q", log.messages[0].model, "claude-sonnet-4")
+	// The default model from LLM config is Kimi K2.5 (ModelID only contains the model name)
+	expectedModel := "Kimi K2.5"
+	if log.messages[0].model != expectedModel {
+		t.Errorf("model = %q, want %q", log.messages[0].model, expectedModel)
 	}
 	if !strings.Contains(log.messages[0].content, "Add user auth") {
 		t.Error("message should contain issue title")

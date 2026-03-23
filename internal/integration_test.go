@@ -55,12 +55,6 @@ func integrationConfig(opencodeURL string) *config.Config {
 		},
 		Pipeline: config.Pipeline{
 			MaxRetries: 3,
-			Stages: []config.Stage{
-				{Name: "analysis", LLM: "claude-sonnet-4"},
-				{Name: "coding", LLM: "claude-sonnet-4"},
-				{Name: "code-review", LLM: "claude-opus-4"},
-				{Name: "merge", ManualApproval: false},
-			},
 		},
 		Dashboard: config.Dashboard{Port: 0},
 		Workers:   config.Workers{Count: 2},
@@ -509,11 +503,17 @@ func TestConfigToProcessorWiring(t *testing.T) {
 		OpenCode: config.OpenCode{URL: srv.URL},
 		Pipeline: config.Pipeline{
 			MaxRetries: 3,
-			Stages: []config.Stage{
-				{Name: "analysis", LLM: "custom-model-for-analysis"},
-				{Name: "coding", LLM: "claude-sonnet-4"},
-				{Name: "code-review", LLM: "claude-opus-4"},
-				{Name: "merge", ManualApproval: false},
+		},
+		LLM: config.LLMConfig{
+			Planning: config.CategoryModels{
+				Strong: config.ModelConfig{
+					Provider: "custom",
+					Model:    "custom-model-for-analysis",
+				},
+				Weak: config.ModelConfig{
+					Provider: "custom",
+					Model:    "custom-model-for-analysis",
+				},
 			},
 		},
 	}

@@ -80,16 +80,4 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Sprint.TasksPerSprint != 10 {
 		t.Errorf("tasks_per_sprint = %d, want 10", cfg.Sprint.TasksPerSprint)
 	}
-	if len(cfg.Pipeline.Stages) != 7 {
-		t.Fatalf("stages count = %d, want 7", len(cfg.Pipeline.Stages))
-	}
-	if cfg.Pipeline.Stages[0].Name != "analysis" {
-		t.Errorf("first stage = %q, want %q", cfg.Pipeline.Stages[0].Name, "analysis")
-	}
-	if cfg.Pipeline.Stages[6].Name != "merge" {
-		t.Errorf("last stage = %q, want %q", cfg.Pipeline.Stages[6].Name, "merge")
-	}
-	if !cfg.Pipeline.Stages[6].ManualApproval {
-		t.Error("merge stage should have manual_approval=true")
-	}
 }

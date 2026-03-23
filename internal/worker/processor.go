@@ -190,14 +190,8 @@ func (p *Processor) Process(ctx context.Context, w *Worker, task *Task) error {
 			return fmt.Errorf("creating PR for task #%d: %w", task.IssueNumber, prErr)
 		}
 
-		mergeStage := p.findStageConfig("merge")
-		if mergeStage != nil && mergeStage.ManualApproval {
-			_ = p.gh.AddLabel(task.IssueNumber, "stage:needs-user")
-		} else {
-			if mergeErr := p.gh.MergePR(branch); mergeErr != nil {
-				return fmt.Errorf("merging PR for task #%d: %w", task.IssueNumber, mergeErr)
-			}
-		}
+		// Always require manual approval for merge
+		_ = p.gh.AddLabel(task.IssueNumber, "stage:needs-user")
 
 		_ = p.brMgr.RemoveBranch(branch)
 
@@ -206,15 +200,6 @@ func (p *Processor) Process(ctx context.Context, w *Worker, task *Task) error {
 		_ = p.gh.AddComment(task.IssueNumber, fmt.Sprintf("ODA pipeline blocked at stage. Last output:\n\n%s", result.Output))
 	}
 
-	return nil
-}
-
-func (p *Processor) findStageConfig(name string) *config.Stage {
-	for i := range p.cfg.Pipeline.Stages {
-		if p.cfg.Pipeline.Stages[i].Name == name {
-			return &p.cfg.Pipeline.Stages[i]
-		}
-	}
 	return nil
 }
 
@@ -356,13 +341,6 @@ func (e *StageExecutor) llmForStage(stage pipeline.Stage) string {
 		model := e.router.SelectModelForStage(string(stage), "")
 		if model != "" {
 			return model
-		}
-	}
-
-	// Fallback to legacy behavior - check pipeline stages
-	for _, s := range e.cfg.Pipeline.Stages {
-		if s.Name == string(stage) {
-			return s.LLM
 		}
 	}
 	return ""

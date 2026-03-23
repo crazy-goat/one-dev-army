@@ -12,21 +12,6 @@ tools:
     test_cmd: go test ./...
     e2e_cmd: ""
 pipeline:
-    stages:
-        - name: analysis
-          llm: nexos-ai/Kimi K2.5
-        - name: planning
-          llm: nexos-ai/Kimi K2.5
-        - name: plan-review
-          llm: nexos-ai/Kimi K2.5
-        - name: coding
-          llm: nexos-ai/Kimi K2.5
-        - name: testing
-          llm: nexos-ai/Kimi K2.5
-        - name: code-review
-          llm: nexos-ai/Kimi K2.5
-        - name: merge
-          manual_approval: true
     max_retries: 5
 planning:
     llm: nexos-ai/Kimi K2.5
@@ -39,32 +24,32 @@ sprint:
 llm:
     development:
         strong:
-            provider: openai
-            model: nexos-ai/Kimi K2.5
+            provider: nexos-ai
+            model: Kimi K2.5
         weak:
-            provider: openai
-            model: nexos-ai/Kimi K2.5
+            provider: nexos-ai
+            model: Kimi K2.5
     planning:
         strong:
-            provider: openai
-            model: nexos-ai/Kimi K2.5
+            provider: nexos-ai
+            model: Kimi K2.5
         weak:
-            provider: openai
-            model: nexos-ai/Kimi K2.5
+            provider: nexos-ai
+            model: Kimi K2.5
     orchestration:
         strong:
-            provider: openai
-            model: nexos-ai/Kimi K2.5
+            provider: nexos-ai
+            model: Kimi K2.5
         weak:
-            provider: openai
-            model: nexos-ai/Kimi K2.5
+            provider: nexos-ai
+            model: Kimi K2.5
     setup:
         strong:
-            provider: openai
-            model: nexos-ai/Kimi K2.5
+            provider: nexos-ai
+            model: Kimi K2.5
         weak:
-            provider: openai
-            model: nexos-ai/Kimi K2.5
+            provider: nexos-ai
+            model: Kimi K2.5
     default_complexity: medium
     routing_rules:
         complexity_thresholds:
