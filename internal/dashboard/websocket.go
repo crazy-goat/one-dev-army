@@ -31,6 +31,9 @@ const (
 	defaultConnectionLimit = 100
 )
 
+// packageDebug controls debug logging for the upgrader (set when first Hub is created)
+var packageDebug bool
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -59,7 +62,9 @@ var upgrader = websocket.Upgrader{
 			}
 		}
 
-		log.Printf("[WebSocket] Rejected connection from origin: %s", origin)
+		if packageDebug {
+			log.Printf("[WebSocket] Rejected connection from origin: %s", origin)
+		}
 		return false
 	},
 }
@@ -123,18 +128,21 @@ type Hub struct {
 	mu         sync.RWMutex
 	maxClients int
 	closed     bool
+	debug      bool
 }
 
 // NewHub creates a new Hub instance
-func NewHub() *Hub {
-	return NewHubWithLimit(defaultConnectionLimit)
+func NewHub(debug bool) *Hub {
+	return NewHubWithLimit(defaultConnectionLimit, debug)
 }
 
 // NewHubWithLimit creates a new Hub with a specific connection limit
-func NewHubWithLimit(limit int) *Hub {
+func NewHubWithLimit(limit int, debug bool) *Hub {
 	if limit <= 0 {
 		limit = defaultConnectionLimit
 	}
+	// Set package-level debug flag for upgrader
+	packageDebug = debug
 	return &Hub{
 		clients:    make(map[*Client]bool),
 		broadcast:  make(chan []byte),
@@ -142,6 +150,14 @@ func NewHubWithLimit(limit int) *Hub {
 		unregister: make(chan *Client),
 		maxClients: limit,
 		closed:     false,
+		debug:      debug,
+	}
+}
+
+// logf logs a message if debug mode is enabled
+func (h *Hub) logf(format string, v ...interface{}) {
+	if h.debug {
+		log.Printf("[WebSocket] "+format, v...)
 	}
 }
 
@@ -158,7 +174,7 @@ func (h *Hub) Run() {
 			}
 			if len(h.clients) >= h.maxClients {
 				h.mu.Unlock()
-				log.Printf("[WebSocket] Connection limit reached (%d), rejecting client", h.maxClients)
+				h.logf("Connection limit reached (%d), rejecting client", h.maxClients)
 				close(client.send)
 				client.conn.Close()
 				continue
@@ -166,7 +182,7 @@ func (h *Hub) Run() {
 			h.clients[client] = true
 			clientCount := len(h.clients)
 			h.mu.Unlock()
-			log.Printf("[WebSocket] Client registered. Total clients: %d", clientCount)
+			h.logf("Client registered. Total clients: %d", clientCount)
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -175,7 +191,7 @@ func (h *Hub) Run() {
 				close(client.send)
 				clientCount := len(h.clients)
 				h.mu.Unlock()
-				log.Printf("[WebSocket] Client unregistered. Total clients: %d", clientCount)
+				h.logf("Client unregistered. Total clients: %d", clientCount)
 			} else {
 				h.mu.Unlock()
 			}
@@ -218,7 +234,7 @@ func (h *Hub) Stop() {
 		delete(h.clients, client)
 	}
 
-	log.Printf("[WebSocket] Hub stopped, all clients disconnected")
+	h.logf("Hub stopped, all clients disconnected")
 }
 
 // ClientCount returns the current number of connected clients
@@ -233,7 +249,7 @@ func (h *Hub) Broadcast(message []byte) {
 	select {
 	case h.broadcast <- message:
 	default:
-		log.Printf("[WebSocket] Broadcast channel full, message dropped")
+		h.logf("Broadcast channel full, message dropped")
 	}
 }
 
@@ -250,7 +266,7 @@ func (h *Hub) BroadcastIssueUpdate(issue github.Issue) {
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("[WebSocket] Error marshaling issue update payload: %v", err)
+		h.logf("Error marshaling issue update payload: %v", err)
 		return
 	}
 
@@ -261,12 +277,12 @@ func (h *Hub) BroadcastIssueUpdate(issue github.Issue) {
 
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("[WebSocket] Error marshaling issue update message: %v", err)
+		h.logf("Error marshaling issue update message: %v", err)
 		return
 	}
 
 	h.Broadcast(msgBytes)
-	log.Printf("[WebSocket] Broadcast issue update for #%d to %d clients", issue.Number, h.ClientCount())
+	h.logf("Broadcast issue update for #%d to %d clients", issue.Number, h.ClientCount())
 }
 
 // BroadcastSyncComplete sends a sync completion message to all clients
@@ -277,7 +293,7 @@ func (h *Hub) BroadcastSyncComplete(count int) {
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("[WebSocket] Error marshaling sync complete payload: %v", err)
+		h.logf("Error marshaling sync complete payload: %v", err)
 		return
 	}
 
@@ -288,12 +304,12 @@ func (h *Hub) BroadcastSyncComplete(count int) {
 
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("[WebSocket] Error marshaling sync complete message: %v", err)
+		h.logf("Error marshaling sync complete message: %v", err)
 		return
 	}
 
 	h.Broadcast(msgBytes)
-	log.Printf("[WebSocket] Broadcast sync complete (count=%d) to %d clients", count, h.ClientCount())
+	h.logf("Broadcast sync complete (count=%d) to %d clients", count, h.ClientCount())
 }
 
 // BroadcastWorkerUpdate sends a worker status update to all clients
@@ -309,7 +325,7 @@ func (h *Hub) BroadcastWorkerUpdate(workerID, status string, taskID int, taskTit
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("[WebSocket] Error marshaling worker update payload: %v", err)
+		h.logf("Error marshaling worker update payload: %v", err)
 		return
 	}
 
@@ -320,12 +336,12 @@ func (h *Hub) BroadcastWorkerUpdate(workerID, status string, taskID int, taskTit
 
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("[WebSocket] Error marshaling worker update message: %v", err)
+		h.logf("Error marshaling worker update message: %v", err)
 		return
 	}
 
 	h.Broadcast(msgBytes)
-	log.Printf("[WebSocket] Broadcast worker update (worker=%s, task=#%d, stage=%s) to %d clients", workerID, taskID, stage, h.ClientCount())
+	h.logf("Broadcast worker update (worker=%s, task=#%d, stage=%s) to %d clients", workerID, taskID, stage, h.ClientCount())
 }
 
 // readPump pumps messages from the WebSocket connection to the hub
@@ -346,7 +362,7 @@ func (c *Client) readPump() {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("[WebSocket] Read error: %v", err)
+				c.hub.logf("Read error: %v", err)
 			}
 			break
 		}
@@ -405,7 +421,7 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	if authToken != "" {
 		queryToken := r.URL.Query().Get("token")
 		if queryToken != authToken {
-			log.Printf("[WebSocket] Authentication failed: invalid or missing token from %s", r.RemoteAddr)
+			hub.logf("Authentication failed: invalid or missing token from %s", r.RemoteAddr)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -413,7 +429,7 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("[WebSocket] Upgrade error: %v", err)
+		hub.logf("Upgrade error: %v", err)
 		return
 	}
 

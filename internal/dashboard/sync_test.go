@@ -52,7 +52,7 @@ func (m *mockStore) SaveIssueCache(issue github.Issue, milestone string, force b
 func TestNewSyncService(t *testing.T) {
 	gh := &mockGitHubClient{}
 	store := &mockStore{}
-	hub := NewHub()
+	hub := NewHub(false)
 
 	service := NewSyncService(gh, store, hub)
 
