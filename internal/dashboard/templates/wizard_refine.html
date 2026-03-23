@@ -22,6 +22,15 @@
     </div>
     {{end}}
     
+    {{if .SprintName}}
+    <div class="form-group sprint-option">
+      <label class="sprint-checkbox">
+        <input type="checkbox" name="add_to_sprint" value="1" checked>
+        <span class="sprint-checkbox-label">Add to current sprint <strong>{{.SprintName}}</strong></span>
+      </label>
+    </div>
+    {{end}}
+    
     <div id="refine-error" class="error-message" style="display:none; color: var(--error); margin: 1rem 0;"></div>
     
     <div class="form-actions">

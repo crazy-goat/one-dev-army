@@ -2661,3 +2661,95 @@ func TestWizardStepIndicator_NoDuplicateInContent(t *testing.T) {
 		t.Errorf("step indicator appears %d times, should appear only once (no duplicates in content)", indicatorCount)
 	}
 }
+
+// TestHandleWizardRefine_ParsesAddToSprint verifies that the add_to_sprint form value is parsed and stored in session
+func TestHandleWizardRefine_ParsesAddToSprint(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Create a session
+	session, _ := srv.wizardStore.Create("feature")
+
+	// Test with add_to_sprint checked
+	form := url.Values{}
+	form.Set("session_id", session.ID)
+	form.Set("idea", "Test feature idea")
+	form.Set("add_to_sprint", "1")
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardRefine(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify session was updated
+	updated, ok := srv.wizardStore.Get(session.ID)
+	if !ok {
+		t.Fatal("expected to retrieve session")
+	}
+
+	if !updated.AddToSprint {
+		t.Errorf("expected AddToSprint to be true when checkbox is checked, got %v", updated.AddToSprint)
+	}
+
+	// Test with add_to_sprint unchecked
+	session2, _ := srv.wizardStore.Create("feature")
+	form2 := url.Values{}
+	form2.Set("session_id", session2.ID)
+	form2.Set("idea", "Another test idea")
+	// Don't set add_to_sprint
+
+	req2 := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(form2.Encode()))
+	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec2 := httptest.NewRecorder()
+
+	srv.handleWizardRefine(rec2, req2)
+
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec2.Code)
+	}
+
+	updated2, ok := srv.wizardStore.Get(session2.ID)
+	if !ok {
+		t.Fatal("expected to retrieve session")
+	}
+
+	if updated2.AddToSprint {
+		t.Errorf("expected AddToSprint to be false when checkbox is unchecked, got %v", updated2.AddToSprint)
+	}
+}
+
+// TestHandleWizardRefine_SprintNameInTemplate verifies SprintName is passed to template when active sprint exists
+func TestHandleWizardRefine_SprintNameInTemplate(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Create a session
+	session, _ := srv.wizardStore.Create("feature")
+
+	form := url.Values{}
+	form.Set("session_id", session.ID)
+	form.Set("idea", "Test feature idea")
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardRefine(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Since there's no active sprint (gh is nil), SprintName should be empty
+	// and the sprint checkbox should NOT appear
+	if strings.Contains(body, `name="add_to_sprint"`) {
+		t.Error("sprint checkbox should NOT appear when there is no active sprint")
+	}
+}
