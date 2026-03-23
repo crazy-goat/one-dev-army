@@ -23,6 +23,10 @@
 .col-blocked .card{border-color:var(--red)}
 .col-failed .card{border-color:#e74c3c;background:rgba(231,76,60,0.05)}
 .col-failed .column-title{color:#e74c3c}
+.col-plan .card{border-color:#f39c12;background:rgba(243,156,18,0.05)}
+.col-plan .column-title{color:#f39c12}
+.col-code .card{border-color:#3498db;background:rgba(52,152,219,0.05)}
+.col-code .column-title{color:#3498db}
 .col-approve .card{border-color:#9b59b6;background:rgba(155,89,182,0.05)}
 .col-approve .column-title{color:#9b59b6}
 .card .card-pr{margin-top:.3rem}
@@ -96,7 +100,7 @@
     {{end}}
   </div>
 
-  <div class="column">
+  <div class="column col-plan">
     <div class="column-title">Plan <span class="count">{{len .Plan}}</span></div>
     {{range .Plan}}
     <div class="card">
@@ -111,7 +115,7 @@
     {{end}}
   </div>
 
-  <div class="column">
+  <div class="column col-code">
     <div class="column-title">Code <span class="count">{{len .Code}}</span></div>
     {{range .Code}}
     <div class="card">
