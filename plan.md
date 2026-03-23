@@ -1,49 +1,41 @@
 # Implementation Plan for Issue #176
 
-**Created:** 2026-03-23T13:48:44+01:00
-**Updated:** 2026-03-23T13:48:44+01:00
+**Created:** 2026-03-23T13:58:37+01:00
+**Updated:** 2026-03-23T13:58:37+01:00
 
 ## Analysis
 
-**Current State Verification:**
+### 1. Core Requirements
+The issue requests removing GitHub Projects API dependency from ODA startup by:
+- Removing `EnsureProject()` and `EnsureProjectColumns()` calls from `main.go`
+- Removing `projectNumber` parameter from `NewOrchestrator()` and `NewServer()`
+- Marking project-related methods as deprecated in `project.go`
+- Removing `projectNumber` field and `moveToColumn()` method from `orchestrator.go`
+- Removing `projectNumber` from dashboard Server struct
 
-1. **Core requirements** — The main changes have already been implemented:
-   - ✅ `main.go` (lines 205-215): No `EnsureProject()` or `EnsureProjectColumns()` calls exist
-   - ✅ `NewOrchestrator()` signature: Does NOT include `projectNumber` parameter
-   - ✅ `NewServer()` signature: Does NOT include `projectNumber` parameter
-   - ✅ `orchestrator.go`: No `projectNumber` field exists; `moveToColumn()` method exists but is already a no-op (lines 374-378)
-   - ✅ `dashboard/handlers.go`: Server struct has no `projectNumber` field
+### 2. Current State Verification
+After examining all relevant files:
 
-2. **Files that need changes:**
-   - `internal/github/project.go` - Only file needing updates (add deprecation comments)
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| `main.go` - Remove `EnsureProject()` calls | ✅ **Already removed** | Lines 204-213: No calls exist |
+| `main.go` - Remove `EnsureProjectColumns()` calls | ✅ **Already removed** | Not present in startup sequence |
+| `NewOrchestrator()` - Remove `projectNumber` param | ✅ **Already removed** | `internal/mvp/orchestrator.go:54` - signature has 5 params, no `projectNumber` |
+| `NewServer()` - Remove `projectNumber` param | ✅ **Already removed** | `internal/dashboard/server.go:36` - signature has 7 params, no `projectNumber` |
+| `project.go` - Mark methods deprecated | ✅ **Already done** | Lines 30, 72, 97 have deprecation comments |
+| `orchestrator.go` - Remove `projectNumber` field | ✅ **Already removed** | Struct has no `projectNumber` field |
+| `orchestrator.go` - Remove `moveToColumn()` method | ⚠️ **Partially done** | Method exists at line 374 but is already a no-op with TODO comment |
+| `dashboard/handlers.go` - Remove `projectNumber` | ✅ **Already removed** | Server struct has no `projectNumber` field |
 
-3. **Implementation approach:**
-   - Add deprecation comments to `EnsureProject()`, `EnsureProjectColumns()`, and `setupProject()` methods
-   - The methods can remain for backward compatibility but should be marked deprecated
+### 3. Implementation Approach
+The GitHub Projects dependency has already been removed from the startup sequence. The remaining `moveToColumn()` method:
+- Is already a no-op (just logs a message)
+- Has a TODO comment indicating it will be replaced with label-based implementation
+- Is called in 4 places but causes no actual GitHub API calls
 
-4. **Testing strategy:**
-   - Run existing tests to ensure no regressions
-   - Verify ODA starts without GitHub Projects API calls
+### 4. Testing Strategy
+- Run existing tests to verify no regressions
+- The `moveToColumn()` calls are harmless no-ops
 
 ---
-
-## Implementation Steps
-
-### Step 1: **File to modify:** `internal/github/project.go`
-
-- Add deprecation comment to `EnsureProject()` method (line 27)
-- Add deprecation comment to `EnsureProjectColumns()` method (line 93)
-- Add deprecation comment to `setupProject()` method (line 69)
-
-### Step 2: **Example deprecation format:**
-
-```go
-// Deprecated: GitHub Projects dependency is being removed. This method is no longer called on startup.
-```
-
-### Step 3: **Testing:**
-
-- Run `go test ./...` to verify all tests pass
-- Start ODA to confirm no GitHub Projects API calls are made
-The implementation is essentially complete. Only documentation/deprecation markers remain as optional cleanup.
 
