@@ -1,106 +1,102 @@
-# Implementation Plan for Issue #168
+# Implementation Plan for Issue #177
 
-**Created:** 2026-03-23T12:41:24+01:00
-**Updated:** 2026-03-23T12:41:24+01:00
+**Created:** 2026-03-23T13:01:51+01:00
+**Updated:** 2026-03-23T13:01:51+01:00
 
 ## Analysis
 
-Excellent! All tests are passing. Let me now provide a comprehensive analysis of the implementation.## Analysis: Issue #168 - Merge analyze and plan steps
+### 1. Core Requirements
+- Create SQLite table `issue_cache` with fields: issue_number (PK), title, body, state, labels (JSON), assignee, milestone, updated_at, cached_at
+- Add 3 indexes: state, cached_at, milestone
+- Implement 5 CRUD methods in `db.go`: SaveIssueCache, GetIssueCache, GetIssuesCacheByMilestone, ClearIssueCache, GetAllCachedIssues
+- Handle JSON serialization for labels array
+- Write comprehensive unit tests
 
-### Status: ✅ **ALREADY IMPLEMENTED**
+### 2. Files That Need Changes
+- `internal/db/migrations.go` - Add 4 new migrations (table + 3 indexes)
+- `internal/db/db.go` - Add IssueCache struct and 5 methods
+- `internal/db/db_test.go` - Add tests for all cache operations
 
-The feature has been fully implemented on branch `oda-168-merge-analyze-and-plan-steps-into-single` (commit `4b0f71e`).
+### 3. Implementation Approach
+Follow existing patterns in the codebase:
+- Use `encoding/json` for labels serialization (stored as TEXT in SQLite)
+- Use `sql.NullString` for nullable fields (body, assignee, milestone, updated_at)
+- Follow error wrapping pattern: `fmt.Errorf("context: %w", err)`
+- Use `rows.Scan()` with pointer fields for NULL handling
+- Use `time.Now()` for cached_at timestamp
 
----
-
-### 1. Core Requirements (Completed)
-
-| Requirement | Status | Implementation |
-|-------------|--------|----------------|
-| Single "technical-planning" step | ✅ | `worker.go:130` - stepOrder updated |
-| Combined prompt | ✅ | `worker.go:23-51` - technicalPlanningPrompt |
-| Parse analysis + plan from response | ✅ | `worker.go:335-374` - parseTechnicalPlanningResponse() |
-| Resume from technical-planning | ✅ | `worker.go:186-198` - backward compatible resume |
-| Migrate old analyze/plan steps | ✅ | `db.go:178-181` - GetLastCompletedStep() mapping |
-| Tests updated | ✅ | All tests passing |
-
----
-
-### 2. Files Modified
-
-- **`internal/mvp/worker.go`** - Main implementation
-  - Combined prompt (`technicalPlanningPrompt`)
-  - New `technicalPlanning()` function (replaces separate analyze/plan)
-  - Response parser with fallback heuristics
-  - Updated step order: 4 steps instead of 5
-  
-- **`internal/db/db.go`** - Database migration
-  - `GetLastCompletedStep()` maps "analyze"/"plan" → "technical-planning"
-  - `GetStepResponse()` fallback to old "plan" step
-  
-- **`internal/mvp/worker_test.go`** - Tests
-  - `TestParseTechnicalPlanningResponse` - 5 test cases for parsing
-  
-- **`internal/db/db_test.go`** - Migration tests
-  - `TestGetLastCompletedStep_Migration`
-  - `TestGetStepResponse_Migration`
-
----
-
-### 3. Implementation Strategy
-
-**Before:** 2 LLM calls (analyze → plan) with separate resume points
-**After:** 1 LLM call with combined prompt, single resume point
-
-**Key Design Decisions:**
-1. **Combined Prompt** - Merges analysis requirements + implementation planning into one structured output
-2. **Response Parsing** - Robust parser handles various LLM output formats (headers, heuristics, fallback)
-3. **Backward Compatibility** - Database layer transparently maps old step names to new
-4. **Plan.md Generation** - Creates GitHub attachment with both analysis and plan sections
-
----
-
-### 4. Testing Strategy (Implemented)
-
-| Test | Coverage |
-|------|----------|
-| `TestParseTechnicalPlanningResponse` | Response parsing with/without headers |
-| `TestGetLastCompletedStep_Migration` | Old step name → new mapping |
-| `TestGetStepResponse_Migration` | Fallback to legacy "plan" step |
-| `TestCheckAlreadyDone` | ALREADY_DONE detection |
-| Integration tests | Full workflow validation |
-
-**All tests passing** ✅
-
----
-
-### Benefits Achieved
-
-1. **Performance**: 50% reduction in LLM calls for planning phase (2 → 1)
-2. **Simplicity**: 4 pipeline steps instead of 5
-3. **Consistency**: Matches wizard behavior from issue #148
-4. **Resilience**: Backward compatible with in-flight tickets using old step names
+### 4. Testing Strategy
+- Test migrations run successfully (idempotent)
+- Test SaveIssueCache with full Issue data
+- Test GetIssueCache retrieval and JSON deserialization
+- Test GetIssuesCacheByMilestone filtering
+- Test ClearIssueCache deletes all records
+- Test GetAllCachedIssues returns all issues
+- Test edge cases: empty cache, NULL fields, JSON parsing
 
 ## Implementation Steps
 
-### Step 1: In `worker.go`:
+### Step 1: **Add migrations** (`internal/db/migrations.go`)
 
-- Line 130: `stepOrder` is set to `["technical-planning", "implement", "code-review", "create-pr"]` - 4 steps instead of 5
-- Lines 23-51: `technicalPlanningPrompt` constant with combined analysis and plan sections
-- Lines 296-333: `technicalPlanning()` function that handles the combined step
-- Lines 335-374: `parseTechnicalPlanningResponse()` function to parse the combined response
-- Lines 174-198: Resume logic that handles both new "technical-planning" step and old "analyze"/"plan" steps
+- Append 4 migration strings to `migrations` slice:
+- CREATE TABLE issue_cache
+- CREATE INDEX idx_issue_cache_state
+- CREATE INDEX idx_issue_cache_cached_at
+- CREATE INDEX idx_issue_cache_milestone
 
-### Step 2: In `db.go`:
+### Step 2: **Add IssueCache struct and methods** (`internal/db/db.go`)
 
-- Lines 178-181: `GetLastCompletedStep()` maps old "analyze" and "plan" step names to "technical-planning"
-- Lines 194-196: `GetStepResponse()` has fallback to old "plan" step for backward compatibility
-The analysis provided by the user is correct - this feature is ALREADY IMPLEMENTED. All the requirements from issue #168 have been met:
-- Single "technical-planning" step ✅
-- Combined prompt with Analysis and Implementation Plan sections ✅
-- Response parsing to extract both sections ✅
-- Resume from technical-planning ✅
-- Migration of old analyze/plan steps ✅
-- Tests (mentioned in the analysis) ✅
-I should respond with "ALREADY_DONE:" followed by the concrete evidence.ALREADY_DONE: The feature is fully implemented in internal/mvp/worker.go:130 (stepOrder with 4 steps), worker.go:23-51 (technicalPlanningPrompt constant), worker.go:296-333 (technicalPlanning function), worker.go:335-374 (parseTechnicalPlanningResponse), and internal/db/db.go:178-181 (migration mapping old "analyze"/"plan" → "technical-planning").
+- Add `IssueCache` struct matching github.Issue fields
+- Add `SaveIssueCache(issue github.Issue, milestone string) error`
+- Add `GetIssueCache(issueNumber int) (github.Issue, error)`
+- Add `GetIssuesCacheByMilestone(milestone string) ([]github.Issue, error)`
+- Add `GetAllCachedIssues() ([]github.Issue, error)`
+- Add `ClearIssueCache() error`
+
+### Step 3: **Add unit tests** (`internal/db/db_test.go`)
+
+- `TestSaveAndGetIssueCache` - full roundtrip test
+- `TestGetIssueCache_NotFound` - empty result handling
+- `TestGetIssuesCacheByMilestone` - filtering by milestone
+- `TestGetAllCachedIssues` - retrieve all
+- `TestClearIssueCache` - deletion verification
+- `TestIssueCache_JSONLabels` - labels serialization/deserialization
+### Detailed Code Changes
+**File: `internal/db/migrations.go`**
+- Append to `migrations` slice (after line 37):
+```go
+`CREATE TABLE IF NOT EXISTS issue_cache (
+issue_number INTEGER PRIMARY KEY,
+title TEXT NOT NULL,
+body TEXT,
+state TEXT NOT NULL,
+labels TEXT,
+assignee TEXT,
+milestone TEXT,
+updated_at DATETIME,
+cached_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`,
+`CREATE INDEX IF NOT EXISTS idx_issue_cache_state ON issue_cache(state)`,
+`CREATE INDEX IF NOT EXISTS idx_issue_cache_cached_at ON issue_cache(cached_at)`,
+`CREATE INDEX IF NOT EXISTS idx_issue_cache_milestone ON issue_cache(milestone)`,
+```
+**File: `internal/db/db.go`**
+- Add import: `"encoding/json"`
+- Add struct after line 22:
+```go
+type IssueCache struct {
+IssueNumber int
+Title       string
+Body        string
+State       string
+Labels      string // JSON array
+Assignee    string
+Milestone   string
+UpdatedAt   *time.Time
+CachedAt    time.Time
+}
+```
+- Add 5 methods after line 253 (end of file)
+**File: `internal/db/db_test.go`**
+- Add 6 test functions following existing patterns (lines 257+)
 
