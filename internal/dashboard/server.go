@@ -19,22 +19,21 @@ import (
 var templateFS embed.FS
 
 type Server struct {
-	port          int
-	tmpls         map[string]*template.Template
-	store         *db.Store
-	pool          func() []worker.WorkerInfo
-	gh            *github.Client
-	projectNumber int
-	orchestrator  *mvp.Orchestrator
-	mux           *http.ServeMux
-	httpSrv       *http.Server
-	wizardStore   *WizardSessionStore
-	oc            *opencode.Client
-	wizardLLM     string
-	hub           *Hub
+	port         int
+	tmpls        map[string]*template.Template
+	store        *db.Store
+	pool         func() []worker.WorkerInfo
+	gh           *github.Client
+	orchestrator *mvp.Orchestrator
+	mux          *http.ServeMux
+	httpSrv      *http.Server
+	wizardStore  *WizardSessionStore
+	oc           *opencode.Client
+	wizardLLM    string
+	hub          *Hub
 }
 
-func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, projectNumber int, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string) (*Server, error) {
+func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string) (*Server, error) {
 	tmpls, err := parseTemplates()
 	if err != nil {
 		return nil, err
@@ -42,19 +41,14 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 
 	mux := http.NewServeMux()
 
-	// Create and start the WebSocket hub
-	hub := NewHub()
-	go hub.Run()
-
 	s := &Server{
-		port:          port,
-		tmpls:         tmpls,
-		store:         store,
-		pool:          pool,
-		gh:            gh,
-		projectNumber: projectNumber,
-		orchestrator:  orchestrator,
-		mux:           mux,
+		port:         port,
+		tmpls:        tmpls,
+		store:        store,
+		pool:         pool,
+		gh:           gh,
+		orchestrator: orchestrator,
+		mux:          mux,
 		httpSrv: &http.Server{
 			Addr:    fmt.Sprintf(":%d", port),
 			Handler: mux,
@@ -62,11 +56,13 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 		wizardStore: NewWizardSessionStore(),
 		oc:          oc,
 		wizardLLM:   wizardLLM,
-		hub:         hub,
+		hub:         NewHub(),
 	}
 	if s.wizardLLM == "" {
 		s.wizardLLM = DefaultLLMModel
 	}
+	// Start the WebSocket hub
+	go s.hub.Run()
 	s.routes()
 	return s, nil
 }

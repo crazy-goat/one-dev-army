@@ -38,29 +38,27 @@ Respond with ONLY this format on the last line:
 NEXT: #<number>`
 
 type Orchestrator struct {
-	cfg           *config.Config
-	worker        *Worker
-	gh            *github.Client
-	oc            *opencode.Client
-	brMgr         *git.BranchManager
-	store         *db.Store
-	projectNumber int
-	running       bool
-	paused        bool
-	processing    bool
-	currentTask   *Task
-	mu            sync.Mutex
+	cfg         *config.Config
+	worker      *Worker
+	gh          *github.Client
+	oc          *opencode.Client
+	brMgr       *git.BranchManager
+	store       *db.Store
+	running     bool
+	paused      bool
+	processing  bool
+	currentTask *Task
+	mu          sync.Mutex
 }
 
-func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client, brMgr *git.BranchManager, store *db.Store, projectNumber int) *Orchestrator {
+func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client, brMgr *git.BranchManager, store *db.Store) *Orchestrator {
 	o := &Orchestrator{
-		cfg:           cfg,
-		gh:            gh,
-		oc:            oc,
-		brMgr:         brMgr,
-		store:         store,
-		projectNumber: projectNumber,
-		paused:        true,
+		cfg:    cfg,
+		gh:     gh,
+		oc:     oc,
+		brMgr:  brMgr,
+		store:  store,
+		paused: true,
 	}
 	o.worker = NewWorker(1, cfg, oc, gh, brMgr, store)
 	return o
@@ -159,14 +157,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		}
 
 		// Fetch project board columns to detect manually-blocked issues
+		// TODO: Replace with label-based detection when implementing ticket #182
 		blockedOnBoard := make(map[int]bool)
-		if o.projectNumber > 0 {
-			if itemsByStatus, err := o.gh.GetProjectItemsByStatus(o.projectNumber); err == nil {
-				for _, item := range itemsByStatus["Blocked"] {
-					blockedOnBoard[item.Number] = true
-				}
-			}
-		}
 
 		var openCount, skippedCount int
 		var inProgressIssue *github.Issue
@@ -380,12 +372,9 @@ func (o *Orchestrator) recordStep(issueNumber int, stepName, response string) {
 }
 
 func (o *Orchestrator) moveToColumn(issueNumber int, column string) {
-	if o.projectNumber == 0 {
-		return
-	}
-	if err := o.gh.MoveItemToColumn(o.projectNumber, issueNumber, column); err != nil {
-		log.Printf("[Orchestrator] Error moving #%d to %q: %v", issueNumber, column, err)
-	}
+	// TODO: Replace with SetStageLabel when implementing ticket #182
+	// For now, this is a no-op as we're removing GitHub Projects dependency
+	log.Printf("[Orchestrator] Would move #%d to %q (label-based implementation pending)", issueNumber, column)
 }
 
 func (o *Orchestrator) sleep(ctx context.Context, d time.Duration) {

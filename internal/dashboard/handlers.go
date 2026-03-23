@@ -134,25 +134,11 @@ func (s *Server) buildBoardData() boardData {
 	}
 	log.Printf("[Dashboard] Found %d issues in milestone %s", len(issues), milestone)
 
-	// Fetch project items with their status
-	itemsByStatus, err := s.gh.GetProjectItemsByStatus(s.projectNumber)
-	if err != nil {
-		log.Printf("[Dashboard] Error fetching project items for project %d: %v", s.projectNumber, err)
-		itemsByStatus = make(map[string][]github.ProjectItem)
-		for _, col := range github.ProjectColumns {
-			itemsByStatus[col] = []github.ProjectItem{}
-		}
-	} else {
-		totalItems := 0
-		for _, items := range itemsByStatus {
-			totalItems += len(items)
-		}
-		log.Printf("[Dashboard] Found %d items in project %d", totalItems, s.projectNumber)
-
-		// If project is empty, we'll map issues to columns based on their state/labels
-		if totalItems == 0 {
-			itemsByStatus = nil // Signal that we need to infer status from issues
-		}
+	// TODO: Replace with cache-based implementation when working on ticket #181
+	// For now, infer status from issue labels
+	itemsByStatus := make(map[string][]github.ProjectItem)
+	for _, col := range github.ProjectColumns {
+		itemsByStatus[col] = []github.ProjectItem{}
 	}
 
 	// Create a map of issue number to issue for quick lookup
@@ -483,9 +469,9 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[Dashboard] Error adding comment to #%d: %v", issueNum, cmtErr)
 		}
 
-		if s.projectNumber > 0 {
-			s.gh.MoveItemToColumn(s.projectNumber, issueNum, "Backlog")
-		}
+		// TODO: Replace with label-based implementation when working on ticket #183
+		// For now, this is a no-op as we're removing GitHub Projects dependency
+		log.Printf("[Dashboard] Would move #%d to Backlog (label-based implementation pending)", issueNum)
 
 		log.Printf("[Dashboard] ✗ Merge conflict on #%d — PR closed, reset to backlog", issueNum)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -498,9 +484,9 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[Dashboard] Error removing awaiting-approval label from #%d: %v", issueNum, err)
 	}
 
-	if s.projectNumber > 0 {
-		s.gh.MoveItemToColumn(s.projectNumber, issueNum, "Done")
-	}
+	// TODO: Replace with label-based implementation when working on ticket #183
+	// For now, this is a no-op as we're removing GitHub Projects dependency
+	log.Printf("[Dashboard] Would move #%d to Done (label-based implementation pending)", issueNum)
 
 	s.recordStep(issueNum, "done", "Moved to Done")
 
