@@ -18,6 +18,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/git"
 	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/llm"
 	"github.com/crazy-goat/one-dev-army/internal/mvp"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
@@ -227,7 +228,8 @@ func TestWorkerProcessEndToEnd(t *testing.T) {
 		Tools:        config.Tools{TestCmd: "echo test-ok"},
 	}
 
-	w := mvp.NewWorker(1, cfg, oc, gh, wtMgr, nil, nil)
+	router := llm.NewRouter(&cfg.LLM)
+	w := mvp.NewWorker(1, cfg, oc, gh, wtMgr, nil, nil, router)
 
 	task := &mvp.Task{
 		Issue: github.Issue{
@@ -295,7 +297,8 @@ func TestWorkerProcessStatusTransitions(t *testing.T) {
 		Tools:        config.Tools{TestCmd: "echo ok"},
 	}
 
-	w := mvp.NewWorker(1, cfg, oc, gh, wtMgr, nil, nil)
+	router := llm.NewRouter(&cfg.LLM)
+	w := mvp.NewWorker(1, cfg, oc, gh, wtMgr, nil, nil, router)
 
 	task := &mvp.Task{
 		Issue: github.Issue{
@@ -330,7 +333,8 @@ func TestWorkerProcessTestFailure(t *testing.T) {
 		Tools:        config.Tools{TestCmd: "exit 1"},
 	}
 
-	w := mvp.NewWorker(1, cfg, oc, gh, wtMgr, nil, nil)
+	router := llm.NewRouter(&cfg.LLM)
+	w := mvp.NewWorker(1, cfg, oc, gh, wtMgr, nil, nil, router)
 
 	task := &mvp.Task{
 		Issue: github.Issue{

@@ -14,6 +14,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/git"
 	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/llm"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"github.com/crazy-goat/one-dev-army/internal/pipeline"
 )
@@ -131,20 +132,22 @@ func BranchName(issueNumber int, title string) string {
 }
 
 type Processor struct {
-	cfg   *config.Config
-	oc    *opencode.Client
-	gh    *github.Client
-	store *db.Store
-	brMgr *git.BranchManager
+	cfg    *config.Config
+	oc     *opencode.Client
+	gh     *github.Client
+	store  *db.Store
+	brMgr  *git.BranchManager
+	router *llm.Router
 }
 
-func NewProcessor(cfg *config.Config, oc *opencode.Client, gh *github.Client, store *db.Store, brMgr *git.BranchManager) *Processor {
+func NewProcessor(cfg *config.Config, oc *opencode.Client, gh *github.Client, store *db.Store, brMgr *git.BranchManager, router *llm.Router) *Processor {
 	return &Processor{
-		cfg:   cfg,
-		oc:    oc,
-		gh:    gh,
-		store: store,
-		brMgr: brMgr,
+		cfg:    cfg,
+		oc:     oc,
+		gh:     gh,
+		store:  store,
+		brMgr:  brMgr,
+		router: router,
 	}
 }
 
@@ -160,7 +163,7 @@ func (p *Processor) Process(ctx context.Context, w *Worker, task *Task) error {
 		Path:   p.brMgr.RepoDir(),
 		Branch: branch,
 	}
-	executor := NewStageExecutor(p.cfg, p.oc, p.store, task, wt)
+	executor := NewStageExecutor(p.cfg, p.oc, p.store, task, wt, p.router)
 
 	startStage := pipeline.Stage(task.Stage)
 	if startStage == "" || startStage == pipeline.StageQueued {
@@ -221,15 +224,17 @@ type StageExecutor struct {
 	store    *db.Store
 	task     *Task
 	worktree *git.Worktree
+	router   *llm.Router
 }
 
-func NewStageExecutor(cfg *config.Config, oc *opencode.Client, store *db.Store, task *Task, wt *git.Worktree) *StageExecutor {
+func NewStageExecutor(cfg *config.Config, oc *opencode.Client, store *db.Store, task *Task, wt *git.Worktree, router *llm.Router) *StageExecutor {
 	return &StageExecutor{
 		cfg:      cfg,
 		oc:       oc,
 		store:    store,
 		task:     task,
 		worktree: wt,
+		router:   router,
 	}
 }
 
@@ -346,6 +351,15 @@ func (e *StageExecutor) executeCoding(taskID int, stage pipeline.Stage, stageCon
 }
 
 func (e *StageExecutor) llmForStage(stage pipeline.Stage) string {
+	// Use the router to select the appropriate model
+	if e.router != nil {
+		model := e.router.SelectModelForStage(string(stage), "")
+		if model != "" {
+			return model
+		}
+	}
+
+	// Fallback to legacy behavior - check pipeline stages
 	for _, s := range e.cfg.Pipeline.Stages {
 		if s.Name == string(stage) {
 			return s.LLM

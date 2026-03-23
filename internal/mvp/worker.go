@@ -14,6 +14,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/git"
 	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/llm"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"github.com/crazy-goat/one-dev-army/internal/plan"
 )
@@ -114,9 +115,10 @@ type Worker struct {
 	store        *db.Store
 	repoDir      string
 	orchestrator *Orchestrator
+	router       *llm.Router
 }
 
-func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Client, brMgr *git.BranchManager, store *db.Store, orchestrator *Orchestrator) *Worker {
+func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Client, brMgr *git.BranchManager, store *db.Store, orchestrator *Orchestrator, router *llm.Router) *Worker {
 	return &Worker{
 		id:           id,
 		cfg:          cfg,
@@ -126,6 +128,7 @@ func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Clien
 		store:        store,
 		repoDir:      brMgr.RepoDir(),
 		orchestrator: orchestrator,
+		router:       router,
 	}
 }
 
@@ -318,7 +321,14 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 
 func (w *Worker) technicalPlanning(ctx context.Context, task *Task) (analysis, implPlan string, err error) {
 	prompt := fmt.Sprintf(technicalPlanningPrompt, task.Issue.Number, task.Issue.Title, task.Issue.Body)
-	response, err := w.llmStep(ctx, task, "technical-planning", prompt, w.cfg.Planning.LLM)
+
+	// Use router to select model for planning category
+	llmModel := w.cfg.Planning.LLM
+	if w.router != nil {
+		llmModel = w.router.SelectModel(config.CategoryPlanning, config.ComplexityMedium, nil)
+	}
+
+	response, err := w.llmStep(ctx, task, "technical-planning", prompt, llmModel)
 	if err != nil {
 		return "", "", err
 	}
@@ -416,7 +426,15 @@ func (w *Worker) implement(ctx context.Context, task *Task, planStr string) erro
 		testCmd = "go test ./..."
 	}
 	prompt := fmt.Sprintf(implementationPrompt, task.Issue.Number, task.Issue.Title, planStr, task.Worktree, testCmd)
-	_, err = w.llmStep(ctx, task, "implement", prompt, w.cfg.EpicAnalysis.LLM)
+
+	// Use router to select model for development category with complexity detection
+	llmModel := w.cfg.EpicAnalysis.LLM
+	if w.router != nil {
+		complexity := llm.DetectComplexity(planStr, w.router.GetConfig().RoutingRules.ComplexityThresholds)
+		llmModel = w.router.SelectModel(config.CategoryDevelopment, complexity, nil)
+	}
+
+	_, err = w.llmStep(ctx, task, "implement", prompt, llmModel)
 	if err != nil {
 		return err
 	}
@@ -444,7 +462,14 @@ func (w *Worker) fixFromReview(ctx context.Context, task *Task, review string) e
 		testCmd = "go test ./..."
 	}
 	prompt := fmt.Sprintf(fixFromReviewPrompt, task.Issue.Number, task.Issue.Title, task.Worktree, testCmd, review)
-	_, err := w.llmStep(ctx, task, "fix-from-review", prompt, w.cfg.EpicAnalysis.LLM)
+
+	// Use router to select model for development category
+	llmModel := w.cfg.EpicAnalysis.LLM
+	if w.router != nil {
+		llmModel = w.router.SelectModel(config.CategoryDevelopment, config.ComplexityMedium, nil)
+	}
+
+	_, err := w.llmStep(ctx, task, "fix-from-review", prompt, llmModel)
 	if err != nil {
 		return err
 	}
@@ -498,7 +523,14 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (appr
 		}
 	}
 
-	model := opencode.ParseModelRef(w.cfg.Planning.LLM)
+	// Use router to select model for development category with high complexity (code review is important)
+	llmModel := w.cfg.Planning.LLM
+	if w.router != nil {
+		hints := map[string]any{"stage": "code-review"}
+		llmModel = w.router.SelectModel(config.CategoryDevelopment, config.ComplexityHigh, hints)
+	}
+
+	model := opencode.ParseModelRef(llmModel)
 	var result crResult
 	if err := w.oc.SendMessageStructured(ctx, session.ID, prompt, model, crSchema, &result); err != nil {
 		if w.store != nil && stepID > 0 {

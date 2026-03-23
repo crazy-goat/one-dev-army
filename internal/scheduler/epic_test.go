@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
+	"github.com/crazy-goat/one-dev-army/internal/llm"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
@@ -118,7 +119,8 @@ func TestEpicAnalyzer_ParseResponse(t *testing.T) {
 		EpicAnalysis: config.EpicAnalysis{LLM: "test-model"},
 	}
 	oc := opencode.NewClient(srv.URL)
-	ea := NewEpicAnalyzer(cfg, oc, nil)
+	router := llm.NewRouter(&cfg.LLM)
+	ea := NewEpicAnalyzer(cfg, oc, nil, router)
 
 	result, err := ea.Analyze("Build a user management system")
 	if err != nil {

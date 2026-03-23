@@ -20,6 +20,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/git"
 	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/llm"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
@@ -283,7 +284,8 @@ func TestFullPipelineWithMockOpencode(t *testing.T) {
 	brMgr := git.NewBranchManager(repoDir)
 
 	ghClient := &github.Client{Repo: "owner/repo"}
-	proc := worker.NewProcessor(cfg, oc, ghClient, store, brMgr)
+	router := llm.NewRouter(&cfg.LLM)
+	proc := worker.NewProcessor(cfg, oc, ghClient, store, brMgr, router)
 
 	task := &worker.Task{
 		ID:          1,
@@ -539,7 +541,8 @@ func TestConfigToProcessorWiring(t *testing.T) {
 	}
 	wt := &git.Worktree{Name: "wiring-worker", Path: repoDir, Branch: "task/77-config-wiring-test"}
 
-	executor := worker.NewStageExecutor(cfg, oc, store, task, wt)
+	router := llm.NewRouter(&cfg.LLM)
+	executor := worker.NewStageExecutor(cfg, oc, store, task, wt, router)
 
 	_, err = executor.Execute(1, "analysis", "test context")
 	if err != nil {
