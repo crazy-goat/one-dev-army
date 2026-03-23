@@ -55,11 +55,9 @@
     {{if .Processing}}<span style="color:var(--green);font-size:.85rem;margin-left:.5rem">{{.CurrentIssue}}</span>{{end}}
     {{if and (not .Paused) (not .Processing)}}<span style="color:var(--green);font-size:.85rem;margin-left:.5rem">Running</span>{{end}}
     {{if .Paused}}<span style="color:var(--muted);font-size:.85rem;margin-left:.5rem">Paused</span>{{end}}
-    <form method="post" action="/sync" style="display:inline">
-      <button type="submit" class="btn">Sync</button>
-    </form>
-    <button type="button" id="autosync-toggle" class="btn" onclick="toggleAutosync()">
-      <span id="autosync-icon">▶</span> <span id="autosync-text">OFF</span>
+    <button type="button" id="sync-btn" class="btn" onclick="triggerSync()">
+      <span id="sync-spinner" style="display:none;">⟳</span>
+      <span id="sync-text">Sync</span>
     </button>
     <form method="post" action="/plan-sprint" style="display:inline">
       <button type="submit" class="btn btn-primary">Plan Sprint</button>
@@ -67,7 +65,7 @@
   </div>
 </div>
 
-<div class="board" id="board-container" hx-get="/api/board-data" hx-swap="outerHTML">
+<div class="board" id="board-container" hx-get="/api/board-data" hx-swap="outerHTML" hx-trigger="refresh">
   <div class="column col-blocked">
     <div class="column-title">Blocked <span class="count">{{len .Blocked}}</span></div>
     {{range .Blocked}}
@@ -197,7 +195,7 @@
 
 <div class="workers-panel">
   <h2>Workers</h2>
-  <div id="workers" hx-get="/api/workers" hx-trigger="every 2s" hx-swap="innerHTML">
+  <div id="workers" hx-get="/api/workers" hx-swap="innerHTML">
     <p style="color:var(--muted);font-size:.85rem">Loading worker status...</p>
   </div>
 </div>
@@ -236,32 +234,35 @@ document.getElementById('decline-modal').addEventListener('click', function(e) {
   if (e.target === this) closeDeclineModal();
 });
 
-// Autosync functionality
-function toggleAutosync() {
-	const board = document.getElementById('board-container');
-	const icon = document.getElementById('autosync-icon');
-	const text = document.getElementById('autosync-text');
-	const isEnabled = board.getAttribute('hx-trigger') === 'every 10s';
-	
-	if (isEnabled) {
-		board.removeAttribute('hx-trigger');
-		icon.textContent = '▶';
-		text.textContent = 'OFF';
-		localStorage.setItem('autosync', 'false');
-	} else {
-		board.setAttribute('hx-trigger', 'every 10s');
-		icon.textContent = '⏸';
-		text.textContent = 'ON';
-		localStorage.setItem('autosync', 'true');
-	}
+function triggerSync() {
+    const btn = document.getElementById('sync-btn');
+    const spinner = document.getElementById('sync-spinner');
+    const text = document.getElementById('sync-text');
+    
+    btn.disabled = true;
+    spinner.style.display = 'inline';
+    text.textContent = 'Syncing...';
+    
+    fetch('/api/sync', {method: 'POST'})
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('[Sync] Triggered successfully');
+            } else {
+                console.error('[Sync] Failed:', data.error);
+                alert('Sync failed: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(err => {
+            console.error('[Sync] Error:', err);
+            alert('Sync error: ' + err.message);
+        })
+        .finally(() => {
+            btn.disabled = false;
+            spinner.style.display = 'none';
+            text.textContent = 'Sync';
+        });
 }
-
-// Restore preference on page load
-document.addEventListener('DOMContentLoaded', function() {
-	if (localStorage.getItem('autosync') === 'true') {
-		toggleAutosync();
-	}
-});
 </script>
 
 <!-- Modal container for wizard -->

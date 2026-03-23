@@ -30,6 +30,9 @@ nav .nav-actions{display:flex;gap:.5rem;margin-left:auto}
 .btn-success:hover{background:var(--green);color:#fff}
 h1{font-size:1.4rem;margin-bottom:1rem}
 h2{font-size:1.1rem;margin-bottom:.75rem;color:var(--muted)}
+.ws-status{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:0.5rem}
+.ws-connected{background:var(--green)}
+.ws-disconnected{background:var(--red)}
 </style>
 </head>
 <body>
@@ -41,11 +44,116 @@ h2{font-size:1.1rem;margin-bottom:.75rem;color:var(--muted)}
     <a href="/costs" {{if eq .Active "costs"}}class="active"{{end}}>Costs</a>
   </div>
   <div class="nav-actions">
+    <span id="ws-status" class="ws-status ws-disconnected" title="Disconnected"></span>
     <a href="/wizard" class="btn btn-primary">+ New Issue</a>
   </div>
 </nav>
 <div class="container">
 {{template "content" .}}
 </div>
+<script>
+(function() {
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = wsProtocol + '//' + window.location.host + '/ws';
+    let ws = null;
+    let reconnectDelay = 1000;
+    let reconnectTimer = null;
+    let isManualClose = false;
+    
+    function updateConnectionStatus(connected) {
+        const indicator = document.getElementById('ws-status');
+        if (indicator) {
+            indicator.className = connected ? 'ws-status ws-connected' : 'ws-status ws-disconnected';
+            indicator.title = connected ? 'Connected' : 'Disconnected';
+        }
+    }
+    
+    function connect() {
+        if (ws || isManualClose) return;
+        
+        try {
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function() {
+                console.log('[WebSocket] Connected');
+                updateConnectionStatus(true);
+                reconnectDelay = 1000; // Reset delay on successful connection
+            };
+            
+            ws.onmessage = function(event) {
+                const msg = JSON.parse(event.data);
+                console.log('[WebSocket] Received:', msg.type);
+                
+                if (msg.type === 'issue_update' || msg.type === 'sync_complete') {
+                    refreshBoard();
+                }
+            };
+            
+            ws.onclose = function() {
+                console.log('[WebSocket] Disconnected');
+                updateConnectionStatus(false);
+                ws = null;
+                
+                if (!isManualClose) {
+                    scheduleReconnect();
+                }
+            };
+            
+            ws.onerror = function(error) {
+                console.error('[WebSocket] Error:', error);
+            };
+        } catch (err) {
+            console.error('[WebSocket] Failed to create connection:', err);
+            scheduleReconnect();
+        }
+    }
+    
+    function scheduleReconnect() {
+        if (reconnectTimer) return;
+        
+        console.log(`[WebSocket] Reconnecting in ${reconnectDelay}ms...`);
+        reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            connect();
+        }, reconnectDelay);
+        
+        // Exponential backoff: 1s, 2s, 4s, 8s, max 30s
+        reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+    }
+    
+    function disconnect() {
+        isManualClose = true;
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
+        if (ws) {
+            ws.close();
+            ws = null;
+        }
+    }
+    
+    function refreshBoard() {
+        // Use HTMX to refresh board data
+        const board = document.getElementById('board-container');
+        if (board && typeof htmx !== 'undefined') {
+            htmx.trigger(board, 'refresh');
+        }
+    }
+    
+    // Expose for global access
+    window.WebSocketClient = {
+        connect: connect,
+        disconnect: disconnect,
+        refreshBoard: refreshBoard
+    };
+    
+    // Auto-connect on page load
+    document.addEventListener('DOMContentLoaded', connect);
+    
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', disconnect);
+})();
+</script>
 </body>
 </html>{{end}}

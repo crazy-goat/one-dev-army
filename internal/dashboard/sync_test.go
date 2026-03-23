@@ -240,8 +240,21 @@ func TestSyncService_SyncNow_ManualTrigger(t *testing.T) {
 	service := NewSyncService(gh, store, nil)
 	service.SetActiveMilestone("Sprint 1")
 
-	// Trigger manual sync without starting the service
-	service.SyncNow()
+	// Start the service first (this triggers initial sync)
+	service.Start()
+	defer service.Stop()
+
+	// Give initial sync time to complete
+	time.Sleep(50 * time.Millisecond)
+
+	// Clear the store to test manual sync specifically
+	store.cachedIssues = nil
+
+	// Trigger manual sync
+	err := service.SyncNow()
+	if err != nil {
+		t.Errorf("SyncNow() should not error when service is running, got: %v", err)
+	}
 
 	// Give it time to complete
 	time.Sleep(100 * time.Millisecond)

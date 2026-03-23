@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -193,46 +192,52 @@ func runServe() error {
 	// Detect and set the active sprint (oldest open milestone)
 	activeMilestone, err := gh.GetOldestOpenMilestone()
 	if err != nil {
-		log.Printf("[Startup] Warning: detecting active sprint: %v", err)
-	} else if activeMilestone != nil {
+		return fmt.Errorf("detecting active sprint: %w", err)
+	}
+	if activeMilestone != nil {
 		gh.SetActiveMilestone(activeMilestone)
-		log.Printf("[Startup] Active sprint: %s (due: %s)", activeMilestone.Title, activeMilestone.DueOn.Format("2006-01-02"))
+		fmt.Printf("  ✓ active sprint: %s (due: %s)\n", activeMilestone.Title, activeMilestone.DueOn.Format("2006-01-02"))
 	} else {
-		log.Printf("[Startup] Warning: no active sprint found")
+		fmt.Println("  ! no active sprint found")
 	}
 
-	// Step 4 & 5: Fetch issues from GitHub and populate cache
+	// Step 4: Fetch all issues from GitHub for active milestone and populate cache
 	if activeMilestone != nil {
-		log.Printf("[Startup] Fetching issues from GitHub for milestone: %s", activeMilestone.Title)
+		fmt.Printf("Fetching issues from GitHub for milestone: %s\n", activeMilestone.Title)
 		issues, err := gh.ListIssuesForMilestone(activeMilestone.Title)
 		if err != nil {
-			log.Printf("[Startup] Warning: failed to fetch issues: %v", err)
+			fmt.Printf("  ! error fetching issues: %v\n", err)
+			fmt.Println("  → continuing with empty cache")
 		} else {
-			log.Printf("[Startup] Fetched %d issues from GitHub", len(issues))
+			// Step 5: Populate issue_cache table
 			cachedCount := 0
 			for _, issue := range issues {
 				if err := store.SaveIssueCache(issue, activeMilestone.Title); err != nil {
-					log.Printf("[Startup] Warning: failed to cache issue #%d: %v", issue.Number, err)
+					fmt.Printf("  ! error caching issue #%d: %v\n", issue.Number, err)
 					continue
 				}
 				cachedCount++
 			}
-			log.Printf("[Startup] Cached %d/%d issues", cachedCount, len(issues))
+			fmt.Printf("  ✓ cached %d issues\n", cachedCount)
 		}
+	} else {
+		fmt.Println("! no active milestone, skipping initial cache population")
 	}
 
 	// Step 6: Create WebSocket hub
+	fmt.Println("Creating WebSocket hub...")
 	hub := dashboard.NewHub()
 	go hub.Run()
-	log.Printf("[Startup] WebSocket hub started")
+	fmt.Println("  ✓ WebSocket hub started")
 
 	// Step 7 & 8: Create and start SyncService
+	fmt.Println("Creating sync service...")
 	syncService := dashboard.NewSyncService(gh, store, hub)
 	if activeMilestone != nil {
 		syncService.SetActiveMilestone(activeMilestone.Title)
 	}
 	syncService.Start()
-	log.Printf("[Startup] Sync service started (30s interval)")
+	fmt.Println("  ✓ Sync service started (30s interval)")
 
 	s := setup.New(dir, oc, cfg)
 	if err := s.CheckAndGenerate(); err != nil {
