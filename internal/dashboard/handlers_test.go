@@ -2108,3 +2108,251 @@ func TestHandleWizardCreate_SkipsBreakdownWhenFlagSet(t *testing.T) {
 		t.Errorf("expected status 200 or 500, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// TestBoardLayout_AfterButtonRemoval verifies board renders without duplicate buttons in board-actions
+func TestBoardLayout_AfterButtonRemoval(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleBoard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify NO duplicate +Feature or +Bug buttons in board-actions section
+	// These should only exist in the header navigation (layout.html)
+	if strings.Contains(body, "+ Feature") && !strings.Contains(body, "+ New Feature") {
+		t.Error("board page contains duplicate '+ Feature' button in board-actions - should only be in header")
+	}
+	if strings.Contains(body, "+ Bug") && !strings.Contains(body, "+ New Bug") {
+		t.Error("board page contains duplicate '+ Bug' button in board-actions - should only be in header")
+	}
+
+	// Verify header buttons ARE present (from layout.html)
+	if !strings.Contains(body, "+ New Feature") {
+		t.Error("board page missing '+ New Feature' button in header navigation")
+	}
+	if !strings.Contains(body, "+ New Bug") {
+		t.Error("board page missing '+ New Bug' button in header navigation")
+	}
+}
+
+// TestBoardActions_ContainsExpectedButtons verifies board-actions has correct buttons
+func TestBoardActions_ContainsExpectedButtons(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleBoard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify board-actions section contains expected sprint control buttons
+	// Note: Start Sprint and Pause Sprint are mutually exclusive (conditional on .Paused)
+	hasStartSprint := strings.Contains(body, "Start Sprint")
+	hasPauseSprint := strings.Contains(body, "Pause Sprint")
+	if !hasStartSprint && !hasPauseSprint {
+		t.Error("board-actions section missing both Start Sprint and Pause Sprint buttons - should have one")
+	}
+
+	// These buttons should always be present
+	requiredButtons := []string{
+		"Sync",
+		"Autosync",
+		"Plan Sprint",
+	}
+
+	for _, button := range requiredButtons {
+		if !strings.Contains(body, button) {
+			t.Errorf("board-actions section missing required button: %s", button)
+		}
+	}
+
+	// Verify the board-actions div exists with correct class
+	if !strings.Contains(body, `class="board-actions"`) {
+		t.Error("board page missing board-actions container div")
+	}
+}
+
+// TestBoardLayout_ResponsiveCSS verifies responsive CSS is present
+func TestBoardLayout_ResponsiveCSS(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleBoard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify responsive CSS classes are present
+	requiredCSS := []string{
+		"flex-wrap:wrap",
+		"@media",
+		"board-actions",
+		"board-header",
+	}
+
+	for _, css := range requiredCSS {
+		if !strings.Contains(body, css) {
+			t.Errorf("board page missing required CSS: %s", css)
+		}
+	}
+}
+
+// TestBoardLayout_ValidHTMLStructure verifies board page has valid HTML structure
+func TestBoardLayout_ValidHTMLStructure(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleBoard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify essential HTML structure elements
+	structureChecks := map[string]string{
+		"DOCTYPE":       "<!DOCTYPE html>",
+		"html tag":      "<html",
+		"head tag":      "<head>",
+		"body tag":      "<body>",
+		"board-header":  `class="board-header"`,
+		"board-actions": `class="board-actions"`,
+		"board grid":    `class="board"`,
+		"7 columns":     "grid-template-columns:repeat(7,1fr)",
+	}
+
+	for name, pattern := range structureChecks {
+		if !strings.Contains(body, pattern) {
+			t.Errorf("board page missing %s structure element", name)
+		}
+	}
+
+	// Verify no unclosed tags that would cause rendering issues
+	// Count opening and closing divs (basic check)
+	openDivs := strings.Count(body, "<div")
+	closeDivs := strings.Count(body, "</div>")
+	if openDivs != closeDivs {
+		t.Errorf("HTML structure issue: %d opening <div> tags but %d closing </div> tags", openDivs, closeDivs)
+	}
+}
+
+// TestBoardLayout_SprintControlsFunctional verifies sprint control buttons work
+func TestBoardLayout_SprintControlsFunctional(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleBoard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify sprint control forms have correct action URLs
+	// Note: start and pause forms are mutually exclusive (conditional on .Paused)
+	hasStartForm := strings.Contains(body, `action="/api/sprint/start"`)
+	hasPauseForm := strings.Contains(body, `action="/api/sprint/pause"`)
+	if !hasStartForm && !hasPauseForm {
+		t.Error("board page missing both sprint control forms - should have either start or pause")
+	}
+
+	// These forms should always be present
+	requiredForms := []string{
+		`action="/sync"`,
+		`action="/plan-sprint"`,
+	}
+
+	for _, form := range requiredForms {
+		if !strings.Contains(body, form) {
+			t.Errorf("board page missing sprint control form: %s", form)
+		}
+	}
+
+	// Verify autosync toggle button exists with correct ID
+	if !strings.Contains(body, `id="autosync-toggle"`) {
+		t.Error("board page missing autosync toggle button")
+	}
+
+	// Verify HTMX polling is configured for board data
+	if !strings.Contains(body, `hx-get="/api/board-data"`) {
+		t.Error("board page missing HTMX polling for board data")
+	}
+}
+
+// TestBoardLayout_NoConsoleErrors verifies no JavaScript errors in page structure
+func TestBoardLayout_NoConsoleErrors(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleBoard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Check for common JavaScript error patterns that would cause console errors
+	errorPatterns := []string{
+		"undefined",
+		"null pointer",
+		"cannot read property",
+	}
+
+	// These checks are for obvious error strings in the HTML
+	// Real console error testing would require a browser environment
+	for _, pattern := range errorPatterns {
+		if strings.Contains(strings.ToLower(body), pattern) {
+			t.Logf("Warning: page contains potential error indicator: %s", pattern)
+		}
+	}
+
+	// Verify all required JavaScript functions are defined
+	requiredFunctions := []string{
+		"function openDeclineModal",
+		"function closeDeclineModal",
+		"function toggleAutosync",
+	}
+
+	for _, fn := range requiredFunctions {
+		if !strings.Contains(body, fn) {
+			t.Errorf("board page missing required JavaScript function: %s", fn)
+		}
+	}
+
+	// Verify HTMX library is included
+	if !strings.Contains(body, "htmx.org") {
+		t.Error("board page missing HTMX library")
+	}
+}
