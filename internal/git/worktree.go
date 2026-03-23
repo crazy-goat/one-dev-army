@@ -2,6 +2,7 @@ package git
 
 import (
 	"fmt"
+	"log"
 	"os/exec"
 	"strings"
 )
@@ -49,10 +50,20 @@ func (m *BranchManager) CreateBranch(branch string) error {
 }
 
 // RemoveBranch switches back to the default branch and deletes the given branch.
+// If the branch doesn't exist, it returns nil (no error) and logs a warning.
 func (m *BranchManager) RemoveBranch(branch string) error {
+	// First check if branch exists
+	cmd := exec.Command("git", "rev-parse", "--verify", branch)
+	cmd.Dir = m.repoDir
+	if err := cmd.Run(); err != nil {
+		// Branch doesn't exist - not an error, just log and return
+		log.Printf("[BranchManager] Branch %q does not exist, skipping deletion", branch)
+		return nil
+	}
+
 	// Switch to main/master first
 	defaultBranch := m.detectDefaultBranch()
-	cmd := exec.Command("git", "checkout", defaultBranch)
+	cmd = exec.Command("git", "checkout", defaultBranch)
 	cmd.Dir = m.repoDir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git checkout %s: %w\n%s", defaultBranch, err, out)
@@ -64,6 +75,8 @@ func (m *BranchManager) RemoveBranch(branch string) error {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git branch -D %s: %w\n%s", branch, err, out)
 	}
+
+	log.Printf("[BranchManager] Deleted branch %q", branch)
 	return nil
 }
 

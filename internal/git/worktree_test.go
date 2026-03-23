@@ -139,3 +139,20 @@ func TestLegacyAliases(t *testing.T) {
 		t.Error("expected non-empty output")
 	}
 }
+
+// TestRemoveBranchNonExistent verifies that RemoveBranch handles non-existent branches gracefully
+func TestRemoveBranchNonExistent(t *testing.T) {
+	repoDir := setupRepo(t)
+	mgr := git.NewBranchManager(repoDir)
+
+	// Try to remove a branch that doesn't exist - should not error
+	if err := mgr.RemoveBranch("non-existent-branch"); err != nil {
+		t.Errorf("RemoveBranch(non-existent) = %v, want nil", err)
+	}
+
+	// Verify we're still on the default branch
+	got := currentBranch(t, repoDir)
+	if got != "master" && got != "main" {
+		t.Errorf("current branch = %q, want master or main", got)
+	}
+}
