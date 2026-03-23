@@ -29,3 +29,43 @@ epic_analysis:
     llm: nexos-ai/Kimi K2.5
 sprint:
     tasks_per_sprint: 10
+
+# Multi-model LLM configuration with task-based routing
+llm:
+    default:
+        provider_id: nexos-ai
+        model_id: Kimi K2.5
+    development:
+        strong:
+            provider_id: nexos-ai
+            model_id: Kimi K2.5
+        weak:
+            provider_id: nexos-ai
+            model_id: Kimi K2.5
+    planning:
+        strong:
+            provider_id: nexos-ai
+            model_id: Kimi K2.5
+        weak:
+            provider_id: nexos-ai
+            model_id: Kimi K2.5
+    orchestration:
+        strong:
+            provider_id: nexos-ai
+            model_id: Kimi K2.5
+        weak:
+            provider_id: nexos-ai
+            model_id: Kimi K2.5
+    setup:
+        strong:
+            provider_id: nexos-ai
+            model_id: Kimi K2.5
+        weak:
+            provider_id: nexos-ai
+            model_id: Kimi K2.5
+    routing:
+        thresholds:
+            development: medium
+            planning: low
+            orchestration: low
+            setup: medium

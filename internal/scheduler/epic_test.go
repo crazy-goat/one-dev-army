@@ -118,7 +118,7 @@ func TestEpicAnalyzer_ParseResponse(t *testing.T) {
 		EpicAnalysis: config.EpicAnalysis{LLM: "test-model"},
 	}
 	oc := opencode.NewClient(srv.URL)
-	ea := NewEpicAnalyzer(cfg, oc, nil)
+	ea := NewEpicAnalyzer(cfg, oc, nil, nil)
 
 	result, err := ea.Analyze("Build a user management system")
 	if err != nil {

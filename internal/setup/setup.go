@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
+	"github.com/crazy-goat/one-dev-army/internal/llm"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
@@ -18,13 +19,15 @@ type Setup struct {
 	projectDir string
 	oc         *opencode.Client
 	cfg        *config.Config
+	router     *llm.Router
 }
 
-func New(projectDir string, oc *opencode.Client, cfg *config.Config) *Setup {
+func New(projectDir string, oc *opencode.Client, cfg *config.Config, router *llm.Router) *Setup {
 	return &Setup{
 		projectDir: projectDir,
 		oc:         oc,
 		cfg:        cfg,
+		router:     router,
 	}
 }
 
@@ -142,7 +145,13 @@ func (s *Setup) generateWithLLM(title, prompt string) (string, error) {
 		return "", fmt.Errorf("creating session: %w", err)
 	}
 
-	msg, err := s.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(s.cfg.Planning.LLM), os.Stdout)
+	// Use router for model selection
+	llmModel := s.cfg.Planning.LLM
+	if s.router != nil {
+		llmModel = s.router.ForSetupString(config.ComplexityMedium, nil)
+	}
+
+	msg, err := s.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(llmModel), os.Stdout)
 	if err != nil {
 		return "", fmt.Errorf("sending message: %w", err)
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/git"
 	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/llm"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
@@ -49,6 +50,7 @@ type Orchestrator struct {
 	brMgr       *git.BranchManager
 	store       *db.Store
 	hub         StageBroadcaster
+	router      *llm.Router
 	running     bool
 	paused      bool
 	processing  bool
@@ -56,7 +58,7 @@ type Orchestrator struct {
 	mu          sync.Mutex
 }
 
-func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client, brMgr *git.BranchManager, store *db.Store, hub StageBroadcaster) *Orchestrator {
+func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client, brMgr *git.BranchManager, store *db.Store, hub StageBroadcaster, router *llm.Router) *Orchestrator {
 	o := &Orchestrator{
 		cfg:    cfg,
 		gh:     gh,
@@ -64,9 +66,10 @@ func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client,
 		brMgr:  brMgr,
 		store:  store,
 		hub:    hub,
+		router: router,
 		paused: true,
 	}
-	o.worker = NewWorker(1, cfg, oc, gh, brMgr, store, o)
+	o.worker = NewWorker(1, cfg, oc, gh, brMgr, store, o, router)
 	return o
 }
 
@@ -328,7 +331,13 @@ func (o *Orchestrator) pickNextTicket(ctx context.Context, candidates []github.I
 		}
 	}()
 
-	model := opencode.ParseModelRef(o.cfg.Planning.LLM)
+	// Use router for model selection
+	llmModel := o.cfg.Planning.LLM
+	if o.router != nil {
+		llmModel = o.router.ForOrchestrationString(config.ComplexityLow, nil)
+	}
+
+	model := opencode.ParseModelRef(llmModel)
 	msg, err := o.oc.SendMessage(session.ID, prompt, model, nil)
 	if err != nil {
 		return nil, fmt.Errorf("sending pick-ticket message: %w", err)

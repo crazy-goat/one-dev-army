@@ -16,6 +16,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/git"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/initialize"
+	"github.com/crazy-goat/one-dev-army/internal/llm"
 	"github.com/crazy-goat/one-dev-army/internal/mvp"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"github.com/crazy-goat/one-dev-army/internal/preflight"
@@ -166,6 +167,9 @@ func runServe() error {
 	oc.SetDirectory(dir)
 	gh := github.NewClient(cfg.GitHub.Repo)
 
+	// Create LLM router for multi-model configuration
+	router := llm.NewRouter(&cfg.LLM, oc)
+
 	fmt.Println("Validating configured models...")
 	configModels := collectConfigModels(cfg)
 	if err := oc.ValidateModels(configModels); err != nil {
@@ -248,16 +252,16 @@ func runServe() error {
 	syncService.Start()
 	fmt.Println("  ✓ Sync service started (30s interval)")
 
-	s := setup.New(dir, oc, cfg)
+	s := setup.New(dir, oc, cfg, router)
 	if err := s.CheckAndGenerate(); err != nil {
 		return fmt.Errorf("setup check failed: %w", err)
 	}
 
 	brMgr := git.NewBranchManager(dir)
 
-	processor := worker.NewProcessor(cfg, oc, gh, store, brMgr)
+	processor := worker.NewProcessor(cfg, oc, gh, store, brMgr, router)
 
-	orchestrator := mvp.NewOrchestrator(cfg, gh, oc, brMgr, store, hub)
+	orchestrator := mvp.NewOrchestrator(cfg, gh, oc, brMgr, store, hub, router)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -345,11 +349,25 @@ func collectConfigModels(cfg *config.Config) []opencode.ModelRef {
 		models = append(models, opencode.ParseModelRef(llm))
 	}
 
+	// Add models from pipeline stages
 	for _, stage := range cfg.Pipeline.Stages {
 		add(stage.LLM)
 	}
+
+	// Add legacy config models for backward compatibility
 	add(cfg.Planning.LLM)
 	add(cfg.EpicAnalysis.LLM)
+
+	// Add multi-model LLM configuration models
+	add(cfg.LLM.Default.String())
+	add(cfg.LLM.Development.Strong.String())
+	add(cfg.LLM.Development.Weak.String())
+	add(cfg.LLM.Planning.Strong.String())
+	add(cfg.LLM.Planning.Weak.String())
+	add(cfg.LLM.Orchestration.Strong.String())
+	add(cfg.LLM.Orchestration.Weak.String())
+	add(cfg.LLM.Setup.Strong.String())
+	add(cfg.LLM.Setup.Weak.String())
 
 	return models
 }

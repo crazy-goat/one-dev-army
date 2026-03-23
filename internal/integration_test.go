@@ -283,7 +283,7 @@ func TestFullPipelineWithMockOpencode(t *testing.T) {
 	brMgr := git.NewBranchManager(repoDir)
 
 	ghClient := &github.Client{Repo: "owner/repo"}
-	proc := worker.NewProcessor(cfg, oc, ghClient, store, brMgr)
+	proc := worker.NewProcessor(cfg, oc, ghClient, store, brMgr, nil)
 
 	task := &worker.Task{
 		ID:          1,
@@ -539,7 +539,7 @@ func TestConfigToProcessorWiring(t *testing.T) {
 	}
 	wt := &git.Worktree{Name: "wiring-worker", Path: repoDir, Branch: "task/77-config-wiring-test"}
 
-	executor := worker.NewStageExecutor(cfg, oc, store, task, wt)
+	executor := worker.NewStageExecutor(cfg, oc, store, task, wt, nil)
 
 	_, err = executor.Execute(1, "analysis", "test context")
 	if err != nil {

@@ -18,6 +18,7 @@ type Config struct {
 	Planning     Planning     `yaml:"planning"`
 	EpicAnalysis EpicAnalysis `yaml:"epic_analysis"`
 	Sprint       Sprint       `yaml:"sprint"`
+	LLM          LLMConfig    `yaml:"llm"`
 }
 
 type GitHub struct {
@@ -79,6 +80,9 @@ func Load(rootDir string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing config %s: %w", path, err)
 	}
+
+	// Set defaults for LLM configuration
+	cfg.LLM.SetDefaults()
 
 	return &cfg, nil
 }

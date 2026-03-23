@@ -266,7 +266,7 @@ func TestStageExecutor_Analysis(t *testing.T) {
 	}
 	wt := &git.Worktree{Name: "test-worker", Path: repoDir, Branch: "task/42-add-user-auth"}
 
-	executor := worker.NewStageExecutor(cfg, oc, store, task, wt)
+	executor := worker.NewStageExecutor(cfg, oc, store, task, wt, nil)
 
 	result, err := executor.Execute(1, pipeline.StageAnalysis, "test context")
 	if err != nil {
@@ -341,7 +341,7 @@ func TestStageExecutor_PlanReview_Approved(t *testing.T) {
 	}
 	wt := &git.Worktree{Name: "test-worker-pr", Path: repoDir, Branch: "task/10-test-task"}
 
-	executor := worker.NewStageExecutor(cfg, oc, nil, task, wt)
+	executor := worker.NewStageExecutor(cfg, oc, nil, task, wt, nil)
 
 	result, err := executor.Execute(1, pipeline.StageCodeReview, `{"steps": []}`)
 	if err != nil {
@@ -371,7 +371,7 @@ func TestStageExecutor_CreatePR(t *testing.T) {
 	}
 	wt := &git.Worktree{Name: "test-worker-cpr", Path: repoDir, Branch: "task/10-test-task-createpr"}
 
-	executor := worker.NewStageExecutor(cfg, nil, nil, task, wt)
+	executor := worker.NewStageExecutor(cfg, nil, nil, task, wt, nil)
 
 	result, err := executor.Execute(1, pipeline.StageCreatePR, "")
 	if err != nil {
@@ -392,7 +392,7 @@ func TestStageExecutor_Merging(t *testing.T) {
 		Body:        "Test body",
 	}
 
-	executor := worker.NewStageExecutor(cfg, nil, nil, task, nil)
+	executor := worker.NewStageExecutor(cfg, nil, nil, task, nil, nil)
 
 	result, err := executor.Execute(1, pipeline.StageMerging, "")
 	if err != nil {
@@ -431,7 +431,7 @@ func TestProcess_FullPipeline(t *testing.T) {
 
 	ghClient := &github.Client{Repo: "owner/repo"}
 
-	proc := worker.NewProcessor(cfg, oc, ghClient, store, brMgr)
+	proc := worker.NewProcessor(cfg, oc, ghClient, store, brMgr, nil)
 
 	task := &worker.Task{
 		ID:          1,

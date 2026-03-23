@@ -197,7 +197,7 @@ func TestPlanSprint_Integration(t *testing.T) {
 	}
 	oc := opencode.NewClient(srv.URL)
 
-	planner := NewPlanner(cfg, oc, nil, nil)
+	planner := NewPlanner(cfg, oc, nil, nil, nil)
 
 	session, err := planner.oc.CreateSession("sprint-planning")
 	if err != nil {
