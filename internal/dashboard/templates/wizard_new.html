@@ -48,7 +48,15 @@
     
     <div class="form-group">
       <label for="idea">Describe your {{if eq .Type "bug"}}bug{{else}}feature idea{{end}}:</label>
-      <textarea id="idea" name="idea" rows="6" placeholder="{{if eq .Type "bug"}}Describe the bug, steps to reproduce, and expected behavior...{{else}}Describe the feature, who it's for, and what problem it solves...{{end}}" required></textarea>
+      <div class="textarea-with-mic">
+        <textarea id="idea" name="idea" rows="6" placeholder="{{if eq .Type "bug"}}Describe the bug, steps to reproduce, and expected behavior...{{else}}Describe the feature, who it's for, and what problem it solves...{{end}}" required></textarea>
+        <button type="button" id="mic-btn" class="mic-btn" title="Voice input">
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+          </svg>
+        </button>
+      </div>
     </div>
     
     <div class="form-actions">
@@ -65,6 +73,96 @@
   </form>
   {{end}}
 </div>
+
+<script>
+(function() {
+  const textarea = document.getElementById('idea');
+  const micBtn = document.getElementById('mic-btn');
+  
+  if (!textarea || !micBtn) return;
+  
+  const form = textarea.closest('form');
+  
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  
+  if (!SpeechRecognition) {
+    micBtn.style.display = 'none';
+    return;
+  }
+  
+  let recognition = null;
+  let isRecording = false;
+  
+  function initRecognition() {
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    
+    recognition.onresult = (event) => {
+      let finalTranscript = '';
+      
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        }
+      }
+      
+      if (finalTranscript) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const before = textarea.value.substring(0, start);
+        const after = textarea.value.substring(end);
+        
+        textarea.value = before + finalTranscript + after;
+        const newPos = start + finalTranscript.length;
+        textarea.setSelectionRange(newPos, newPos);
+      }
+    };
+    
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      stopRecording();
+    };
+    
+    recognition.onend = () => {
+      if (isRecording) {
+        recognition.start();
+      }
+    };
+  }
+  
+  function startRecording() {
+    if (!recognition) initRecognition();
+    isRecording = true;
+    micBtn.classList.add('recording');
+    recognition.start();
+  }
+  
+  function stopRecording() {
+    isRecording = false;
+    micBtn.classList.remove('recording');
+    if (recognition) {
+      recognition.stop();
+    }
+  }
+  
+  micBtn.addEventListener('click', () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  });
+  
+  if (form) {
+    form.addEventListener('submit', () => {
+      if (isRecording) stopRecording();
+    });
+  }
+})();
+</script>
 
 <style>
 .wizard-step-content { max-width: 800px; margin: 0 auto; }
@@ -142,6 +240,48 @@
 .type-description {
   font-size: 0.85rem;
   color: var(--muted);
+}
+
+/* Voice input styles */
+.textarea-with-mic {
+  position: relative;
+}
+.textarea-with-mic textarea {
+  padding-right: 2.5rem;
+}
+.mic-btn {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--muted);
+  transition: all 0.2s;
+}
+.mic-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.mic-btn.recording {
+  background: var(--red);
+  border-color: var(--red);
+  color: white;
+  animation: mic-pulse 1.5s ease-in-out infinite;
+}
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248, 81, 73, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(248, 81, 73, 0); }
+}
+.mic-btn svg {
+  fill: currentColor;
 }
 </style>
 {{end}}
