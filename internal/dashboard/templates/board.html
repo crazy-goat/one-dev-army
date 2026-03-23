@@ -38,8 +38,6 @@
     {{if .SprintName}}<p style="color:var(--muted);font-size:.9rem;margin-top:.25rem">{{.SprintName}}</p>{{end}}
   </div>
   <div class="board-actions">
-    <a href="/wizard?type=feature" class="btn btn-primary">+ Feature</a>
-    <a href="/wizard?type=bug" class="btn">+ Bug</a>
     {{if .Paused}}
     <form method="post" action="/api/sprint/start" style="display:inline">
       <button type="submit" class="btn btn-success">Start Sprint</button>
