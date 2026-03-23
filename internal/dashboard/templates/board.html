@@ -69,6 +69,87 @@
   </div>
 </div>
 
+{{template "board-columns" .}}
+
+<div class="workers-panel">
+  <h2>Workers</h2>
+  <div id="workers" hx-get="/api/workers" hx-swap="innerHTML">
+    <p style="color:var(--muted);font-size:.85rem">Loading worker status...</p>
+  </div>
+</div>
+
+<!-- Decline modal -->
+<div id="decline-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center">
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:1.5rem;width:500px;max-width:90vw">
+    <h3 style="margin-bottom:.25rem">Decline #<span id="decline-issue-id"></span></h3>
+    <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem" id="decline-issue-title"></p>
+    <form method="post" id="decline-form">
+      <label for="decline-reason" style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.4rem">What needs to be fixed?</label>
+      <textarea id="decline-reason" name="reason" rows="5" required
+        style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.85rem;resize:vertical"
+        placeholder="Describe what's wrong and what the AI should fix..."></textarea>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem">
+        <button type="button" class="btn" onclick="closeDeclineModal()">Cancel</button>
+        <button type="submit" class="btn btn-danger">Decline & Send Back</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openDeclineModal(id, title) {
+  document.getElementById('decline-issue-id').textContent = id;
+  document.getElementById('decline-issue-title').textContent = title;
+  document.getElementById('decline-form').action = '/decline/' + id;
+  document.getElementById('decline-reason').value = '';
+  var m = document.getElementById('decline-modal');
+  m.style.display = 'flex';
+}
+function closeDeclineModal() {
+  document.getElementById('decline-modal').style.display = 'none';
+}
+document.getElementById('decline-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeDeclineModal();
+});
+
+function triggerSync() {
+    const btn = document.getElementById('sync-btn');
+    const spinner = document.getElementById('sync-spinner');
+    const text = document.getElementById('sync-text');
+    
+    btn.disabled = true;
+    spinner.style.display = 'inline';
+    text.textContent = 'Syncing...';
+    
+    fetch('/api/sync', {method: 'POST'})
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('[Sync] Triggered successfully');
+            } else {
+                console.error('[Sync] Failed:', data.error);
+                alert('Sync failed: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(err => {
+            console.error('[Sync] Error:', err);
+            alert('Sync error: ' + err.message);
+        })
+        .finally(() => {
+            btn.disabled = false;
+            spinner.style.display = 'none';
+            text.textContent = 'Sync';
+        });
+}
+</script>
+
+<!-- Modal container for wizard -->
+<div id="modal-container"></div>
+<!-- Modal container for wizard -->
+<div id="modal-container"></div>
+{{end}}
+
+{{define "board-columns"}}
 <div class="board" id="board-container" hx-get="/api/board-data" hx-swap="outerHTML" hx-trigger="refresh">
   <div class="column col-blocked">
     <div class="column-title">Blocked <span class="count">{{len .Blocked}}</span></div>
@@ -211,79 +292,4 @@
     {{end}}
   </div>
 </div>
-
-<div class="workers-panel">
-  <h2>Workers</h2>
-  <div id="workers" hx-get="/api/workers" hx-swap="innerHTML">
-    <p style="color:var(--muted);font-size:.85rem">Loading worker status...</p>
-  </div>
-</div>
-
-<!-- Decline modal -->
-<div id="decline-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center">
-  <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:1.5rem;width:500px;max-width:90vw">
-    <h3 style="margin-bottom:.25rem">Decline #<span id="decline-issue-id"></span></h3>
-    <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem" id="decline-issue-title"></p>
-    <form method="post" id="decline-form">
-      <label for="decline-reason" style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.4rem">What needs to be fixed?</label>
-      <textarea id="decline-reason" name="reason" rows="5" required
-        style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.85rem;resize:vertical"
-        placeholder="Describe what's wrong and what the AI should fix..."></textarea>
-      <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem">
-        <button type="button" class="btn" onclick="closeDeclineModal()">Cancel</button>
-        <button type="submit" class="btn btn-danger">Decline & Send Back</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<script>
-function openDeclineModal(id, title) {
-  document.getElementById('decline-issue-id').textContent = id;
-  document.getElementById('decline-issue-title').textContent = title;
-  document.getElementById('decline-form').action = '/decline/' + id;
-  document.getElementById('decline-reason').value = '';
-  var m = document.getElementById('decline-modal');
-  m.style.display = 'flex';
-}
-function closeDeclineModal() {
-  document.getElementById('decline-modal').style.display = 'none';
-}
-document.getElementById('decline-modal').addEventListener('click', function(e) {
-  if (e.target === this) closeDeclineModal();
-});
-
-function triggerSync() {
-    const btn = document.getElementById('sync-btn');
-    const spinner = document.getElementById('sync-spinner');
-    const text = document.getElementById('sync-text');
-    
-    btn.disabled = true;
-    spinner.style.display = 'inline';
-    text.textContent = 'Syncing...';
-    
-    fetch('/api/sync', {method: 'POST'})
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                console.log('[Sync] Triggered successfully');
-            } else {
-                console.error('[Sync] Failed:', data.error);
-                alert('Sync failed: ' + (data.error || 'Unknown error'));
-            }
-        })
-        .catch(err => {
-            console.error('[Sync] Error:', err);
-            alert('Sync error: ' + err.message);
-        })
-        .finally(() => {
-            btn.disabled = false;
-            spinner.style.display = 'none';
-            text.textContent = 'Sync';
-        });
-}
-</script>
-
-<!-- Modal container for wizard -->
-<div id="modal-container"></div>
 {{end}}
