@@ -798,8 +798,50 @@ func (s *Server) handleSprintClose(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[Dashboard] Closed milestone: %s", milestone.Title)
 
-	// Clear active milestone
-	s.gh.SetActiveMilestone(nil)
+	// Auto-create a new sprint to ensure continuous sprint coverage
+	newSprintTitle, err := s.gh.CreateNextSprint(milestone.Title)
+	if err != nil {
+		log.Printf("[Dashboard] Error creating next sprint after closing %s: %v", milestone.Title, err)
+		http.Error(w, fmt.Sprintf("failed to create next sprint: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[Dashboard] Created new sprint: %s", newSprintTitle)
+
+	// Reload milestone state to get the newly created sprint
+	newMilestone, err := s.gh.GetOldestOpenMilestone()
+	if err != nil {
+		log.Printf("[Dashboard] Error reloading milestones after closing %s: %v", milestone.Title, err)
+		http.Error(w, fmt.Sprintf("failed to reload milestones: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Validate that we have a new active sprint
+	if newMilestone == nil {
+		log.Printf("[Dashboard] No open milestone found after closing %s", milestone.Title)
+		http.Error(w, "no active sprint available after closing", http.StatusInternalServerError)
+		return
+	}
+
+	// Update GitHub client with the new active milestone
+	s.gh.SetActiveMilestone(newMilestone)
+	log.Printf("[Dashboard] Set new active milestone: %s", newMilestone.Title)
+
+	// Update sync service with the new milestone title
+	if s.syncService != nil {
+		s.syncService.SetActiveMilestone(newMilestone.Title)
+		log.Printf("[Dashboard] Updated sync service with new milestone: %s", newMilestone.Title)
+	}
+
+	// Trigger a sync to refresh cached data with the new sprint
+	if s.syncService != nil {
+		if err := s.syncService.SyncNow(); err != nil {
+			log.Printf("[Dashboard] Warning: failed to trigger sync after sprint close: %v", err)
+			// Don't fail the operation if sync trigger fails
+		} else {
+			log.Printf("[Dashboard] Triggered sync to refresh data for new sprint: %s", newMilestone.Title)
+		}
+	}
 
 	// Redirect to board
 	http.Redirect(w, r, "/", http.StatusSeeOther)
