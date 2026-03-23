@@ -29,6 +29,16 @@ func TestNewHub(t *testing.T) {
 	}
 }
 
+func TestNewHubWithDebug(t *testing.T) {
+	hub := NewHub(true)
+	if hub == nil {
+		t.Fatal("NewHub() returned nil")
+	}
+	if !hub.debug {
+		t.Error("New hub should have debug enabled when passed true")
+	}
+}
+
 func TestNewHubWithLimit(t *testing.T) {
 	tests := []struct {
 		name     string
