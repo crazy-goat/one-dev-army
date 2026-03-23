@@ -2,144 +2,73 @@ package git
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
-type Worktree struct {
-	Name   string
-	Path   string
-	Branch string
+// BranchManager manages git branches for the single-worker pipeline.
+// Replaces WorktreeManager — uses regular git checkout instead of worktrees.
+type BranchManager struct {
+	repoDir string
 }
 
-type WorktreeManager struct {
-	repoDir      string
-	worktreesDir string
+// NewBranchManager creates a new BranchManager for the given repo directory.
+func NewBranchManager(repoDir string) *BranchManager {
+	return &BranchManager{repoDir: repoDir}
 }
 
-func NewWorktreeManager(repoDir, worktreesDir string) *WorktreeManager {
-	return &WorktreeManager{
-		repoDir:      repoDir,
-		worktreesDir: worktreesDir,
-	}
-}
-
-func (m *WorktreeManager) WorktreesDir() string {
-	return m.worktreesDir
-}
-
-func (m *WorktreeManager) RepoDir() string {
+// RepoDir returns the repository root directory.
+func (m *BranchManager) RepoDir() string {
 	return m.repoDir
 }
 
-func (m *WorktreeManager) Create(workerName, branch string) (*Worktree, error) {
-	wtPath := filepath.Join(m.worktreesDir, workerName)
+// CreateBranch creates a new branch and checks it out.
+// If the branch already exists, it checks it out. If a workerName-based
+// worktree exists from a previous run, it is cleaned up first.
+func (m *BranchManager) CreateBranch(branch string) error {
+	// Clean up any leftover worktrees from previous runs
+	m.cleanupLegacyWorktrees()
 
-	if _, err := os.Stat(wtPath); err == nil {
-		if err := m.Remove(workerName); err != nil {
-			return nil, fmt.Errorf("removing existing worktree %s: %w", workerName, err)
-		}
-	}
-
-	cmd := exec.Command("git", "worktree", "add", "-b", branch, wtPath)
+	// Try creating a new branch
+	cmd := exec.Command("git", "checkout", "-b", branch)
 	cmd.Dir = m.repoDir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("git worktree add: %w\n%s", err, out)
-	}
-
-	return &Worktree{
-		Name:   workerName,
-		Path:   wtPath,
-		Branch: branch,
-	}, nil
-}
-
-func (m *WorktreeManager) Remove(workerName string) error {
-	wtPath := filepath.Join(m.worktreesDir, workerName)
-
-	worktrees, err := m.List()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("listing worktrees: %w", err)
-	}
-
-	var branch string
-	for _, wt := range worktrees {
-		if wt.Path == wtPath {
-			branch = wt.Branch
-			break
+		// Branch might already exist — try checking it out
+		if strings.Contains(string(out), "already exists") {
+			cmd = exec.Command("git", "checkout", branch)
+			cmd.Dir = m.repoDir
+			if out2, err2 := cmd.CombinedOutput(); err2 != nil {
+				return fmt.Errorf("git checkout %s: %w\n%s", branch, err2, out2)
+			}
+			return nil
 		}
+		return fmt.Errorf("git checkout -b %s: %w\n%s", branch, err, out)
 	}
-
-	cmd := exec.Command("git", "worktree", "remove", "--force", wtPath)
-	cmd.Dir = m.repoDir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("git worktree remove: %w\n%s", err, out)
-	}
-
-	if branch != "" {
-		cmd = exec.Command("git", "branch", "-D", branch)
-		cmd.Dir = m.repoDir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("git branch -D %s: %w\n%s", branch, err, out)
-		}
-	}
-
 	return nil
 }
 
-func (m *WorktreeManager) List() ([]Worktree, error) {
-	cmd := exec.Command("git", "worktree", "list", "--porcelain")
+// RemoveBranch switches back to the default branch and deletes the given branch.
+func (m *BranchManager) RemoveBranch(branch string) error {
+	// Switch to main/master first
+	defaultBranch := m.detectDefaultBranch()
+	cmd := exec.Command("git", "checkout", defaultBranch)
 	cmd.Dir = m.repoDir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("git worktree list: %w\n%s", err, out)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git checkout %s: %w\n%s", defaultBranch, err, out)
 	}
 
-	return parsePorcelain(string(out)), nil
-}
-
-func parsePorcelain(output string) []Worktree {
-	var worktrees []Worktree
-	blocks := strings.Split(strings.TrimSpace(output), "\n\n")
-
-	for _, block := range blocks {
-		if block == "" {
-			continue
-		}
-
-		var wt Worktree
-		for _, line := range strings.Split(block, "\n") {
-			switch {
-			case strings.HasPrefix(line, "worktree "):
-				wt.Path = strings.TrimPrefix(line, "worktree ")
-				wt.Name = filepath.Base(wt.Path)
-			case strings.HasPrefix(line, "branch "):
-				ref := strings.TrimPrefix(line, "branch ")
-				wt.Branch = strings.TrimPrefix(ref, "refs/heads/")
-			}
-		}
-
-		if wt.Path != "" {
-			worktrees = append(worktrees, wt)
-		}
+	// Delete the branch
+	cmd = exec.Command("git", "branch", "-D", branch)
+	cmd.Dir = m.repoDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git branch -D %s: %w\n%s", branch, err, out)
 	}
-
-	return worktrees
+	return nil
 }
 
-func RunInWorktree(wtPath, name string, args ...string) ([]byte, error) {
-	cmd := exec.Command(name, args...)
-	cmd.Dir = wtPath
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("running %s in %s: %w\n%s", name, wtPath, err, out)
-	}
-	return out, nil
-}
-
-func (m *WorktreeManager) PushBranch(branch string) error {
+// PushBranch pushes the given branch to origin.
+func (m *BranchManager) PushBranch(branch string) error {
 	// Try force-with-lease first (safe for existing remote branches)
 	cmd := exec.Command("git", "push", "-u", "--force-with-lease", "origin", branch)
 	cmd.Dir = m.repoDir
@@ -160,4 +89,74 @@ func (m *WorktreeManager) PushBranch(branch string) error {
 	}
 
 	return fmt.Errorf("git push -u --force-with-lease origin %s: %w\n%s", branch, err, out)
+}
+
+// RunInDir executes a command in the repo directory.
+func RunInDir(dir, name string, args ...string) ([]byte, error) {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("running %s in %s: %w\n%s", name, dir, err, out)
+	}
+	return out, nil
+}
+
+// detectDefaultBranch returns "main" or "master" depending on what exists.
+func (m *BranchManager) detectDefaultBranch() string {
+	cmd := exec.Command("git", "rev-parse", "--verify", "main")
+	cmd.Dir = m.repoDir
+	if err := cmd.Run(); err == nil {
+		return "main"
+	}
+	return "master"
+}
+
+// cleanupLegacyWorktrees removes any leftover git worktrees from previous runs.
+func (m *BranchManager) cleanupLegacyWorktrees() {
+	cmd := exec.Command("git", "worktree", "list", "--porcelain")
+	cmd.Dir = m.repoDir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return
+	}
+
+	// Parse worktree list — remove any non-main worktrees
+	blocks := strings.Split(strings.TrimSpace(string(out)), "\n\n")
+	for _, block := range blocks {
+		var wtPath string
+		for _, line := range strings.Split(block, "\n") {
+			if strings.HasPrefix(line, "worktree ") {
+				wtPath = strings.TrimPrefix(line, "worktree ")
+			}
+		}
+		// Skip the main worktree (the repo itself)
+		if wtPath != "" && wtPath != m.repoDir {
+			rmCmd := exec.Command("git", "worktree", "remove", "--force", wtPath)
+			rmCmd.Dir = m.repoDir
+			_ = rmCmd.Run()
+		}
+	}
+}
+
+// Legacy aliases for backward compatibility during migration
+
+// WorktreeManager is an alias for BranchManager (legacy compatibility).
+type WorktreeManager = BranchManager
+
+// NewWorktreeManager creates a BranchManager. The worktreesDir parameter is ignored.
+func NewWorktreeManager(repoDir, _ string) *BranchManager {
+	return NewBranchManager(repoDir)
+}
+
+// Worktree is kept for struct compatibility but Path always equals repoDir.
+type Worktree struct {
+	Name   string
+	Path   string
+	Branch string
+}
+
+// RunInWorktree is a legacy alias for RunInDir.
+func RunInWorktree(dir, name string, args ...string) ([]byte, error) {
+	return RunInDir(dir, name, args...)
 }

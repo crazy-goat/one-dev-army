@@ -42,7 +42,7 @@ type Orchestrator struct {
 	worker        *Worker
 	gh            *github.Client
 	oc            *opencode.Client
-	wtMgr         *git.WorktreeManager
+	brMgr         *git.BranchManager
 	store         *db.Store
 	projectNumber int
 	running       bool
@@ -52,17 +52,17 @@ type Orchestrator struct {
 	mu            sync.Mutex
 }
 
-func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client, wtMgr *git.WorktreeManager, store *db.Store, projectNumber int) *Orchestrator {
+func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client, brMgr *git.BranchManager, store *db.Store, projectNumber int) *Orchestrator {
 	o := &Orchestrator{
 		cfg:           cfg,
 		gh:            gh,
 		oc:            oc,
-		wtMgr:         wtMgr,
+		brMgr:         brMgr,
 		store:         store,
 		projectNumber: projectNumber,
 		paused:        true,
 	}
-	o.worker = NewWorker(1, cfg, oc, gh, wtMgr, store)
+	o.worker = NewWorker(1, cfg, oc, gh, brMgr, store)
 	return o
 }
 

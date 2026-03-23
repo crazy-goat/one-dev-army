@@ -195,27 +195,31 @@ type Processor struct {
 	oc    *opencode.Client
 	gh    *github.Client
 	store *db.Store
-	wtMgr *git.WorktreeManager
+	brMgr *git.BranchManager
 }
 
-func NewProcessor(cfg *config.Config, oc *opencode.Client, gh *github.Client, store *db.Store, wtMgr *git.WorktreeManager) *Processor {
+func NewProcessor(cfg *config.Config, oc *opencode.Client, gh *github.Client, store *db.Store, brMgr *git.BranchManager) *Processor {
 	return &Processor{
 		cfg:   cfg,
 		oc:    oc,
 		gh:    gh,
 		store: store,
-		wtMgr: wtMgr,
+		brMgr: brMgr,
 	}
 }
 
 func (p *Processor) Process(ctx context.Context, w *Worker, task *Task) error {
 	branch := BranchName(task.IssueNumber, task.Title)
 
-	wt, err := p.wtMgr.Create(w.id, branch)
-	if err != nil {
-		return fmt.Errorf("creating worktree for task #%d: %w", task.IssueNumber, err)
+	if err := p.brMgr.CreateBranch(branch); err != nil {
+		return fmt.Errorf("creating branch for task #%d: %w", task.IssueNumber, err)
 	}
 
+	wt := &git.Worktree{
+		Name:   w.id,
+		Path:   p.brMgr.RepoDir(),
+		Branch: branch,
+	}
 	executor := NewStageExecutor(p.cfg, p.oc, p.store, task, wt)
 
 	startStage := pipeline.Stage(task.Stage)
@@ -252,7 +256,7 @@ func (p *Processor) Process(ctx context.Context, w *Worker, task *Task) error {
 			}
 		}
 
-		_ = p.wtMgr.Remove(w.id)
+		_ = p.brMgr.RemoveBranch(branch)
 
 	case pipeline.StageBlocked:
 		_ = p.gh.AddLabel(task.IssueNumber, "stage:needs-user")

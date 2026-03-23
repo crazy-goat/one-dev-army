@@ -111,20 +111,20 @@ type Worker struct {
 	cfg     *config.Config
 	oc      *opencode.Client
 	gh      *github.Client
-	wtMgr   *git.WorktreeManager
+	brMgr   *git.BranchManager
 	store   *db.Store
-	baseDir string
+	repoDir string
 }
 
-func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Client, wtMgr *git.WorktreeManager, store *db.Store) *Worker {
+func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Client, brMgr *git.BranchManager, store *db.Store) *Worker {
 	return &Worker{
 		id:      id,
 		cfg:     cfg,
 		oc:      oc,
 		gh:      gh,
-		wtMgr:   wtMgr,
+		brMgr:   brMgr,
 		store:   store,
-		baseDir: wtMgr.WorktreesDir(),
+		repoDir: brMgr.RepoDir(),
 	}
 }
 
@@ -158,20 +158,19 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	task.Status = StatusAnalyzing
 
 	branch := fmt.Sprintf("oda-%d-%s", task.Issue.Number, slug(task.Issue.Title))
-	workerName := fmt.Sprintf("worker-%d", w.id)
-	log.Printf("[Worker %d] Creating worktree %q on branch %q", w.id, workerName, branch)
-	wt, err := w.wtMgr.Create(workerName, branch)
-	if err != nil {
+	log.Printf("[Worker %d] Creating branch %q", w.id, branch)
+	if err := w.brMgr.CreateBranch(branch); err != nil {
 		task.Status = StatusFailed
-		task.Result = &TaskResult{Error: fmt.Errorf("creating worktree: %w", err)}
-		log.Printf("[Worker %d] ✗ FAILED creating worktree: %v", w.id, err)
+		task.Result = &TaskResult{Error: fmt.Errorf("creating branch: %w", err)}
+		log.Printf("[Worker %d] ✗ FAILED creating branch: %v", w.id, err)
 		return task.Result.Error
 	}
 	task.Branch = branch
-	task.Worktree = wt.Path
-	log.Printf("[Worker %d] Worktree ready at %s", w.id, wt.Path)
+	task.Worktree = w.repoDir
+	log.Printf("[Worker %d] Branch %s ready, working in %s", w.id, branch, w.repoDir)
 
 	var analysis, plan, prURL string
+	var err error
 
 	if resumeFrom <= 0 {
 		log.Printf("[Worker %d] [1/5] Analyzing #%d...", w.id, task.Issue.Number)
@@ -250,7 +249,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 				return task.Result.Error
 			}
 			log.Printf("[Worker %d] Fix from review done (%s), pushing...", w.id, time.Since(stepStart).Round(time.Second))
-			if pushErr := w.wtMgr.PushBranch(task.Branch); pushErr != nil {
+			if pushErr := w.brMgr.PushBranch(task.Branch); pushErr != nil {
 				task.Status = StatusFailed
 				task.Result = &TaskResult{Error: fmt.Errorf("pushing fixes: %w", pushErr)}
 				log.Printf("[Worker %d] ✗ FAILED pushing fixes: %v", w.id, pushErr)
@@ -458,7 +457,7 @@ func (w *Worker) createPR(ctx context.Context, task *Task) (string, error) {
 		}
 	}
 
-	if err := w.wtMgr.PushBranch(task.Branch); err != nil {
+	if err := w.brMgr.PushBranch(task.Branch); err != nil {
 		if w.store != nil && stepID > 0 {
 			_ = w.store.FailStep(stepID, err.Error())
 		}

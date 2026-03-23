@@ -282,12 +282,11 @@ func TestFullPipelineWithMockOpencode(t *testing.T) {
 	defer store.Close()
 
 	repoDir := t.TempDir()
-	wtDir := t.TempDir()
 	initGitRepo(t, repoDir)
-	wtMgr := git.NewWorktreeManager(repoDir, wtDir)
+	brMgr := git.NewBranchManager(repoDir)
 
 	ghClient := &github.Client{Repo: "owner/repo"}
-	proc := worker.NewProcessor(cfg, oc, ghClient, store, wtMgr)
+	proc := worker.NewProcessor(cfg, oc, ghClient, store, brMgr)
 
 	task := &worker.Task{
 		ID:          1,
@@ -530,9 +529,8 @@ func TestConfigToProcessorWiring(t *testing.T) {
 	defer store.Close()
 
 	repoDir := t.TempDir()
-	wtDir := t.TempDir()
 	initGitRepo(t, repoDir)
-	wtMgr := git.NewWorktreeManager(repoDir, wtDir)
+	brMgr := git.NewBranchManager(repoDir)
 
 	task := &worker.Task{
 		ID:          1,
@@ -541,10 +539,10 @@ func TestConfigToProcessorWiring(t *testing.T) {
 		Body:        "Verify model wiring",
 	}
 
-	wt, err := wtMgr.Create("wiring-worker", "task/77-config-wiring-test")
-	if err != nil {
-		t.Fatalf("creating worktree: %v", err)
+	if err := brMgr.CreateBranch("task/77-config-wiring-test"); err != nil {
+		t.Fatalf("creating branch: %v", err)
 	}
+	wt := &git.Worktree{Name: "wiring-worker", Path: repoDir, Branch: "task/77-config-wiring-test"}
 
 	executor := worker.NewStageExecutor(cfg, oc, store, task, wt)
 

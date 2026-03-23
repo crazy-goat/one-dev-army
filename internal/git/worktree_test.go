@@ -3,7 +3,6 @@ package git_test
 import (
 	"os"
 	"os/exec"
-	"path/filepath"
 	"testing"
 
 	"github.com/crazy-goat/one-dev-army/internal/git"
@@ -35,84 +34,108 @@ func setupRepo(t *testing.T) string {
 	return dir
 }
 
-func TestCreateAndRemoveWorktree(t *testing.T) {
-	repoDir := setupRepo(t)
-	wtDir := filepath.Join(repoDir, "worktrees")
-	mgr := git.NewWorktreeManager(repoDir, wtDir)
-
-	wt, err := mgr.Create("worker-1", "branch-1")
+func currentBranch(t *testing.T, dir string) string {
+	t.Helper()
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("Create: %v", err)
+		t.Fatalf("git rev-parse: %v\n%s", err, out)
+	}
+	return string(out[:len(out)-1]) // trim newline
+}
+
+func TestCreateAndRemoveBranch(t *testing.T) {
+	repoDir := setupRepo(t)
+	mgr := git.NewBranchManager(repoDir)
+
+	if err := mgr.CreateBranch("feature-1"); err != nil {
+		t.Fatalf("CreateBranch: %v", err)
 	}
 
-	if wt.Name != "worker-1" {
-		t.Errorf("Name = %q, want %q", wt.Name, "worker-1")
-	}
-	if wt.Branch != "branch-1" {
-		t.Errorf("Branch = %q, want %q", wt.Branch, "branch-1")
+	if got := currentBranch(t, repoDir); got != "feature-1" {
+		t.Errorf("current branch = %q, want %q", got, "feature-1")
 	}
 
-	expectedPath := filepath.Join(wtDir, "worker-1")
-	if wt.Path != expectedPath {
-		t.Errorf("Path = %q, want %q", wt.Path, expectedPath)
+	if err := mgr.RemoveBranch("feature-1"); err != nil {
+		t.Fatalf("RemoveBranch: %v", err)
 	}
 
-	if _, err := os.Stat(wt.Path); err != nil {
-		t.Errorf("worktree directory should exist: %v", err)
-	}
-
-	if err := mgr.Remove("worker-1"); err != nil {
-		t.Fatalf("Remove: %v", err)
-	}
-
-	if _, err := os.Stat(wt.Path); !os.IsNotExist(err) {
-		t.Errorf("worktree directory should be removed, got err: %v", err)
+	// Should be back on default branch
+	got := currentBranch(t, repoDir)
+	if got != "master" && got != "main" {
+		t.Errorf("current branch = %q, want master or main", got)
 	}
 }
 
-func TestCreateWorktreeAlreadyExists(t *testing.T) {
+func TestCreateBranchAlreadyExists(t *testing.T) {
 	repoDir := setupRepo(t)
-	wtDir := filepath.Join(repoDir, "worktrees")
-	mgr := git.NewWorktreeManager(repoDir, wtDir)
+	mgr := git.NewBranchManager(repoDir)
 
-	_, err := mgr.Create("worker-1", "branch-a")
-	if err != nil {
-		t.Fatalf("first Create: %v", err)
+	if err := mgr.CreateBranch("branch-a"); err != nil {
+		t.Fatalf("first CreateBranch: %v", err)
 	}
 
-	wt, err := mgr.Create("worker-1", "branch-b")
-	if err != nil {
-		t.Fatalf("second Create: %v", err)
-	}
-
-	if wt.Branch != "branch-b" {
-		t.Errorf("Branch = %q, want %q", wt.Branch, "branch-b")
-	}
-
-	if _, err := os.Stat(wt.Path); err != nil {
-		t.Errorf("worktree directory should exist after re-create: %v", err)
-	}
-}
-
-func TestList(t *testing.T) {
-	repoDir := setupRepo(t)
-	wtDir := filepath.Join(repoDir, "worktrees")
-	mgr := git.NewWorktreeManager(repoDir, wtDir)
-
-	for i, name := range []string{"worker-1", "worker-2"} {
-		branch := "branch-" + name
-		if _, err := mgr.Create(name, branch); err != nil {
-			t.Fatalf("Create[%d]: %v", i, err)
+	// Switch back to default
+	defaultBranch := currentBranch(t, repoDir)
+	_ = defaultBranch
+	cmd := exec.Command("git", "checkout", "master")
+	cmd.Dir = repoDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		// try main
+		cmd2 := exec.Command("git", "checkout", "main")
+		cmd2.Dir = repoDir
+		if out2, err2 := cmd2.CombinedOutput(); err2 != nil {
+			t.Fatalf("checkout default: %v\n%s\n%s", err, out, out2)
 		}
 	}
 
-	worktrees, err := mgr.List()
-	if err != nil {
-		t.Fatalf("List: %v", err)
+	// Creating same branch again should succeed (checkout existing)
+	if err := mgr.CreateBranch("branch-a"); err != nil {
+		t.Fatalf("second CreateBranch: %v", err)
 	}
 
-	// main worktree + 2 created = 3
-	if len(worktrees) != 3 {
-		t.Fatalf("len(worktrees) = %d, want 3", len(worktrees))
+	if got := currentBranch(t, repoDir); got != "branch-a" {
+		t.Errorf("current branch = %q, want %q", got, "branch-a")
+	}
+}
+
+func TestRunInDir(t *testing.T) {
+	repoDir := setupRepo(t)
+
+	out, err := git.RunInDir(repoDir, "git", "status")
+	if err != nil {
+		t.Fatalf("RunInDir: %v", err)
+	}
+
+	if len(out) == 0 {
+		t.Error("expected non-empty output from git status")
+	}
+}
+
+func TestRepoDir(t *testing.T) {
+	mgr := git.NewBranchManager("/some/path")
+	if mgr.RepoDir() != "/some/path" {
+		t.Errorf("RepoDir() = %q, want %q", mgr.RepoDir(), "/some/path")
+	}
+}
+
+// TestLegacyAliases verifies backward-compatible aliases work
+func TestLegacyAliases(t *testing.T) {
+	repoDir := setupRepo(t)
+
+	// NewWorktreeManager should return a BranchManager
+	mgr := git.NewWorktreeManager(repoDir, "/ignored")
+	if mgr.RepoDir() != repoDir {
+		t.Errorf("RepoDir() = %q, want %q", mgr.RepoDir(), repoDir)
+	}
+
+	// RunInWorktree should work as alias for RunInDir
+	out, err := git.RunInWorktree(repoDir, "git", "status")
+	if err != nil {
+		t.Fatalf("RunInWorktree: %v", err)
+	}
+	if len(out) == 0 {
+		t.Error("expected non-empty output")
 	}
 }

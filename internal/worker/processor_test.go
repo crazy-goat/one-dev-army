@@ -261,14 +261,13 @@ func TestStageExecutor_Analysis(t *testing.T) {
 	}
 
 	repoDir := t.TempDir()
-	wtDir := t.TempDir()
 	initGitRepo(t, repoDir)
-	wtMgr := git.NewWorktreeManager(repoDir, wtDir)
+	brMgr := git.NewBranchManager(repoDir)
 
-	wt, err := wtMgr.Create("test-worker", "task/42-add-user-auth")
-	if err != nil {
-		t.Fatalf("creating worktree: %v", err)
+	if err := brMgr.CreateBranch("task/42-add-user-auth"); err != nil {
+		t.Fatalf("creating branch: %v", err)
 	}
+	wt := &git.Worktree{Name: "test-worker", Path: repoDir, Branch: "task/42-add-user-auth"}
 
 	executor := worker.NewStageExecutor(cfg, oc, store, task, wt)
 
@@ -338,13 +337,12 @@ func TestStageExecutor_PlanReview_Approved(t *testing.T) {
 	}
 
 	repoDir := t.TempDir()
-	wtDir := t.TempDir()
 	initGitRepo(t, repoDir)
-	wtMgr := git.NewWorktreeManager(repoDir, wtDir)
-	wt, err := wtMgr.Create("test-worker-pr", "task/10-test-task")
-	if err != nil {
-		t.Fatalf("creating worktree: %v", err)
+	brMgr := git.NewBranchManager(repoDir)
+	if err := brMgr.CreateBranch("task/10-test-task"); err != nil {
+		t.Fatalf("creating branch: %v", err)
 	}
+	wt := &git.Worktree{Name: "test-worker-pr", Path: repoDir, Branch: "task/10-test-task"}
 
 	executor := worker.NewStageExecutor(cfg, oc, nil, task, wt)
 
@@ -372,13 +370,12 @@ func TestStageExecutor_Testing_Success(t *testing.T) {
 	}
 
 	repoDir := t.TempDir()
-	wtDir := t.TempDir()
 	initGitRepo(t, repoDir)
-	wtMgr := git.NewWorktreeManager(repoDir, wtDir)
-	wt, err := wtMgr.Create("test-worker-ts", "task/10-test-task-success")
-	if err != nil {
-		t.Fatalf("creating worktree: %v", err)
+	brMgr := git.NewBranchManager(repoDir)
+	if err := brMgr.CreateBranch("task/10-test-task-success"); err != nil {
+		t.Fatalf("creating branch: %v", err)
 	}
+	wt := &git.Worktree{Name: "test-worker-ts", Path: repoDir, Branch: "task/10-test-task-success"}
 
 	executor := worker.NewStageExecutor(cfg, nil, nil, task, wt)
 
@@ -406,13 +403,12 @@ func TestStageExecutor_Testing_Failure(t *testing.T) {
 	}
 
 	repoDir := t.TempDir()
-	wtDir := t.TempDir()
 	initGitRepo(t, repoDir)
-	wtMgr := git.NewWorktreeManager(repoDir, wtDir)
-	wt, err := wtMgr.Create("test-worker-tf", "task/10-test-task-fail")
-	if err != nil {
-		t.Fatalf("creating worktree: %v", err)
+	brMgr := git.NewBranchManager(repoDir)
+	if err := brMgr.CreateBranch("task/10-test-task-fail"); err != nil {
+		t.Fatalf("creating branch: %v", err)
 	}
+	wt := &git.Worktree{Name: "test-worker-tf", Path: repoDir, Branch: "task/10-test-task-fail"}
 
 	executor := worker.NewStageExecutor(cfg, nil, nil, task, wt)
 
@@ -472,13 +468,12 @@ func TestProcess_FullPipeline(t *testing.T) {
 	defer store.Close()
 
 	repoDir := t.TempDir()
-	wtDir := t.TempDir()
 	initGitRepo(t, repoDir)
-	wtMgr := git.NewWorktreeManager(repoDir, wtDir)
+	brMgr := git.NewBranchManager(repoDir)
 
 	ghClient := &github.Client{Repo: "owner/repo"}
 
-	proc := worker.NewProcessor(cfg, oc, ghClient, store, wtMgr)
+	proc := worker.NewProcessor(cfg, oc, ghClient, store, brMgr)
 
 	task := &worker.Task{
 		ID:          1,

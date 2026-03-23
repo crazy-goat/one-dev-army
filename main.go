@@ -219,15 +219,11 @@ func runServe() error {
 		return fmt.Errorf("setup check failed: %w", err)
 	}
 
-	worktreesDir := filepath.Join(dir, ".oda", "worktrees")
-	if err := os.MkdirAll(worktreesDir, 0o755); err != nil {
-		return fmt.Errorf("creating worktrees directory: %w", err)
-	}
-	wtMgr := git.NewWorktreeManager(dir, worktreesDir)
+	brMgr := git.NewBranchManager(dir)
 
-	processor := worker.NewProcessor(cfg, oc, gh, store, wtMgr)
+	processor := worker.NewProcessor(cfg, oc, gh, store, brMgr)
 
-	orchestrator := mvp.NewOrchestrator(cfg, gh, oc, wtMgr, store, project.Number)
+	orchestrator := mvp.NewOrchestrator(cfg, gh, oc, brMgr, store, project.Number)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
