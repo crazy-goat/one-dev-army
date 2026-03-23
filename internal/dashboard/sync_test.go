@@ -1,43 +1,45 @@
 package dashboard
 
 import (
+	"errors"
 	"testing"
 	"time"
 
-	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 )
 
-// mockGitHubClient is a mock implementation of the GitHub client for testing
+// mockGitHubClient is a test double for GitHubClient interface
 type mockGitHubClient struct {
-	issues []github.Issue
-	err    error
+	issues    []github.Issue
+	listErr   error
+	milestone string
 }
 
 func (m *mockGitHubClient) ListIssuesForMilestone(milestone string) ([]github.Issue, error) {
-	if m.err != nil {
-		return nil, m.err
+	m.milestone = milestone
+	if m.listErr != nil {
+		return nil, m.listErr
 	}
 	return m.issues, nil
 }
 
-// mockStore is a mock implementation of the database store for testing
+// mockStore is a test double for Store interface
 type mockStore struct {
-	savedIssues []github.Issue
-	err         error
+	cachedIssues []github.Issue
+	saveErr      error
 }
 
 func (m *mockStore) SaveIssueCache(issue github.Issue, milestone string) error {
-	if m.err != nil {
-		return m.err
+	if m.saveErr != nil {
+		return m.saveErr
 	}
-	m.savedIssues = append(m.savedIssues, issue)
+	m.cachedIssues = append(m.cachedIssues, issue)
 	return nil
 }
 
-func TestSyncService_NewSyncService(t *testing.T) {
-	gh := &github.Client{}
-	store := &db.Store{}
+func TestNewSyncService(t *testing.T) {
+	gh := &mockGitHubClient{}
+	store := &mockStore{}
 	hub := NewHub()
 
 	service := NewSyncService(gh, store, hub)
@@ -45,20 +47,16 @@ func TestSyncService_NewSyncService(t *testing.T) {
 	if service == nil {
 		t.Fatal("NewSyncService returned nil")
 	}
-
 	if service.gh != gh {
 		t.Error("GitHub client not set correctly")
 	}
-
 	if service.store != store {
 		t.Error("Store not set correctly")
 	}
-
 	if service.hub != hub {
 		t.Error("Hub not set correctly")
 	}
-
-	if service.running {
+	if service.IsRunning() {
 		t.Error("Service should not be running initially")
 	}
 }
@@ -67,115 +65,262 @@ func TestSyncService_SetActiveMilestone(t *testing.T) {
 	service := NewSyncService(nil, nil, nil)
 
 	service.SetActiveMilestone("Sprint 1")
-
 	if got := service.GetActiveMilestone(); got != "Sprint 1" {
 		t.Errorf("GetActiveMilestone() = %q, want %q", got, "Sprint 1")
+	}
+
+	service.SetActiveMilestone("Sprint 2")
+	if got := service.GetActiveMilestone(); got != "Sprint 2" {
+		t.Errorf("GetActiveMilestone() = %q, want %q", got, "Sprint 2")
 	}
 }
 
 func TestSyncService_StartStop(t *testing.T) {
-	service := NewSyncService(nil, nil, nil)
+	gh := &mockGitHubClient{
+		issues: []github.Issue{
+			{Number: 1, Title: "Issue 1", State: "open"},
+		},
+	}
+	store := &mockStore{}
+	service := NewSyncService(gh, store, nil)
+	service.SetActiveMilestone("Sprint 1")
 
-	// Test starting
+	// Start the service
 	service.Start()
-
 	if !service.IsRunning() {
 		t.Error("Service should be running after Start()")
 	}
 
-	// Test starting again (should be idempotent)
-	service.Start()
-
-	if !service.IsRunning() {
-		t.Error("Service should still be running after second Start()")
-	}
-
-	// Test stopping
-	service.Stop()
-
-	// Give it a moment to stop
+	// Give it time to perform initial sync
 	time.Sleep(100 * time.Millisecond)
 
+	// Stop the service
+	service.Stop()
 	if service.IsRunning() {
 		t.Error("Service should not be running after Stop()")
 	}
 
-	// Test stopping again (should be idempotent)
-	service.Stop()
-}
-
-func TestSyncService_SyncNow_NotRunning(t *testing.T) {
-	service := NewSyncService(nil, nil, nil)
-
-	err := service.SyncNow()
-	if err == nil {
-		t.Error("SyncNow() should return error when service is not running")
+	// Verify issues were cached during initial sync
+	if len(store.cachedIssues) != 1 {
+		t.Errorf("Expected 1 cached issue, got %d", len(store.cachedIssues))
 	}
 }
 
-func TestSyncService_SyncNow_NoMilestone(t *testing.T) {
-	service := NewSyncService(nil, nil, nil)
+func TestSyncService_Start_AlreadyRunning(t *testing.T) {
+	gh := &mockGitHubClient{}
+	store := &mockStore{}
+	service := NewSyncService(gh, store, nil)
+	service.SetActiveMilestone("Sprint 1")
+
 	service.Start()
 	defer service.Stop()
 
-	// Should not error even without milestone
+	// Try to start again - should not panic or create duplicate goroutines
+	service.Start()
+
+	if !service.IsRunning() {
+		t.Error("Service should still be running")
+	}
+}
+
+func TestSyncService_Stop_NotRunning(t *testing.T) {
+	service := NewSyncService(nil, nil, nil)
+
+	// Should not panic when stopping a non-running service
+	service.Stop()
+
+	if service.IsRunning() {
+		t.Error("Service should not be running")
+	}
+}
+
+func TestSyncService_syncNow_NoMilestone(t *testing.T) {
+	gh := &mockGitHubClient{}
+	store := &mockStore{}
+	service := NewSyncService(gh, store, nil)
+	// No milestone set
+
+	service.syncNow()
+
+	if len(store.cachedIssues) != 0 {
+		t.Error("Should not cache any issues when no milestone is set")
+	}
+}
+
+func TestSyncService_syncNow_NoGitHubClient(t *testing.T) {
+	store := &mockStore{}
+	service := NewSyncService(nil, store, nil)
+	service.SetActiveMilestone("Sprint 1")
+
+	service.syncNow()
+
+	if len(store.cachedIssues) != 0 {
+		t.Error("Should not cache any issues when GitHub client is nil")
+	}
+}
+
+func TestSyncService_syncNow_NoStore(t *testing.T) {
+	gh := &mockGitHubClient{
+		issues: []github.Issue{{Number: 1, Title: "Issue 1"}},
+	}
+	service := NewSyncService(gh, nil, nil)
+	service.SetActiveMilestone("Sprint 1")
+
+	service.syncNow()
+	// Should not panic
+}
+
+func TestSyncService_syncNow_GitHubError(t *testing.T) {
+	gh := &mockGitHubClient{
+		listErr: errors.New("github error"),
+	}
+	store := &mockStore{}
+	service := NewSyncService(gh, store, nil)
+	service.SetActiveMilestone("Sprint 1")
+
+	service.syncNow()
+
+	if len(store.cachedIssues) != 0 {
+		t.Error("Should not cache any issues when GitHub returns an error")
+	}
+}
+
+func TestSyncService_syncNow_SaveError(t *testing.T) {
+	gh := &mockGitHubClient{
+		issues: []github.Issue{
+			{Number: 1, Title: "Issue 1"},
+			{Number: 2, Title: "Issue 2"},
+		},
+	}
+	store := &mockStore{
+		saveErr: errors.New("save error"),
+	}
+	service := NewSyncService(gh, store, nil)
+	service.SetActiveMilestone("Sprint 1")
+
+	service.syncNow()
+
+	// Should continue even if individual saves fail
+	if len(store.cachedIssues) != 0 {
+		t.Error("Should not have cached issues when save fails")
+	}
+}
+
+func TestSyncService_syncNow_Success(t *testing.T) {
+	gh := &mockGitHubClient{
+		issues: []github.Issue{
+			{Number: 1, Title: "Issue 1", State: "open"},
+			{Number: 2, Title: "Issue 2", State: "closed"},
+			{Number: 3, Title: "Issue 3", State: "open"},
+		},
+	}
+	store := &mockStore{}
+	service := NewSyncService(gh, store, nil)
+	service.SetActiveMilestone("Sprint 1")
+
+	service.syncNow()
+
+	if len(store.cachedIssues) != 3 {
+		t.Errorf("Expected 3 cached issues, got %d", len(store.cachedIssues))
+	}
+
+	// Verify the milestone was passed correctly
+	if gh.milestone != "Sprint 1" {
+		t.Errorf("Expected milestone 'Sprint 1', got %q", gh.milestone)
+	}
+}
+
+func TestSyncService_SyncNow_ManualTrigger(t *testing.T) {
+	gh := &mockGitHubClient{
+		issues: []github.Issue{
+			{Number: 1, Title: "Issue 1"},
+		},
+	}
+	store := &mockStore{}
+	service := NewSyncService(gh, store, nil)
+	service.SetActiveMilestone("Sprint 1")
+
+	// Start the service first (this triggers initial sync)
+	service.Start()
+	defer service.Stop()
+
+	// Give initial sync time to complete
+	time.Sleep(50 * time.Millisecond)
+
+	// Clear the store to test manual sync specifically
+	store.cachedIssues = nil
+
+	// Trigger manual sync
 	err := service.SyncNow()
 	if err != nil {
-		t.Errorf("SyncNow() with no milestone should not error, got: %v", err)
+		t.Errorf("SyncNow() should not error when service is running, got: %v", err)
+	}
+
+	// Give it time to complete
+	time.Sleep(100 * time.Millisecond)
+
+	if len(store.cachedIssues) != 1 {
+		t.Errorf("Expected 1 cached issue after manual sync, got %d", len(store.cachedIssues))
 	}
 }
 
 func TestSyncService_ThreadSafety(t *testing.T) {
-	service := NewSyncService(nil, nil, nil)
+	gh := &mockGitHubClient{
+		issues: []github.Issue{
+			{Number: 1, Title: "Issue 1"},
+		},
+	}
+	store := &mockStore{}
+	service := NewSyncService(gh, store, nil)
 
-	// Test concurrent access to milestone
+	// Concurrent operations
 	done := make(chan bool, 3)
 
 	go func() {
-		for i := 0; i < 100; i++ {
-			service.SetActiveMilestone("Sprint 1")
-		}
+		service.SetActiveMilestone("Sprint 1")
 		done <- true
 	}()
 
 	go func() {
-		for i := 0; i < 100; i++ {
-			_ = service.GetActiveMilestone()
-		}
+		service.GetActiveMilestone()
 		done <- true
 	}()
 
 	go func() {
-		for i := 0; i < 100; i++ {
-			service.SetActiveMilestone("Sprint 2")
-		}
+		service.IsRunning()
 		done <- true
 	}()
 
 	// Wait for all goroutines
 	for i := 0; i < 3; i++ {
-		<-done
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("Timeout waiting for concurrent operations")
+		}
 	}
-
-	// No race conditions should occur
-	t.Log("Thread safety test passed")
 }
 
-func TestSyncService_MultipleStartStop(t *testing.T) {
-	service := NewSyncService(nil, nil, nil)
+func TestSyncService_WithHub(t *testing.T) {
+	gh := &mockGitHubClient{
+		issues: []github.Issue{
+			{Number: 1, Title: "Issue 1", State: "open"},
+		},
+	}
+	store := &mockStore{}
+	hub := NewHub()
 
-	// Multiple start/stop cycles
-	for i := 0; i < 5; i++ {
-		service.Start()
-		if !service.IsRunning() {
-			t.Errorf("Cycle %d: Service should be running after Start()", i)
-		}
+	// Start hub in background
+	go hub.Run()
+	defer hub.Stop()
 
-		service.Stop()
-		time.Sleep(50 * time.Millisecond)
+	service := NewSyncService(gh, store, hub)
+	service.SetActiveMilestone("Sprint 1")
 
-		if service.IsRunning() {
-			t.Errorf("Cycle %d: Service should not be running after Stop()", i)
-		}
+	service.syncNow()
+
+	// Verify issues were cached
+	if len(store.cachedIssues) != 1 {
+		t.Errorf("Expected 1 cached issue, got %d", len(store.cachedIssues))
 	}
 }

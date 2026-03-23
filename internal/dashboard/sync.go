@@ -6,24 +6,34 @@ import (
 	"sync"
 	"time"
 
-	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 )
 
+// GitHubClient defines the interface for GitHub operations needed by SyncService
+type GitHubClient interface {
+	ListIssuesForMilestone(milestone string) ([]github.Issue, error)
+}
+
+// Store defines the interface for database operations needed by SyncService
+type Store interface {
+	SaveIssueCache(issue github.Issue, milestone string) error
+}
+
 // SyncService handles periodic synchronization of GitHub issues with the local cache
 type SyncService struct {
-	gh              *github.Client
-	store           *db.Store
+	gh              GitHubClient
+	store           Store
 	hub             *Hub
 	activeMilestone string
 	ticker          *time.Ticker
 	stopCh          chan struct{}
 	mu              sync.RWMutex
 	running         bool
+	wg              sync.WaitGroup
 }
 
 // NewSyncService creates a new SyncService instance
-func NewSyncService(gh *github.Client, store *db.Store, hub *Hub) *SyncService {
+func NewSyncService(gh GitHubClient, store Store, hub *Hub) *SyncService {
 	return &SyncService{
 		gh:     gh,
 		store:  store,
@@ -72,9 +82,8 @@ func (s *SyncService) Start() {
 // Stop gracefully shuts down the sync service
 func (s *SyncService) Stop() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if !s.running {
+		s.mu.Unlock()
 		return
 	}
 
@@ -83,6 +92,10 @@ func (s *SyncService) Stop() {
 		s.ticker.Stop()
 	}
 	close(s.stopCh)
+	s.mu.Unlock()
+
+	// Wait for any ongoing sync operations to complete
+	s.wg.Wait()
 
 	log.Println("[SyncService] Stopped")
 }
@@ -108,9 +121,22 @@ func (s *SyncService) run() {
 
 // syncNow performs a single synchronization operation
 func (s *SyncService) syncNow() {
+	s.wg.Add(1)
+	defer s.wg.Done()
+
 	milestone := s.GetActiveMilestone()
 	if milestone == "" {
 		log.Println("[SyncService] No active milestone set, skipping sync")
+		return
+	}
+
+	if s.gh == nil {
+		log.Println("[SyncService] No GitHub client set, skipping sync")
+		return
+	}
+
+	if s.store == nil {
+		log.Println("[SyncService] No store set, skipping sync")
 		return
 	}
 
