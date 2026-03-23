@@ -45,15 +45,6 @@ type boardData struct {
 	Failed         []taskCard
 }
 
-type backlogData struct {
-	Active string
-	Items  []taskCard
-}
-
-type costsData struct {
-	Active string
-}
-
 func placeholderBoard() boardData {
 	return boardData{
 		Active: "board",
@@ -234,25 +225,8 @@ func (s *Server) addCardToColumn(data *boardData, col string, issue github.Issue
 	}
 }
 
-func (s *Server) handleBacklog(w http.ResponseWriter, r *http.Request) {
-	data := backlogData{
-		Active: "backlog",
-		Items: []taskCard{
-			{ID: 10, Title: "Add rate limiting", Status: "backlog"},
-			{ID: 11, Title: "Write API docs", Status: "backlog"},
-			{ID: 12, Title: "Set up monitoring", Status: "backlog"},
-		},
-	}
-	s.render(w, "backlog.html", data)
-}
-
-func (s *Server) handleCosts(w http.ResponseWriter, r *http.Request) {
-	data := costsData{Active: "costs"}
-	s.render(w, "costs.html", data)
-}
-
 func (s *Server) handleAddEpic(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/backlog", http.StatusSeeOther)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
