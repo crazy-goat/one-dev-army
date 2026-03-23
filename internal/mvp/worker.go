@@ -129,6 +129,13 @@ func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Clien
 	}
 }
 
+func (w *Worker) setStageLabel(stage string) {
+	if w.orchestrator == nil || w.orchestrator.currentTask == nil {
+		return
+	}
+	w.orchestrator.BroadcastStageUpdate(w.orchestrator.currentTask.Issue.Number, stage)
+}
+
 var stepOrder = []string{"technical-planning", "implement", "code-review", "create-pr"}
 
 func stepIndex(name string) int {
@@ -202,6 +209,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	if resumeFrom <= 1 {
 		task.Status = StatusCoding
 		log.Printf("[Worker %d] [2/4] Implementing #%d (includes tests)...", w.id, task.Issue.Number)
+		w.setStageLabel("stage:coding")
 		stepStart := time.Now()
 		if err := w.implement(ctx, task, implPlan); err != nil {
 			task.Status = StatusFailed
@@ -209,6 +217,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			log.Printf("[Worker %d] ✗ FAILED implementing: %v", w.id, err)
 			return task.Result.Error
 		}
+		w.setStageLabel("stage:testing")
 		log.Printf("[Worker %d] [2/4] Implementation done (%s)", w.id, time.Since(stepStart).Round(time.Second))
 	} else {
 		log.Printf("[Worker %d] [2/4] Skipping implement (completed previously)", w.id)
@@ -217,6 +226,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	if resumeFrom <= 2 {
 		task.Status = StatusReviewing
 		log.Printf("[Worker %d] [3/4] Code review #%d...", w.id, task.Issue.Number)
+		w.setStageLabel("stage:code-review")
 		stepStart := time.Now()
 		approved, review, crErr := w.codeReview(ctx, task, "")
 		if crErr != nil {
