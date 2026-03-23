@@ -95,13 +95,13 @@ func parseTemplates() (map[string]*template.Template, error) {
 		tmpls[page] = t
 	}
 
-	wizardPageTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/wizard_new.html", "templates/wizard_page.html")
+	wizardPageTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/wizard_new.html", "templates/wizard_type_select.html", "templates/wizard_page.html")
 	if err != nil {
 		return nil, fmt.Errorf("parsing wizard_page.html: %w", err)
 	}
 	tmpls["wizard_page.html"] = wizardPageTmpl
 
-	wizardModalTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/wizard_new.html", "templates/wizard_modal.html")
+	wizardModalTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/wizard_new.html", "templates/wizard_type_select.html", "templates/wizard_modal.html")
 	if err != nil {
 		return nil, fmt.Errorf("parsing wizard_modal.html: %w", err)
 	}
@@ -152,6 +152,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /wizard", s.handleWizardPage)
 	s.mux.HandleFunc("GET /wizard/new", s.handleWizardNew)
 	s.mux.HandleFunc("GET /wizard/modal", s.handleWizardModal)
+	s.mux.HandleFunc("POST /wizard/select-type", s.handleWizardSelectType)
 	s.mux.HandleFunc("POST /wizard/cancel", s.handleWizardCancel)
 	s.mux.HandleFunc("POST /wizard/refine", s.handleWizardRefine)
 	s.mux.HandleFunc("POST /wizard/breakdown", s.handleWizardBreakdown)

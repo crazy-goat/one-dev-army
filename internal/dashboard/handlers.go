@@ -15,6 +15,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"github.com/crazy-goat/one-dev-army/internal/worker"
+	"github.com/google/uuid"
 )
 
 type taskCard struct {
@@ -790,21 +791,109 @@ func (s *Server) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleWizardNew returns the initial wizard modal form
-func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
-	// Get wizard type from query param (default to feature)
-	wizardType := r.URL.Query().Get("type")
+// handleWizardSelectType processes the type selection and redirects to the idea step
+func (s *Server) handleWizardSelectType(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	sessionID := r.FormValue("session_id")
+	wizardType := r.FormValue("wizard_type")
+	isPage := r.FormValue("page") == "1"
 
 	// Validate wizard type
-	if wizardType == "" {
-		wizardType = "feature"
-	} else if wizardType != "feature" && wizardType != "bug" {
+	if wizardType != "feature" && wizardType != "bug" {
 		http.Error(w, "invalid wizard type: must be 'feature' or 'bug'", http.StatusBadRequest)
 		return
 	}
 
+	// Get or create session
+	var session *WizardSession
+	if sessionID != "" {
+		if existing, ok := s.wizardStore.Get(sessionID); ok {
+			session = existing
+			session.Type = WizardType(wizardType)
+			session.UpdatedAt = time.Now()
+		}
+	}
+
+	if session == nil {
+		var err error
+		session, err = s.wizardStore.Create(wizardType)
+		if err != nil {
+			http.Error(w, "failed to create session", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Render the idea input step
+	data := struct {
+		Type      string
+		SessionID string
+		IsPage    bool
+		Step      int
+	}{
+		Type:      wizardType,
+		SessionID: session.ID,
+		IsPage:    isPage,
+		Step:      2, // Idea step
+	}
+
+	s.renderFragment(w, "wizard_new.html", data)
+}
+func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
+	// Get wizard type from query param
+	wizardType := r.URL.Query().Get("type")
+
 	// Check for page mode
 	isPage := r.URL.Query().Get("page") == "1"
+
+	// If no type is provided, show the type selector
+	if wizardType == "" {
+		// Check for existing session ID (for back navigation)
+		sessionID := r.URL.Query().Get("session_id")
+		var session *WizardSession
+
+		if sessionID != "" {
+			// Try to get existing session
+			if existing, ok := s.wizardStore.Get(sessionID); ok {
+				session = existing
+			}
+		}
+
+		// Create new session if not found
+		if session == nil {
+			// Create a temporary session without type - type will be set later
+			now := time.Now()
+			session = &WizardSession{
+				ID:          uuid.New().String(),
+				CurrentStep: WizardStepNew,
+				CreatedAt:   now,
+				UpdatedAt:   now,
+			}
+			s.wizardStore.sessions[session.ID] = session
+		}
+
+		data := struct {
+			SessionID string
+			IsPage    bool
+			Step      int
+		}{
+			SessionID: session.ID,
+			IsPage:    isPage,
+			Step:      1, // Type selection step
+		}
+
+		s.renderFragment(w, "wizard_type_select.html", data)
+		return
+	}
+
+	// Validate wizard type if provided
+	if wizardType != "feature" && wizardType != "bug" {
+		http.Error(w, "invalid wizard type: must be 'feature' or 'bug'", http.StatusBadRequest)
+		return
+	}
 
 	// Check for existing session ID (for back navigation)
 	sessionID := r.URL.Query().Get("session_id")
@@ -831,10 +920,12 @@ func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 		Type      string
 		SessionID string
 		IsPage    bool
+		Step      int
 	}{
 		Type:      wizardType,
 		SessionID: session.ID,
 		IsPage:    isPage,
+		Step:      2, // Idea step
 	}
 
 	s.renderFragment(w, "wizard_new.html", data)
@@ -1579,10 +1670,45 @@ func (s *Server) handleWizardLogs(w http.ResponseWriter, r *http.Request) {
 
 // handleWizardPage returns the full wizard page (not modal)
 func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
-	// Get wizard type from query param (default to feature)
+	// Get wizard type from query param
 	wizardType := r.URL.Query().Get("type")
-	if wizardType != "bug" {
-		wizardType = "feature"
+
+	// If no type is provided, show the type selector page
+	if wizardType == "" {
+		// Create a temporary session without type
+		now := time.Now()
+		session := &WizardSession{
+			ID:          uuid.New().String(),
+			CurrentStep: WizardStepNew,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+		s.wizardStore.sessions[session.ID] = session
+
+		data := struct {
+			Active            string
+			Type              string
+			SessionID         string
+			CurrentStep       int
+			IsPage            bool
+			ShowBreakdownStep bool
+		}{
+			Active:            "wizard",
+			Type:              "",
+			SessionID:         session.ID,
+			CurrentStep:       1, // Type selection step
+			IsPage:            true,
+			ShowBreakdownStep: false,
+		}
+
+		s.render(w, "wizard_page.html", data)
+		return
+	}
+
+	// Validate wizard type if provided
+	if wizardType != "feature" && wizardType != "bug" {
+		http.Error(w, "invalid wizard type: must be 'feature' or 'bug'", http.StatusBadRequest)
+		return
 	}
 
 	// Create new session
@@ -1603,7 +1729,7 @@ func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
 		Active:            "wizard",
 		Type:              wizardType,
 		SessionID:         session.ID,
-		CurrentStep:       1,
+		CurrentStep:       2, // Idea step
 		IsPage:            true,
 		ShowBreakdownStep: wizardType == "feature" && !session.SkipBreakdown,
 	}
@@ -1613,10 +1739,41 @@ func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
 
 // handleWizardModal returns the full modal shell with step 1 loaded
 func (s *Server) handleWizardModal(w http.ResponseWriter, r *http.Request) {
-	// Get wizard type from query param (default to feature)
+	// Get wizard type from query param
 	wizardType := r.URL.Query().Get("type")
-	if wizardType != "bug" {
-		wizardType = "feature"
+
+	// If no type is provided, show the type selector
+	if wizardType == "" {
+		// Create a temporary session without type
+		now := time.Now()
+		session := &WizardSession{
+			ID:          uuid.New().String(),
+			CurrentStep: WizardStepNew,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+		s.wizardStore.sessions[session.ID] = session
+
+		data := struct {
+			Type              string
+			SessionID         string
+			CurrentStep       int
+			ShowBreakdownStep bool
+		}{
+			Type:              "",
+			SessionID:         session.ID,
+			CurrentStep:       1, // Type selection step
+			ShowBreakdownStep: false,
+		}
+
+		s.renderFragment(w, "wizard_modal.html", data)
+		return
+	}
+
+	// Validate wizard type if provided
+	if wizardType != "feature" && wizardType != "bug" {
+		http.Error(w, "invalid wizard type: must be 'feature' or 'bug'", http.StatusBadRequest)
+		return
 	}
 
 	// Create new session
@@ -1634,7 +1791,7 @@ func (s *Server) handleWizardModal(w http.ResponseWriter, r *http.Request) {
 	}{
 		Type:              wizardType,
 		SessionID:         session.ID,
-		CurrentStep:       1,
+		CurrentStep:       2, // Idea step
 		ShowBreakdownStep: wizardType == "feature" && !session.SkipBreakdown,
 	}
 
