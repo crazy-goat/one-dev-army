@@ -1,93 +1,77 @@
-# Implementation Plan for Issue #180
+# Implementation Plan for Issue #179
 
-**Created:** 2026-03-23T13:50:54+01:00
-**Updated:** 2026-03-23T13:50:54+01:00
+**Created:** 2026-03-23T13:53:41+01:00
+**Updated:** 2026-03-23T13:53:41+01:00
 
 ## Analysis
 
-All tests pass. Let me verify the complete implementation by checking if all the requirements from the issue are met:
+### 1. Core Requirements
+- Create a `SyncService` struct that runs background synchronization every 30 seconds
+- Sync issues from GitHub API to SQLite `issue_cache` table for the active milestone only
+- Provide lifecycle methods: `Start()`, `Stop()`, `SyncNow()`
+- Support dynamic milestone switching via `SetActiveMilestone()`
+- Broadcast sync completion via WebSocket hub
+- Handle errors gracefully without crashing
 
-1. ✅ `internal/dashboard/websocket.go` exists
-2. ✅ WebSocket upgrader with CORS/origin checks (lines 34-65)
-3. ✅ `Hub` struct with:
-   - ✅ `clients map[*Client]bool` (line 107)
-   - ✅ `broadcast chan Message` (actually `chan []byte` at line 108)
-   - ✅ `register chan *Client` (line 109)
-   - ✅ `unregister chan *Client` (line 110)
-4. ✅ `Client` struct with:
-   - ✅ `hub *Hub` (line 98)
-   - ✅ `conn *websocket.Conn` (line 99)
-   - ✅ `send chan []byte` (line 100)
-5. ✅ `Message` struct with:
-   - ✅ `Type string` (actually `MessageType` at line 79)
-   - ✅ `Payload` with data (line 80)
-6. ✅ `Run()` method on Hub (lines 137-189)
-7. ✅ `BroadcastIssueUpdate(issue github.Issue)` method (lines 229-257)
-8. ✅ `BroadcastSyncComplete(count int)` method (lines 260-284)
-9. ✅ Client disconnections handled gracefully with defer unregister (lines 288-291, 331-333)
-10. ✅ Ping/pong to keep connections alive (lines 25, 294-297, 328, 349-351)
-11. ✅ Max connections limit (lines 31, 112, 122-125, 147-152)
-12. ✅ Unit tests for Hub (websocket_test.go - 545 lines, all tests pass)
+### 2. Files That Need Changes
+- **NEW**: `internal/dashboard/sync.go` - Main sync service implementation
+- **MODIFY**: `internal/dashboard/server.go` - Integrate SyncService into Server
 
+### 3. Implementation Approach
+- Use `time.Ticker` for periodic 30s sync intervals
+- Use goroutine with proper shutdown signaling via `context.Context` or `chan struct{}`
+- Leverage existing `github.Client.ListIssuesForMilestone()` for fetching
+- Leverage existing `db.Store.SaveIssueCache()` for persistence
+- Leverage existing `Hub.BroadcastSyncComplete()` for WebSocket notifications
+- Thread-safe milestone switching with mutex protection
 
-13. ✅ WebSocket endpoint `/ws` is properly configured (server.go lines 154-155, 192-194)
-14. ✅ The system supports multiple simultaneous client connections (validated by TestHubConcurrentClients)
-15. ✅ Broadcast functionality reaches all connected clients (validated by TestHubBroadcast)
-16. ✅ Server remains stable when clients disconnect (validated by TestHubRegisterUnregister and TestHubStop)
-17. ✅ All Hub unit tests pass successfully
-18. ✅ Messages are formatted as valid JSON (validated by TestHubBroadcastIssueUpdate and TestHubBroadcastSyncComplete)
+### 4. Testing Strategy
+- Unit tests for `SyncService` with mocked GitHub client and store
+- Test start/stop lifecycle
+- Test manual sync trigger
+- Test error handling (GitHub API failures)
+- Test milestone switching during active sync
 
-The feature is fully implemented and operational.ALREADY_DONE: The WebSocket server for dashboard is fully implemented in `internal/dashboard/websocket.go` (399 lines) and `internal/dashboard/websocket_test.go` (545 lines). All requirements are satisfied: Hub struct with clients/broadcast/register/unregister channels, Client struct with hub/conn/send fields, Message struct with Type/Payload, Run() method, BroadcastIssueUpdate() and BroadcastSyncComplete() methods, graceful disconnections with defer unregister, ping/pong keepalive (30s/60s), max connection limit (default 100), CORS/origin checks, WebSocket endpoint `/ws` registered in server.go:155, and all 12 unit tests pass including concurrent clients, connection limits, and ping/pong tests.
+---
 
 ## Implementation Steps
 
-### Step 1: ✅ `internal/dashboard/websocket.go` exists
+### Step 1: Add `syncService *SyncService` field to `Server` struct
 
-### Step 2: ✅ WebSocket upgrader with CORS/origin checks (lines 34-65)
+### Step 2: Initialize in `NewServer()` after hub creation
 
-### Step 3: ✅ `Hub` struct with:
+### Step 3: Start sync service in `NewServer()` if `gh` and `store` are available
 
-- ✅ `clients map[*Client]bool` (line 107)
-- ✅ `broadcast chan Message` (actually `chan []byte` at line 108)
-- ✅ `register chan *Client` (line 109)
-- ✅ `unregister chan *Client` (line 110)
+### Step 4: Stop sync service in `Shutdown()`
 
-### Step 4: ✅ `Client` struct with:
+**Code changes:**
+- Line 33: Add `syncService *SyncService` to Server struct
+- Line 65 (after hub.Run()): Initialize and start sync service
+- Line 174-179 (Shutdown): Add sync service stop call
+### Phase 3: Testing (`internal/dashboard/sync_test.go`)
+Create comprehensive tests:
+- `TestSyncService_StartStop` - lifecycle management
+- `TestSyncService_SyncNow` - manual sync trigger
+- `TestSyncService_SetActiveMilestone` - milestone switching
+- `TestSyncService_GitHubError` - error handling
+- `TestSyncService_Broadcast` - WebSocket notification
+### Order of Operations
 
-- ✅ `hub *Hub` (line 98)
-- ✅ `conn *websocket.Conn` (line 99)
-- ✅ `send chan []byte` (line 100)
+### Step 1: **Create** `internal/dashboard/sync.go` with full implementation
 
-### Step 5: ✅ `Message` struct with:
+### Step 2: **Modify** `internal/dashboard/server.go` to integrate SyncService
 
-- ✅ `Type string` (actually `MessageType` at line 79)
-- ✅ `Payload` with data (line 80)
+### Step 3: **Create** `internal/dashboard/sync_test.go` with unit tests
 
-### Step 6: ✅ `Run()` method on Hub (lines 137-189)
+### Step 4: **Run** tests: `go test ./internal/dashboard/... -v`
 
-### Step 7: ✅ `BroadcastIssueUpdate(issue github.Issue)` method (lines 229-257)
+### Step 5: **Verify** integration: Run server and check logs for sync activity
 
-### Step 8: ✅ `BroadcastSyncComplete(count int)` method (lines 260-284)
-
-### Step 9: ✅ Client disconnections handled gracefully with defer unregister (lines 288-291, 331-333)
-
-### Step 10: ✅ Ping/pong to keep connections alive (lines 25, 294-297, 328, 349-351)
-
-### Step 11: ✅ Max connections limit (lines 31, 112, 122-125, 147-152)
-
-### Step 12: ✅ Unit tests for Hub (websocket_test.go - 545 lines, all tests pass)
-
-### Step 13: ✅ WebSocket endpoint `/ws` is properly configured (server.go lines 154-155, 192-194)
-
-### Step 14: ✅ The system supports multiple simultaneous client connections (validated by TestHubConcurrentClients)
-
-### Step 15: ✅ Broadcast functionality reaches all connected clients (validated by TestHubBroadcast)
-
-### Step 16: ✅ Server remains stable when clients disconnect (validated by TestHubRegisterUnregister and TestHubStop)
-
-### Step 17: ✅ All Hub unit tests pass successfully
-
-### Step 18: ✅ Messages are formatted as valid JSON (validated by TestHubBroadcastIssueUpdate and TestHubBroadcastSyncComplete)
-
-The feature is fully implemented and operational.ALREADY_DONE: The WebSocket server for dashboard is fully implemented in `internal/dashboard/websocket.go` (399 lines) and `internal/dashboard/websocket_test.go` (545 lines). All requirements are satisfied: Hub struct with clients/broadcast/register/unregister channels, Client struct with hub/conn/send fields, Message struct with Type/Payload, Run() method, BroadcastIssueUpdate() and BroadcastSyncComplete() methods, graceful disconnections with defer unregister, ping/pong keepalive (30s/60s), max connection limit (default 100), CORS/origin checks, WebSocket endpoint `/ws` registered in server.go:155, and all 12 unit tests pass including concurrent clients, connection limits, and ping/pong tests.
+### Acceptance Criteria Verification
+- ✅ Sync runs every 30s automatically (ticker-based)
+- ✅ Manual sync works via `SyncNow()` (public method)
+- ✅ Errors are logged but don't crash service (error handling in performSync)
+- ✅ Can be started/stopped cleanly (context-based lifecycle)
+- ✅ Broadcasts update after sync (hub.BroadcastSyncComplete)
+- ✅ Only syncs active milestone issues (milestone filtering in ListIssuesForMilestone)
 
