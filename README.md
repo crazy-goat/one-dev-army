@@ -95,9 +95,11 @@ sprint:
 - **SQLite** — local metrics storage (tokens, costs, duration)
 - **Dashboard** — HTMX + Go templates, real-time worker status
 
-## Status
+## Documentation
 
-Early development. See [docs/plans/](docs/plans/) for design documents and current status.
+- **Workflow**: [docs/workflow.md](docs/workflow.md) - Visual guide to the ODA ticket lifecycle
+- **Design**: [docs/plans/](docs/plans/) - Architecture and implementation plans
+- **Status**: Early development
 
 ## License
 
