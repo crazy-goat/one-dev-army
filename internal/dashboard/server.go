@@ -31,9 +31,10 @@ type Server struct {
 	oc           *opencode.Client
 	wizardLLM    string
 	hub          *Hub
+	syncService  *SyncService
 }
 
-func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string) (*Server, error) {
+func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService) (*Server, error) {
 	tmpls, err := parseTemplates()
 	if err != nil {
 		return nil, err
@@ -56,13 +57,12 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 		wizardStore: NewWizardSessionStore(),
 		oc:          oc,
 		wizardLLM:   wizardLLM,
-		hub:         NewHub(),
+		hub:         hub,
+		syncService: syncService,
 	}
 	if s.wizardLLM == "" {
 		s.wizardLLM = DefaultLLMModel
 	}
-	// Start the WebSocket hub
-	go s.hub.Run()
 	s.routes()
 	return s, nil
 }
@@ -172,6 +172,11 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	// Stop the sync service
+	if s.syncService != nil {
+		s.syncService.Stop()
+	}
+
 	// Stop the WebSocket hub
 	if s.hub != nil {
 		s.hub.Stop()

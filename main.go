@@ -201,6 +201,44 @@ func runServe() error {
 		fmt.Println("  ! no active sprint found")
 	}
 
+	// Step 4: Fetch all issues from GitHub for active milestone and populate cache
+	if activeMilestone != nil {
+		fmt.Printf("Fetching issues from GitHub for milestone: %s\n", activeMilestone.Title)
+		issues, err := gh.ListIssuesForMilestone(activeMilestone.Title)
+		if err != nil {
+			fmt.Printf("  ! error fetching issues: %v\n", err)
+			fmt.Println("  → continuing with empty cache")
+		} else {
+			// Step 5: Populate issue_cache table
+			cachedCount := 0
+			for _, issue := range issues {
+				if err := store.SaveIssueCache(issue, activeMilestone.Title); err != nil {
+					fmt.Printf("  ! error caching issue #%d: %v\n", issue.Number, err)
+					continue
+				}
+				cachedCount++
+			}
+			fmt.Printf("  ✓ cached %d issues\n", cachedCount)
+		}
+	} else {
+		fmt.Println("! no active milestone, skipping initial cache population")
+	}
+
+	// Step 6: Create WebSocket hub
+	fmt.Println("Creating WebSocket hub...")
+	hub := dashboard.NewHub()
+	go hub.Run()
+	fmt.Println("  ✓ WebSocket hub started")
+
+	// Step 7 & 8: Create and start SyncService
+	fmt.Println("Creating sync service...")
+	syncService := dashboard.NewSyncService(gh, store, hub)
+	if activeMilestone != nil {
+		syncService.SetActiveMilestone(activeMilestone.Title)
+	}
+	syncService.Start()
+	fmt.Println("  ✓ Sync service started (30s interval)")
+
 	s := setup.New(dir, oc, cfg)
 	if err := s.CheckAndGenerate(); err != nil {
 		return fmt.Errorf("setup check failed: %w", err)
@@ -228,7 +266,7 @@ func runServe() error {
 		}
 	}()
 
-	srv, err := dashboard.NewServer(cfg.Dashboard.Port, store, pool.Workers, gh, orchestrator, oc, cfg.Planning.LLM)
+	srv, err := dashboard.NewServer(cfg.Dashboard.Port, store, pool.Workers, gh, orchestrator, oc, cfg.Planning.LLM, hub, syncService)
 	if err != nil {
 		return fmt.Errorf("creating dashboard server: %w", err)
 	}
