@@ -10,29 +10,17 @@ import (
 
 // mockGitHubClient is a test double for GitHubClient interface
 type mockGitHubClient struct {
-	issues      []github.Issue
-	listErr     error
-	milestone   string
-	prStatus    map[int]bool
-	prMergedAt  map[int]*time.Time
-	prStatusErr error
+	issues    []github.Issue
+	listErr   error
+	milestone string
 }
 
-func (m *mockGitHubClient) ListIssuesForMilestone(milestone string) ([]github.Issue, error) {
+func (m *mockGitHubClient) ListIssuesWithPRStatus(milestone string) ([]github.Issue, error) {
 	m.milestone = milestone
 	if m.listErr != nil {
 		return nil, m.listErr
 	}
 	return m.issues, nil
-}
-
-func (m *mockGitHubClient) GetIssuePRStatus(issueNumber int) (bool, *time.Time, error) {
-	if m.prStatusErr != nil {
-		return false, nil, m.prStatusErr
-	}
-	isMerged := m.prStatus[issueNumber]
-	mergedAt := m.prMergedAt[issueNumber]
-	return isMerged, mergedAt, nil
 }
 
 // mockStore is a test double for Store interface
@@ -318,15 +306,8 @@ func TestSyncService_syncNow_FetchesPRStatus(t *testing.T) {
 	gh := &mockGitHubClient{
 		issues: []github.Issue{
 			{Number: 1, Title: "Open Issue", State: "open"},
-			{Number: 2, Title: "Merged Issue", State: "CLOSED"},
+			{Number: 2, Title: "Merged Issue", State: "CLOSED", PRMerged: true, MergedAt: &mergedAt},
 			{Number: 3, Title: "Closed Issue", State: "CLOSED"},
-		},
-		prStatus: map[int]bool{
-			2: true,
-			3: false,
-		},
-		prMergedAt: map[int]*time.Time{
-			2: &mergedAt,
 		},
 	}
 	store := &mockStore{}

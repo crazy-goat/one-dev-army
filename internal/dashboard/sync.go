@@ -11,8 +11,7 @@ import (
 
 // GitHubClient defines the interface for GitHub operations needed by SyncService
 type GitHubClient interface {
-	ListIssuesForMilestone(milestone string) ([]github.Issue, error)
-	GetIssuePRStatus(issueNumber int) (bool, *time.Time, error)
+	ListIssuesWithPRStatus(milestone string) ([]github.Issue, error)
 }
 
 // Store defines the interface for database operations needed by SyncService
@@ -143,30 +142,18 @@ func (s *SyncService) syncNow() {
 
 	log.Printf("[SyncService] Starting sync for milestone: %s", milestone)
 
-	// Fetch issues from GitHub
-	issues, err := s.gh.ListIssuesForMilestone(milestone)
+	// Single GraphQL query fetches issues + PR merge status together
+	issues, err := s.gh.ListIssuesWithPRStatus(milestone)
 	if err != nil {
 		log.Printf("[SyncService] Error fetching issues: %v", err)
 		return
 	}
 
-	log.Printf("[SyncService] Fetched %d issues from GitHub", len(issues))
+	log.Printf("[SyncService] Fetched %d issues from GitHub (single query)", len(issues))
 
 	// Cache each issue
 	cachedCount := 0
 	for _, issue := range issues {
-		// For closed issues, fetch PR merge status
-		if issue.State == "CLOSED" {
-			isMerged, mergedAt, err := s.gh.GetIssuePRStatus(issue.Number)
-			if err != nil {
-				log.Printf("[SyncService] Error fetching PR status for issue #%d: %v", issue.Number, err)
-			} else {
-				issue.PRMerged = isMerged
-				issue.MergedAt = mergedAt
-				log.Printf("[SyncService] Issue #%d PR status: merged=%v", issue.Number, isMerged)
-			}
-		}
-
 		if err := s.store.SaveIssueCache(issue, milestone, false); err != nil {
 			log.Printf("[SyncService] Error caching issue #%d: %v", issue.Number, err)
 			continue

@@ -361,6 +361,181 @@ func (c *Client) GetIssuePRStatus(issueNumber int) (bool, *time.Time, error) {
 	return false, nil, nil
 }
 
+// ListIssuesWithPRStatus fetches all issues for a milestone with PR merge status
+// in a single GraphQL query, replacing the N+1 pattern of ListIssuesForMilestone + N × GetIssuePRStatus.
+func (c *Client) ListIssuesWithPRStatus(milestone string) ([]Issue, error) {
+	parts := strings.SplitN(c.Repo, "/", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid repo format: %s", c.Repo)
+	}
+	owner, repo := parts[0], parts[1]
+
+	query := `query($repo: String!, $owner: String!, $milestone: String!, $cursor: String) {
+		repository(owner: $owner, name: $repo) {
+			milestones(first: 1, query: $milestone) {
+				nodes {
+					issues(first: 100, after: $cursor) {
+						pageInfo {
+							hasNextPage
+							endCursor
+						}
+						nodes {
+							number
+							title
+							body
+							state
+							updatedAt
+							assignees(first: 5) {
+								nodes {
+									login
+								}
+							}
+							labels(first: 20) {
+								nodes {
+									name
+								}
+							}
+							timelineItems(first: 5, itemTypes: [CLOSED_EVENT]) {
+								nodes {
+									... on ClosedEvent {
+										closer {
+											... on PullRequest {
+												state
+												mergedAt
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}`
+
+	type gqlIssueNode struct {
+		Number    int        `json:"number"`
+		Title     string     `json:"title"`
+		Body      string     `json:"body"`
+		State     string     `json:"state"`
+		UpdatedAt *time.Time `json:"updatedAt"`
+		Assignees struct {
+			Nodes []struct {
+				Login string `json:"login"`
+			} `json:"nodes"`
+		} `json:"assignees"`
+		Labels struct {
+			Nodes []struct {
+				Name string `json:"name"`
+			} `json:"nodes"`
+		} `json:"labels"`
+		TimelineItems struct {
+			Nodes []struct {
+				Closer struct {
+					State    string     `json:"state"`
+					MergedAt *time.Time `json:"mergedAt"`
+				} `json:"closer"`
+			} `json:"nodes"`
+		} `json:"timelineItems"`
+	}
+
+	var allIssues []Issue
+	var cursor *string
+
+	for {
+		args := []string{
+			"api", "graphql",
+			"-f", fmt.Sprintf("query=%s", query),
+			"-f", fmt.Sprintf("owner=%s", owner),
+			"-f", fmt.Sprintf("repo=%s", repo),
+			"-f", fmt.Sprintf("milestone=%s", milestone),
+		}
+		if cursor != nil {
+			args = append(args, "-f", fmt.Sprintf("cursor=%s", *cursor))
+		}
+
+		out, err := c.ghNoRepo(args...)
+		if err != nil {
+			return nil, fmt.Errorf("graphql query for milestone %s: %w", milestone, err)
+		}
+
+		var result struct {
+			Data struct {
+				Repository struct {
+					Milestones struct {
+						Nodes []struct {
+							Issues struct {
+								PageInfo struct {
+									HasNextPage bool   `json:"hasNextPage"`
+									EndCursor   string `json:"endCursor"`
+								} `json:"pageInfo"`
+								Nodes []gqlIssueNode `json:"nodes"`
+							} `json:"issues"`
+						} `json:"nodes"`
+					} `json:"milestones"`
+				} `json:"repository"`
+			} `json:"data"`
+		}
+
+		if err := json.Unmarshal(out, &result); err != nil {
+			return nil, fmt.Errorf("parsing graphql response for milestone %s: %w", milestone, err)
+		}
+
+		milestones := result.Data.Repository.Milestones.Nodes
+		if len(milestones) == 0 {
+			log.Printf("[GitHub] No milestone found matching %q", milestone)
+			return nil, nil
+		}
+
+		issuesData := milestones[0].Issues
+
+		for _, node := range issuesData.Nodes {
+			issue := Issue{
+				Number:    node.Number,
+				Title:     node.Title,
+				Body:      node.Body,
+				State:     node.State,
+				UpdatedAt: node.UpdatedAt,
+			}
+
+			// Map assignees
+			for _, a := range node.Assignees.Nodes {
+				issue.Assignees = append(issue.Assignees, struct {
+					Login string `json:"login"`
+				}{Login: a.Login})
+			}
+
+			// Map labels
+			for _, l := range node.Labels.Nodes {
+				issue.Labels = append(issue.Labels, struct {
+					Name string `json:"name"`
+				}{Name: l.Name})
+			}
+
+			// Extract PR merge status from timeline
+			for _, te := range node.TimelineItems.Nodes {
+				if te.Closer.State == "MERGED" {
+					issue.PRMerged = true
+					issue.MergedAt = te.Closer.MergedAt
+					break
+				}
+			}
+
+			allIssues = append(allIssues, issue)
+		}
+
+		if !issuesData.PageInfo.HasNextPage {
+			break
+		}
+		endCursor := issuesData.PageInfo.EndCursor
+		cursor = &endCursor
+	}
+
+	log.Printf("[GitHub] Fetched %d issues with PR status for milestone %q (1 GraphQL query)", len(allIssues), milestone)
+	return allIssues, nil
+}
+
 func (c *Client) CloseMilestone(number int) error {
 	_, err := c.ghNoRepo("api", "repos/"+c.Repo+"/milestones/"+strconv.Itoa(number), "-f", "state=closed")
 	if err != nil {
