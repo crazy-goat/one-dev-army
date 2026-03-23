@@ -31,6 +31,7 @@ type Server struct {
 	oc           *opencode.Client
 	wizardLLM    string
 	hub          *Hub
+	syncService  *SyncService
 }
 
 func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string) (*Server, error) {
@@ -63,6 +64,9 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 	}
 	// Start the WebSocket hub
 	go s.hub.Run()
+	// Initialize and start the background sync service
+	s.syncService = NewSyncService(gh, store, s.hub)
+	s.syncService.Start()
 	s.routes()
 	return s, nil
 }
@@ -172,6 +176,10 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	// Stop the background sync service
+	if s.syncService != nil {
+		s.syncService.Stop()
+	}
 	// Stop the WebSocket hub
 	if s.hub != nil {
 		s.hub.Stop()

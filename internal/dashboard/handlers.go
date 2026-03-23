@@ -308,6 +308,10 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[Dashboard] Sync error: %v", err)
 		} else {
 			s.gh.SetActiveMilestone(m)
+			if s.syncService != nil {
+				s.syncService.SetActiveMilestone(m.Title)
+				s.syncService.SyncNow()
+			}
 			if m != nil {
 				log.Printf("[Dashboard] Synced active milestone: %s", m.Title)
 			} else {
