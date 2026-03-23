@@ -27,6 +27,7 @@ type Project struct {
 // EnsureProject ensures a GitHub Project with the given name exists for the
 // repo owner. Returns the project node ID and number. Creates the project if
 // it does not exist.
+// Deprecated: GitHub Projects dependency is being removed. This method is no longer called on startup.
 func (c *Client) EnsureProject(name string) (Project, error) {
 	owner := strings.Split(c.Repo, "/")[0]
 
@@ -68,6 +69,7 @@ func (c *Client) EnsureProject(name string) (Project, error) {
 
 // setupProject links the project to the repo and sets visibility to public.
 // Errors are ignored — these are best-effort (project works without them).
+// Deprecated: GitHub Projects dependency is being removed. This method is no longer called on startup.
 func (c *Client) setupProject(projectNumber int) {
 	owner := strings.Split(c.Repo, "/")[0]
 	num := fmt.Sprintf("%d", projectNumber)
@@ -92,6 +94,7 @@ type fieldList struct {
 
 // EnsureProjectColumns ensures the project's Status field contains all
 // required columns in the correct order. Overwrites options if they differ.
+// Deprecated: GitHub Projects dependency is being removed. This method is no longer called on startup.
 func (c *Client) EnsureProjectColumns(projectID string, projectNumber int) error {
 	owner := strings.Split(c.Repo, "/")[0]
 
