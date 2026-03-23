@@ -1,122 +1,96 @@
-# Implementation Plan for Issue #164
+# Implementation Plan for Issue #168
 
-**Created:** 2026-03-23T12:27:49+01:00
-**Updated:** 2026-03-23T12:27:49+01:00
+**Created:** 2026-03-23T12:33:47+01:00
+**Updated:** 2026-03-23T12:33:47+01:00
 
 ## Analysis
 
-Now I have a comprehensive understanding of the codebase. Let me provide a concise analysis of the issue.
+Now I have a good understanding of the codebase. Let me provide a concise analysis of the issue:
 
-## Analysis Summary
+1. **Core Requirements:**
+   - Merge "analyze" and "plan" steps into single "technical-planning" step
+   - Combine the two LLM prompts into one
+   - Update stepOrder from ["analyze", "plan", "implement", "code-review", "create-pr"] to ["technical-planning", "implement", "code-review", "create-pr"]
+   - Create a new technicalPlanning() function that returns both analysis and plan
+   - Handle resume logic migration from old steps
+   - Update tests
 
-### 1. Core Requirements
-Split the "In Progress" column into two separate columns:
-- **Plan** column (yellow/orange): Contains `analyzing` + `planning` states
-- **Code** column (blue): Contains `coding` state only
+2. **Files that need changes:**
+   - `internal/mvp/worker.go` - Main implementation (lines 23-53 for prompts, 132 for stepOrder, 309-373 for analyze/plan functions, 176-211 for Process method)
+   - `internal/mvp/worker_test.go` - Update tests
+   - `internal/db/db.go` - May need migration logic for old step names (lines 165-178 for GetLastCompletedStep, 180-193 for GetStepResponse)
 
-New column order: Blocked → Backlog → Plan → Code → AI Review → Approve → Done → Failed
+3. **Implementation approach:**
+   - Create combined `technicalPlanningPrompt` that merges analysisPrompt and planningPrompt
+   - Create `technicalPlanning()` function that makes single LLM call and returns (analysis, plan string, err error)
+   - Parse combined response to extract both analysis and plan sections
+   - Update `Process()` to call technicalPlanning() instead of separate analyze() and plan() calls
+   - Update resume logic to handle migration: if last completed step is "analyze" or "plan", treat as "technical-planning" completed
+   - Keep backward compatibility by checking for old step names in database
 
-### 2. Files That Need Changes
-
-1. **`internal/github/project.go`** (lines 10-17):
-   - Update `ProjectColumns` array to replace "In Progress" with "Plan" and "Code"
-   - Update `columnColors` map (lines 168-175) with new column colors
-
-2. **`internal/dashboard/handlers.go`**:
-   - Update `boardData` struct (lines 30-43): Replace `Progress []taskCard` with `Plan []taskCard` and `Code []taskCard`
-   - Update `placeholderBoard()` (lines 63-84): Replace Progress with Plan/Code
-   - Update `inferColumnFromIssue()` (lines 205-239): Map state labels to new columns
-   - Update `addCardToColumn()` (lines 241-271): Handle new column names
-
-3. **`internal/dashboard/templates/board.html`**:
-   - Replace "In Progress" column section (lines 99-112) with two new column sections
-   - Add CSS styling for `.col-plan` and `.col-code` classes
-   - Update grid template to accommodate 8 columns instead of 7 (line 7)
-
-### 3. Implementation Approach
-
-**Phase 1: Data Model Changes**
-- Update `ProjectColumns` in `project.go` to define the new column structure
-- Modify `boardData` struct to replace single `Progress` field with separate `Plan` and `Code` fields
-
-**Phase 2: Logic Updates**
-- Refactor `inferColumnFromIssue()` to route issues to the appropriate column based on their state labels
-- Update `addCardToColumn()` to populate the new data structures correctly
-
-**Phase 3: UI Changes**
-- Redesign the board template to display the two new columns with distinct visual styling
-- Adjust the CSS grid layout to support the additional column
-
-**Phase 4: State Label Mapping**
-- `state:analyze` and `state:plan` labels → Plan column
-- `state:coding` label → Code column
-
-### 4. Testing Strategy
-
-**Unit Tests to Update:**
-- `handlers_test.go`: Refresh tests that check the board data structure and column mappings
-- `project_test.go`: Validate the new column configuration and color assignments
-
-**Integration Tests:**
-- Verify that issues with different state labels appear in the correct columns
-- Test the complete flow from issue creation through state transitions
-- Ensure the dashboard renders correctly with the new 8-column layout
-
-**Manual Verification:**
-- Confirm the column order matches the specification
-- Check that color coding is applied correctly to each column
-- Validate responsive behavior on different screen sizes## Analysis: GitHub Issue #164 - Split In Progress Column
+4. **Testing strategy:**
+   - Update existing tests to use new "technical-planning" step name
+   - Add tests for technicalPlanning() function
+   - Add tests for resume logic migration from old "analyze"/"plan" steps
+   - Test that combined prompt generates both analysis and plan sections
+   - Verify backward compatibility with old tickets## Analysis of GitHub Issue #168
 
 ### 1. Core Requirements
 
-Split the "In Progress" column into two distinct columns:
-- **Plan** (yellow/orange): Tickets in `analyzing` or `planning` state
-- **Code** (blue): Tickets in `coding` state only
+Merge the separate `analyze` and `plan` steps into a single `technical-planning` step:
 
-New column order: Blocked → Backlog → **Plan** → **Code** → AI Review → Approve → Done → Failed
+- **Combine prompts**: Merge `analysisPrompt` (lines 23-34) and `planningPrompt` (lines 36-53) into one unified prompt
+- **Single LLM call**: Replace two separate `llmStep()` calls with one call that returns both analysis and plan
+- **Update step order**: Change `stepOrder` (line 132) from `["analyze", "plan", "implement", "code-review", "create-pr"]` to `["technical-planning", "implement", "code-review", "create-pr"]`
+- **Resume migration**: Handle tickets that have old "analyze" or "plan" steps completed
+- **Plan.md updates**: The combined step should still create and update plan.md (currently done separately in `analyze()` lines 316-336 and `plan()` lines 351-370)
 
 ### 2. Files That Need Changes
 
-| File | Lines | Changes Needed |
-|------|-------|----------------|
-| `internal/github/project.go` | 10-17, 168-175 | Update `ProjectColumns` array and `columnColors` map |
-| `internal/dashboard/handlers.go` | 30-43, 63-84, 205-239, 241-271 | Update `boardData` struct, `placeholderBoard()`, `inferColumnFromIssue()`, `addCardToColumn()` |
-| `internal/dashboard/templates/board.html` | 7, 99-112 | Update grid to 8 columns, replace In Progress section with Plan and Code sections, add CSS |
+| File | Lines | Changes |
+|------|-------|---------|
+| `internal/mvp/worker.go` | 23-53 | Create combined `technicalPlanningPrompt` |
+| `internal/mvp/worker.go` | 132 | Update `stepOrder` array |
+| `internal/mvp/worker.go` | 176-211 | Replace separate analyze/plan calls in `Process()` |
+| `internal/mvp/worker.go` | 309-373 | Replace `analyze()` and `plan()` with `technicalPlanning()` |
+| `internal/mvp/worker.go` | 143-157 | Update resume logic for migration |
+| `internal/mvp/worker_test.go` | All | Update tests for new step name |
+| `internal/db/db.go` | 165-193 | Consider migration for `GetLastCompletedStep` and `GetStepResponse` |
 
 ### 3. Implementation Approach
 
-**Data Layer:**
-- Replace `Progress []taskCard` with `Plan []taskCard` and `Code []taskCard` in `boardData` struct
-- Update `ProjectColumns` from `["Backlog", "In Progress", "AI Review", "Approve", "Done", "Blocked"]` to `["Blocked", "Backlog", "Plan", "Code", "AI Review", "Approve", "Done", "Failed"]`
+**Prompt merging strategy:**
+- Create `technicalPlanningPrompt` that asks LLM to output both analysis and plan in structured format (similar to wizard's `TechnicalPlanningPromptTemplate` in `internal/dashboard/prompts.go:71-100`)
+- Use clear section markers (e.g., `## Analysis` and `## Implementation Plan`) so response can be parsed
 
-**Logic Layer:**
-- Modify `inferColumnFromIssue()` to map labels:
-  - `state:analyze` or `state:plan` → "Plan"
-  - `state:coding` → "Code"
-  - Remove old `in-progress` label mapping
-- Update `addCardToColumn()` switch statement to handle "Plan" and "Code" cases
+**Function structure:**
+```go
+func (w *Worker) technicalPlanning(ctx context.Context, task *Task) (analysis, plan string, err error)
+```
 
-**Presentation Layer:**
-- Change CSS grid from `repeat(7,1fr)` to `repeat(8,1fr)`
-- Add two new column sections with styling:
-  - `.col-plan`: Yellow/orange (#f39c12) border and title
-  - `.col-code`: Blue (#3498db) border and title
+**Response parsing:**
+- Split LLM response on section headers to extract analysis and plan separately
+- Handle `ALREADY_DONE:` detection (currently in `checkAlreadyDone()` at line 617)
+
+**Resume migration:**
+- In `GetLastCompletedStep()` check: if last step is "analyze" or "plan", return "technical-planning"
+- In `Process()`, when resuming from old steps, fetch both responses and combine
+
+**Plan.md handling:**
+- Single call to create/update plan.md with both analysis and plan content (merge the two existing plan.md operations)
 
 ### 4. Testing Strategy
 
-**Unit Tests:**
-- Update `handlers_test.go` tests that reference `data.Progress` → `data.Plan`/`data.Code`
-- Add tests for `inferColumnFromIssue()` with new state labels
-- Verify `addCardToColumn()` correctly routes to Plan vs Code columns
+**Unit tests to add/update:**
+- `TestTechnicalPlanning()` - Test new function makes single LLM call and parses response correctly
+- `TestTechnicalPlanningAlreadyDone()` - Verify `ALREADY_DONE:` detection still works
+- `TestProcessResumeFromOldSteps()` - Test migration from "analyze"/"plan" to "technical-planning"
+- Update `TestSlug`, `TestExtractText` tests if they reference step names
 
-**Integration Tests:**
-- Test board renders with 8 columns in correct order
-- Verify tickets with `state:analyze` appear in Plan column
-- Verify tickets with `state:coding` appear in Code column
-- Test responsive layout on mobile viewport
+**Integration considerations:**
+- Test that old tickets with completed "analyze" step can resume correctly
+- Test that plan.md is created with combined content
+- Verify step storage in database uses new "technical-planning" name
 
-**Edge Cases:**
-- Tickets with both `state:plan` and `state:coding` labels (should go to Code - more specific)
-- Tickets with no state labels (default to Backlog)
-- Existing tickets with old `in-progress` label (need migration or backward compatibility)
+**Key risk:** The wizard implementation (`internal/dashboard/prompts.go`) already has a unified technical planning prompt template that could be adapted for the worker.
 
