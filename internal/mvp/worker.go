@@ -210,7 +210,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	if resumeFrom <= 1 {
 		task.Status = StatusCoding
 		log.Printf("[Worker %d] [2/4] Implementing #%d (includes tests)...", w.id, task.Issue.Number)
-		w.setStageLabel("Code")
+		w.setStageLabel("stage:coding")
 		stepStart := time.Now()
 		if err := w.implement(ctx, task, implPlan); err != nil {
 			task.Status = StatusFailed
@@ -218,6 +218,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			log.Printf("[Worker %d] ✗ FAILED implementing: %v", w.id, err)
 			return task.Result.Error
 		}
+		w.setStageLabel("stage:testing")
 		log.Printf("[Worker %d] [2/4] Implementation done (%s)", w.id, time.Since(stepStart).Round(time.Second))
 	} else {
 		log.Printf("[Worker %d] [2/4] Skipping implement (completed previously)", w.id)
@@ -226,7 +227,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	if resumeFrom <= 2 {
 		task.Status = StatusReviewing
 		log.Printf("[Worker %d] [3/4] Code review #%d...", w.id, task.Issue.Number)
-		w.setStageLabel("AI Review")
+		w.setStageLabel("stage:code-review")
 		stepStart := time.Now()
 		approved, review, crErr := w.codeReview(ctx, task, "")
 		if crErr != nil {
@@ -329,17 +330,11 @@ func (w *Worker) technicalPlanning(ctx context.Context, task *Task) (analysis, i
 	}
 	planMgr := plan.NewAttachmentManager(w.gh, wt)
 
-	planURL, err := planMgr.CreateFullPlan(task.Issue.Number, task.Branch, analysis, implPlan)
+	_, err = planMgr.CreateFullPlan(task.Issue.Number, task.Branch, analysis, implPlan)
 	if err != nil {
-		log.Printf("[Worker %d] Warning: failed to create plan.md: %v", w.id, err)
+		log.Printf("[Worker %d] Warning: failed to add technical planning comment: %v", w.id, err)
 	} else {
-		log.Printf("[Worker %d] Created plan.md: %s", w.id, planURL)
-		// Store URL in database
-		if w.store != nil {
-			if err := w.store.UpdateStepPlanURL(task.Issue.Number, "technical-planning", planURL); err != nil {
-				log.Printf("[Worker %d] Warning: failed to store plan URL: %v", w.id, err)
-			}
-		}
+		log.Printf("[Worker %d] Added technical planning comment to issue #%d", w.id, task.Issue.Number)
 	}
 
 	return analysis, implPlan, nil
