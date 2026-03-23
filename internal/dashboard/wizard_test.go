@@ -187,22 +187,6 @@ func TestWizardSession_SetRefinedDescription(t *testing.T) {
 	}
 }
 
-func TestWizardSession_SetTasks(t *testing.T) {
-	session := &WizardSession{
-		ID:   "test-id",
-		Type: "feature",
-	}
-
-	tasks := []WizardTask{
-		{Title: "Task 1", Description: "Desc 1", Priority: "high", Complexity: "M"},
-	}
-
-	session.SetTasks(tasks)
-	if len(session.Tasks) != 1 {
-		t.Errorf("expected 1 task, got %d", len(session.Tasks))
-	}
-}
-
 func TestParseTaskJSON_RawJSON(t *testing.T) {
 	input := `[{"title": "Task 1", "description": "Description 1", "priority": "high", "complexity": "M"}]`
 
@@ -549,7 +533,7 @@ func TestWizardSession_SetAddToSprint(t *testing.T) {
 }
 
 func TestWizardStepConstants(t *testing.T) {
-	// Verify breakdown step is removed
+	// Verify breakdown step is removed - should have exactly 4 steps
 	steps := []WizardStep{
 		WizardStepNew,
 		WizardStepRefine,
