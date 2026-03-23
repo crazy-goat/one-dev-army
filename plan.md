@@ -1,38 +1,83 @@
 # Implementation Plan for Issue #180
 
-**Created:** 2026-03-23T13:07:49+01:00
-**Updated:** 2026-03-23T13:07:49+01:00
+**Created:** 2026-03-23T13:21:26+01:00
+**Updated:** 2026-03-23T13:21:26+01:00
 
 ## Analysis
 
-### 1. Core Requirements
-- Create a WebSocket server at `/ws` endpoint for real-time dashboard updates
-- Implement Hub pattern with client management (register/unregister/broadcast)
-- Support message types: `issue_update`, `sync_complete`
-- Handle multiple concurrent connections with proper lifecycle management
-- Implement ping/pong keepalive and graceful disconnections
-- Add connection limits and CORS/origin checks
-- Provide broadcast methods for issue updates and sync completion
+The WebSocket implementation is already fully implemented! Let me verify all the requirements from the issue:
 
-### 2. Files That Need Changes
-- **NEW**: `internal/dashboard/websocket.go` - Core WebSocket implementation
-- **NEW**: `internal/dashboard/websocket_test.go` - Unit tests for Hub
-- **MODIFY**: `internal/dashboard/server.go` - Add WebSocket route and Hub integration
-- **MODIFY**: `go.mod` - Add gorilla/websocket dependency
+1. ✅ `internal/dashboard/websocket.go` exists with:
+   - WebSocket upgrader with proper CORS/origin checks (lines 33-64)
+   - `Hub` struct with:
+     - `clients map[*Client]bool` (line 108)
+     - `broadcast chan []byte` (line 109)
+     - `register chan *Client` (line 110)
+     - `unregister chan *Client` (line 111)
+   - `Client` struct with:
+     - `hub *Hub` (line 99)
+     - `conn *websocket.Conn` (line 100)
+     - `send chan []byte` (line 101)
+   - `Message` struct with:
+     - `Type MessageType` (line 78) - supports "issue_update", "sync_complete", etc.
+     - `Payload json.RawMessage` (line 79)
 
-### 3. Implementation Approach
-- Use **gorilla/websocket** library (industry standard for Go WebSockets)
-- Implement classic Hub pattern with goroutines for concurrency
-- Hub runs in background goroutine handling register/unregister/broadcast channels
-- Each Client has its own goroutine for reading/writing
-- Ping/pong every 30 seconds to keep connections alive
-- Connection limit: 100 concurrent clients (configurable)
-- JSON message format for all communications
+2. ✅ `Run()` method on Hub (lines 138-190) - handles register/unregister/broadcast
 
-### 4. Testing Strategy
-- Unit tests for Hub: client registration, broadcasting, unregistration
-- Test concurrent client operations
-- Test message marshaling/unmarshaling
-- Test connection limits
-- Mock WebSocket connections using gorilla/websocket test utilities
+3. ✅ `BroadcastIssueUpdate` method (lines 230-257) - broadcasts issue updates
+
+4. ✅ `BroadcastSyncComplete` method (lines 260-286) - broadcasts sync completion
+
+5. ✅ Client disconnections handled gracefully with defer unregister (lines 290-293, 333-334)
+
+6. ✅ Ping/pong keepalive implemented (lines 329-356 with ticker, lines 296-300 SetPongHandler)
+
+7. ✅ Max connections limit implemented (lines 30, 113, 123-135, 148-153)
+
+8. ✅ Unit tests for Hub in `internal/dashboard/websocket_test.go` (547 lines of comprehensive tests)
+
+9. ✅ WebSocket endpoint `/ws` registered in server.go (line 159)
+
+
+10. ✅ Message format is JSON (lines 77-80)
+
+The implementation fully satisfies all requirements. I should respond with ALREADY_DONE.ALREADY_DONE: The WebSocket server is fully implemented in `internal/dashboard/websocket.go` with all required components: Hub struct with clients/broadcast/register/unregister channels, Client struct with hub/conn/send fields, Message struct with Type/Payload, Run() method handling the event loop, BroadcastIssueUpdate() and BroadcastSyncComplete() methods, graceful disconnection handling with defer unregister, ping/pong keepalive (30s/60s), max connection limiting (default 100), and CORS/origin checks. The `/ws` endpoint is registered in `server.go:159`. Comprehensive unit tests exist in `websocket_test.go` (547 lines) covering all functionality including concurrent clients, connection limits, broadcasts, and ping/pong.
+
+## Implementation Steps
+
+### Step 1: ✅ `internal/dashboard/websocket.go` exists with:
+
+- WebSocket upgrader with proper CORS/origin checks (lines 33-64)
+- `Hub` struct with:
+- `clients map[*Client]bool` (line 108)
+- `broadcast chan []byte` (line 109)
+- `register chan *Client` (line 110)
+- `unregister chan *Client` (line 111)
+- `Client` struct with:
+- `hub *Hub` (line 99)
+- `conn *websocket.Conn` (line 100)
+- `send chan []byte` (line 101)
+- `Message` struct with:
+- `Type MessageType` (line 78) - supports "issue_update", "sync_complete", etc.
+- `Payload json.RawMessage` (line 79)
+
+### Step 2: ✅ `Run()` method on Hub (lines 138-190) - handles register/unregister/broadcast
+
+### Step 3: ✅ `BroadcastIssueUpdate` method (lines 230-257) - broadcasts issue updates
+
+### Step 4: ✅ `BroadcastSyncComplete` method (lines 260-286) - broadcasts sync completion
+
+### Step 5: ✅ Client disconnections handled gracefully with defer unregister (lines 290-293, 333-334)
+
+### Step 6: ✅ Ping/pong keepalive implemented (lines 329-356 with ticker, lines 296-300 SetPongHandler)
+
+### Step 7: ✅ Max connections limit implemented (lines 30, 113, 123-135, 148-153)
+
+### Step 8: ✅ Unit tests for Hub in `internal/dashboard/websocket_test.go` (547 lines of comprehensive tests)
+
+### Step 9: ✅ WebSocket endpoint `/ws` registered in server.go (line 159)
+
+### Step 10: ✅ Message format is JSON (lines 77-80)
+
+The implementation fully satisfies all requirements. I should respond with ALREADY_DONE.ALREADY_DONE: The WebSocket server is fully implemented in `internal/dashboard/websocket.go` with all required components: Hub struct with clients/broadcast/register/unregister channels, Client struct with hub/conn/send fields, Message struct with Type/Payload, Run() method handling the event loop, BroadcastIssueUpdate() and BroadcastSyncComplete() methods, graceful disconnection handling with defer unregister, ping/pong keepalive (30s/60s), max connection limiting (default 100), and CORS/origin checks. The `/ws` endpoint is registered in `server.go:159`. Comprehensive unit tests exist in `websocket_test.go` (547 lines) covering all functionality including concurrent clients, connection limits, broadcasts, and ping/pong.
 
