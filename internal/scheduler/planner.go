@@ -9,6 +9,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/llm"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
@@ -24,14 +25,15 @@ type Sprint struct {
 }
 
 type Planner struct {
-	cfg   *config.Config
-	oc    *opencode.Client
-	gh    *github.Client
-	store *db.Store
+	cfg    *config.Config
+	oc     *opencode.Client
+	gh     *github.Client
+	store  *db.Store
+	router *llm.Router
 }
 
-func NewPlanner(cfg *config.Config, oc *opencode.Client, gh *github.Client, store *db.Store) *Planner {
-	return &Planner{cfg: cfg, oc: oc, gh: gh, store: store}
+func NewPlanner(cfg *config.Config, oc *opencode.Client, gh *github.Client, store *db.Store, router *llm.Router) *Planner {
+	return &Planner{cfg: cfg, oc: oc, gh: gh, store: store, router: router}
 }
 
 func (p *Planner) PlanSprint() (*Sprint, error) {
@@ -50,7 +52,14 @@ func (p *Planner) PlanSprint() (*Sprint, error) {
 	}
 
 	prompt := automatedPipelineNotice + buildSprintPrompt(issues, p.cfg.Sprint.TasksPerSprint)
-	msg, err := p.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(p.cfg.Planning.LLM), os.Stdout)
+
+	// Use router to select model for planning category
+	llmModel := p.cfg.Planning.LLM
+	if p.router != nil {
+		llmModel = p.router.SelectModel(config.CategoryPlanning, config.ComplexityMedium, nil)
+	}
+
+	msg, err := p.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(llmModel), os.Stdout)
 	if err != nil {
 		return nil, fmt.Errorf("sending planning prompt: %w", err)
 	}
@@ -124,7 +133,14 @@ func (p *Planner) AnalyzeInsights(sprintID int) error {
 	}
 
 	prompt := buildInsightPrompt(allInsights)
-	msg, err := p.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(p.cfg.Planning.LLM), os.Stdout)
+
+	// Use router to select model for planning category
+	llmModel := p.cfg.Planning.LLM
+	if p.router != nil {
+		llmModel = p.router.SelectModel(config.CategoryPlanning, config.ComplexityLow, nil)
+	}
+
+	msg, err := p.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(llmModel), os.Stdout)
 	if err != nil {
 		return fmt.Errorf("sending insight prompt: %w", err)
 	}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/llm"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
@@ -197,7 +198,8 @@ func TestPlanSprint_Integration(t *testing.T) {
 	}
 	oc := opencode.NewClient(srv.URL)
 
-	planner := NewPlanner(cfg, oc, nil, nil)
+	router := llm.NewRouter(&cfg.LLM)
+	planner := NewPlanner(cfg, oc, nil, nil, router)
 
 	session, err := planner.oc.CreateSession("sprint-planning")
 	if err != nil {

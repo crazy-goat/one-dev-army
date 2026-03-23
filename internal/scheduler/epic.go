@@ -8,6 +8,7 @@ import (
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/llm"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
@@ -21,13 +22,14 @@ type TaskSpec struct {
 }
 
 type EpicAnalyzer struct {
-	cfg *config.Config
-	oc  *opencode.Client
-	gh  *github.Client
+	cfg    *config.Config
+	oc     *opencode.Client
+	gh     *github.Client
+	router *llm.Router
 }
 
-func NewEpicAnalyzer(cfg *config.Config, oc *opencode.Client, gh *github.Client) *EpicAnalyzer {
-	return &EpicAnalyzer{cfg: cfg, oc: oc, gh: gh}
+func NewEpicAnalyzer(cfg *config.Config, oc *opencode.Client, gh *github.Client, router *llm.Router) *EpicAnalyzer {
+	return &EpicAnalyzer{cfg: cfg, oc: oc, gh: gh, router: router}
 }
 
 func (ea *EpicAnalyzer) Analyze(description string) ([]TaskSpec, error) {
@@ -37,7 +39,18 @@ func (ea *EpicAnalyzer) Analyze(description string) ([]TaskSpec, error) {
 	}
 
 	prompt := buildEpicPrompt(description)
-	msg, err := ea.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(ea.cfg.EpicAnalysis.LLM), os.Stdout)
+
+	// Use router to select model for planning category with complexity detection
+	llmModel := ea.cfg.EpicAnalysis.LLM
+	if ea.router != nil {
+		complexity := llm.DetectComplexity(description, ea.router.GetConfig().RoutingRules.ComplexityThresholds)
+		routerModel := ea.router.SelectModel(config.CategoryPlanning, complexity, nil)
+		if routerModel != "" {
+			llmModel = routerModel
+		}
+	}
+
+	msg, err := ea.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(llmModel), os.Stdout)
 	if err != nil {
 		return nil, fmt.Errorf("sending epic analysis prompt: %w", err)
 	}
