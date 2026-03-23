@@ -32,6 +32,7 @@ var RequiredLabels = []Label{
 	{Name: "priority:low", Color: "0E8A16"},
 	{Name: "epic", Color: "5319E7"},
 	{Name: "wizard", Color: "7C3AED"},
+	{Name: "merge-failed", Color: "D93F0B"},
 }
 
 func (c *Client) EnsureLabels() error {

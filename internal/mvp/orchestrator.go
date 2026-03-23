@@ -211,6 +211,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		if err := o.gh.AddLabel(nextIssue.Number, "in-progress"); err != nil {
 			log.Printf("[Orchestrator] Error adding in-progress label: %v", err)
 		}
+		if err := o.gh.RemoveLabel(nextIssue.Number, "merge-failed"); err != nil {
+			log.Printf("[Orchestrator] Error removing merge-failed label: %v", err)
+		}
 		o.moveToColumn(nextIssue.Number, "In Progress")
 
 		task := &Task{
