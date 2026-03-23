@@ -36,6 +36,7 @@
   {{end}}
 
   <form method="post" action="/settings" hx-post="/settings" hx-target="#settings-content" hx-swap="outerHTML">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
     <div id="settings-content">
       <!-- Development Category -->
       <div class="settings-section">
@@ -45,38 +46,40 @@
             <h3>Strong Model</h3>
             <div class="form-group">
               <label for="development_strong_provider">Provider</label>
-              <input type="text" id="development_strong_provider" name="development_strong_provider" value="{{.Config.Development.Strong.Provider}}" placeholder="e.g., nexos-ai, openai, anthropic">
+              <input type="text" id="development_strong_provider" name="development_strong_provider" value="{{if index .FormValues "development_strong_provider"}}{{index .FormValues "development_strong_provider"}}{{else}}{{.Config.Development.Strong.Provider}}{{end}}" placeholder="e.g., nexos-ai, openai, anthropic">
             </div>
             <div class="form-group">
               <label for="development_strong_model">Model</label>
-              <input type="text" id="development_strong_model" name="development_strong_model" value="{{.Config.Development.Strong.Model}}" placeholder="e.g., Kimi K2.5, gpt-4, claude-3-opus">
+              <input type="text" id="development_strong_model" name="development_strong_model" value="{{if index .FormValues "development_strong_model"}}{{index .FormValues "development_strong_model"}}{{else}}{{.Config.Development.Strong.Model}}{{end}}" placeholder="e.g., Kimi K2.5, gpt-4, claude-3-opus">
             </div>
             <div class="form-group">
               <label for="development_strong_api_key">API Key (optional)</label>
-              <input type="password" id="development_strong_api_key" name="development_strong_api_key" value="{{.Config.Development.Strong.APIKey}}" placeholder="Leave empty to use env var">
+              <input type="password" id="development_strong_api_key" name="development_strong_api_key" value="" placeholder="Leave empty to keep existing or use env var">
+              <div class="help-text">Enter new API key to change, or leave empty to keep existing</div>
             </div>
             <div class="form-group">
               <label for="development_strong_base_url">Base URL (optional)</label>
-              <input type="text" id="development_strong_base_url" name="development_strong_base_url" value="{{.Config.Development.Strong.BaseURL}}" placeholder="Custom API endpoint">
+              <input type="text" id="development_strong_base_url" name="development_strong_base_url" value="{{if index .FormValues "development_strong_base_url"}}{{index .FormValues "development_strong_base_url"}}{{else}}{{.Config.Development.Strong.BaseURL}}{{end}}" placeholder="Custom API endpoint">
             </div>
           </div>
           <div class="model-variant">
             <h3>Weak Model</h3>
             <div class="form-group">
               <label for="development_weak_provider">Provider</label>
-              <input type="text" id="development_weak_provider" name="development_weak_provider" value="{{.Config.Development.Weak.Provider}}" placeholder="e.g., nexos-ai, openai, anthropic">
+              <input type="text" id="development_weak_provider" name="development_weak_provider" value="{{if index .FormValues "development_weak_provider"}}{{index .FormValues "development_weak_provider"}}{{else}}{{.Config.Development.Weak.Provider}}{{end}}" placeholder="e.g., nexos-ai, openai, anthropic">
             </div>
             <div class="form-group">
               <label for="development_weak_model">Model</label>
-              <input type="text" id="development_weak_model" name="development_weak_model" value="{{.Config.Development.Weak.Model}}" placeholder="e.g., Kimi K2.5, gpt-3.5-turbo">
+              <input type="text" id="development_weak_model" name="development_weak_model" value="{{if index .FormValues "development_weak_model"}}{{index .FormValues "development_weak_model"}}{{else}}{{.Config.Development.Weak.Model}}{{end}}" placeholder="e.g., Kimi K2.5, gpt-3.5-turbo">
             </div>
             <div class="form-group">
               <label for="development_weak_api_key">API Key (optional)</label>
-              <input type="password" id="development_weak_api_key" name="development_weak_api_key" value="{{.Config.Development.Weak.APIKey}}" placeholder="Leave empty to use env var">
+              <input type="password" id="development_weak_api_key" name="development_weak_api_key" value="" placeholder="Leave empty to keep existing or use env var">
+              <div class="help-text">Enter new API key to change, or leave empty to keep existing</div>
             </div>
             <div class="form-group">
               <label for="development_weak_base_url">Base URL (optional)</label>
-              <input type="text" id="development_weak_base_url" name="development_weak_base_url" value="{{.Config.Development.Weak.BaseURL}}" placeholder="Custom API endpoint">
+              <input type="text" id="development_weak_base_url" name="development_weak_base_url" value="{{if index .FormValues "development_weak_base_url"}}{{index .FormValues "development_weak_base_url"}}{{else}}{{.Config.Development.Weak.BaseURL}}{{end}}" placeholder="Custom API endpoint">
             </div>
           </div>
         </div>
@@ -90,38 +93,40 @@
             <h3>Strong Model</h3>
             <div class="form-group">
               <label for="planning_strong_provider">Provider</label>
-              <input type="text" id="planning_strong_provider" name="planning_strong_provider" value="{{.Config.Planning.Strong.Provider}}" placeholder="e.g., nexos-ai, openai, anthropic">
+              <input type="text" id="planning_strong_provider" name="planning_strong_provider" value="{{if index .FormValues "planning_strong_provider"}}{{index .FormValues "planning_strong_provider"}}{{else}}{{.Config.Planning.Strong.Provider}}{{end}}" placeholder="e.g., nexos-ai, openai, anthropic">
             </div>
             <div class="form-group">
               <label for="planning_strong_model">Model</label>
-              <input type="text" id="planning_strong_model" name="planning_strong_model" value="{{.Config.Planning.Strong.Model}}" placeholder="e.g., Kimi K2.5, gpt-4, claude-3-opus">
+              <input type="text" id="planning_strong_model" name="planning_strong_model" value="{{if index .FormValues "planning_strong_model"}}{{index .FormValues "planning_strong_model"}}{{else}}{{.Config.Planning.Strong.Model}}{{end}}" placeholder="e.g., Kimi K2.5, gpt-4, claude-3-opus">
             </div>
             <div class="form-group">
               <label for="planning_strong_api_key">API Key (optional)</label>
-              <input type="password" id="planning_strong_api_key" name="planning_strong_api_key" value="{{.Config.Planning.Strong.APIKey}}" placeholder="Leave empty to use env var">
+              <input type="password" id="planning_strong_api_key" name="planning_strong_api_key" value="" placeholder="Leave empty to keep existing or use env var">
+              <div class="help-text">Enter new API key to change, or leave empty to keep existing</div>
             </div>
             <div class="form-group">
               <label for="planning_strong_base_url">Base URL (optional)</label>
-              <input type="text" id="planning_strong_base_url" name="planning_strong_base_url" value="{{.Config.Planning.Strong.BaseURL}}" placeholder="Custom API endpoint">
+              <input type="text" id="planning_strong_base_url" name="planning_strong_base_url" value="{{if index .FormValues "planning_strong_base_url"}}{{index .FormValues "planning_strong_base_url"}}{{else}}{{.Config.Planning.Strong.BaseURL}}{{end}}" placeholder="Custom API endpoint">
             </div>
           </div>
           <div class="model-variant">
             <h3>Weak Model</h3>
             <div class="form-group">
               <label for="planning_weak_provider">Provider</label>
-              <input type="text" id="planning_weak_provider" name="planning_weak_provider" value="{{.Config.Planning.Weak.Provider}}" placeholder="e.g., nexos-ai, openai, anthropic">
+              <input type="text" id="planning_weak_provider" name="planning_weak_provider" value="{{if index .FormValues "planning_weak_provider"}}{{index .FormValues "planning_weak_provider"}}{{else}}{{.Config.Planning.Weak.Provider}}{{end}}" placeholder="e.g., nexos-ai, openai, anthropic">
             </div>
             <div class="form-group">
               <label for="planning_weak_model">Model</label>
-              <input type="text" id="planning_weak_model" name="planning_weak_model" value="{{.Config.Planning.Weak.Model}}" placeholder="e.g., Kimi K2.5, gpt-3.5-turbo">
+              <input type="text" id="planning_weak_model" name="planning_weak_model" value="{{if index .FormValues "planning_weak_model"}}{{index .FormValues "planning_weak_model"}}{{else}}{{.Config.Planning.Weak.Model}}{{end}}" placeholder="e.g., Kimi K2.5, gpt-3.5-turbo">
             </div>
             <div class="form-group">
               <label for="planning_weak_api_key">API Key (optional)</label>
-              <input type="password" id="planning_weak_api_key" name="planning_weak_api_key" value="{{.Config.Planning.Weak.APIKey}}" placeholder="Leave empty to use env var">
+              <input type="password" id="planning_weak_api_key" name="planning_weak_api_key" value="" placeholder="Leave empty to keep existing or use env var">
+              <div class="help-text">Enter new API key to change, or leave empty to keep existing</div>
             </div>
             <div class="form-group">
               <label for="planning_weak_base_url">Base URL (optional)</label>
-              <input type="text" id="planning_weak_base_url" name="planning_weak_base_url" value="{{.Config.Planning.Weak.BaseURL}}" placeholder="Custom API endpoint">
+              <input type="text" id="planning_weak_base_url" name="planning_weak_base_url" value="{{if index .FormValues "planning_weak_base_url"}}{{index .FormValues "planning_weak_base_url"}}{{else}}{{.Config.Planning.Weak.BaseURL}}{{end}}" placeholder="Custom API endpoint">
             </div>
           </div>
         </div>
@@ -135,38 +140,40 @@
             <h3>Strong Model</h3>
             <div class="form-group">
               <label for="orchestration_strong_provider">Provider</label>
-              <input type="text" id="orchestration_strong_provider" name="orchestration_strong_provider" value="{{.Config.Orchestration.Strong.Provider}}" placeholder="e.g., nexos-ai, openai, anthropic">
+              <input type="text" id="orchestration_strong_provider" name="orchestration_strong_provider" value="{{if index .FormValues "orchestration_strong_provider"}}{{index .FormValues "orchestration_strong_provider"}}{{else}}{{.Config.Orchestration.Strong.Provider}}{{end}}" placeholder="e.g., nexos-ai, openai, anthropic">
             </div>
             <div class="form-group">
               <label for="orchestration_strong_model">Model</label>
-              <input type="text" id="orchestration_strong_model" name="orchestration_strong_model" value="{{.Config.Orchestration.Strong.Model}}" placeholder="e.g., Kimi K2.5, gpt-4, claude-3-opus">
+              <input type="text" id="orchestration_strong_model" name="orchestration_strong_model" value="{{if index .FormValues "orchestration_strong_model"}}{{index .FormValues "orchestration_strong_model"}}{{else}}{{.Config.Orchestration.Strong.Model}}{{end}}" placeholder="e.g., Kimi K2.5, gpt-4, claude-3-opus">
             </div>
             <div class="form-group">
               <label for="orchestration_strong_api_key">API Key (optional)</label>
-              <input type="password" id="orchestration_strong_api_key" name="orchestration_strong_api_key" value="{{.Config.Orchestration.Strong.APIKey}}" placeholder="Leave empty to use env var">
+              <input type="password" id="orchestration_strong_api_key" name="orchestration_strong_api_key" value="" placeholder="Leave empty to keep existing or use env var">
+              <div class="help-text">Enter new API key to change, or leave empty to keep existing</div>
             </div>
             <div class="form-group">
               <label for="orchestration_strong_base_url">Base URL (optional)</label>
-              <input type="text" id="orchestration_strong_base_url" name="orchestration_strong_base_url" value="{{.Config.Orchestration.Strong.BaseURL}}" placeholder="Custom API endpoint">
+              <input type="text" id="orchestration_strong_base_url" name="orchestration_strong_base_url" value="{{if index .FormValues "orchestration_strong_base_url"}}{{index .FormValues "orchestration_strong_base_url"}}{{else}}{{.Config.Orchestration.Strong.BaseURL}}{{end}}" placeholder="Custom API endpoint">
             </div>
           </div>
           <div class="model-variant">
             <h3>Weak Model</h3>
             <div class="form-group">
               <label for="orchestration_weak_provider">Provider</label>
-              <input type="text" id="orchestration_weak_provider" name="orchestration_weak_provider" value="{{.Config.Orchestration.Weak.Provider}}" placeholder="e.g., nexos-ai, openai, anthropic">
+              <input type="text" id="orchestration_weak_provider" name="orchestration_weak_provider" value="{{if index .FormValues "orchestration_weak_provider"}}{{index .FormValues "orchestration_weak_provider"}}{{else}}{{.Config.Orchestration.Weak.Provider}}{{end}}" placeholder="e.g., nexos-ai, openai, anthropic">
             </div>
             <div class="form-group">
               <label for="orchestration_weak_model">Model</label>
-              <input type="text" id="orchestration_weak_model" name="orchestration_weak_model" value="{{.Config.Orchestration.Weak.Model}}" placeholder="e.g., Kimi K2.5, gpt-3.5-turbo">
+              <input type="text" id="orchestration_weak_model" name="orchestration_weak_model" value="{{if index .FormValues "orchestration_weak_model"}}{{index .FormValues "orchestration_weak_model"}}{{else}}{{.Config.Orchestration.Weak.Model}}{{end}}" placeholder="e.g., Kimi K2.5, gpt-3.5-turbo">
             </div>
             <div class="form-group">
               <label for="orchestration_weak_api_key">API Key (optional)</label>
-              <input type="password" id="orchestration_weak_api_key" name="orchestration_weak_api_key" value="{{.Config.Orchestration.Weak.APIKey}}" placeholder="Leave empty to use env var">
+              <input type="password" id="orchestration_weak_api_key" name="orchestration_weak_api_key" value="" placeholder="Leave empty to keep existing or use env var">
+              <div class="help-text">Enter new API key to change, or leave empty to keep existing</div>
             </div>
             <div class="form-group">
               <label for="orchestration_weak_base_url">Base URL (optional)</label>
-              <input type="text" id="orchestration_weak_base_url" name="orchestration_weak_base_url" value="{{.Config.Orchestration.Weak.BaseURL}}" placeholder="Custom API endpoint">
+              <input type="text" id="orchestration_weak_base_url" name="orchestration_weak_base_url" value="{{if index .FormValues "orchestration_weak_base_url"}}{{index .FormValues "orchestration_weak_base_url"}}{{else}}{{.Config.Orchestration.Weak.BaseURL}}{{end}}" placeholder="Custom API endpoint">
             </div>
           </div>
         </div>
@@ -180,38 +187,40 @@
             <h3>Strong Model</h3>
             <div class="form-group">
               <label for="setup_strong_provider">Provider</label>
-              <input type="text" id="setup_strong_provider" name="setup_strong_provider" value="{{.Config.Setup.Strong.Provider}}" placeholder="e.g., nexos-ai, openai, anthropic">
+              <input type="text" id="setup_strong_provider" name="setup_strong_provider" value="{{if index .FormValues "setup_strong_provider"}}{{index .FormValues "setup_strong_provider"}}{{else}}{{.Config.Setup.Strong.Provider}}{{end}}" placeholder="e.g., nexos-ai, openai, anthropic">
             </div>
             <div class="form-group">
               <label for="setup_strong_model">Model</label>
-              <input type="text" id="setup_strong_model" name="setup_strong_model" value="{{.Config.Setup.Strong.Model}}" placeholder="e.g., Kimi K2.5, gpt-4, claude-3-opus">
+              <input type="text" id="setup_strong_model" name="setup_strong_model" value="{{if index .FormValues "setup_strong_model"}}{{index .FormValues "setup_strong_model"}}{{else}}{{.Config.Setup.Strong.Model}}{{end}}" placeholder="e.g., Kimi K2.5, gpt-4, claude-3-opus">
             </div>
             <div class="form-group">
               <label for="setup_strong_api_key">API Key (optional)</label>
-              <input type="password" id="setup_strong_api_key" name="setup_strong_api_key" value="{{.Config.Setup.Strong.APIKey}}" placeholder="Leave empty to use env var">
+              <input type="password" id="setup_strong_api_key" name="setup_strong_api_key" value="" placeholder="Leave empty to keep existing or use env var">
+              <div class="help-text">Enter new API key to change, or leave empty to keep existing</div>
             </div>
             <div class="form-group">
               <label for="setup_strong_base_url">Base URL (optional)</label>
-              <input type="text" id="setup_strong_base_url" name="setup_strong_base_url" value="{{.Config.Setup.Strong.BaseURL}}" placeholder="Custom API endpoint">
+              <input type="text" id="setup_strong_base_url" name="setup_strong_base_url" value="{{if index .FormValues "setup_strong_base_url"}}{{index .FormValues "setup_strong_base_url"}}{{else}}{{.Config.Setup.Strong.BaseURL}}{{end}}" placeholder="Custom API endpoint">
             </div>
           </div>
           <div class="model-variant">
             <h3>Weak Model</h3>
             <div class="form-group">
               <label for="setup_weak_provider">Provider</label>
-              <input type="text" id="setup_weak_provider" name="setup_weak_provider" value="{{.Config.Setup.Weak.Provider}}" placeholder="e.g., nexos-ai, openai, anthropic">
+              <input type="text" id="setup_weak_provider" name="setup_weak_provider" value="{{if index .FormValues "setup_weak_provider"}}{{index .FormValues "setup_weak_provider"}}{{else}}{{.Config.Setup.Weak.Provider}}{{end}}" placeholder="e.g., nexos-ai, openai, anthropic">
             </div>
             <div class="form-group">
               <label for="setup_weak_model">Model</label>
-              <input type="text" id="setup_weak_model" name="setup_weak_model" value="{{.Config.Setup.Weak.Model}}" placeholder="e.g., Kimi K2.5, gpt-3.5-turbo">
+              <input type="text" id="setup_weak_model" name="setup_weak_model" value="{{if index .FormValues "setup_weak_model"}}{{index .FormValues "setup_weak_model"}}{{else}}{{.Config.Setup.Weak.Model}}{{end}}" placeholder="e.g., Kimi K2.5, gpt-3.5-turbo">
             </div>
             <div class="form-group">
               <label for="setup_weak_api_key">API Key (optional)</label>
-              <input type="password" id="setup_weak_api_key" name="setup_weak_api_key" value="{{.Config.Setup.Weak.APIKey}}" placeholder="Leave empty to use env var">
+              <input type="password" id="setup_weak_api_key" name="setup_weak_api_key" value="" placeholder="Leave empty to keep existing or use env var">
+              <div class="help-text">Enter new API key to change, or leave empty to keep existing</div>
             </div>
             <div class="form-group">
               <label for="setup_weak_base_url">Base URL (optional)</label>
-              <input type="text" id="setup_weak_base_url" name="setup_weak_base_url" value="{{.Config.Setup.Weak.BaseURL}}" placeholder="Custom API endpoint">
+              <input type="text" id="setup_weak_base_url" name="setup_weak_base_url" value="{{if index .FormValues "setup_weak_base_url"}}{{index .FormValues "setup_weak_base_url"}}{{else}}{{.Config.Setup.Weak.BaseURL}}{{end}}" placeholder="Custom API endpoint">
             </div>
           </div>
         </div>
@@ -223,17 +232,17 @@
         <div class="routing-grid">
           <div class="form-group">
             <label for="routing_code_size_threshold">Code Size Threshold (lines)</label>
-            <input type="number" id="routing_code_size_threshold" name="routing_code_size_threshold" value="{{.Config.RoutingRules.ComplexityThresholds.CodeSizeThreshold}}" min="1" placeholder="100">
+            <input type="number" id="routing_code_size_threshold" name="routing_code_size_threshold" value="{{if index .FormValues "routing_code_size_threshold"}}{{index .FormValues "routing_code_size_threshold"}}{{else}}{{.Config.RoutingRules.ComplexityThresholds.CodeSizeThreshold}}{{end}}" min="1" placeholder="100">
             <div class="help-text">Number of lines that triggers medium complexity</div>
           </div>
           <div class="form-group">
             <label for="routing_high_complexity_threshold">High Complexity Threshold (lines)</label>
-            <input type="number" id="routing_high_complexity_threshold" name="routing_high_complexity_threshold" value="{{.Config.RoutingRules.ComplexityThresholds.HighComplexityThreshold}}" min="1" placeholder="500">
+            <input type="number" id="routing_high_complexity_threshold" name="routing_high_complexity_threshold" value="{{if index .FormValues "routing_high_complexity_threshold"}}{{index .FormValues "routing_high_complexity_threshold"}}{{else}}{{.Config.RoutingRules.ComplexityThresholds.HighComplexityThreshold}}{{end}}" min="1" placeholder="500">
             <div class="help-text">Number of lines that triggers high complexity</div>
           </div>
           <div class="form-group">
             <label for="routing_file_count_threshold">File Count Threshold</label>
-            <input type="number" id="routing_file_count_threshold" name="routing_file_count_threshold" value="{{.Config.RoutingRules.ComplexityThresholds.FileCountThreshold}}" min="1" placeholder="5">
+            <input type="number" id="routing_file_count_threshold" name="routing_file_count_threshold" value="{{if index .FormValues "routing_file_count_threshold"}}{{index .FormValues "routing_file_count_threshold"}}{{else}}{{.Config.RoutingRules.ComplexityThresholds.FileCountThreshold}}{{end}}" min="1" placeholder="5">
             <div class="help-text">Number of files that triggers higher complexity</div>
           </div>
         </div>

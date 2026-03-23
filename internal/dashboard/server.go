@@ -2,7 +2,10 @@ package dashboard
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
 	"embed"
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -34,6 +37,7 @@ type Server struct {
 	syncService      *SyncService
 	rateLimitService *RateLimitService
 	rootDir          string
+	csrfKey          []byte
 }
 
 func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string) (*Server, error) {
@@ -62,6 +66,7 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 		hub:         hub,
 		syncService: syncService,
 		rootDir:     rootDir,
+		csrfKey:     generateCSRFKey(),
 	}
 	if s.wizardLLM == "" {
 		s.wizardLLM = DefaultLLMModel
@@ -220,4 +225,24 @@ func (s *Server) Hub() *Hub {
 // handleWebSocket handles WebSocket upgrade requests
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ServeWs(s.hub, w, r)
+}
+
+// generateCSRFKey generates a random CSRF key
+func generateCSRFKey() []byte {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		// Fallback: use timestamp-based key if crypto/rand fails
+		return []byte(fmt.Sprintf("%d", time.Now().UnixNano()))
+	}
+	return key
+}
+
+// GetCSRFToken returns the CSRF token for use in templates
+func (s *Server) GetCSRFToken() string {
+	return base64.URLEncoding.EncodeToString(s.csrfKey)
+}
+
+// validateCSRFToken validates a CSRF token against the expected value
+func validateCSRFToken(token, expected string) bool {
+	return subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1
 }

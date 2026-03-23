@@ -1822,6 +1822,8 @@ type settingsData struct {
 	Success           string
 	Error             string
 	ForceStrongStages map[string]bool
+	CSRFToken         string
+	FormValues        map[string]string
 }
 
 // handleSettings renders the LLM configuration settings page
@@ -1844,6 +1846,8 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		Active:            "settings",
 		Config:            cfg.LLM,
 		ForceStrongStages: forcedStages,
+		CSRFToken:         s.GetCSRFToken(),
+		FormValues:        make(map[string]string),
 	}
 
 	s.render(w, "llm-config.html", data)
@@ -1852,7 +1856,14 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 // handleSaveSettings processes the settings form submission
 func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		s.renderSettingsWithError(w, "Invalid form data", nil)
+		s.renderSettingsWithError(w, r, "Invalid form data", nil)
+		return
+	}
+
+	// Validate CSRF token
+	csrfToken := r.FormValue("csrf_token")
+	if !validateCSRFToken(csrfToken, s.GetCSRFToken()) {
+		s.renderSettingsWithError(w, r, "Invalid CSRF token", nil)
 		return
 	}
 
@@ -1866,41 +1877,57 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	// Parse Development models
 	cfg.LLM.Development.Strong.Provider = r.FormValue("development_strong_provider")
 	cfg.LLM.Development.Strong.Model = r.FormValue("development_strong_model")
-	cfg.LLM.Development.Strong.APIKey = r.FormValue("development_strong_api_key")
+	if apiKey := r.FormValue("development_strong_api_key"); apiKey != "" {
+		cfg.LLM.Development.Strong.APIKey = apiKey
+	}
 	cfg.LLM.Development.Strong.BaseURL = r.FormValue("development_strong_base_url")
 	cfg.LLM.Development.Weak.Provider = r.FormValue("development_weak_provider")
 	cfg.LLM.Development.Weak.Model = r.FormValue("development_weak_model")
-	cfg.LLM.Development.Weak.APIKey = r.FormValue("development_weak_api_key")
+	if apiKey := r.FormValue("development_weak_api_key"); apiKey != "" {
+		cfg.LLM.Development.Weak.APIKey = apiKey
+	}
 	cfg.LLM.Development.Weak.BaseURL = r.FormValue("development_weak_base_url")
 
 	// Parse Planning models
 	cfg.LLM.Planning.Strong.Provider = r.FormValue("planning_strong_provider")
 	cfg.LLM.Planning.Strong.Model = r.FormValue("planning_strong_model")
-	cfg.LLM.Planning.Strong.APIKey = r.FormValue("planning_strong_api_key")
+	if apiKey := r.FormValue("planning_strong_api_key"); apiKey != "" {
+		cfg.LLM.Planning.Strong.APIKey = apiKey
+	}
 	cfg.LLM.Planning.Strong.BaseURL = r.FormValue("planning_strong_base_url")
 	cfg.LLM.Planning.Weak.Provider = r.FormValue("planning_weak_provider")
 	cfg.LLM.Planning.Weak.Model = r.FormValue("planning_weak_model")
-	cfg.LLM.Planning.Weak.APIKey = r.FormValue("planning_weak_api_key")
+	if apiKey := r.FormValue("planning_weak_api_key"); apiKey != "" {
+		cfg.LLM.Planning.Weak.APIKey = apiKey
+	}
 	cfg.LLM.Planning.Weak.BaseURL = r.FormValue("planning_weak_base_url")
 
 	// Parse Orchestration models
 	cfg.LLM.Orchestration.Strong.Provider = r.FormValue("orchestration_strong_provider")
 	cfg.LLM.Orchestration.Strong.Model = r.FormValue("orchestration_strong_model")
-	cfg.LLM.Orchestration.Strong.APIKey = r.FormValue("orchestration_strong_api_key")
+	if apiKey := r.FormValue("orchestration_strong_api_key"); apiKey != "" {
+		cfg.LLM.Orchestration.Strong.APIKey = apiKey
+	}
 	cfg.LLM.Orchestration.Strong.BaseURL = r.FormValue("orchestration_strong_base_url")
 	cfg.LLM.Orchestration.Weak.Provider = r.FormValue("orchestration_weak_provider")
 	cfg.LLM.Orchestration.Weak.Model = r.FormValue("orchestration_weak_model")
-	cfg.LLM.Orchestration.Weak.APIKey = r.FormValue("orchestration_weak_api_key")
+	if apiKey := r.FormValue("orchestration_weak_api_key"); apiKey != "" {
+		cfg.LLM.Orchestration.Weak.APIKey = apiKey
+	}
 	cfg.LLM.Orchestration.Weak.BaseURL = r.FormValue("orchestration_weak_base_url")
 
 	// Parse Setup models
 	cfg.LLM.Setup.Strong.Provider = r.FormValue("setup_strong_provider")
 	cfg.LLM.Setup.Strong.Model = r.FormValue("setup_strong_model")
-	cfg.LLM.Setup.Strong.APIKey = r.FormValue("setup_strong_api_key")
+	if apiKey := r.FormValue("setup_strong_api_key"); apiKey != "" {
+		cfg.LLM.Setup.Strong.APIKey = apiKey
+	}
 	cfg.LLM.Setup.Strong.BaseURL = r.FormValue("setup_strong_base_url")
 	cfg.LLM.Setup.Weak.Provider = r.FormValue("setup_weak_provider")
 	cfg.LLM.Setup.Weak.Model = r.FormValue("setup_weak_model")
-	cfg.LLM.Setup.Weak.APIKey = r.FormValue("setup_weak_api_key")
+	if apiKey := r.FormValue("setup_weak_api_key"); apiKey != "" {
+		cfg.LLM.Setup.Weak.APIKey = apiKey
+	}
 	cfg.LLM.Setup.Weak.BaseURL = r.FormValue("setup_weak_base_url")
 
 	// Validate required fields
@@ -1949,14 +1976,14 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	// If there are validation errors, render the form with errors
 	if len(validationErrors) > 0 {
-		s.renderSettingsWithError(w, strings.Join(validationErrors, "; "), cfg)
+		s.renderSettingsWithError(w, r, strings.Join(validationErrors, "; "), cfg)
 		return
 	}
 
 	// Save config
 	if err := config.SaveConfig(s.rootDir, cfg); err != nil {
 		log.Printf("[Dashboard] Error saving config: %v", err)
-		s.renderSettingsWithError(w, "Failed to save configuration: "+err.Error(), cfg)
+		s.renderSettingsWithError(w, r, "Failed to save configuration: "+err.Error(), cfg)
 		return
 	}
 
@@ -1974,13 +2001,15 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		Config:            cfg.LLM,
 		Success:           "Configuration saved successfully",
 		ForceStrongStages: forcedStages,
+		CSRFToken:         s.GetCSRFToken(),
+		FormValues:        make(map[string]string),
 	}
 
 	s.render(w, "llm-config.html", data)
 }
 
 // renderSettingsWithError renders the settings page with an error message
-func (s *Server) renderSettingsWithError(w http.ResponseWriter, errorMsg string, cfg *config.Config) {
+func (s *Server) renderSettingsWithError(w http.ResponseWriter, r *http.Request, errorMsg string, cfg *config.Config) {
 	if cfg == nil {
 		cfg = &config.Config{LLM: config.DefaultLLMConfig()}
 	}
@@ -1990,11 +2019,45 @@ func (s *Server) renderSettingsWithError(w http.ResponseWriter, errorMsg string,
 		forcedStages[stage] = true
 	}
 
+	// Preserve form values from the request
+	formValues := make(map[string]string)
+	if r != nil {
+		formValues["development_strong_provider"] = r.FormValue("development_strong_provider")
+		formValues["development_strong_model"] = r.FormValue("development_strong_model")
+		formValues["development_strong_base_url"] = r.FormValue("development_strong_base_url")
+		formValues["development_weak_provider"] = r.FormValue("development_weak_provider")
+		formValues["development_weak_model"] = r.FormValue("development_weak_model")
+		formValues["development_weak_base_url"] = r.FormValue("development_weak_base_url")
+		formValues["planning_strong_provider"] = r.FormValue("planning_strong_provider")
+		formValues["planning_strong_model"] = r.FormValue("planning_strong_model")
+		formValues["planning_strong_base_url"] = r.FormValue("planning_strong_base_url")
+		formValues["planning_weak_provider"] = r.FormValue("planning_weak_provider")
+		formValues["planning_weak_model"] = r.FormValue("planning_weak_model")
+		formValues["planning_weak_base_url"] = r.FormValue("planning_weak_base_url")
+		formValues["orchestration_strong_provider"] = r.FormValue("orchestration_strong_provider")
+		formValues["orchestration_strong_model"] = r.FormValue("orchestration_strong_model")
+		formValues["orchestration_strong_base_url"] = r.FormValue("orchestration_strong_base_url")
+		formValues["orchestration_weak_provider"] = r.FormValue("orchestration_weak_provider")
+		formValues["orchestration_weak_model"] = r.FormValue("orchestration_weak_model")
+		formValues["orchestration_weak_base_url"] = r.FormValue("orchestration_weak_base_url")
+		formValues["setup_strong_provider"] = r.FormValue("setup_strong_provider")
+		formValues["setup_strong_model"] = r.FormValue("setup_strong_model")
+		formValues["setup_strong_base_url"] = r.FormValue("setup_strong_base_url")
+		formValues["setup_weak_provider"] = r.FormValue("setup_weak_provider")
+		formValues["setup_weak_model"] = r.FormValue("setup_weak_model")
+		formValues["setup_weak_base_url"] = r.FormValue("setup_weak_base_url")
+		formValues["routing_code_size_threshold"] = r.FormValue("routing_code_size_threshold")
+		formValues["routing_high_complexity_threshold"] = r.FormValue("routing_high_complexity_threshold")
+		formValues["routing_file_count_threshold"] = r.FormValue("routing_file_count_threshold")
+	}
+
 	data := settingsData{
 		Active:            "settings",
 		Config:            cfg.LLM,
 		Error:             errorMsg,
 		ForceStrongStages: forcedStages,
+		CSRFToken:         s.GetCSRFToken(),
+		FormValues:        formValues,
 	}
 
 	s.render(w, "llm-config.html", data)
