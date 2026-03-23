@@ -1606,3 +1606,47 @@ func (s *Server) handleWizardSelectType(w http.ResponseWriter, r *http.Request) 
 
 	s.renderFragment(w, "wizard_new.html", data)
 }
+
+// handleRateLimit returns the current GitHub API rate limit status as HTML fragment
+func (s *Server) handleRateLimit(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	if s.rateLimitService == nil {
+		w.Write([]byte(`<span class="rate-limit-unknown">GitHub API: Not configured</span>`))
+		return
+	}
+
+	data := s.rateLimitService.GetData()
+
+	// Build the HTML response
+	color := data.GetColorCSS()
+	statusText := fmt.Sprintf("GitHub API: %d/%d", data.Remaining, data.Limit)
+	resetText := data.GetResetTimeFormatted()
+
+	// Add warning indicator if there's an error but we have cached data
+	warningIcon := ""
+	if data.Error != "" && !data.UpdatedAt.IsZero() {
+		warningIcon = " ⚠"
+	}
+
+	html := fmt.Sprintf(
+		`<div class="rate-limit-container" style="color: %s; cursor: pointer;" title="Click to refresh" hx-post="/api/rate-limit/refresh" hx-swap="outerHTML">
+			<span class="rate-limit-status">%s%s</span>
+			<span class="rate-limit-reset">%s</span>
+		</div>`,
+		color, statusText, warningIcon, resetText,
+	)
+
+	w.Write([]byte(html))
+}
+
+// handleRateLimitRefresh triggers a manual refresh of the rate limit data
+func (s *Server) handleRateLimitRefresh(w http.ResponseWriter, r *http.Request) {
+	if s.rateLimitService != nil {
+		s.rateLimitService.Refresh()
+		// Small delay to allow the refresh to complete
+		time.Sleep(100 * time.Millisecond)
+	}
+	// Return the updated status
+	s.handleRateLimit(w, r)
+}

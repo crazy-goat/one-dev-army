@@ -84,3 +84,17 @@ func DetectRepo() (string, error) {
 	}
 	return repo, nil
 }
+
+// GetToken retrieves the GitHub authentication token from gh CLI
+func GetToken() (string, error) {
+	cmd := exec.Command("gh", "auth", "token")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("getting token: %w\n%s", err, out)
+	}
+	token := strings.TrimSpace(string(out))
+	if token == "" {
+		return "", fmt.Errorf("getting token: empty result from gh")
+	}
+	return token, nil
+}

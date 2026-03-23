@@ -19,19 +19,20 @@ import (
 var templateFS embed.FS
 
 type Server struct {
-	port         int
-	tmpls        map[string]*template.Template
-	store        *db.Store
-	pool         func() []worker.WorkerInfo
-	gh           *github.Client
-	orchestrator *mvp.Orchestrator
-	mux          *http.ServeMux
-	httpSrv      *http.Server
-	wizardStore  *WizardSessionStore
-	oc           *opencode.Client
-	wizardLLM    string
-	hub          *Hub
-	syncService  *SyncService
+	port             int
+	tmpls            map[string]*template.Template
+	store            *db.Store
+	pool             func() []worker.WorkerInfo
+	gh               *github.Client
+	orchestrator     *mvp.Orchestrator
+	mux              *http.ServeMux
+	httpSrv          *http.Server
+	wizardStore      *WizardSessionStore
+	oc               *opencode.Client
+	wizardLLM        string
+	hub              *Hub
+	syncService      *SyncService
+	rateLimitService *RateLimitService
 }
 
 func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService) (*Server, error) {
@@ -63,6 +64,12 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 	if s.wizardLLM == "" {
 		s.wizardLLM = DefaultLLMModel
 	}
+
+	// Initialize rate limit service
+	token, _ := github.GetToken()
+	s.rateLimitService = NewRateLimitService(token)
+	s.rateLimitService.Start()
+
 	s.routes()
 	return s, nil
 }
@@ -166,6 +173,10 @@ func (s *Server) routes() {
 	// REMOVED: s.mux.HandleFunc("POST /wizard/breakdown", s.handleWizardBreakdown)
 	s.mux.HandleFunc("POST /wizard/create", s.handleWizardCreate)
 	s.mux.HandleFunc("GET /wizard/logs/{sessionId}", s.handleWizardLogs)
+
+	// Rate limit endpoints
+	s.mux.HandleFunc("GET /api/rate-limit", s.handleRateLimit)
+	s.mux.HandleFunc("POST /api/rate-limit/refresh", s.handleRateLimitRefresh)
 }
 
 func (s *Server) Start() error {
@@ -173,6 +184,11 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	// Stop the rate limit service
+	if s.rateLimitService != nil {
+		s.rateLimitService.Stop()
+	}
+
 	// Stop the sync service
 	if s.syncService != nil {
 		s.syncService.Stop()
