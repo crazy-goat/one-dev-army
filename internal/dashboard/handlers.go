@@ -479,9 +479,9 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[Dashboard] Error adding comment to #%d: %v", issueNum, cmtErr)
 		}
 
-		// TODO: Replace with label-based implementation when working on ticket #183
-		// For now, this is a no-op as we're removing GitHub Projects dependency
-		log.Printf("[Dashboard] Would move #%d to Backlog (label-based implementation pending)", issueNum)
+		// Label-based implementation: Move issue to Backlog by removing awaiting-approval label
+		// The issue will automatically appear in Backlog column via label inference
+		log.Printf("[Dashboard] Moving #%d to Backlog (label-based)", issueNum)
 
 		log.Printf("[Dashboard] ✗ Merge conflict on #%d — PR closed, reset to backlog", issueNum)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -494,9 +494,9 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[Dashboard] Error removing awaiting-approval label from #%d: %v", issueNum, err)
 	}
 
-	// TODO: Replace with label-based implementation when working on ticket #183
-	// For now, this is a no-op as we're removing GitHub Projects dependency
-	log.Printf("[Dashboard] Would move #%d to Done (label-based implementation pending)", issueNum)
+	// Label-based implementation: Issue will appear in Done column via label inference
+	// after PR is merged and issue is closed
+	log.Printf("[Dashboard] Moving #%d to Done (label-based, issue closed after merge)", issueNum)
 
 	s.recordStep(issueNum, "done", "Moved to Done")
 

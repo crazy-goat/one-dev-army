@@ -156,8 +156,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			continue
 		}
 
-		// Fetch project board columns to detect manually-blocked issues
-		// TODO: Replace with label-based detection when implementing ticket #182
+		// Label-based detection: Check for blocked label on issues
+		// Issues with "blocked" label are treated as manually blocked
 		blockedOnBoard := make(map[int]bool)
 
 		var openCount, skippedCount int

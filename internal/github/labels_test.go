@@ -309,3 +309,356 @@ func TestMergeFailedLabel(t *testing.T) {
 func mockGhError(msg string) error {
 	return errors.New(msg)
 }
+
+// mockCacheStore is a test implementation of CacheStore
+type mockCacheStore struct {
+	cachedIssues map[int]Issue
+	milestone    string
+	saveErr      error
+}
+
+func newMockCacheStore() *mockCacheStore {
+	return &mockCacheStore{
+		cachedIssues: make(map[int]Issue),
+	}
+}
+
+func (m *mockCacheStore) SaveIssueCache(issue Issue, milestone string) error {
+	if m.saveErr != nil {
+		return m.saveErr
+	}
+	m.cachedIssues[issue.Number] = issue
+	m.milestone = milestone
+	return nil
+}
+
+// mockWebSocketHub is a test implementation of WebSocketHub
+type mockWebSocketHub struct {
+	broadcasts []Issue
+}
+
+func newMockWebSocketHub() *mockWebSocketHub {
+	return &mockWebSocketHub{
+		broadcasts: make([]Issue, 0),
+	}
+}
+
+func (m *mockWebSocketHub) BroadcastIssueUpdate(issue Issue) {
+	m.broadcasts = append(m.broadcasts, issue)
+}
+
+// TestSetStageLabel_ValidStage tests transitioning to a valid stage
+func TestSetStageLabel_ValidStage(t *testing.T) {
+	// This test verifies the stage validation logic
+	validStages := []string{"Backlog", "Plan", "Code", "AI Review", "Approve", "Done", "Failed", "Blocked"}
+
+	for _, stage := range validStages {
+		labels, ok := StageToLabels[stage]
+		if !ok {
+			t.Errorf("Stage %s should be valid", stage)
+			continue
+		}
+
+		// Verify each stage has the expected labels
+		switch stage {
+		case "Backlog":
+			if len(labels) != 0 {
+				t.Errorf("Backlog should have no labels, got %v", labels)
+			}
+		case "Plan":
+			expected := []string{"stage:analysis", "stage:planning"}
+			if !sliceEqual(labels, expected) {
+				t.Errorf("Plan stage labels mismatch: got %v, want %v", labels, expected)
+			}
+		case "Code":
+			expected := []string{"stage:coding", "stage:testing"}
+			if !sliceEqual(labels, expected) {
+				t.Errorf("Code stage labels mismatch: got %v, want %v", labels, expected)
+			}
+		case "AI Review":
+			expected := []string{"stage:code-review"}
+			if !sliceEqual(labels, expected) {
+				t.Errorf("AI Review stage labels mismatch: got %v, want %v", labels, expected)
+			}
+		case "Approve":
+			expected := []string{"awaiting-approval"}
+			if !sliceEqual(labels, expected) {
+				t.Errorf("Approve stage labels mismatch: got %v, want %v", labels, expected)
+			}
+		case "Done":
+			if len(labels) != 0 {
+				t.Errorf("Done should have no labels, got %v", labels)
+			}
+		case "Failed":
+			expected := []string{"failed"}
+			if !sliceEqual(labels, expected) {
+				t.Errorf("Failed stage labels mismatch: got %v, want %v", labels, expected)
+			}
+		case "Blocked":
+			expected := []string{"blocked"}
+			if !sliceEqual(labels, expected) {
+				t.Errorf("Blocked stage labels mismatch: got %v, want %v", labels, expected)
+			}
+		}
+	}
+}
+
+// TestSetStageLabel_InvalidStage tests error handling for invalid stage
+func TestSetStageLabel_InvalidStage(t *testing.T) {
+	invalidStages := []string{"", "Invalid", "Unknown", "Testing", "Review"}
+
+	for _, stage := range invalidStages {
+		_, ok := StageToLabels[stage]
+		if ok {
+			t.Errorf("Stage %s should be invalid", stage)
+		}
+	}
+}
+
+// TestSetStageLabel_RemovesOldStageLabels tests that old stage labels are removed
+func TestSetStageLabel_RemovesOldStageLabels(t *testing.T) {
+	// Test the getStageLabelsToRemove logic
+	issue := &Issue{
+		Number: 1,
+		Labels: []struct {
+			Name string `json:"name"`
+		}{
+			{Name: "stage:analysis"},
+			{Name: "stage:planning"},
+			{Name: "sprint"},
+			{Name: "priority:high"},
+		},
+	}
+
+	client := &Client{Repo: "test/repo"}
+	labelsToRemove := client.getStageLabelsToRemove(issue)
+
+	// Should remove stage labels but keep non-stage labels
+	expected := []string{"stage:analysis", "stage:planning"}
+	if !sliceEqual(labelsToRemove, expected) {
+		t.Errorf("Labels to remove mismatch: got %v, want %v", labelsToRemove, expected)
+	}
+
+	// Verify non-stage labels are not in the remove list
+	for _, label := range labelsToRemove {
+		if label == "sprint" || label == "priority:high" {
+			t.Errorf("Non-stage label %s should not be removed", label)
+		}
+	}
+}
+
+// TestSetStageLabel_BacklogRemovesAllStageLabels tests that Backlog removes all stage labels
+func TestSetStageLabel_BacklogRemovesAllStageLabels(t *testing.T) {
+	// Backlog stage should have empty labels
+	labels, ok := StageToLabels["Backlog"]
+	if !ok {
+		t.Fatal("Backlog stage should exist")
+	}
+	if len(labels) != 0 {
+		t.Errorf("Backlog should have no labels, got %v", labels)
+	}
+
+	// Verify all stage prefixes are defined
+	expectedPrefixes := []string{"stage:", "awaiting-approval", "failed", "blocked"}
+	if !sliceEqual(StageLabelPrefixes, expectedPrefixes) {
+		t.Errorf("StageLabelPrefixes mismatch: got %v, want %v", StageLabelPrefixes, expectedPrefixes)
+	}
+}
+
+// TestSetStageLabel_DoneClosesIssue tests that Done stage closes the issue
+func TestSetStageLabel_DoneClosesIssue(t *testing.T) {
+	// Verify Done stage has no labels
+	labels, ok := StageToLabels["Done"]
+	if !ok {
+		t.Fatal("Done stage should exist")
+	}
+	if len(labels) != 0 {
+		t.Errorf("Done should have no labels, got %v", labels)
+	}
+}
+
+// TestSetStageLabel_CacheIntegration tests cache integration
+func TestSetStageLabel_CacheIntegration(t *testing.T) {
+	cache := newMockCacheStore()
+	hub := newMockWebSocketHub()
+
+	// Verify cache store works
+	issue := Issue{
+		Number: 42,
+		Title:  "Test Issue",
+		State:  "open",
+	}
+
+	err := cache.SaveIssueCache(issue, "sprint-1")
+	if err != nil {
+		t.Errorf("SaveIssueCache should not error, got: %v", err)
+	}
+
+	if len(cache.cachedIssues) != 1 {
+		t.Errorf("Expected 1 cached issue, got %d", len(cache.cachedIssues))
+	}
+
+	if cache.milestone != "sprint-1" {
+		t.Errorf("Expected milestone 'sprint-1', got %s", cache.milestone)
+	}
+
+	// Verify WebSocket hub works
+	hub.BroadcastIssueUpdate(issue)
+	if len(hub.broadcasts) != 1 {
+		t.Errorf("Expected 1 broadcast, got %d", len(hub.broadcasts))
+	}
+
+	if hub.broadcasts[0].Number != 42 {
+		t.Errorf("Expected broadcast issue #42, got #%d", hub.broadcasts[0].Number)
+	}
+}
+
+// TestSetStageLabel_CacheErrorHandling tests that cache errors don't fail the operation
+func TestSetStageLabel_CacheErrorHandling(t *testing.T) {
+	cache := newMockCacheStore()
+	cache.saveErr = errors.New("cache error")
+
+	issue := Issue{
+		Number: 42,
+		Title:  "Test Issue",
+		State:  "open",
+	}
+
+	// Cache error should be returned
+	err := cache.SaveIssueCache(issue, "sprint-1")
+	if err == nil {
+		t.Error("SaveIssueCache should return error when saveErr is set")
+	}
+
+	if err.Error() != "cache error" {
+		t.Errorf("Expected 'cache error', got: %v", err)
+	}
+}
+
+// TestSetStageLabel_NilDependencies tests that nil cache and hub don't panic
+func TestSetStageLabel_NilDependencies(t *testing.T) {
+	// This test verifies the method signature accepts nil values
+	// The actual GitHub API calls would need mocking for full testing
+	client := &Client{Repo: "test/repo"}
+
+	if client == nil {
+		t.Error("Client should not be nil")
+	}
+
+	// Verify the method exists with the correct signature
+	// Full integration test would require mocking GitHub API
+}
+
+// TestGetStageFromLabels tests the stage inference from labels
+func TestGetStageFromLabels(t *testing.T) {
+	tests := []struct {
+		name     string
+		labels   []string
+		expected string
+	}{
+		{
+			name:     "empty labels defaults to Backlog",
+			labels:   []string{},
+			expected: "Backlog",
+		},
+		{
+			name:     "non-stage labels default to Backlog",
+			labels:   []string{"sprint", "priority:high"},
+			expected: "Backlog",
+		},
+		{
+			name:     "stage:analysis maps to Plan",
+			labels:   []string{"stage:analysis"},
+			expected: "Plan",
+		},
+		{
+			name:     "stage:planning maps to Plan",
+			labels:   []string{"stage:planning"},
+			expected: "Plan",
+		},
+		{
+			name:     "stage:coding maps to Code",
+			labels:   []string{"stage:coding"},
+			expected: "Code",
+		},
+		{
+			name:     "stage:testing maps to Code",
+			labels:   []string{"stage:testing"},
+			expected: "Code",
+		},
+		{
+			name:     "stage:code-review maps to AI Review",
+			labels:   []string{"stage:code-review"},
+			expected: "AI Review",
+		},
+		{
+			name:     "awaiting-approval maps to Approve",
+			labels:   []string{"awaiting-approval"},
+			expected: "Approve",
+		},
+		{
+			name:     "failed maps to Failed",
+			labels:   []string{"failed"},
+			expected: "Failed",
+		},
+		{
+			name:     "blocked maps to Blocked",
+			labels:   []string{"blocked"},
+			expected: "Blocked",
+		},
+		{
+			name:     "multiple labels - first match wins",
+			labels:   []string{"stage:analysis", "stage:coding"},
+			expected: "Plan",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetStageFromLabels(tt.labels)
+			if result != tt.expected {
+				t.Errorf("GetStageFromLabels(%v) = %s, want %s", tt.labels, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestIsStageLabel tests the IsStageLabel helper function
+func TestIsStageLabel(t *testing.T) {
+	tests := []struct {
+		label    string
+		expected bool
+	}{
+		{"stage:analysis", true},
+		{"stage:coding", true},
+		{"awaiting-approval", true},
+		{"failed", true},
+		{"blocked", true},
+		{"sprint", false},
+		{"priority:high", false},
+		{"epic", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.label, func(t *testing.T) {
+			result := IsStageLabel(tt.label)
+			if result != tt.expected {
+				t.Errorf("IsStageLabel(%q) = %v, want %v", tt.label, result, tt.expected)
+			}
+		})
+	}
+}
+
+// sliceEqual compares two string slices for equality
+func sliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}

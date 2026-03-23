@@ -3430,3 +3430,176 @@ func TestInferColumnFromIssue_MergedStatus(t *testing.T) {
 		})
 	}
 }
+
+// TestWebSocket_BroadcastsIssueUpdate tests that WebSocket hub broadcasts issue updates
+func TestWebSocket_BroadcastsIssueUpdate(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	// Create a test issue
+	issue := github.Issue{
+		Number: 42,
+		Title:  "Test Issue",
+		State:  "open",
+		Labels: []struct {
+			Name string `json:"name"`
+		}{{Name: "stage:coding"}},
+	}
+
+	// Broadcast the issue update
+	hub.BroadcastIssueUpdate(issue)
+
+	// Give the hub time to process
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify hub is still running
+	if hub.closed {
+		t.Error("Hub should not be closed after broadcast")
+	}
+}
+
+// TestWebSocket_SyncCompleteBroadcast tests that sync completion is broadcast
+func TestWebSocket_SyncCompleteBroadcast(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	// Broadcast sync complete
+	hub.BroadcastSyncComplete(10)
+
+	// Give the hub time to process
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify hub is still running
+	if hub.closed {
+		t.Error("Hub should not be closed after sync broadcast")
+	}
+}
+
+// TestWebSocket_ClientRegistration tests client registration and unregistration
+func TestWebSocket_ClientRegistration(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	// Initially should have 0 clients
+	if hub.ClientCount() != 0 {
+		t.Errorf("Expected 0 clients initially, got %d", hub.ClientCount())
+	}
+}
+
+// TestWebSocket_HubStop tests hub stop functionality
+func TestWebSocket_HubStop(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+
+	// Stop the hub
+	hub.Stop()
+
+	// Give time for stop to process
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify hub is closed
+	if !hub.closed {
+		t.Error("Hub should be closed after Stop()")
+	}
+}
+
+// TestSyncService_TriggersWebSocketBroadcast tests that sync service broadcasts updates
+func TestSyncService_TriggersWebSocketBroadcast(t *testing.T) {
+	// Create mock dependencies
+	mockGH := &mockGitHubClient{}
+	mockStore := &mockStore{}
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	// Create sync service
+	syncService := NewSyncService(mockGH, mockStore, hub)
+	syncService.SetActiveMilestone("sprint-1")
+
+	// Start the service
+	syncService.Start()
+	defer syncService.Stop()
+
+	// Verify service is running
+	if !syncService.IsRunning() {
+		t.Error("Sync service should be running")
+	}
+
+	// Trigger manual sync
+	err := syncService.SyncNow()
+	if err != nil {
+		t.Errorf("SyncNow should not error, got: %v", err)
+	}
+
+	// Give time for sync to process
+	time.Sleep(200 * time.Millisecond)
+}
+
+// TestSyncService_NotRunningError tests error when sync service is not running
+func TestSyncService_NotRunningError(t *testing.T) {
+	mockGH := &mockGitHubClient{}
+	mockStore := &mockStore{}
+	hub := NewHub()
+
+	syncService := NewSyncService(mockGH, mockStore, hub)
+	// Don't start the service
+
+	err := syncService.SyncNow()
+	if err == nil {
+		t.Error("SyncNow should error when service is not running")
+	}
+}
+
+// TestManualSyncHandler_BroadcastsSyncStart tests that manual sync broadcasts sync start
+func TestManualSyncHandler_BroadcastsSyncStart(t *testing.T) {
+	// Create a server with hub but no sync service (to test the handler works)
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	srv := &Server{
+		tmpls: make(map[string]*template.Template),
+		hub:   hub,
+		// syncService is nil - handler should handle this gracefully
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/sync", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleManualSync(rec, req)
+
+	// Should return 200 even without sync service (returns error in JSON)
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "not configured") {
+		t.Errorf("Expected error message about sync service not configured, got: %s", body)
+	}
+}
+
+// TestManualSyncHandler_NoSyncService tests error when sync service is nil
+func TestManualSyncHandler_NoSyncService(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		syncService: nil,
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/sync", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleManualSync(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "not configured") {
+		t.Errorf("Expected error message about sync service not configured, got: %s", body)
+	}
+}

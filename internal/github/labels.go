@@ -7,6 +7,16 @@ import (
 	"sync"
 )
 
+// CacheStore defines the interface for caching issue data
+type CacheStore interface {
+	SaveIssueCache(issue Issue, milestone string) error
+}
+
+// WebSocketHub defines the interface for broadcasting issue updates
+type WebSocketHub interface {
+	BroadcastIssueUpdate(issue Issue)
+}
+
 // StageToLabels maps stage names to their corresponding GitHub labels
 var StageToLabels = map[string][]string{
 	"Backlog":   {},
@@ -64,7 +74,10 @@ var RequiredLabels = []Label{
 // Special cases:
 //   - "Done": closes the issue
 //   - "Backlog": removes all stage labels without adding new ones
-func (c *Client) SetStageLabel(issueNumber int, stage string) (Issue, error) {
+//
+// The cacheStore and hub parameters are optional - if provided, the cache will be updated
+// and a WebSocket broadcast will be sent.
+func (c *Client) SetStageLabel(issueNumber int, stage string, cacheStore CacheStore, hub WebSocketHub) (Issue, error) {
 	// Validate stage
 	labels, ok := StageToLabels[stage]
 	if !ok {
@@ -104,6 +117,19 @@ func (c *Client) SetStageLabel(issueNumber int, stage string) (Issue, error) {
 	updatedIssue, err := c.GetIssue(issueNumber)
 	if err != nil {
 		return Issue{}, fmt.Errorf("fetching updated issue #%d: %w", issueNumber, err)
+	}
+
+	// Update cache if store is provided
+	if cacheStore != nil {
+		if err := cacheStore.SaveIssueCache(*updatedIssue, ""); err != nil {
+			// Log error but don't fail the operation
+			fmt.Printf("[SetStageLabel] Warning: failed to update cache for issue #%d: %v\n", issueNumber, err)
+		}
+	}
+
+	// Broadcast via WebSocket if hub is provided
+	if hub != nil {
+		hub.BroadcastIssueUpdate(*updatedIssue)
 	}
 
 	return *updatedIssue, nil
