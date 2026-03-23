@@ -190,9 +190,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				continue
 			}
 			// Issues waiting on external input — skip but don't block others
-			if hasLabel(issues[i], "stage:needs-user") || blockedOnBoard[issues[i].Number] {
+			if blockedOnBoard[issues[i].Number] {
 				skippedCount++
-				log.Printf("[Orchestrator]   skip #%d %q (blocked/needs-user)", issues[i].Number, issues[i].Title)
+				log.Printf("[Orchestrator]   skip #%d %q (blocked on board)", issues[i].Number, issues[i].Title)
 				continue
 			}
 			candidates = append(candidates, issues[i])
