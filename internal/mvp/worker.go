@@ -15,6 +15,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/git"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
+	"github.com/crazy-goat/one-dev-army/internal/plan"
 )
 
 var ErrAlreadyDone = errors.New("ticket already done")
@@ -307,32 +308,97 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 
 func (w *Worker) analyze(ctx context.Context, task *Task) (string, error) {
 	prompt := fmt.Sprintf(analysisPrompt, task.Issue.Number, task.Issue.Title, task.Issue.Body)
-	return w.llmStep(ctx, task, "analyze", prompt, w.cfg.Planning.LLM)
+	analysis, err := w.llmStep(ctx, task, "analyze", prompt, w.cfg.Planning.LLM)
+	if err != nil {
+		return "", err
+	}
+
+	// Create initial plan.md with analysis
+	wt := &git.Worktree{
+		Name:   fmt.Sprintf("worker-%d", w.id),
+		Path:   w.repoDir,
+		Branch: task.Branch,
+	}
+	planMgr := plan.NewAttachmentManager(w.gh, wt)
+
+	planURL, err := planMgr.CreateInitialPlan(task.Issue.Number, task.Branch, analysis)
+	if err != nil {
+		log.Printf("[Worker %d] Warning: failed to create initial plan.md: %v", w.id, err)
+	} else {
+		log.Printf("[Worker %d] Created plan.md: %s", w.id, planURL)
+		// Store URL in database
+		if w.store != nil {
+			if err := w.store.UpdateStepPlanURL(task.Issue.Number, "analyze", planURL); err != nil {
+				log.Printf("[Worker %d] Warning: failed to store plan URL: %v", w.id, err)
+			}
+		}
+	}
+
+	return analysis, nil
 }
 
 func (w *Worker) plan(ctx context.Context, task *Task, analysis string) (string, error) {
 	prompt := fmt.Sprintf(planningPrompt, task.Issue.Number, task.Issue.Title, analysis)
-	result, err := w.llmStep(ctx, task, "plan", prompt, w.cfg.Planning.LLM)
+	planContent, err := w.llmStep(ctx, task, "plan", prompt, w.cfg.Planning.LLM)
 	if err != nil {
 		return "", err
 	}
-	if reason := checkAlreadyDone(result); reason != "" {
+	if reason := checkAlreadyDone(planContent); reason != "" {
 		log.Printf("[Worker %d] Planning detected ticket already done: %s", w.id, reason)
 		return "", fmt.Errorf("%w: %s", ErrAlreadyDone, reason)
 	}
-	return result, nil
+
+	// Update plan.md with implementation steps
+	wt := &git.Worktree{
+		Name:   fmt.Sprintf("worker-%d", w.id),
+		Path:   w.repoDir,
+		Branch: task.Branch,
+	}
+	planMgr := plan.NewAttachmentManager(w.gh, wt)
+
+	planURL, err := planMgr.UpdatePlanWithImplementation(task.Issue.Number, task.Branch, analysis, planContent)
+	if err != nil {
+		log.Printf("[Worker %d] Warning: failed to update plan.md with implementation: %v", w.id, err)
+	} else {
+		log.Printf("[Worker %d] Updated plan.md with implementation: %s", w.id, planURL)
+		// Store URL in database
+		if w.store != nil {
+			if err := w.store.UpdateStepPlanURL(task.Issue.Number, "plan", planURL); err != nil {
+				log.Printf("[Worker %d] Warning: failed to store plan URL: %v", w.id, err)
+			}
+		}
+	}
+
+	return planContent, nil
 }
 
-func (w *Worker) implement(ctx context.Context, task *Task, plan string) error {
+func (w *Worker) implement(ctx context.Context, task *Task, planStr string) error {
 	w.oc.SetDirectory(task.Worktree)
 	defer w.oc.SetDirectory("")
+
+	// Try to retrieve plan from GitHub if available
+	wt := &git.Worktree{
+		Name:   fmt.Sprintf("worker-%d", w.id),
+		Path:   w.repoDir,
+		Branch: task.Branch,
+	}
+	planMgr := plan.NewAttachmentManager(w.gh, wt)
+
+	githubPlan, err := planMgr.GetFromIssue(ctx, task.Issue.Number)
+	if err == nil && githubPlan != nil {
+		// Use the plan from GitHub
+		planStr = githubPlan.ToMarkdown()
+		log.Printf("[Worker %d] Using plan.md from GitHub", w.id)
+	} else {
+		log.Printf("[Worker %d] Falling back to context-based plan", w.id)
+	}
 
 	testCmd := w.cfg.Tools.TestCmd
 	if testCmd == "" {
 		testCmd = "go test ./..."
 	}
-	prompt := fmt.Sprintf(implementationPrompt, task.Issue.Number, task.Issue.Title, plan, task.Worktree, testCmd)
-	_, err := w.llmStep(ctx, task, "implement", prompt, w.cfg.EpicAnalysis.LLM)
+	prompt := fmt.Sprintf(implementationPrompt, task.Issue.Number, task.Issue.Title, planStr, task.Worktree, testCmd)
+	_, err = w.llmStep(ctx, task, "implement", prompt, w.cfg.EpicAnalysis.LLM)
 	if err != nil {
 		return err
 	}
