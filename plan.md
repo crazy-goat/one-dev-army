@@ -1,7 +1,7 @@
 # Implementation Plan for Issue #166
 
-**Created:** 2026-03-23T12:25:10+01:00
-**Updated:** 2026-03-23T12:25:10+01:00
+**Created:** 2026-03-23T12:25:19+01:00
+**Updated:** 2026-03-23T12:25:19+01:00
 
 ## Analysis
 
@@ -37,4 +37,20 @@ Simple template modification:
   - Select a type → Cancel button SHOULD appear on description step
   - Verify modal can still be closed via X button and clicking outside
   - Verify page mode (`?page=1`) navigation still works via browser back button
+
+## Implementation Steps
+
+### Step 1: Open wizard in modal mode → Confirm Cancel button does NOT appear on type selection
+
+### Step 2: Select "Feature" or "Bug" → Confirm Cancel button DOES appear on description step
+
+### Step 3: Verify modal can still be closed via X button and clicking outside
+
+### Step 4: Test page mode (`?page=1`) → browser back button still works for navigation
+
+### Step 4: Run Existing Tests
+```bash
+go test ./internal/dashboard/... -v
+```
+**Estimated effort:** 5 minutes (single file edit, no logic changes)
 
