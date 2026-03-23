@@ -42,11 +42,11 @@ const (
 type WizardStep string
 
 const (
-	WizardStepNew       WizardStep = "new"
-	WizardStepRefine    WizardStep = "refine"
-	WizardStepBreakdown WizardStep = "breakdown"
-	WizardStepCreate    WizardStep = "create"
-	WizardStepDone      WizardStep = "done"
+	WizardStepNew    WizardStep = "new"
+	WizardStepRefine WizardStep = "refine"
+	// REMOVED: WizardStepBreakdown WizardStep = "breakdown"
+	WizardStepCreate WizardStep = "create"
+	WizardStepDone   WizardStep = "done"
 )
 
 // LLMLogEntry represents a single log entry from LLM interactions
@@ -76,20 +76,21 @@ type CreatedIssue struct {
 
 // WizardSession holds the state for a single wizard instance
 type WizardSession struct {
-	ID                 string         `json:"id"`
-	Type               WizardType     `json:"type"`
-	CurrentStep        WizardStep     `json:"current_step"`
-	IdeaText           string         `json:"idea_text"`
-	RefinedDescription string         `json:"refined_description"`
-	Tasks              []WizardTask   `json:"tasks"`
-	CreatedIssues      []CreatedIssue `json:"created_issues"`
-	EpicNumber         int            `json:"epic_number"`
-	AddToSprint        bool           `json:"add_to_sprint"`
-	SkipBreakdown      bool           `json:"skip_breakdown"`
-	LLMLogs            []LLMLogEntry  `json:"llm_logs"`
-	CreatedAt          time.Time      `json:"created_at"`
-	UpdatedAt          time.Time      `json:"updated_at"`
-	mu                 sync.RWMutex   `json:"-"`
+	ID                 string     `json:"id"`
+	Type               WizardType `json:"type"`
+	CurrentStep        WizardStep `json:"current_step"`
+	IdeaText           string     `json:"idea_text"`
+	RefinedDescription string     `json:"refined_description"`
+	// REMOVED: Tasks              []WizardTask   `json:"tasks"`
+	TechnicalPlanning string         `json:"technical_planning"` // NEW FIELD
+	CreatedIssues     []CreatedIssue `json:"created_issues"`
+	EpicNumber        int            `json:"epic_number"`
+	AddToSprint       bool           `json:"add_to_sprint"`
+	SkipBreakdown     bool           `json:"skip_breakdown"` // Keep for backward compatibility
+	LLMLogs           []LLMLogEntry  `json:"llm_logs"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
+	mu                sync.RWMutex   `json:"-"`
 }
 
 // AddLog adds a new log entry to the session (thread-safe)
@@ -121,11 +122,11 @@ func (s *WizardSession) SetRefinedDescription(desc string) {
 	s.UpdatedAt = time.Now()
 }
 
-// SetTasks updates the task list (thread-safe)
-func (s *WizardSession) SetTasks(tasks []WizardTask) {
+// SetTechnicalPlanning updates the technical planning (thread-safe)
+func (s *WizardSession) SetTechnicalPlanning(planning string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.Tasks = tasks
+	s.TechnicalPlanning = planning
 	s.UpdatedAt = time.Now()
 }
 

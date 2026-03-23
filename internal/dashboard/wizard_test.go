@@ -547,3 +547,34 @@ func TestWizardSession_SetAddToSprint(t *testing.T) {
 		t.Errorf("expected AddToSprint to be false, got %v", session.AddToSprint)
 	}
 }
+
+func TestWizardStepConstants(t *testing.T) {
+	// Verify breakdown step is removed
+	steps := []WizardStep{
+		WizardStepNew,
+		WizardStepRefine,
+		// WizardStepBreakdown should NOT exist
+		WizardStepCreate,
+		WizardStepDone,
+	}
+
+	// Should have exactly 4 steps (not 5)
+	if len(steps) != 4 {
+		t.Errorf("Expected 4 steps, got %d", len(steps))
+	}
+}
+
+func TestWizardSession_TechnicalPlanning(t *testing.T) {
+	// Verify TechnicalPlanning field works
+	session := &WizardSession{
+		ID:   "test-id",
+		Type: WizardTypeFeature,
+	}
+
+	planning := "## Architecture Overview\n\nTest planning content"
+	session.SetTechnicalPlanning(planning)
+
+	if session.TechnicalPlanning != planning {
+		t.Errorf("expected TechnicalPlanning to be set correctly")
+	}
+}
