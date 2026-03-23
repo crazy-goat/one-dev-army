@@ -243,6 +243,14 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		processErr := o.worker.Process(ctx, task)
 
+		// Explicit cleanup: ensure branch is deleted after worker finishes (success or failure)
+		if task.Branch != "" {
+			log.Printf("[Orchestrator] Cleaning up branch %q for issue #%d", task.Branch, task.Issue.Number)
+			if err := o.brMgr.RemoveBranch(task.Branch); err != nil {
+				log.Printf("[Orchestrator] Warning: failed to remove branch %q: %v", task.Branch, err)
+			}
+		}
+
 		o.mu.Lock()
 		o.processing = false
 		o.currentTask = nil

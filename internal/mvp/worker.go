@@ -177,6 +177,16 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	task.Worktree = w.repoDir
 	log.Printf("[Worker %d] Branch %s ready, working in %s", w.id, branch, w.repoDir)
 
+	// Deferred cleanup: delete branch after PR workflow completes (success or failure)
+	defer func() {
+		if task.Branch != "" {
+			log.Printf("[Worker %d] Cleaning up branch %q", w.id, task.Branch)
+			if err := w.brMgr.RemoveBranch(task.Branch); err != nil {
+				log.Printf("[Worker %d] Warning: failed to remove branch %q: %v", w.id, task.Branch, err)
+			}
+		}
+	}()
+
 	var analysis, implPlan, prURL string
 	var err error
 
