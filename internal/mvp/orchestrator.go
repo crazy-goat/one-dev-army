@@ -158,6 +158,16 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			continue
 		}
 
+		// Fetch project board columns to detect manually-blocked issues
+		blockedOnBoard := make(map[int]bool)
+		if o.projectNumber > 0 {
+			if itemsByStatus, err := o.gh.GetProjectItemsByStatus(o.projectNumber); err == nil {
+				for _, item := range itemsByStatus["Blocked"] {
+					blockedOnBoard[item.Number] = true
+				}
+			}
+		}
+
 		var openCount int
 		var inProgressIssue *github.Issue
 		var candidates []github.Issue
@@ -173,7 +183,11 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				}
 				continue
 			}
-			if hasLabel(issues[i], "awaiting-approval") || hasLabel(issues[i], "failed") || hasLabel(issues[i], "stage:needs-user") {
+			isBlocked := hasLabel(issues[i], "awaiting-approval") ||
+				hasLabel(issues[i], "failed") ||
+				hasLabel(issues[i], "stage:needs-user") ||
+				blockedOnBoard[issues[i].Number]
+			if isBlocked {
 				blocking = append(blocking, issues[i])
 				log.Printf("[Orchestrator]   blocking #%d %q (%s)", issues[i].Number, issues[i].Title, labelNames(issues[i]))
 				continue
