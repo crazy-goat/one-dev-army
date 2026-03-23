@@ -174,6 +174,12 @@ func (s *Store) GetLastCompletedStep(issueNumber int) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("querying last completed step: %w", err)
 	}
+
+	// Migration: map old step names to new "technical-planning" step
+	if stepName.String == "analyze" || stepName.String == "plan" {
+		return "technical-planning", nil
+	}
+
 	return stepName.String, nil
 }
 
@@ -184,6 +190,10 @@ func (s *Store) GetStepResponse(issueNumber int, stepName string) (string, error
 		issueNumber, stepName,
 	).Scan(&response)
 	if err == sql.ErrNoRows || !response.Valid {
+		// Migration: if "technical-planning" not found, try old "plan" step
+		if stepName == "technical-planning" {
+			return s.GetStepResponse(issueNumber, "plan")
+		}
 		return "", nil
 	}
 	if err != nil {

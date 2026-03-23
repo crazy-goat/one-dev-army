@@ -20,23 +20,21 @@ import (
 
 var ErrAlreadyDone = errors.New("ticket already done")
 
-const analysisPrompt = `Analyze GitHub issue #%d: %s
+const technicalPlanningPrompt = `Analyze and create an implementation plan for GitHub issue #%d: %s
 
 Issue body:
 %s
 
-Provide a concise analysis covering:
+Provide a comprehensive technical analysis and implementation plan with the following structure:
+
+## Analysis
+
 1. Core requirements — what exactly needs to be done
 2. Files that likely need changes
 3. Implementation approach — high-level strategy
 4. Testing strategy — what tests to write or update
 
-Be concise. Do NOT ask questions. Output your analysis directly.`
-
-const planningPrompt = `Create a step-by-step implementation plan for GitHub issue #%d: %s
-
-Analysis from previous step:
-%s
+## Implementation Plan
 
 IMPORTANT: First check if this feature/fix is ALREADY IMPLEMENTED in the codebase.
 Read the relevant source files and verify. If and ONLY if the existing code already fully satisfies
@@ -50,7 +48,7 @@ If changes ARE needed (which is the expected case), create a concrete, actionabl
 3. What tests to add or update
 4. Order of operations
 
-Be specific and actionable. Do NOT ask questions. Output the plan directly.`
+Be specific and actionable. Do NOT ask questions. Output both sections directly.`
 
 const codeReviewPrompt = `You are reviewing code changes for GitHub issue #%d: %s
 
@@ -129,7 +127,7 @@ func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Clien
 	}
 }
 
-var stepOrder = []string{"analyze", "plan", "implement", "code-review", "create-pr"}
+var stepOrder = []string{"technical-planning", "implement", "code-review", "create-pr"}
 
 func stepIndex(name string) int {
 	for i, s := range stepOrder {
@@ -170,64 +168,53 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	task.Worktree = w.repoDir
 	log.Printf("[Worker %d] Branch %s ready, working in %s", w.id, branch, w.repoDir)
 
-	var analysis, plan, prURL string
+	var analysis, implPlan, prURL string
 	var err error
 
 	if resumeFrom <= 0 {
-		log.Printf("[Worker %d] [1/5] Analyzing #%d...", w.id, task.Issue.Number)
+		log.Printf("[Worker %d] [1/4] Technical planning for #%d...", w.id, task.Issue.Number)
 		stepStart := time.Now()
-		analysis, err = w.analyze(ctx, task)
+		analysis, implPlan, err = w.technicalPlanning(ctx, task)
 		if err != nil {
 			task.Status = StatusFailed
-			task.Result = &TaskResult{Error: fmt.Errorf("analyzing: %w", err)}
-			log.Printf("[Worker %d] ✗ FAILED analyzing: %v", w.id, err)
+			task.Result = &TaskResult{Error: fmt.Errorf("technical planning: %w", err)}
+			log.Printf("[Worker %d] ✗ FAILED technical planning: %v", w.id, err)
 			return task.Result.Error
 		}
-		log.Printf("[Worker %d] [1/5] Analysis done (%s, %d chars)", w.id, time.Since(stepStart).Round(time.Second), len(analysis))
+		log.Printf("[Worker %d] [1/4] Technical planning done (%s, analysis=%d chars, plan=%d chars)", w.id, time.Since(stepStart).Round(time.Second), len(analysis), len(implPlan))
 	} else {
-		log.Printf("[Worker %d] [1/5] Skipping analyze (completed previously)", w.id)
+		log.Printf("[Worker %d] [1/4] Skipping technical-planning (completed previously)", w.id)
 		if w.store != nil {
-			analysis, _ = w.store.GetStepResponse(task.Issue.Number, "analyze")
+			// Try to get combined response from new step name
+			response, _ := w.store.GetStepResponse(task.Issue.Number, "technical-planning")
+			if response != "" {
+				analysis, implPlan = parseTechnicalPlanningResponse(response)
+			} else {
+				// Fallback: try to get from old step names for backward compatibility
+				analysis, _ = w.store.GetStepResponse(task.Issue.Number, "analyze")
+				implPlan, _ = w.store.GetStepResponse(task.Issue.Number, "plan")
+			}
 		}
 	}
 
 	if resumeFrom <= 1 {
-		task.Status = StatusPlanning
-		log.Printf("[Worker %d] [2/5] Planning #%d...", w.id, task.Issue.Number)
-		stepStart := time.Now()
-		plan, err = w.plan(ctx, task, analysis)
-		if err != nil {
-			task.Status = StatusFailed
-			task.Result = &TaskResult{Error: fmt.Errorf("planning: %w", err)}
-			log.Printf("[Worker %d] ✗ FAILED planning: %v", w.id, err)
-			return task.Result.Error
-		}
-		log.Printf("[Worker %d] [2/5] Planning done (%s, %d chars)", w.id, time.Since(stepStart).Round(time.Second), len(plan))
-	} else {
-		log.Printf("[Worker %d] [2/5] Skipping plan (completed previously)", w.id)
-		if w.store != nil {
-			plan, _ = w.store.GetStepResponse(task.Issue.Number, "plan")
-		}
-	}
-
-	if resumeFrom <= 2 {
 		task.Status = StatusCoding
-		log.Printf("[Worker %d] [3/5] Implementing #%d (includes tests)...", w.id, task.Issue.Number)
+		log.Printf("[Worker %d] [2/4] Implementing #%d (includes tests)...", w.id, task.Issue.Number)
 		stepStart := time.Now()
-		if err := w.implement(ctx, task, plan); err != nil {
+		if err := w.implement(ctx, task, implPlan); err != nil {
 			task.Status = StatusFailed
 			task.Result = &TaskResult{Error: fmt.Errorf("implementing: %w", err)}
 			log.Printf("[Worker %d] ✗ FAILED implementing: %v", w.id, err)
 			return task.Result.Error
 		}
-		log.Printf("[Worker %d] [3/5] Implementation done (%s)", w.id, time.Since(stepStart).Round(time.Second))
+		log.Printf("[Worker %d] [2/4] Implementation done (%s)", w.id, time.Since(stepStart).Round(time.Second))
 	} else {
-		log.Printf("[Worker %d] [3/5] Skipping implement (completed previously)", w.id)
+		log.Printf("[Worker %d] [2/4] Skipping implement (completed previously)", w.id)
 	}
 
-	if resumeFrom <= 3 {
+	if resumeFrom <= 2 {
 		task.Status = StatusReviewing
-		log.Printf("[Worker %d] [4/5] Code review #%d...", w.id, task.Issue.Number)
+		log.Printf("[Worker %d] [3/4] Code review #%d...", w.id, task.Issue.Number)
 		stepStart := time.Now()
 		approved, review, crErr := w.codeReview(ctx, task, "")
 		if crErr != nil {
@@ -236,7 +223,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			log.Printf("[Worker %d] ✗ FAILED code review: %v", w.id, crErr)
 			return task.Result.Error
 		}
-		log.Printf("[Worker %d] [4/5] Code review done (%s, approved=%v)", w.id, time.Since(stepStart).Round(time.Second), approved)
+		log.Printf("[Worker %d] [3/4] Code review done (%s, approved=%v)", w.id, time.Since(stepStart).Round(time.Second), approved)
 
 		if !approved {
 			// Retry with fixes
@@ -275,12 +262,12 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			}
 		}
 	} else {
-		log.Printf("[Worker %d] [4/5] Skipping code-review (completed previously)", w.id)
+		log.Printf("[Worker %d] [3/4] Skipping code-review (completed previously)", w.id)
 	}
 
-	if resumeFrom <= 4 {
+	if resumeFrom <= 3 {
 		task.Status = StatusCreatingPR
-		log.Printf("[Worker %d] [5/5] Creating PR for #%d...", w.id, task.Issue.Number)
+		log.Printf("[Worker %d] [4/4] Creating PR for #%d...", w.id, task.Issue.Number)
 		stepStart := time.Now()
 		prURL, err = w.createPR(ctx, task)
 		if err != nil {
@@ -289,9 +276,9 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			log.Printf("[Worker %d] ✗ FAILED creating PR: %v", w.id, err)
 			return task.Result.Error
 		}
-		log.Printf("[Worker %d] [5/5] PR created: %s (%s)", w.id, prURL, time.Since(stepStart).Round(time.Second))
+		log.Printf("[Worker %d] [4/4] PR created: %s (%s)", w.id, prURL, time.Since(stepStart).Round(time.Second))
 	} else {
-		log.Printf("[Worker %d] [5/5] Skipping create-pr (completed previously)", w.id)
+		log.Printf("[Worker %d] [4/4] Skipping create-pr (completed previously)", w.id)
 		if w.store != nil {
 			prURL, _ = w.store.GetStepResponse(task.Issue.Number, "create-pr")
 		}
@@ -306,14 +293,22 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	return nil
 }
 
-func (w *Worker) analyze(ctx context.Context, task *Task) (string, error) {
-	prompt := fmt.Sprintf(analysisPrompt, task.Issue.Number, task.Issue.Title, task.Issue.Body)
-	analysis, err := w.llmStep(ctx, task, "analyze", prompt, w.cfg.Planning.LLM)
+func (w *Worker) technicalPlanning(ctx context.Context, task *Task) (analysis, implPlan string, err error) {
+	prompt := fmt.Sprintf(technicalPlanningPrompt, task.Issue.Number, task.Issue.Title, task.Issue.Body)
+	response, err := w.llmStep(ctx, task, "technical-planning", prompt, w.cfg.Planning.LLM)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	// Create initial plan.md with analysis
+	if reason := checkAlreadyDone(response); reason != "" {
+		log.Printf("[Worker %d] Technical planning detected ticket already done: %s", w.id, reason)
+		return "", "", fmt.Errorf("%w: %s", ErrAlreadyDone, reason)
+	}
+
+	// Parse response to extract analysis and plan sections
+	analysis, implPlan = parseTechnicalPlanningResponse(response)
+
+	// Create/update plan.md with both analysis and plan
 	wt := &git.Worktree{
 		Name:   fmt.Sprintf("worker-%d", w.id),
 		Path:   w.repoDir,
@@ -321,55 +316,61 @@ func (w *Worker) analyze(ctx context.Context, task *Task) (string, error) {
 	}
 	planMgr := plan.NewAttachmentManager(w.gh, wt)
 
-	planURL, err := planMgr.CreateInitialPlan(task.Issue.Number, task.Branch, analysis)
+	planURL, err := planMgr.CreateFullPlan(task.Issue.Number, task.Branch, analysis, implPlan)
 	if err != nil {
-		log.Printf("[Worker %d] Warning: failed to create initial plan.md: %v", w.id, err)
+		log.Printf("[Worker %d] Warning: failed to create plan.md: %v", w.id, err)
 	} else {
 		log.Printf("[Worker %d] Created plan.md: %s", w.id, planURL)
 		// Store URL in database
 		if w.store != nil {
-			if err := w.store.UpdateStepPlanURL(task.Issue.Number, "analyze", planURL); err != nil {
+			if err := w.store.UpdateStepPlanURL(task.Issue.Number, "technical-planning", planURL); err != nil {
 				log.Printf("[Worker %d] Warning: failed to store plan URL: %v", w.id, err)
 			}
 		}
 	}
 
-	return analysis, nil
+	return analysis, implPlan, nil
 }
 
-func (w *Worker) plan(ctx context.Context, task *Task, analysis string) (string, error) {
-	prompt := fmt.Sprintf(planningPrompt, task.Issue.Number, task.Issue.Title, analysis)
-	planContent, err := w.llmStep(ctx, task, "plan", prompt, w.cfg.Planning.LLM)
-	if err != nil {
-		return "", err
-	}
-	if reason := checkAlreadyDone(planContent); reason != "" {
-		log.Printf("[Worker %d] Planning detected ticket already done: %s", w.id, reason)
-		return "", fmt.Errorf("%w: %s", ErrAlreadyDone, reason)
-	}
+func parseTechnicalPlanningResponse(response string) (analysis, plan string) {
+	// Look for ## Analysis and ## Implementation Plan headers
+	analysisIdx := strings.Index(response, "## Analysis")
+	planIdx := strings.Index(response, "## Implementation Plan")
 
-	// Update plan.md with implementation steps
-	wt := &git.Worktree{
-		Name:   fmt.Sprintf("worker-%d", w.id),
-		Path:   w.repoDir,
-		Branch: task.Branch,
-	}
-	planMgr := plan.NewAttachmentManager(w.gh, wt)
+	if analysisIdx >= 0 && planIdx > analysisIdx {
+		// Extract analysis section (between ## Analysis and ## Implementation Plan)
+		analysisStart := analysisIdx + len("## Analysis")
+		analysis = strings.TrimSpace(response[analysisStart:planIdx])
 
-	planURL, err := planMgr.UpdatePlanWithImplementation(task.Issue.Number, task.Branch, analysis, planContent)
-	if err != nil {
-		log.Printf("[Worker %d] Warning: failed to update plan.md with implementation: %v", w.id, err)
+		// Extract plan section (after ## Implementation Plan)
+		planStart := planIdx + len("## Implementation Plan")
+		plan = strings.TrimSpace(response[planStart:])
+	} else if analysisIdx >= 0 {
+		// Only analysis header found, treat rest as plan
+		analysisStart := analysisIdx + len("## Analysis")
+		analysis = strings.TrimSpace(response[analysisStart:])
+		plan = analysis
+	} else if planIdx >= 0 {
+		// Only plan header found, treat everything before as analysis
+		analysis = strings.TrimSpace(response[:planIdx])
+		planStart := planIdx + len("## Implementation Plan")
+		plan = strings.TrimSpace(response[planStart:])
 	} else {
-		log.Printf("[Worker %d] Updated plan.md with implementation: %s", w.id, planURL)
-		// Store URL in database
-		if w.store != nil {
-			if err := w.store.UpdateStepPlanURL(task.Issue.Number, "plan", planURL); err != nil {
-				log.Printf("[Worker %d] Warning: failed to store plan URL: %v", w.id, err)
-			}
+		// No headers found, use heuristics to split
+		// Try to find a natural break point (e.g., "Implementation Plan" without ##)
+		lowerResponse := strings.ToLower(response)
+		implIdx := strings.Index(lowerResponse, "implementation plan")
+		if implIdx > 0 {
+			analysis = strings.TrimSpace(response[:implIdx])
+			plan = strings.TrimSpace(response[implIdx:])
+		} else {
+			// Can't split, use full response for both
+			analysis = response
+			plan = response
 		}
 	}
 
-	return planContent, nil
+	return analysis, plan
 }
 
 func (w *Worker) implement(ctx context.Context, task *Task, planStr string) error {

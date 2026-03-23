@@ -157,3 +157,101 @@ func TestGetSprintCost(t *testing.T) {
 		t.Errorf("empty sprint cost = %f, want 0", costEmpty)
 	}
 }
+
+func TestGetLastCompletedStep_Migration(t *testing.T) {
+	store := openTestStore(t)
+
+	// Insert old "analyze" step
+	stepID, err := store.InsertStep(100, "analyze", "test prompt", "session-1")
+	if err != nil {
+		t.Fatalf("inserting analyze step: %v", err)
+	}
+	if err := store.FinishStep(stepID, "analysis response"); err != nil {
+		t.Fatalf("finishing analyze step: %v", err)
+	}
+
+	// Should return "technical-planning" for old "analyze" step
+	lastStep, err := store.GetLastCompletedStep(100)
+	if err != nil {
+		t.Fatalf("getting last completed step: %v", err)
+	}
+	if lastStep != "technical-planning" {
+		t.Errorf("last step = %q, want %q", lastStep, "technical-planning")
+	}
+
+	// Insert old "plan" step
+	stepID2, err := store.InsertStep(101, "plan", "test prompt 2", "session-2")
+	if err != nil {
+		t.Fatalf("inserting plan step: %v", err)
+	}
+	if err := store.FinishStep(stepID2, "plan response"); err != nil {
+		t.Fatalf("finishing plan step: %v", err)
+	}
+
+	// Should return "technical-planning" for old "plan" step
+	lastStep2, err := store.GetLastCompletedStep(101)
+	if err != nil {
+		t.Fatalf("getting last completed step: %v", err)
+	}
+	if lastStep2 != "technical-planning" {
+		t.Errorf("last step = %q, want %q", lastStep2, "technical-planning")
+	}
+
+	// Insert new "technical-planning" step
+	stepID3, err := store.InsertStep(102, "technical-planning", "test prompt 3", "session-3")
+	if err != nil {
+		t.Fatalf("inserting technical-planning step: %v", err)
+	}
+	if err := store.FinishStep(stepID3, "combined response"); err != nil {
+		t.Fatalf("finishing technical-planning step: %v", err)
+	}
+
+	// Should return "technical-planning" for new step
+	lastStep3, err := store.GetLastCompletedStep(102)
+	if err != nil {
+		t.Fatalf("getting last completed step: %v", err)
+	}
+	if lastStep3 != "technical-planning" {
+		t.Errorf("last step = %q, want %q", lastStep3, "technical-planning")
+	}
+}
+
+func TestGetStepResponse_Migration(t *testing.T) {
+	store := openTestStore(t)
+
+	// Insert old "plan" step
+	stepID, err := store.InsertStep(200, "plan", "test prompt", "session-1")
+	if err != nil {
+		t.Fatalf("inserting plan step: %v", err)
+	}
+	if err := store.FinishStep(stepID, "plan response content"); err != nil {
+		t.Fatalf("finishing plan step: %v", err)
+	}
+
+	// Request "technical-planning" should fall back to "plan" response
+	response, err := store.GetStepResponse(200, "technical-planning")
+	if err != nil {
+		t.Fatalf("getting step response: %v", err)
+	}
+	if response != "plan response content" {
+		t.Errorf("response = %q, want %q", response, "plan response content")
+	}
+
+	// Insert new "technical-planning" step
+	stepID2, err := store.InsertStep(201, "technical-planning", "test prompt 2", "session-2")
+	if err != nil {
+		t.Fatalf("inserting technical-planning step: %v", err)
+	}
+	if err := store.FinishStep(stepID2, "combined response content"); err != nil {
+		t.Fatalf("finishing technical-planning step: %v", err)
+	}
+
+	// Should return the new step response directly
+	response2, err := store.GetStepResponse(201, "technical-planning")
+	if err != nil {
+		t.Fatalf("getting step response: %v", err)
+	}
+	if response2 != "combined response content" {
+		t.Errorf("response = %q, want %q", response2, "combined response content")
+	}
+}

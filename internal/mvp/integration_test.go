@@ -259,7 +259,7 @@ func TestWorkerProcessEndToEnd(t *testing.T) {
 	log.mu.Lock()
 	defer log.mu.Unlock()
 
-	expectedSessions := []string{"analyze-99", "plan-99", "implement-99"}
+	expectedSessions := []string{"technical-planning-99", "implement-99"}
 	for _, expected := range expectedSessions {
 		found := false
 		for _, s := range log.sessions {
@@ -273,8 +273,8 @@ func TestWorkerProcessEndToEnd(t *testing.T) {
 		}
 	}
 
-	if len(log.messages) < 3 {
-		t.Errorf("expected at least 3 messages sent, got %d", len(log.messages))
+	if len(log.messages) < 2 {
+		t.Errorf("expected at least 2 messages sent, got %d", len(log.messages))
 	}
 }
 

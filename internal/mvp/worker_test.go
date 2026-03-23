@@ -117,3 +117,115 @@ func TestExtractText(t *testing.T) {
 		})
 	}
 }
+
+func TestParseTechnicalPlanningResponse(t *testing.T) {
+	tests := []struct {
+		name         string
+		response     string
+		wantAnalysis string
+		wantPlan     string
+	}{
+		{
+			name: "both sections present",
+			response: `## Analysis
+
+1. Core requirements: implement feature X
+2. Files to change: main.go
+3. Implementation approach: add new function
+4. Testing strategy: unit tests
+
+## Implementation Plan
+
+1. Modify main.go to add feature
+2. Add tests in main_test.go`,
+			wantAnalysis: "1. Core requirements: implement feature X\n2. Files to change: main.go\n3. Implementation approach: add new function\n4. Testing strategy: unit tests",
+			wantPlan:     "1. Modify main.go to add feature\n2. Add tests in main_test.go",
+		},
+		{
+			name: "only analysis header",
+			response: `## Analysis
+
+Some analysis content here
+More analysis content`,
+			wantAnalysis: "Some analysis content here\nMore analysis content",
+			wantPlan:     "Some analysis content here\nMore analysis content",
+		},
+		{
+			name: "only plan header",
+			response: `Some intro text
+
+## Implementation Plan
+
+1. Step one
+2. Step two`,
+			wantAnalysis: "Some intro text",
+			wantPlan:     "1. Step one\n2. Step two",
+		},
+		{
+			name: "no headers - heuristic split",
+			response: `Analysis part here.
+
+Implementation Plan:
+1. First step
+2. Second step`,
+			wantAnalysis: "Analysis part here.",
+			wantPlan:     "Implementation Plan:\n1. First step\n2. Second step",
+		},
+		{
+			name:         "no headers - no split",
+			response:     `Just some content without any markers`,
+			wantAnalysis: "Just some content without any markers",
+			wantPlan:     "Just some content without any markers",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotAnalysis, gotPlan := parseTechnicalPlanningResponse(tt.response)
+			if gotAnalysis != tt.wantAnalysis {
+				t.Errorf("parseTechnicalPlanningResponse() analysis = %q, want %q", gotAnalysis, tt.wantAnalysis)
+			}
+			if gotPlan != tt.wantPlan {
+				t.Errorf("parseTechnicalPlanningResponse() plan = %q, want %q", gotPlan, tt.wantPlan)
+			}
+		})
+	}
+}
+
+func TestCheckAlreadyDone(t *testing.T) {
+	tests := []struct {
+		name     string
+		response string
+		want     string
+	}{
+		{
+			name:     "ALREADY_DONE prefix present",
+			response: "ALREADY_DONE: method Foo already exists in bar.go:42",
+			want:     "method Foo already exists in bar.go:42",
+		},
+		{
+			name:     "ALREADY_DONE with extra text",
+			response: "Some text\nALREADY_DONE: feature already implemented\nMore text",
+			want:     "feature already implemented",
+		},
+		{
+			name:     "no ALREADY_DONE",
+			response: "This is a normal response without the prefix",
+			want:     "",
+		},
+		{
+			name:     "empty response",
+			response: "",
+			want:     "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := checkAlreadyDone(tt.response)
+			if got != tt.want {
+				t.Errorf("checkAlreadyDone() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
