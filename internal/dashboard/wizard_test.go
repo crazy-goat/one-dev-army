@@ -575,3 +575,80 @@ func TestWizardSession_SetLanguage(t *testing.T) {
 		t.Errorf("Expected Language to be 'pl-PL', got %q", session.Language)
 	}
 }
+
+// TestWizardSession_TitleFields tests the new title-related session fields
+func TestWizardSession_TitleFields(t *testing.T) {
+	session := &WizardSession{
+		ID:   "test-session",
+		Type: WizardTypeFeature,
+	}
+
+	// Test SetGeneratedTitle
+	session.SetGeneratedTitle("[Feature] Add user authentication")
+	if session.GeneratedTitle != "[Feature] Add user authentication" {
+		t.Errorf("Expected GeneratedTitle to be set correctly, got %q", session.GeneratedTitle)
+	}
+
+	// Test GetFinalTitle returns generated title by default
+	finalTitle := session.GetFinalTitle()
+	if finalTitle != "[Feature] Add user authentication" {
+		t.Errorf("Expected GetFinalTitle to return generated title, got %q", finalTitle)
+	}
+
+	// Test SetCustomTitle and SetUseCustomTitle
+	session.SetCustomTitle("[Feature] Custom authentication title")
+	session.SetUseCustomTitle(true)
+
+	if session.CustomTitle != "[Feature] Custom authentication title" {
+		t.Errorf("Expected CustomTitle to be set correctly, got %q", session.CustomTitle)
+	}
+	if !session.UseCustomTitle {
+		t.Error("Expected UseCustomTitle to be true")
+	}
+
+	// Test GetFinalTitle returns custom title when UseCustomTitle is true
+	finalTitle = session.GetFinalTitle()
+	if finalTitle != "[Feature] Custom authentication title" {
+		t.Errorf("Expected GetFinalTitle to return custom title, got %q", finalTitle)
+	}
+}
+
+// TestWizardSession_GetFinalTitle_EmptyCustom tests GetFinalTitle with empty custom title
+func TestWizardSession_GetFinalTitle_EmptyCustom(t *testing.T) {
+	session := &WizardSession{
+		ID:   "test-session",
+		Type: WizardTypeFeature,
+	}
+
+	session.SetGeneratedTitle("[Feature] Generated title")
+	session.SetUseCustomTitle(true)
+	session.SetCustomTitle("") // Empty custom title
+
+	// Should fall back to generated title when custom is empty
+	finalTitle := session.GetFinalTitle()
+	if finalTitle != "[Feature] Generated title" {
+		t.Errorf("Expected GetFinalTitle to fall back to generated title, got %q", finalTitle)
+	}
+}
+
+// TestWizardSession_GetFinalTitle_EmptyGenerated tests GetFinalTitle with empty generated title
+func TestWizardSession_GetFinalTitle_EmptyGenerated(t *testing.T) {
+	session := &WizardSession{
+		ID:   "test-session",
+		Type: WizardTypeFeature,
+	}
+
+	// Both empty - should return empty string
+	finalTitle := session.GetFinalTitle()
+	if finalTitle != "" {
+		t.Errorf("Expected GetFinalTitle to return empty string, got %q", finalTitle)
+	}
+}
+
+// TestWizardSession_TitleStep tests the Title wizard step constant
+func TestWizardSession_TitleStep(t *testing.T) {
+	// Verify WizardStepTitle exists and has correct value
+	if WizardStepTitle != "title" {
+		t.Errorf("Expected WizardStepTitle to be 'title', got %q", WizardStepTitle)
+	}
+}

@@ -3,7 +3,7 @@
 <div class="wizard-step">
   <h2>Technical Planning</h2>
   
-  <form id="refine-form" hx-post="/wizard/create{{if .IsPage}}?page=1{{end}}" hx-target="#wizard-content" hx-swap="innerHTML" hx-disabled-elt="button[type='submit']" data-is-page="{{.IsPage}}">
+  <form id="refine-form" hx-post="/wizard/title{{if .IsPage}}?page=1{{end}}" hx-target="#wizard-content" hx-swap="innerHTML" hx-disabled-elt="button[type='submit']" data-is-page="{{.IsPage}}">
     <input type="hidden" name="session_id" value="{{.SessionID}}">
     {{if .IsPage}}<input type="hidden" name="page" value="1">{{end}}
     
@@ -44,7 +44,7 @@
         </button>
         <button type="submit" class="btn btn-primary">
           <span class="spinner" style="display:none;">⏳</span>
-          <span class="label">Accept &amp; Create Issue</span>
+          <span class="label">Accept &amp; Continue</span>
         </button>
       </div>
     </div>

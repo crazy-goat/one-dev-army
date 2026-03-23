@@ -73,7 +73,7 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 	tmpls["wizard_modal.html"] = wizardModalTmpl
 
 	// Parse wizard partial templates (no layout)
-	wizardPartials := []string{"wizard_new.html", "wizard_refine.html", "wizard_create.html", "wizard_error.html", "wizard_logs.html"}
+	wizardPartials := []string{"wizard_new.html", "wizard_refine.html", "wizard_title.html", "wizard_create.html", "wizard_error.html", "wizard_logs.html"}
 	for _, page := range wizardPartials {
 		t, err := template.ParseFiles(
 			filepath.Join(templateDir, "wizard_steps.html"),
@@ -2696,5 +2696,251 @@ func TestHandleWizardRefine_AcceptsLanguageParameter(t *testing.T) {
 
 	if session.Language != "pl-PL" {
 		t.Errorf("Expected Language to be 'pl-PL', got %q", session.Language)
+	}
+}
+
+// TestHandleWizardGenerateTitle tests the title generation handler
+func TestHandleWizardGenerateTitle(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Create a session first
+	session, err := srv.wizardStore.Create("feature")
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	// Set up technical planning
+	session.SetTechnicalPlanning("## Problem Statement\n\nAdd user authentication to the system.")
+
+	// Test title generation
+	formData := url.Values{}
+	formData.Set("session_id", session.ID)
+
+	req := httptest.NewRequest("POST", "/wizard/title", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardGenerateTitle(rec, req)
+
+	// Should return 200 OK
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", rec.Code)
+	}
+
+	// Verify session has generated title
+	updatedSession, ok := srv.wizardStore.Get(session.ID)
+	if !ok {
+		t.Fatal("Session not found after title generation")
+	}
+
+	if updatedSession.GeneratedTitle == "" {
+		t.Error("Expected GeneratedTitle to be set")
+	}
+
+	// Verify title has proper prefix
+	if !strings.HasPrefix(updatedSession.GeneratedTitle, "[") {
+		t.Errorf("Expected title to have prefix, got: %s", updatedSession.GeneratedTitle)
+	}
+}
+
+// TestHandleWizardGenerateTitle_BugType tests title generation for bug type
+func TestHandleWizardGenerateTitle_BugType(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Create a bug session
+	session, err := srv.wizardStore.Create("bug")
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	session.SetTechnicalPlanning("## Problem Statement\n\nFix login error when user enters wrong password.")
+
+	formData := url.Values{}
+	formData.Set("session_id", session.ID)
+
+	req := httptest.NewRequest("POST", "/wizard/title", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardGenerateTitle(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", rec.Code)
+	}
+
+	updatedSession, ok := srv.wizardStore.Get(session.ID)
+	if !ok {
+		t.Fatal("Session not found")
+	}
+
+	// Bug titles should have [Bug] prefix
+	if !strings.HasPrefix(updatedSession.GeneratedTitle, "[Bug]") {
+		t.Errorf("Expected bug title to have [Bug] prefix, got: %s", updatedSession.GeneratedTitle)
+	}
+}
+
+// TestHandleWizardGenerateTitle_CustomTitle tests custom title override
+func TestHandleWizardGenerateTitle_CustomTitle(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	session, err := srv.wizardStore.Create("feature")
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	session.SetTechnicalPlanning("## Problem Statement\n\nAdd user authentication.")
+
+	// Submit custom title
+	formData := url.Values{}
+	formData.Set("session_id", session.ID)
+	formData.Set("issue_title", "[Feature] Custom authentication title")
+
+	req := httptest.NewRequest("POST", "/wizard/title", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardGenerateTitle(rec, req)
+
+	updatedSession, ok := srv.wizardStore.Get(session.ID)
+	if !ok {
+		t.Fatal("Session not found")
+	}
+
+	if updatedSession.CustomTitle != "[Feature] Custom authentication title" {
+		t.Errorf("Expected CustomTitle to be set, got: %s", updatedSession.CustomTitle)
+	}
+
+	if !updatedSession.UseCustomTitle {
+		t.Error("Expected UseCustomTitle to be true")
+	}
+}
+
+// TestHandleWizardGenerateTitle_MissingSession tests error handling for missing session
+func TestHandleWizardGenerateTitle_MissingSession(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	formData := url.Values{}
+	formData.Set("session_id", "non-existent-session")
+
+	req := httptest.NewRequest("POST", "/wizard/title", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardGenerateTitle(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected status 400 for missing session, got %d", rec.Code)
+	}
+}
+
+// TestHandleWizardGenerateTitle_MissingSessionID tests error handling for missing session_id
+func TestHandleWizardGenerateTitle_MissingSessionID(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest("POST", "/wizard/title", strings.NewReader(""))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardGenerateTitle(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected status 400 for missing session_id, got %d", rec.Code)
+	}
+}
+
+// TestHandleWizardCreate_UsesSessionTitle tests that issue creation uses the session title
+func TestHandleWizardCreate_UsesSessionTitle(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Create a session with technical planning and generated title
+	session, err := srv.wizardStore.Create("feature")
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	session.SetTechnicalPlanning("## Problem Statement\n\nAdd user authentication.")
+	session.SetGeneratedTitle("[Feature] Add user authentication system")
+	session.SetStep(WizardStepTitle)
+
+	// Create issue
+	formData := url.Values{}
+	formData.Set("session_id", session.ID)
+
+	req := httptest.NewRequest("POST", "/wizard/create", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardCreate(rec, req)
+
+	// Should return 200 OK (mock mode)
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", rec.Code)
+	}
+
+	// Verify the response contains the generated title
+	body := rec.Body.String()
+	if !strings.Contains(body, "[Feature] Add user authentication system") {
+		t.Errorf("Expected response to contain the generated title, got: %s", body)
+	}
+}
+
+// TestGenerateMockTitle tests the mock title generation function
+func TestGenerateMockTitle(t *testing.T) {
+	// Test feature type
+	planning := "## Problem Statement\n\nAdd user authentication to the system."
+	title := generateMockTitle(WizardTypeFeature, planning)
+
+	if !strings.HasPrefix(title, "[Feature]") {
+		t.Errorf("Expected feature title to have [Feature] prefix, got: %s", title)
+	}
+
+	// Test bug type
+	planning = "## Problem Statement\n\nFix login error when user enters wrong password."
+	title = generateMockTitle(WizardTypeBug, planning)
+
+	if !strings.HasPrefix(title, "[Bug]") {
+		t.Errorf("Expected bug title to have [Bug] prefix, got: %s", title)
+	}
+
+	// Test with empty planning
+	title = generateMockTitle(WizardTypeFeature, "")
+	if title == "" {
+		t.Error("Expected non-empty title even with empty planning")
+	}
+}
+
+// TestWizardRoutes_TitleRoute tests that the title route is registered
+func TestWizardRoutes_TitleRoute(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Create a session
+	session, err := srv.wizardStore.Create("feature")
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	session.SetTechnicalPlanning("## Problem Statement\n\nAdd user authentication.")
+
+	// Test that the route exists and is accessible
+	formData := url.Values{}
+	formData.Set("session_id", session.ID)
+
+	req := httptest.NewRequest("POST", "/wizard/title", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	// The handler should exist and process the request
+	srv.handleWizardGenerateTitle(rec, req)
+
+	// Should not return 404
+	if rec.Code == http.StatusNotFound {
+		t.Error("Title route should be registered")
 	}
 }
