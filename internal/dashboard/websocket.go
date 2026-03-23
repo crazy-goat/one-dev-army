@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/gorilla/websocket"
 )
 
@@ -81,17 +82,15 @@ type Message struct {
 
 // IssueUpdatePayload represents the payload for issue_update messages
 type IssueUpdatePayload struct {
-	IssueNumber int    `json:"issue_number"`
-	Title       string `json:"title"`
-	Status      string `json:"status"`
-	Column      string `json:"column"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	State  string `json:"state"`
+	Column string `json:"column"`
 }
 
 // SyncCompletePayload represents the payload for sync_complete messages
 type SyncCompletePayload struct {
-	Success   bool   `json:"success"`
-	Milestone string `json:"milestone,omitempty"`
-	Error     string `json:"error,omitempty"`
+	Count int `json:"count"`
 }
 
 // Client represents a single WebSocket connection
@@ -227,12 +226,13 @@ func (h *Hub) Broadcast(message []byte) {
 }
 
 // BroadcastIssueUpdate sends an issue update to all clients
-func (h *Hub) BroadcastIssueUpdate(issueNum int, title, status, column string) {
+func (h *Hub) BroadcastIssueUpdate(issue github.Issue) {
+	column := inferColumnFromIssue(issue)
 	payload := IssueUpdatePayload{
-		IssueNumber: issueNum,
-		Title:       title,
-		Status:      status,
-		Column:      column,
+		Number: issue.Number,
+		Title:  issue.Title,
+		State:  issue.State,
+		Column: column,
 	}
 
 	payloadBytes, err := json.Marshal(payload)
@@ -253,15 +253,13 @@ func (h *Hub) BroadcastIssueUpdate(issueNum int, title, status, column string) {
 	}
 
 	h.Broadcast(msgBytes)
-	log.Printf("[WebSocket] Broadcast issue update for #%d to %d clients", issueNum, h.ClientCount())
+	log.Printf("[WebSocket] Broadcast issue update for #%d to %d clients", issue.Number, h.ClientCount())
 }
 
 // BroadcastSyncComplete sends a sync completion message to all clients
-func (h *Hub) BroadcastSyncComplete(success bool, milestone, errMsg string) {
+func (h *Hub) BroadcastSyncComplete(count int) {
 	payload := SyncCompletePayload{
-		Success:   success,
-		Milestone: milestone,
-		Error:     errMsg,
+		Count: count,
 	}
 
 	payloadBytes, err := json.Marshal(payload)
@@ -282,7 +280,7 @@ func (h *Hub) BroadcastSyncComplete(success bool, milestone, errMsg string) {
 	}
 
 	h.Broadcast(msgBytes)
-	log.Printf("[WebSocket] Broadcast sync complete (success=%v) to %d clients", success, h.ClientCount())
+	log.Printf("[WebSocket] Broadcast sync complete (count=%d) to %d clients", count, h.ClientCount())
 }
 
 // readPump pumps messages from the WebSocket connection to the hub
