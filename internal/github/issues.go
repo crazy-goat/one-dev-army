@@ -22,8 +22,9 @@ type Issue struct {
 		Name string `json:"name"`
 	} `json:"labels"`
 	// PR merge status fields for distinguishing merged vs manually closed issues
-	PRMerged bool       `json:"pr_merged,omitempty"`
-	MergedAt *time.Time `json:"merged_at,omitempty"`
+	PRMerged  bool       `json:"pr_merged,omitempty"`
+	MergedAt  *time.Time `json:"merged_at,omitempty"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
 // GetAssignee returns the first assignee's login or empty string if unassigned

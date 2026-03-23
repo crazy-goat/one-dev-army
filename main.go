@@ -221,7 +221,7 @@ func runServe() error {
 			// Step 5: Populate issue_cache table
 			cachedCount := 0
 			for _, issue := range issues {
-				if err := store.SaveIssueCache(issue, activeMilestone.Title); err != nil {
+				if err := store.SaveIssueCache(issue, activeMilestone.Title, true); err != nil {
 					fmt.Printf("  ! error caching issue #%d: %v\n", issue.Number, err)
 					continue
 				}

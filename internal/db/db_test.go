@@ -279,7 +279,7 @@ func TestSaveAndGetIssueCache(t *testing.T) {
 		},
 	}
 
-	if err := store.SaveIssueCache(issue, "v1.0"); err != nil {
+	if err := store.SaveIssueCache(issue, "v1.0", true); err != nil {
 		t.Fatalf("saving issue cache: %v", err)
 	}
 
@@ -338,7 +338,7 @@ func TestGetIssuesCacheByMilestone(t *testing.T) {
 		if issue.Number == 3 {
 			milestone = "v2.0"
 		}
-		if err := store.SaveIssueCache(issue, milestone); err != nil {
+		if err := store.SaveIssueCache(issue, milestone, true); err != nil {
 			t.Fatalf("saving issue cache: %v", err)
 		}
 	}
@@ -369,7 +369,7 @@ func TestGetAllCachedIssues(t *testing.T) {
 	}
 
 	for _, issue := range issues {
-		if err := store.SaveIssueCache(issue, "backlog"); err != nil {
+		if err := store.SaveIssueCache(issue, "backlog", true); err != nil {
 			t.Fatalf("saving issue cache: %v", err)
 		}
 	}
@@ -394,7 +394,7 @@ func TestClearIssueCache(t *testing.T) {
 		Labels: nil,
 	}
 
-	if err := store.SaveIssueCache(issue, "v1.0"); err != nil {
+	if err := store.SaveIssueCache(issue, "v1.0", true); err != nil {
 		t.Fatalf("saving issue cache: %v", err)
 	}
 
@@ -434,7 +434,7 @@ func TestSaveAndGetIssueCache_WithMergeStatus(t *testing.T) {
 		Assignees: nil,
 	}
 
-	if err := store.SaveIssueCache(issue, "v1.0"); err != nil {
+	if err := store.SaveIssueCache(issue, "v1.0", true); err != nil {
 		t.Fatalf("saving issue cache with merge status: %v", err)
 	}
 
@@ -473,7 +473,7 @@ func TestSaveAndGetIssueCache_NotMerged(t *testing.T) {
 		Assignees: nil,
 	}
 
-	if err := store.SaveIssueCache(issue, "v1.0"); err != nil {
+	if err := store.SaveIssueCache(issue, "v1.0", true); err != nil {
 		t.Fatalf("saving issue cache without merge status: %v", err)
 	}
 
@@ -487,5 +487,209 @@ func TestSaveAndGetIssueCache_NotMerged(t *testing.T) {
 	}
 	if got.MergedAt != nil {
 		t.Errorf("merged_at should be nil, got %v", got.MergedAt)
+	}
+}
+
+func TestSaveIssueCache_TimestampComparison_SkipWhenLocalNewer(t *testing.T) {
+	store := openTestStore(t)
+
+	// Create initial issue with NEWER timestamp (simulating recent local edit)
+	newTime := time.Now().UTC().Truncate(time.Second)
+	issue := github.Issue{
+		Number:    200,
+		Title:     "Local Title",
+		Body:      "Local body",
+		State:     "open",
+		UpdatedAt: &newTime,
+		Labels:    nil,
+		Assignees: nil,
+	}
+
+	// Save initial issue with force=true (simulating local edit)
+	if err := store.SaveIssueCache(issue, "v1.0", true); err != nil {
+		t.Fatalf("saving initial issue cache: %v", err)
+	}
+
+	// Verify initial save
+	got, err := store.GetIssueCache(200)
+	if err != nil {
+		t.Fatalf("getting initial issue cache: %v", err)
+	}
+	if got.Title != "Local Title" {
+		t.Errorf("initial title = %q, want %q", got.Title, "Local Title")
+	}
+
+	// Simulate stale GitHub CDN data with OLDER timestamp
+	oldTime := time.Now().UTC().Add(-1 * time.Hour).Truncate(time.Second)
+	staleGitHubIssue := github.Issue{
+		Number:    200,
+		Title:     "Stale GitHub Title",
+		Body:      "Stale GitHub body",
+		State:     "open",
+		UpdatedAt: &oldTime,
+		Labels:    nil,
+		Assignees: nil,
+	}
+
+	// Save with force=false (auto-sync) - should skip because local is newer than GitHub
+	if err := store.SaveIssueCache(staleGitHubIssue, "v1.0", false); err != nil {
+		t.Fatalf("saving stale GitHub issue cache with force=false: %v", err)
+	}
+
+	// Verify the cache was NOT updated (still has local data)
+	got, err = store.GetIssueCache(200)
+	if err != nil {
+		t.Fatalf("getting issue cache after skip: %v", err)
+	}
+	if got.Title != "Local Title" {
+		t.Errorf("title after skip = %q, want %q (should not have updated)", got.Title, "Local Title")
+	}
+	if got.Body != "Local body" {
+		t.Errorf("body after skip = %q, want %q (should not have updated)", got.Body, "Local body")
+	}
+}
+
+func TestSaveIssueCache_TimestampComparison_UpdateWhenGitHubNewer(t *testing.T) {
+	store := openTestStore(t)
+
+	// Create initial issue with newer timestamp (simulating local edit)
+	newTime := time.Now().UTC().Truncate(time.Second)
+	issue := github.Issue{
+		Number:    201,
+		Title:     "Local Title",
+		Body:      "Local body",
+		State:     "open",
+		UpdatedAt: &newTime,
+		Labels:    nil,
+		Assignees: nil,
+	}
+
+	// Save initial issue with force=true
+	if err := store.SaveIssueCache(issue, "v1.0", true); err != nil {
+		t.Fatalf("saving initial issue cache: %v", err)
+	}
+
+	// Simulate GitHub update with even newer timestamp
+	newerTime := time.Now().UTC().Add(1 * time.Minute).Truncate(time.Second)
+	githubIssue := github.Issue{
+		Number:    201,
+		Title:     "GitHub Title",
+		Body:      "GitHub body",
+		State:     "open",
+		UpdatedAt: &newerTime,
+		Labels:    nil,
+		Assignees: nil,
+	}
+
+	// Save with force=false (auto-sync) - should update because GitHub is newer
+	if err := store.SaveIssueCache(githubIssue, "v1.0", false); err != nil {
+		t.Fatalf("saving GitHub issue cache with force=false: %v", err)
+	}
+
+	// Verify the cache WAS updated
+	got, err := store.GetIssueCache(201)
+	if err != nil {
+		t.Fatalf("getting issue cache after update: %v", err)
+	}
+	if got.Title != "GitHub Title" {
+		t.Errorf("title after update = %q, want %q", got.Title, "GitHub Title")
+	}
+	if got.Body != "GitHub body" {
+		t.Errorf("body after update = %q, want %q", got.Body, "GitHub body")
+	}
+}
+
+func TestSaveIssueCache_ForceTrue_AlwaysUpdates(t *testing.T) {
+	store := openTestStore(t)
+
+	// Create initial issue
+	oldTime := time.Now().UTC().Add(-1 * time.Hour).Truncate(time.Second)
+	issue := github.Issue{
+		Number:    202,
+		Title:     "Original Title",
+		Body:      "Original body",
+		State:     "open",
+		UpdatedAt: &oldTime,
+		Labels:    nil,
+		Assignees: nil,
+	}
+
+	// Save initial issue
+	if err := store.SaveIssueCache(issue, "v1.0", true); err != nil {
+		t.Fatalf("saving initial issue cache: %v", err)
+	}
+
+	// Update local issue with newer timestamp
+	newTime := time.Now().UTC().Truncate(time.Second)
+	localIssue := github.Issue{
+		Number:    202,
+		Title:     "Local Title",
+		Body:      "Local body",
+		State:     "open",
+		UpdatedAt: &newTime,
+		Labels:    nil,
+		Assignees: nil,
+	}
+
+	// Save with force=true (manual action) - should always update even if local is newer
+	if err := store.SaveIssueCache(localIssue, "v1.0", true); err != nil {
+		t.Fatalf("saving local issue cache with force=true: %v", err)
+	}
+
+	// Verify the cache WAS updated despite local being newer
+	got, err := store.GetIssueCache(202)
+	if err != nil {
+		t.Fatalf("getting issue cache after force update: %v", err)
+	}
+	if got.Title != "Local Title" {
+		t.Errorf("title after force update = %q, want %q", got.Title, "Local Title")
+	}
+	if got.Body != "Local body" {
+		t.Errorf("body after force update = %q, want %q", got.Body, "Local body")
+	}
+}
+
+func TestSaveIssueCache_NoTimestamps_UpdatesAnyway(t *testing.T) {
+	store := openTestStore(t)
+
+	// Create issue without timestamps
+	issue := github.Issue{
+		Number:    203,
+		Title:     "First Title",
+		Body:      "First body",
+		State:     "open",
+		UpdatedAt: nil, // No timestamp
+		Labels:    nil,
+		Assignees: nil,
+	}
+
+	// Save initial issue
+	if err := store.SaveIssueCache(issue, "v1.0", true); err != nil {
+		t.Fatalf("saving initial issue cache: %v", err)
+	}
+
+	// Update issue
+	updatedIssue := github.Issue{
+		Number:    203,
+		Title:     "Second Title",
+		Body:      "Second body",
+		State:     "open",
+		UpdatedAt: nil, // Still no timestamp
+		Labels:    nil,
+		Assignees: nil,
+	}
+
+	// Save with force=false - should update since we can't compare timestamps
+	if err := store.SaveIssueCache(updatedIssue, "v1.0", false); err != nil {
+		t.Fatalf("saving updated issue cache: %v", err)
+	}
+
+	// Verify the cache WAS updated
+	got, err := store.GetIssueCache(203)
+	if err != nil {
+		t.Fatalf("getting issue cache: %v", err)
+	}
+	if got.Title != "Second Title" {
+		t.Errorf("title = %q, want %q", got.Title, "Second Title")
 	}
 }

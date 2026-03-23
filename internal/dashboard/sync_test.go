@@ -41,7 +41,7 @@ type mockStore struct {
 	saveErr      error
 }
 
-func (m *mockStore) SaveIssueCache(issue github.Issue, milestone string) error {
+func (m *mockStore) SaveIssueCache(issue github.Issue, milestone string, force bool) error {
 	if m.saveErr != nil {
 		return m.saveErr
 	}
