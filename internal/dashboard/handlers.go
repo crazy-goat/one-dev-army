@@ -313,10 +313,70 @@ func (s *Server) handlePlanSprint(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	issueNum := 0
+	fmt.Sscanf(id, "%d", &issueNum)
+	if issueNum == 0 || s.gh == nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	// Set stage label to "Approve"
+	updatedIssue, err := s.gh.SetStageLabel(issueNum, "Approve")
+	if err != nil {
+		log.Printf("[Dashboard] Error setting Approve label on #%d: %v", issueNum, err)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	// Update cache
+	if s.store != nil {
+		milestone := s.activeSprintName()
+		if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
+		}
+	}
+
+	// Broadcast update via WebSocket
+	if s.hub != nil {
+		s.hub.BroadcastIssueUpdate(updatedIssue)
+	}
+
+	log.Printf("[Dashboard] Approved #%d — moved to Approve column", issueNum)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (s *Server) handleReject(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	issueNum := 0
+	fmt.Sscanf(id, "%d", &issueNum)
+	if issueNum == 0 || s.gh == nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	// Set stage label to "Backlog" (removes all stage labels)
+	updatedIssue, err := s.gh.SetStageLabel(issueNum, "Backlog")
+	if err != nil {
+		log.Printf("[Dashboard] Error setting Backlog stage on #%d: %v", issueNum, err)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	// Update cache
+	if s.store != nil {
+		milestone := s.activeSprintName()
+		if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
+		}
+	}
+
+	// Broadcast update via WebSocket
+	if s.hub != nil {
+		s.hub.BroadcastIssueUpdate(updatedIssue)
+	}
+
+	log.Printf("[Dashboard] Rejected #%d — moved to Backlog", issueNum)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -329,11 +389,28 @@ func (s *Server) handleRetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.gh.RemoveLabel(issueNum, "failed"); err != nil {
-		log.Printf("[Dashboard] Error removing failed label from #%d: %v", issueNum, err)
+	// Set stage label to "Code" (removes failed label and adds coding label)
+	updatedIssue, err := s.gh.SetStageLabel(issueNum, "Code")
+	if err != nil {
+		log.Printf("[Dashboard] Error setting Code stage on #%d: %v", issueNum, err)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
 	}
 
-	log.Printf("[Dashboard] Retry #%d — will resume from last step", issueNum)
+	// Update cache
+	if s.store != nil {
+		milestone := s.activeSprintName()
+		if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
+		}
+	}
+
+	// Broadcast update via WebSocket
+	if s.hub != nil {
+		s.hub.BroadcastIssueUpdate(updatedIssue)
+	}
+
+	log.Printf("[Dashboard] Retry #%d — moved to Code column", issueNum)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -354,11 +431,12 @@ func (s *Server) handleRetryFresh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Remove all workflow labels
-	for _, label := range []string{"failed", "in-progress", "awaiting-approval"} {
-		if err := s.gh.RemoveLabel(issueNum, label); err != nil {
-			log.Printf("[Dashboard] Error removing %s label from #%d: %v", label, issueNum, err)
-		}
+	// Set stage label to "Backlog" (removes all stage labels)
+	updatedIssue, err := s.gh.SetStageLabel(issueNum, "Backlog")
+	if err != nil {
+		log.Printf("[Dashboard] Error setting Backlog stage on #%d: %v", issueNum, err)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
 	}
 
 	// Clear DB steps
@@ -368,7 +446,20 @@ func (s *Server) handleRetryFresh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	log.Printf("[Dashboard] Retry fresh #%d — PR closed, steps cleared, starting from scratch", issueNum)
+	// Update cache
+	if s.store != nil {
+		milestone := s.activeSprintName()
+		if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
+		}
+	}
+
+	// Broadcast update via WebSocket
+	if s.hub != nil {
+		s.hub.BroadcastIssueUpdate(updatedIssue)
+	}
+
+	log.Printf("[Dashboard] Retry fresh #%d — PR closed, steps cleared, moved to Backlog", issueNum)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -397,8 +488,12 @@ func (s *Server) handleDecline(w http.ResponseWriter, r *http.Request) {
 
 	s.recordStep(issueNum, "declined", reason)
 
-	if err := s.gh.RemoveLabel(issueNum, "awaiting-approval"); err != nil {
-		log.Printf("[Dashboard] Error removing awaiting-approval label from #%d: %v", issueNum, err)
+	// Set stage label to "Code" (removes awaiting-approval and adds coding label)
+	updatedIssue, err := s.gh.SetStageLabel(issueNum, "Code")
+	if err != nil {
+		log.Printf("[Dashboard] Error setting Code stage on #%d: %v", issueNum, err)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
 	}
 
 	if reason != "" {
@@ -412,6 +507,19 @@ func (s *Server) handleDecline(w http.ResponseWriter, r *http.Request) {
 		if err := s.store.DeleteSteps(issueNum); err != nil {
 			log.Printf("[Dashboard] Error deleting steps for #%d: %v", issueNum, err)
 		}
+	}
+
+	// Update cache
+	if s.store != nil {
+		milestone := s.activeSprintName()
+		if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
+		}
+	}
+
+	// Broadcast update via WebSocket
+	if s.hub != nil {
+		s.hub.BroadcastIssueUpdate(updatedIssue)
 	}
 
 	log.Printf("[Dashboard] Declined #%d — reason: %s", issueNum, reason)
@@ -445,9 +553,24 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[Dashboard] Error closing PR for #%d: %v", issueNum, closeErr)
 		}
 
-		if rmErr := s.gh.RemoveLabel(issueNum, "awaiting-approval"); rmErr != nil {
-			log.Printf("[Dashboard] Error removing awaiting-approval label from #%d: %v", issueNum, rmErr)
+		// Set stage label to "Backlog" on merge failure
+		updatedIssue, labelErr := s.gh.SetStageLabel(issueNum, "Backlog")
+		if labelErr != nil {
+			log.Printf("[Dashboard] Error setting Backlog stage on #%d: %v", issueNum, labelErr)
+		} else {
+			// Update cache
+			if s.store != nil {
+				milestone := s.activeSprintName()
+				if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+					log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
+				}
+			}
+			// Broadcast update via WebSocket
+			if s.hub != nil {
+				s.hub.BroadcastIssueUpdate(updatedIssue)
+			}
 		}
+
 		if s.store != nil {
 			if delErr := s.store.DeleteSteps(issueNum); delErr != nil {
 				log.Printf("[Dashboard] Error deleting steps for #%d: %v", issueNum, delErr)
@@ -459,10 +582,6 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[Dashboard] Error adding comment to #%d: %v", issueNum, cmtErr)
 		}
 
-		// TODO: Replace with label-based implementation when working on ticket #183
-		// For now, this is a no-op as we're removing GitHub Projects dependency
-		log.Printf("[Dashboard] Would move #%d to Backlog (label-based implementation pending)", issueNum)
-
 		log.Printf("[Dashboard] ✗ Merge conflict on #%d — PR closed, reset to backlog", issueNum)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
@@ -470,13 +589,26 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 
 	s.recordStep(issueNum, "merged", "PR merged successfully")
 
-	if err := s.gh.RemoveLabel(issueNum, "awaiting-approval"); err != nil {
-		log.Printf("[Dashboard] Error removing awaiting-approval label from #%d: %v", issueNum, err)
+	// Set stage label to "Done" on successful merge
+	updatedIssue, err := s.gh.SetStageLabel(issueNum, "Done")
+	if err != nil {
+		log.Printf("[Dashboard] Error setting Done stage on #%d: %v", issueNum, err)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
 	}
 
-	// TODO: Replace with label-based implementation when working on ticket #183
-	// For now, this is a no-op as we're removing GitHub Projects dependency
-	log.Printf("[Dashboard] Would move #%d to Done (label-based implementation pending)", issueNum)
+	// Update cache
+	if s.store != nil {
+		milestone := s.activeSprintName()
+		if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
+		}
+	}
+
+	// Broadcast update via WebSocket
+	if s.hub != nil {
+		s.hub.BroadcastIssueUpdate(updatedIssue)
+	}
 
 	s.recordStep(issueNum, "done", "Moved to Done")
 
