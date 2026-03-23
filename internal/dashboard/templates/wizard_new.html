@@ -30,14 +30,6 @@
       </div>
     </div>
   </div>
-  
-  <div class="form-actions">
-    {{if .IsPage}}
-    <a href="/" class="btn">Cancel</a>
-    {{else}}
-    <button type="button" class="btn" onclick="closeWizardModal()">Cancel</button>
-    {{end}}
-  </div>
   {{else}}
   <h1>Create New {{if eq .Type "bug"}}Bug Report{{else}}Feature{{end}}</h1>
   
