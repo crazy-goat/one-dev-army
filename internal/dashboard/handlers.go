@@ -1441,6 +1441,16 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	// Trigger immediate sync to make new ticket appear on dashboard
+	// Sync failure must not block the creation flow
+	if s.syncService != nil {
+		go func() {
+			if err := s.syncService.SyncNow(); err != nil {
+				log.Printf("[Wizard] Sync error after issue creation: %v", err)
+			}
+		}()
+	}
+
 	data := struct {
 		Epic               CreatedIssue
 		SubTasks           []CreatedIssue
