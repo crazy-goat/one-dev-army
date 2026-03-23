@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -25,8 +26,21 @@ import (
 )
 
 func main() {
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
+	// Define flags
+	var debugWebSocket bool
+	flag.BoolVar(&debugWebSocket, "debug-websocket", false, "Enable WebSocket debug logging")
+
+	// Custom usage message
+	flag.Usage = printUsage
+
+	// Parse flags
+	flag.Parse()
+
+	// Get remaining args after flag parsing
+	args := flag.Args()
+
+	if len(args) > 0 {
+		switch args[0] {
 		case "init":
 			if err := runInit(); err != nil {
 				fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -37,13 +51,13 @@ func main() {
 			printUsage()
 			return
 		default:
-			fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", os.Args[1])
+			fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", args[0])
 			printUsage()
 			os.Exit(1)
 		}
 	}
 
-	if err := runServe(); err != nil {
+	if err := runServe(debugWebSocket); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
@@ -51,12 +65,15 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println("Usage: oda [command]")
+	fmt.Println("Usage: oda [options] [command]")
 	fmt.Println()
 	fmt.Println("Commands:")
 	fmt.Println("  (none)    Start the ODA agent and dashboard")
 	fmt.Println("  init      Initialize a new ODA project in the current directory")
 	fmt.Println("  help      Show this help message")
+	fmt.Println()
+	fmt.Println("Options:")
+	fmt.Println("  --debug-websocket    Enable WebSocket debug logging")
 }
 
 func runInit() error {
@@ -73,7 +90,7 @@ func runInit() error {
 	return i.Run()
 }
 
-func runServe() error {
+func runServe(debugWebSocket bool) error {
 	dir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("getting working directory: %w", err)
@@ -236,7 +253,7 @@ func runServe() error {
 
 	// Step 6: Create WebSocket hub
 	fmt.Println("Creating WebSocket hub...")
-	hub := dashboard.NewHub()
+	hub := dashboard.NewHub(debugWebSocket)
 	go hub.Run()
 	fmt.Println("  ✓ WebSocket hub started")
 

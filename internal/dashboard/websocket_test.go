@@ -14,7 +14,7 @@ import (
 )
 
 func TestNewHub(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(false)
 	if hub == nil {
 		t.Fatal("NewHub() returned nil")
 	}
@@ -23,6 +23,9 @@ func TestNewHub(t *testing.T) {
 	}
 	if hub.closed {
 		t.Error("New hub should not be closed")
+	}
+	if hub.debug {
+		t.Error("New hub should have debug disabled by default")
 	}
 }
 
@@ -39,7 +42,7 @@ func TestNewHubWithLimit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hub := NewHubWithLimit(tt.limit)
+			hub := NewHubWithLimit(tt.limit, false)
 			if hub.maxClients != tt.expected {
 				t.Errorf("Expected maxClients to be %d, got %d", tt.expected, hub.maxClients)
 			}
@@ -48,7 +51,7 @@ func TestNewHubWithLimit(t *testing.T) {
 }
 
 func TestHubClientCount(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(false)
 	go hub.Run()
 	defer hub.Stop()
 
@@ -59,7 +62,7 @@ func TestHubClientCount(t *testing.T) {
 }
 
 func TestHubRegisterUnregister(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(false)
 	go hub.Run()
 	defer hub.Stop()
 
@@ -96,7 +99,7 @@ func TestHubRegisterUnregister(t *testing.T) {
 }
 
 func TestHubBroadcast(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(false)
 	go hub.Run()
 	defer hub.Stop()
 
@@ -143,7 +146,7 @@ func TestHubBroadcast(t *testing.T) {
 }
 
 func TestHubBroadcastIssueUpdate(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(false)
 	go hub.Run()
 	defer hub.Stop()
 
@@ -205,7 +208,7 @@ func TestHubBroadcastIssueUpdate(t *testing.T) {
 }
 
 func TestHubBroadcastSyncComplete(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(false)
 	go hub.Run()
 	defer hub.Stop()
 
@@ -256,7 +259,7 @@ func TestHubBroadcastSyncComplete(t *testing.T) {
 }
 
 func TestHubBroadcastWorkerUpdate(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(false)
 	go hub.Run()
 	defer hub.Stop()
 
@@ -362,7 +365,7 @@ func TestWorkerUpdatePayloadMarshal(t *testing.T) {
 }
 
 func TestHubConnectionLimit(t *testing.T) {
-	hub := NewHubWithLimit(2)
+	hub := NewHubWithLimit(2, false)
 	go hub.Run()
 	defer hub.Stop()
 
@@ -415,7 +418,7 @@ func TestHubConnectionLimit(t *testing.T) {
 }
 
 func TestHubConcurrentClients(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(false)
 	go hub.Run()
 	defer hub.Stop()
 
@@ -470,7 +473,7 @@ func TestHubConcurrentClients(t *testing.T) {
 }
 
 func TestHubStop(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(false)
 	go hub.Run()
 
 	// Create a test server
@@ -592,7 +595,7 @@ func TestSyncCompletePayloadMarshal(t *testing.T) {
 }
 
 func TestClientPingPong(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(false)
 	go hub.Run()
 	defer hub.Stop()
 
