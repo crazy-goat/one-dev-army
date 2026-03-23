@@ -37,7 +37,9 @@ IMPORTANT: Consider the codebase context above when refining. Look for:
 
 Return a well-structured, professional %s suitable for a GitHub issue.
 
-CRITICAL: Return ONLY the markdown content. No introduction, no preamble, no conversational text, no "Let me summarize". Start directly with the structured content. No "Here's the refined description" or similar phrases. Just the content itself.`
+CRITICAL: Return ONLY the markdown content. No introduction, no preamble, no conversational text, no "Let me summarize". Start directly with the structured content. No "Here's the refined description" or similar phrases. Just the content itself.
+
+CRITICAL: Output MUST be in English regardless of input language.`
 
 // BreakdownPromptTemplate is the base template for task breakdown
 // It instructs the LLM to break down a technical description into actionable tasks

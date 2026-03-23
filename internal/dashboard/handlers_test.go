@@ -509,6 +509,36 @@ func TestHandleWizardCreate(t *testing.T) {
 	}
 }
 
+// TestHandleWizardCreate_UsesRefinedDescriptionForTitle verifies that epic title uses refined description
+func TestHandleWizardCreate_UsesRefinedDescriptionForTitle(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	srv.gh = nil
+	defer srv.wizardStore.Stop()
+
+	session, _ := srv.wizardStore.Create("feature")
+	session.SetIdeaText("Raw user input")
+	session.SetRefinedDescription("LLM refined description")
+	session.SetTasks([]WizardTask{
+		{Title: "Task 1", Description: "Desc 1", Priority: "high", Complexity: "M"},
+		{Title: "Task 2", Description: "Desc 2", Priority: "medium", Complexity: "S"},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader("session_id="+session.ID))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardCreate(rec, req)
+
+	// Verify response contains the refined description as title, not raw idea text
+	body := rec.Body.String()
+	if !strings.Contains(body, "LLM refined description") {
+		t.Errorf("expected response to contain refined description as title, got: %s", body)
+	}
+	if strings.Contains(body, "Raw user input") && !strings.Contains(body, "LLM refined description") {
+		t.Error("expected title to come from refined description, not raw idea text")
+	}
+}
+
 func TestHandleWizardCreate_NoTasks(t *testing.T) {
 	srv := &Server{
 		tmpls:       make(map[string]*template.Template),
@@ -2069,6 +2099,31 @@ func TestHandleWizardRefine_SkipBreakdown(t *testing.T) {
 	updatedSession3, _ := srv.wizardStore.Get(session3.ID)
 	if !updatedSession3.SkipBreakdown {
 		t.Error("expected SkipBreakdown to be true for bug type")
+	}
+}
+
+// TestHandleWizardCreateSingle_UsesRefinedDescriptionForTitle verifies single issue uses refined description
+func TestHandleWizardCreateSingle_UsesRefinedDescriptionForTitle(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	session, _ := srv.wizardStore.Create("feature")
+	session.SetIdeaText("Raw user input")
+	session.SetRefinedDescription("LLM refined description")
+	session.SetSkipBreakdown(true)
+
+	form := url.Values{}
+	form.Set("session_id", session.ID)
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardCreate(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "LLM refined description") {
+		t.Errorf("expected response to contain refined description as title, got: %s", body)
 	}
 }
 
