@@ -1,38 +1,49 @@
-# Implementation Plan for Issue #180
+# Implementation Plan for Issue #176
 
-**Created:** 2026-03-23T13:45:43+01:00
-**Updated:** 2026-03-23T13:45:43+01:00
+**Created:** 2026-03-23T13:48:44+01:00
+**Updated:** 2026-03-23T13:48:44+01:00
 
 ## Analysis
 
-### 1. Core Requirements
-The WebSocket server implementation exists and is functional:
-- ✅ `internal/dashboard/websocket.go` - Complete with Hub, Client, Message structs
-- ✅ `internal/dashboard/websocket_test.go` - Comprehensive unit tests (all passing)
-- ✅ WebSocket upgrader with CORS/origin checks (lines 33-64)
-- ✅ Hub with `clients`, `broadcast`, `register`, `unregister` channels (lines 107-115)
-- ✅ Client with `hub`, `conn`, `send` fields (lines 98-104)
-- ✅ Message struct with `Type` and `Payload` (lines 77-80)
-- ✅ `Run()` method handling register/unregister/broadcast (lines 138-190)
-- ✅ Graceful disconnection handling with defer unregister (lines 290-293, 331-334)
-- ✅ Ping/pong keepalive (lines 297-300, 349-353)
-- ✅ Max connection limiting (lines 30, 122-135, 148-154)
-- ✅ `/ws` endpoint registered in server.go (line 155)
+**Current State Verification:**
 
-### 2. Method Signature Discrepancies
-The current implementation works but uses different signatures than specified:
+1. **Core requirements** — The main changes have already been implemented:
+   - ✅ `main.go` (lines 205-215): No `EnsureProject()` or `EnsureProjectColumns()` calls exist
+   - ✅ `NewOrchestrator()` signature: Does NOT include `projectNumber` parameter
+   - ✅ `NewServer()` signature: Does NOT include `projectNumber` parameter
+   - ✅ `orchestrator.go`: No `projectNumber` field exists; `moveToColumn()` method exists but is already a no-op (lines 374-378)
+   - ✅ `dashboard/handlers.go`: Server struct has no `projectNumber` field
 
-**Issue Requirement:**
-- `BroadcastIssueUpdate(issue github.Issue)` 
-- `BroadcastSyncComplete(count int)`
+2. **Files that need changes:**
+   - `internal/github/project.go` - Only file needing updates (add deprecation comments)
 
-**Current Implementation:**
-- `BroadcastIssueUpdate(issueNum int, title, status, column string)` (line 230)
-- `BroadcastSyncComplete(success bool, milestone, errMsg string)` (line 260)
+3. **Implementation approach:**
+   - Add deprecation comments to `EnsureProject()`, `EnsureProjectColumns()`, and `setupProject()` methods
+   - The methods can remain for backward compatibility but should be marked deprecated
 
-### 3. Files Status
-- `internal/dashboard/websocket.go` - ✅ Exists, fully implemented
-- `internal/dashboard/websocket_test.go` - ✅ Exists, 547 lines of comprehensive tests
-- `/ws` endpoint - ✅ Registered and working
-- All acceptance criteria met except exact method signatures
+4. **Testing strategy:**
+   - Run existing tests to ensure no regressions
+   - Verify ODA starts without GitHub Projects API calls
+
+---
+
+## Implementation Steps
+
+### Step 1: **File to modify:** `internal/github/project.go`
+
+- Add deprecation comment to `EnsureProject()` method (line 27)
+- Add deprecation comment to `EnsureProjectColumns()` method (line 93)
+- Add deprecation comment to `setupProject()` method (line 69)
+
+### Step 2: **Example deprecation format:**
+
+```go
+// Deprecated: GitHub Projects dependency is being removed. This method is no longer called on startup.
+```
+
+### Step 3: **Testing:**
+
+- Run `go test ./...` to verify all tests pass
+- Start ODA to confirm no GitHub Projects API calls are made
+The implementation is essentially complete. Only documentation/deprecation markers remain as optional cleanup.
 
