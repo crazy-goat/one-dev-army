@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 )
 
@@ -86,6 +87,16 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 		}
 		tmpls[page] = t
 	}
+
+	// Parse settings template
+	settingsTmpl, err := template.New("").Funcs(funcMap).ParseFiles(
+		filepath.Join(templateDir, "layout.html"),
+		filepath.Join(templateDir, "llm-config.html"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("parsing llm-config.html: %w", err)
+	}
+	tmpls["llm-config.html"] = settingsTmpl
 
 	return tmpls, nil
 }
@@ -3513,5 +3524,468 @@ func TestHandleSprintClose_WhileProcessing_WithMock(t *testing.T) {
 
 	if canClose {
 		t.Error("expected canClose to be false when processing is true")
+	}
+}
+
+// TestHandleSettings tests the GET /settings handler
+func TestHandleSettings(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory and config.yaml
+	odaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(odaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a minimal config file
+	configContent := `llm:
+  development:
+    strong:
+      provider: test-provider
+      model: test-model
+    weak:
+      provider: test-provider
+      model: test-model-weak
+`
+	configPath := filepath.Join(odaDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Test GET /settings
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleSettings(rec, req)
+
+	// Should return 200 OK
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify response contains expected content
+	body := rec.Body.String()
+	if !strings.Contains(body, "LLM Configuration Settings") {
+		t.Error("response should contain 'LLM Configuration Settings' heading")
+	}
+	if !strings.Contains(body, "Development") {
+		t.Error("response should contain 'Development' category")
+	}
+	if !strings.Contains(body, "test-provider") {
+		t.Error("response should contain the provider value from config")
+	}
+}
+
+// TestHandleSettings_NoConfigFile tests that the handler works even without a config file
+func TestHandleSettings_NoConfigFile(t *testing.T) {
+	// Create a temporary directory without config
+	tmpDir := t.TempDir()
+
+	// Create server with templates
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Test GET /settings without config file
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleSettings(rec, req)
+
+	// Should return 200 OK (uses defaults)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify response contains expected content
+	body := rec.Body.String()
+	if !strings.Contains(body, "LLM Configuration Settings") {
+		t.Error("response should contain 'LLM Configuration Settings' heading")
+	}
+}
+
+// TestHandleSaveSettings tests the POST /settings handler
+func TestHandleSaveSettings(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	odaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(odaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a minimal config file
+	configContent := `llm:
+  development:
+    strong:
+      provider: old-provider
+      model: old-model
+    weak:
+      provider: old-provider
+      model: old-model-weak
+`
+	configPath := filepath.Join(odaDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Test POST /settings with valid data
+	form := url.Values{}
+	form.Set("development_strong_provider", "new-provider")
+	form.Set("development_strong_model", "new-model")
+	form.Set("development_strong_api_key", "new-api-key")
+	form.Set("development_strong_base_url", "https://new-api.example.com")
+	form.Set("development_weak_provider", "new-provider")
+	form.Set("development_weak_model", "new-model-weak")
+	form.Set("planning_strong_provider", "planning-provider")
+	form.Set("planning_strong_model", "planning-model")
+	form.Set("planning_weak_provider", "planning-provider")
+	form.Set("planning_weak_model", "planning-model-weak")
+	form.Set("orchestration_strong_provider", "orch-provider")
+	form.Set("orchestration_strong_model", "orch-model")
+	form.Set("orchestration_weak_provider", "orch-provider")
+	form.Set("orchestration_weak_model", "orch-model-weak")
+	form.Set("setup_strong_provider", "setup-provider")
+	form.Set("setup_strong_model", "setup-model")
+	form.Set("setup_weak_provider", "setup-provider")
+	form.Set("setup_weak_model", "setup-model-weak")
+	form.Set("routing_code_size_threshold", "150")
+	form.Set("routing_high_complexity_threshold", "600")
+	form.Set("routing_file_count_threshold", "10")
+	form.Set("routing_force_strong_stages", "plan-review, code-review")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	// Should return 200 OK
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify success message
+	body := rec.Body.String()
+	if !strings.Contains(body, "Settings saved successfully") {
+		t.Error("response should contain success message")
+	}
+
+	// Verify config was saved
+	savedData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to read saved config: %v", err)
+	}
+
+	savedContent := string(savedData)
+	if !strings.Contains(savedContent, "new-provider") {
+		t.Error("saved config should contain new provider")
+	}
+	if !strings.Contains(savedContent, "new-model") {
+		t.Error("saved config should contain new model")
+	}
+	if !strings.Contains(savedContent, "150") {
+		t.Error("saved config should contain new code size threshold")
+	}
+}
+
+// TestHandleSaveSettingsValidation tests form validation
+func TestHandleSaveSettingsValidation(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	odaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(odaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a minimal config file
+	configPath := filepath.Join(odaDir, "config.yaml")
+	configContent := `llm:
+  development:
+    strong:
+      provider: test-provider
+      model: test-model
+    weak:
+      provider: test-provider
+      model: test-model-weak
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Test POST /settings with invalid data (empty required fields)
+	form := url.Values{}
+	form.Set("development_strong_provider", "") // Empty - should fail validation
+	form.Set("development_strong_model", "new-model")
+	form.Set("development_weak_provider", "weak-provider")
+	form.Set("development_weak_model", "weak-model")
+	form.Set("planning_strong_provider", "planning-provider")
+	form.Set("planning_strong_model", "planning-model")
+	form.Set("planning_weak_provider", "planning-provider")
+	form.Set("planning_weak_model", "planning-model-weak")
+	form.Set("orchestration_strong_provider", "orch-provider")
+	form.Set("orchestration_strong_model", "orch-model")
+	form.Set("orchestration_weak_provider", "orch-provider")
+	form.Set("orchestration_weak_model", "orch-model-weak")
+	form.Set("setup_strong_provider", "setup-provider")
+	form.Set("setup_strong_model", "setup-model")
+	form.Set("setup_weak_provider", "setup-provider")
+	form.Set("setup_weak_model", "setup-model-weak")
+	form.Set("routing_code_size_threshold", "150")
+	form.Set("routing_high_complexity_threshold", "600")
+	form.Set("routing_file_count_threshold", "10")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	// Should return 200 OK but with error message
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify error message
+	body := rec.Body.String()
+	if !strings.Contains(body, "Provider is required") {
+		t.Error("response should contain validation error for empty provider")
+	}
+}
+
+// TestHandleSaveSettingsValidationNegativeThresholds tests validation for negative thresholds
+func TestHandleSaveSettingsValidationNegativeThresholds(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	odaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(odaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a minimal config file
+	configPath := filepath.Join(odaDir, "config.yaml")
+	configContent := `llm:
+  development:
+    strong:
+      provider: test-provider
+      model: test-model
+    weak:
+      provider: test-provider
+      model: test-model-weak
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Test POST /settings with negative threshold
+	form := url.Values{}
+	form.Set("development_strong_provider", "provider")
+	form.Set("development_strong_model", "model")
+	form.Set("development_weak_provider", "weak-provider")
+	form.Set("development_weak_model", "weak-model")
+	form.Set("planning_strong_provider", "planning-provider")
+	form.Set("planning_strong_model", "planning-model")
+	form.Set("planning_weak_provider", "planning-provider")
+	form.Set("planning_weak_model", "planning-model-weak")
+	form.Set("orchestration_strong_provider", "orch-provider")
+	form.Set("orchestration_strong_model", "orch-model")
+	form.Set("orchestration_weak_provider", "orch-provider")
+	form.Set("orchestration_weak_model", "orch-model-weak")
+	form.Set("setup_strong_provider", "setup-provider")
+	form.Set("setup_strong_model", "setup-model")
+	form.Set("setup_weak_provider", "setup-provider")
+	form.Set("setup_weak_model", "setup-model-weak")
+	form.Set("routing_code_size_threshold", "-1") // Negative - should fail validation
+	form.Set("routing_high_complexity_threshold", "600")
+	form.Set("routing_file_count_threshold", "10")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	// Should return 200 OK but with error message
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify error message
+	body := rec.Body.String()
+	if !strings.Contains(body, "positive integer") {
+		t.Error("response should contain validation error for negative threshold")
+	}
+}
+
+// TestSettingsPersistence verifies that saved config can be reloaded correctly
+func TestSettingsPersistence(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	odaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(odaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a minimal config file
+	configPath := filepath.Join(odaDir, "config.yaml")
+	configContent := `llm:
+  development:
+    strong:
+      provider: original-provider
+      model: original-model
+    weak:
+      provider: original-provider
+      model: original-model-weak
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Save new settings
+	form := url.Values{}
+	form.Set("development_strong_provider", "persisted-provider")
+	form.Set("development_strong_model", "persisted-model")
+	form.Set("development_strong_api_key", "persisted-key")
+	form.Set("development_strong_base_url", "https://persisted.example.com")
+	form.Set("development_weak_provider", "persisted-provider")
+	form.Set("development_weak_model", "persisted-model-weak")
+	form.Set("planning_strong_provider", "planning-provider")
+	form.Set("planning_strong_model", "planning-model")
+	form.Set("planning_weak_provider", "planning-provider")
+	form.Set("planning_weak_model", "planning-model-weak")
+	form.Set("orchestration_strong_provider", "orch-provider")
+	form.Set("orchestration_strong_model", "orch-model")
+	form.Set("orchestration_weak_provider", "orch-provider")
+	form.Set("orchestration_weak_model", "orch-model-weak")
+	form.Set("setup_strong_provider", "setup-provider")
+	form.Set("setup_strong_model", "setup-model")
+	form.Set("setup_weak_provider", "setup-provider")
+	form.Set("setup_weak_model", "setup-model-weak")
+	form.Set("routing_code_size_threshold", "200")
+	form.Set("routing_high_complexity_threshold", "700")
+	form.Set("routing_file_count_threshold", "15")
+	form.Set("routing_force_strong_stages", "test-stage")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Reload the config
+	reloadedCfg, err := config.Load(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to reload config: %v", err)
+	}
+
+	// Verify the values were persisted
+	if reloadedCfg.LLM.Development.Strong.Provider != "persisted-provider" {
+		t.Errorf("expected provider to be 'persisted-provider', got %q", reloadedCfg.LLM.Development.Strong.Provider)
+	}
+	if reloadedCfg.LLM.Development.Strong.Model != "persisted-model" {
+		t.Errorf("expected model to be 'persisted-model', got %q", reloadedCfg.LLM.Development.Strong.Model)
+	}
+	if reloadedCfg.LLM.Development.Strong.APIKey != "persisted-key" {
+		t.Errorf("expected API key to be 'persisted-key', got %q", reloadedCfg.LLM.Development.Strong.APIKey)
+	}
+	if reloadedCfg.LLM.Development.Strong.BaseURL != "https://persisted.example.com" {
+		t.Errorf("expected base URL to be 'https://persisted.example.com', got %q", reloadedCfg.LLM.Development.Strong.BaseURL)
+	}
+	if reloadedCfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold != 200 {
+		t.Errorf("expected code size threshold to be 200, got %d", reloadedCfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold)
+	}
+	if len(reloadedCfg.LLM.RoutingRules.ForceStrongForStages) != 1 || reloadedCfg.LLM.RoutingRules.ForceStrongForStages[0] != "test-stage" {
+		t.Errorf("expected force strong stages to be ['test-stage'], got %v", reloadedCfg.LLM.RoutingRules.ForceStrongForStages)
+	}
+}
+
+// TestHandleSettingsTemplateData verifies the template data is correctly populated
+func TestHandleSettingsTemplateData(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	odaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(odaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a config file with force strong stages
+	configContent := `llm:
+  development:
+    strong:
+      provider: test-provider
+      model: test-model
+    weak:
+      provider: test-provider
+      model: test-model-weak
+  routing_rules:
+    force_strong_for_stages:
+      - stage1
+      - stage2
+      - stage3
+`
+	configPath := filepath.Join(odaDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Test GET /settings
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleSettings(rec, req)
+
+	// Should return 200 OK
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify force strong stages are displayed as comma-separated
+	body := rec.Body.String()
+	if !strings.Contains(body, "stage1, stage2, stage3") && !strings.Contains(body, "stage1,stage2,stage3") {
+		t.Error("response should contain comma-separated force strong stages")
 	}
 }

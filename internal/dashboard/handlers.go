@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
@@ -1812,4 +1813,212 @@ func (s *Server) handleRateLimitRefresh(w http.ResponseWriter, r *http.Request) 
 	}
 	// Return the updated status
 	s.handleRateLimit(w, r)
+}
+
+// settingsData holds the data for the settings template
+type settingsData struct {
+	Active            string
+	Config            config.LLMConfig
+	ForceStrongStages string
+	Success           bool
+	Errors            []string
+}
+
+// handleSettings renders the LLM configuration settings page
+func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
+	// Load current config
+	cfg, err := config.Load(s.rootDir)
+	if err != nil {
+		log.Printf("[Dashboard] Error loading config: %v", err)
+		// Use default config if load fails
+		defaultCfg := config.DefaultLLMConfig()
+		cfg = &config.Config{LLM: defaultCfg}
+	}
+
+	// Build comma-separated list of forced strong stages
+	forceStrongStages := strings.Join(cfg.LLM.RoutingRules.ForceStrongForStages, ", ")
+
+	data := settingsData{
+		Active:            "settings",
+		Config:            cfg.LLM,
+		ForceStrongStages: forceStrongStages,
+	}
+
+	s.render(w, "llm-config.html", data)
+}
+
+// handleSaveSettings processes the settings form submission
+func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.renderSettingsWithErrors(w, r, []string{"Failed to parse form data"})
+		return
+	}
+
+	// Load existing config
+	cfg, err := config.Load(s.rootDir)
+	if err != nil {
+		log.Printf("[Dashboard] Error loading config: %v", err)
+		cfg = &config.Config{LLM: config.DefaultLLMConfig()}
+	}
+
+	// Parse and validate form data
+	var errors []string
+
+	// Parse Development models
+	cfg.LLM.Development.Strong.Provider = r.FormValue("development_strong_provider")
+	cfg.LLM.Development.Strong.Model = r.FormValue("development_strong_model")
+	cfg.LLM.Development.Strong.APIKey = r.FormValue("development_strong_api_key")
+	cfg.LLM.Development.Strong.BaseURL = r.FormValue("development_strong_base_url")
+
+	cfg.LLM.Development.Weak.Provider = r.FormValue("development_weak_provider")
+	cfg.LLM.Development.Weak.Model = r.FormValue("development_weak_model")
+	cfg.LLM.Development.Weak.APIKey = r.FormValue("development_weak_api_key")
+	cfg.LLM.Development.Weak.BaseURL = r.FormValue("development_weak_base_url")
+
+	// Parse Planning models
+	cfg.LLM.Planning.Strong.Provider = r.FormValue("planning_strong_provider")
+	cfg.LLM.Planning.Strong.Model = r.FormValue("planning_strong_model")
+	cfg.LLM.Planning.Strong.APIKey = r.FormValue("planning_strong_api_key")
+	cfg.LLM.Planning.Strong.BaseURL = r.FormValue("planning_strong_base_url")
+
+	cfg.LLM.Planning.Weak.Provider = r.FormValue("planning_weak_provider")
+	cfg.LLM.Planning.Weak.Model = r.FormValue("planning_weak_model")
+	cfg.LLM.Planning.Weak.APIKey = r.FormValue("planning_weak_api_key")
+	cfg.LLM.Planning.Weak.BaseURL = r.FormValue("planning_weak_base_url")
+
+	// Parse Orchestration models
+	cfg.LLM.Orchestration.Strong.Provider = r.FormValue("orchestration_strong_provider")
+	cfg.LLM.Orchestration.Strong.Model = r.FormValue("orchestration_strong_model")
+	cfg.LLM.Orchestration.Strong.APIKey = r.FormValue("orchestration_strong_api_key")
+	cfg.LLM.Orchestration.Strong.BaseURL = r.FormValue("orchestration_strong_base_url")
+
+	cfg.LLM.Orchestration.Weak.Provider = r.FormValue("orchestration_weak_provider")
+	cfg.LLM.Orchestration.Weak.Model = r.FormValue("orchestration_weak_model")
+	cfg.LLM.Orchestration.Weak.APIKey = r.FormValue("orchestration_weak_api_key")
+	cfg.LLM.Orchestration.Weak.BaseURL = r.FormValue("orchestration_weak_base_url")
+
+	// Parse Setup models
+	cfg.LLM.Setup.Strong.Provider = r.FormValue("setup_strong_provider")
+	cfg.LLM.Setup.Strong.Model = r.FormValue("setup_strong_model")
+	cfg.LLM.Setup.Strong.APIKey = r.FormValue("setup_strong_api_key")
+	cfg.LLM.Setup.Strong.BaseURL = r.FormValue("setup_strong_base_url")
+
+	cfg.LLM.Setup.Weak.Provider = r.FormValue("setup_weak_provider")
+	cfg.LLM.Setup.Weak.Model = r.FormValue("setup_weak_model")
+	cfg.LLM.Setup.Weak.APIKey = r.FormValue("setup_weak_api_key")
+	cfg.LLM.Setup.Weak.BaseURL = r.FormValue("setup_weak_base_url")
+
+	// Validate required fields
+	categories := []struct {
+		name   string
+		strong config.ModelConfig
+		weak   config.ModelConfig
+	}{
+		{"Development", cfg.LLM.Development.Strong, cfg.LLM.Development.Weak},
+		{"Planning", cfg.LLM.Planning.Strong, cfg.LLM.Planning.Weak},
+		{"Orchestration", cfg.LLM.Orchestration.Strong, cfg.LLM.Orchestration.Weak},
+		{"Setup", cfg.LLM.Setup.Strong, cfg.LLM.Setup.Weak},
+	}
+
+	for _, cat := range categories {
+		if cat.strong.Provider == "" {
+			errors = append(errors, fmt.Sprintf("%s Strong: Provider is required", cat.name))
+		}
+		if cat.strong.Model == "" {
+			errors = append(errors, fmt.Sprintf("%s Strong: Model is required", cat.name))
+		}
+		if cat.weak.Provider == "" {
+			errors = append(errors, fmt.Sprintf("%s Weak: Provider is required", cat.name))
+		}
+		if cat.weak.Model == "" {
+			errors = append(errors, fmt.Sprintf("%s Weak: Model is required", cat.name))
+		}
+	}
+
+	// Parse routing thresholds
+	codeSizeThreshold, err := strconv.Atoi(r.FormValue("routing_code_size_threshold"))
+	if err != nil || codeSizeThreshold < 1 {
+		errors = append(errors, "Code Size Threshold must be a positive integer")
+	} else {
+		cfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold = codeSizeThreshold
+	}
+
+	highComplexityThreshold, err := strconv.Atoi(r.FormValue("routing_high_complexity_threshold"))
+	if err != nil || highComplexityThreshold < 1 {
+		errors = append(errors, "High Complexity Threshold must be a positive integer")
+	} else {
+		cfg.LLM.RoutingRules.ComplexityThresholds.HighComplexityThreshold = highComplexityThreshold
+	}
+
+	fileCountThreshold, err := strconv.Atoi(r.FormValue("routing_file_count_threshold"))
+	if err != nil || fileCountThreshold < 1 {
+		errors = append(errors, "File Count Threshold must be a positive integer")
+	} else {
+		cfg.LLM.RoutingRules.ComplexityThresholds.FileCountThreshold = fileCountThreshold
+	}
+
+	// Parse forced strong stages
+	forceStrongStagesStr := r.FormValue("routing_force_strong_stages")
+	if forceStrongStagesStr != "" {
+		// Split by comma and trim whitespace
+		stages := strings.Split(forceStrongStagesStr, ",")
+		cfg.LLM.RoutingRules.ForceStrongForStages = make([]string, 0, len(stages))
+		for _, stage := range stages {
+			stage = strings.TrimSpace(stage)
+			if stage != "" {
+				cfg.LLM.RoutingRules.ForceStrongForStages = append(cfg.LLM.RoutingRules.ForceStrongForStages, stage)
+			}
+		}
+	} else {
+		cfg.LLM.RoutingRules.ForceStrongForStages = []string{}
+	}
+
+	// If there are validation errors, re-render the form with errors
+	if len(errors) > 0 {
+		s.renderSettingsWithErrors(w, r, errors)
+		return
+	}
+
+	// Save the config
+	if err := config.SaveConfig(s.rootDir, cfg); err != nil {
+		log.Printf("[Dashboard] Error saving config: %v", err)
+		s.renderSettingsWithErrors(w, r, []string{fmt.Sprintf("Failed to save configuration: %v", err)})
+		return
+	}
+
+	log.Printf("[Dashboard] LLM configuration saved successfully")
+
+	// Re-render with success message
+	forceStrongStages := strings.Join(cfg.LLM.RoutingRules.ForceStrongForStages, ", ")
+	data := settingsData{
+		Active:            "settings",
+		Config:            cfg.LLM,
+		ForceStrongStages: forceStrongStages,
+		Success:           true,
+	}
+
+	s.render(w, "llm-config.html", data)
+}
+
+// renderSettingsWithErrors renders the settings page with validation errors
+func (s *Server) renderSettingsWithErrors(w http.ResponseWriter, r *http.Request, errors []string) {
+	// Load current config to populate the form
+	cfg, err := config.Load(s.rootDir)
+	if err != nil {
+		log.Printf("[Dashboard] Error loading config: %v", err)
+		cfg = &config.Config{LLM: config.DefaultLLMConfig()}
+	}
+
+	// Override with form values to preserve user input
+	// This is a simplified approach - in production, you'd want to preserve all form values
+	forceStrongStages := r.FormValue("routing_force_strong_stages")
+
+	data := settingsData{
+		Active:            "settings",
+		Config:            cfg.LLM,
+		ForceStrongStages: forceStrongStages,
+		Errors:            errors,
+	}
+
+	s.render(w, "llm-config.html", data)
 }
