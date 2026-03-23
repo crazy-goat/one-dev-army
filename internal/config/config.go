@@ -21,7 +21,8 @@ type Config struct {
 }
 
 type GitHub struct {
-	Repo string `yaml:"repo"`
+	Repo        string `yaml:"repo"`
+	UseProjects bool   `yaml:"use_projects,omitempty"`
 }
 
 type Dashboard struct {

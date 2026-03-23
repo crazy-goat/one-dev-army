@@ -172,6 +172,39 @@ func TestLoad_Sprint(t *testing.T) {
 	}
 }
 
+func TestLoad_GitHubUseProjects(t *testing.T) {
+	configWithProjects := `github:
+  repo: "owner/repo"
+  use_projects: true
+`
+	dir := setupConfigDir(t, configWithProjects)
+
+	cfg, err := config.Load(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !cfg.GitHub.UseProjects {
+		t.Errorf("github.use_projects = %v, want true", cfg.GitHub.UseProjects)
+	}
+}
+
+func TestLoad_GitHubUseProjectsDefault(t *testing.T) {
+	configWithoutProjects := `github:
+  repo: "owner/repo"
+`
+	dir := setupConfigDir(t, configWithoutProjects)
+
+	cfg, err := config.Load(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.GitHub.UseProjects {
+		t.Errorf("github.use_projects = %v, want false (default)", cfg.GitHub.UseProjects)
+	}
+}
+
 func TestLoad_MissingConfig(t *testing.T) {
 	dir := t.TempDir()
 
