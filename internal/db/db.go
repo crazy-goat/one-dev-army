@@ -91,16 +91,17 @@ func (s *Store) GetTaskMetrics(taskID int) ([]StageMetric, error) {
 }
 
 type TaskStep struct {
-	ID          int64
-	IssueNumber int
-	StepName    string
-	Status      string
-	Prompt      string
-	Response    string
-	ErrorMsg    string
-	SessionID   string
-	StartedAt   *time.Time
-	FinishedAt  *time.Time
+	ID                int64
+	IssueNumber       int
+	StepName          string
+	Status            string
+	Prompt            string
+	Response          string
+	ErrorMsg          string
+	SessionID         string
+	PlanAttachmentURL string
+	StartedAt         *time.Time
+	FinishedAt        *time.Time
 }
 
 func (s *Store) InsertStep(issueNumber int, stepName, prompt, sessionID string) (int64, error) {
@@ -142,7 +143,7 @@ func (s *Store) FailStep(id int64, errMsg string) error {
 
 func (s *Store) GetSteps(issueNumber int) ([]TaskStep, error) {
 	rows, err := s.db.Query(
-		`SELECT id, issue_number, step_name, status, prompt, response, error_msg, session_id, started_at, finished_at
+		`SELECT id, issue_number, step_name, status, prompt, response, error_msg, session_id, plan_attachment_url, started_at, finished_at
 		 FROM task_steps WHERE issue_number = ? ORDER BY id`, issueNumber,
 	)
 	if err != nil {
@@ -153,7 +154,7 @@ func (s *Store) GetSteps(issueNumber int) ([]TaskStep, error) {
 	var steps []TaskStep
 	for rows.Next() {
 		var st TaskStep
-		if err := rows.Scan(&st.ID, &st.IssueNumber, &st.StepName, &st.Status, &st.Prompt, &st.Response, &st.ErrorMsg, &st.SessionID, &st.StartedAt, &st.FinishedAt); err != nil {
+		if err := rows.Scan(&st.ID, &st.IssueNumber, &st.StepName, &st.Status, &st.Prompt, &st.Response, &st.ErrorMsg, &st.SessionID, &st.PlanAttachmentURL, &st.StartedAt, &st.FinishedAt); err != nil {
 			return nil, fmt.Errorf("scanning task step: %w", err)
 		}
 		steps = append(steps, st)
@@ -211,4 +212,32 @@ func (s *Store) GetSprintCost(sprintID int) (float64, error) {
 		return 0, nil
 	}
 	return cost.Float64, nil
+}
+
+// UpdateStepPlanURL updates the plan_attachment_url for a specific step
+func (s *Store) UpdateStepPlanURL(issueNumber int, stepName, planURL string) error {
+	_, err := s.db.Exec(
+		`UPDATE task_steps SET plan_attachment_url = ? WHERE issue_number = ? AND step_name = ? AND status = 'done'`,
+		planURL, issueNumber, stepName,
+	)
+	if err != nil {
+		return fmt.Errorf("updating step plan URL: %w", err)
+	}
+	return nil
+}
+
+// GetPlanAttachmentURL retrieves the plan_attachment_url for the most recent completed step
+func (s *Store) GetPlanAttachmentURL(issueNumber int) (string, error) {
+	var url sql.NullString
+	err := s.db.QueryRow(
+		`SELECT plan_attachment_url FROM task_steps WHERE issue_number = ? AND status = 'done' AND plan_attachment_url != '' ORDER BY id DESC LIMIT 1`,
+		issueNumber,
+	).Scan(&url)
+	if err == sql.ErrNoRows || !url.Valid {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("querying plan attachment URL: %w", err)
+	}
+	return url.String, nil
 }
