@@ -1,76 +1,64 @@
-# Implementation Plan for Issue #180
+# Implementation Plan for Issue #178
 
-**Created:** 2026-03-23T13:33:42+01:00
-**Updated:** 2026-03-23T13:33:42+01:00
+**Created:** 2026-03-23T13:37:17+01:00
+**Updated:** 2026-03-23T13:37:17+01:00
 
 ## Analysis
 
-The WebSocket implementation is already complete and fully functional. Let me verify the tests pass and check if the endpoint is wired up in the server.ALREADY_DONE: The WebSocket server implementation is fully complete and all tests pass. Evidence:
+### 1. Core Requirements
+- Create `SetStageLabel(issueNumber int, stage string) (Issue, error)` method in `labels.go`
+- Map stage names to GitHub labels per the issue specification
+- Remove all existing stage labels before applying new ones
+- Fetch fresh issue data from GitHub API after label changes
+- Return updated issue (cache update handled by caller)
+- Handle special cases: "Done" closes issue, "Backlog" removes all stage labels
 
-1. **`internal/dashboard/websocket.go`** exists with all required components:
-   - WebSocket upgrader with CORS/origin checks (lines 33-64)
-   - `Hub` struct with `clients`, `broadcast`, `register`, `unregister` channels (lines 107-115)
-   - `Client` struct with `hub`, `conn`, `send` channel (lines 98-104)
-   - `Message` struct with `Type` and `Payload` (lines 76-80)
-   - `Run()` method handling register/unregister/broadcast (lines 138-190)
-   - `BroadcastIssueUpdate()` method (lines 230-257)
-   - `BroadcastSyncComplete()` method (lines 260-286)
-   - Graceful disconnection handling with `defer unregister` (lines 291-292, 333-334)
-   - Ping/pong keepalive (lines 329-356)
-   - Connection limit support via `maxClients` (lines 30, 114, 148-154)
+### 2. Files That Need Changes
+- `internal/github/labels.go` - Add `SetStageLabel()` method and stage-to-label mapping
+- `internal/github/labels_test.go` - Add comprehensive unit tests
 
-2. **`internal/dashboard/websocket_test.go`** exists with comprehensive tests (547 lines) covering:
-   - Hub creation and limits
-   - Client registration/unregistration
-   - Broadcasting to multiple clients
-   - Issue update and sync complete messages
-   - Connection limits
-   - Concurrent clients
-   - Hub shutdown
-   - Ping/pong handling
+### 3. Implementation Approach
+- Define stage-to-labels mapping as a map[string][]string
+- Define all stage label prefixes for cleanup (stage:*, awaiting-approval, failed, blocked)
+- Implementation steps:
+  1. Get current issue to check existing labels
+  2. Remove all stage-related labels from the issue
+  3. Add new label(s) based on stage mapping
+  4. For "Done" stage: close the issue via `CloseIssue()`
+  5. Fetch fresh issue data via `GetIssue()`
+  6. Return updated issue
+- Error handling: wrap errors with context, continue on label removal errors (idempotent)
 
-3. **All 11 WebSocket tests pass**:
-   - `TestNewHub`, `TestNewHubWithLimit`, `TestHubClientCount`
-   - `TestHubRegisterUnregister`, `TestHubBroadcast`
-   - `TestHubBroadcastIssueUpdate`, `TestHubBroadcastSyncComplete`
-   - `TestHubConnectionLimit`, `TestHubConcurrentClients`
-   - `TestHubStop`, `TestClientPingPong`
-
-4. **Endpoint `/ws` is ready** - The `ServeWs()` function exists (lines 359-390) and is ready to be wired up in `server.go` (currently commented out at lines 152-153, 186-188, 192-194 with TODOs referencing ticket #180).
+### 4. Testing Strategy
+- Mock `gh` command responses for all scenarios
+- Test each stage mapping (Backlog, Plan, Code, AI Review, Approve, Done, Failed, Blocked)
+- Test label removal logic
+- Test error handling (API failures, partial failures)
+- Test edge cases (issue already closed, label already exists)
 
 ## Implementation Steps
 
-### Step 1: **`internal/dashboard/websocket.go`** exists with all required components:
+### Step 1: **Phase 1: Implementation** (15 min)
 
-- WebSocket upgrader with CORS/origin checks (lines 33-64)
-- `Hub` struct with `clients`, `broadcast`, `register`, `unregister` channels (lines 107-115)
-- `Client` struct with `hub`, `conn`, `send` channel (lines 98-104)
-- `Message` struct with `Type` and `Payload` (lines 76-80)
-- `Run()` method handling register/unregister/broadcast (lines 138-190)
-- `BroadcastIssueUpdate()` method (lines 230-257)
-- `BroadcastSyncComplete()` method (lines 260-286)
-- Graceful disconnection handling with `defer unregister` (lines 291-292, 333-334)
-- Ping/pong keepalive (lines 329-356)
-- Connection limit support via `maxClients` (lines 30, 114, 148-154)
+- Add stage mappings and `SetStageLabel()` to `labels.go`
+- Add necessary imports
 
-### Step 2: **`internal/dashboard/websocket_test.go`** exists with comprehensive tests (547 lines) covering:
+### Step 2: **Phase 2: Testing** (20 min)
 
-- Hub creation and limits
-- Client registration/unregistration
-- Broadcasting to multiple clients
-- Issue update and sync complete messages
-- Connection limits
-- Concurrent clients
-- Hub shutdown
-- Ping/pong handling
+- Add unit tests to `labels_test.go`
+- Run tests: `go test ./internal/github/... -v`
 
-### Step 3: **All 11 WebSocket tests pass**:
+### Step 3: **Phase 3: Verification** (5 min)
 
-- `TestNewHub`, `TestNewHubWithLimit`, `TestHubClientCount`
-- `TestHubRegisterUnregister`, `TestHubBroadcast`
-- `TestHubBroadcastIssueUpdate`, `TestHubBroadcastSyncComplete`
-- `TestHubConnectionLimit`, `TestHubConcurrentClients`
-- `TestHubStop`, `TestClientPingPong`
-
-### Step 4: **Endpoint `/ws` is ready** - The `ServeWs()` function exists (lines 359-390) and is ready to be wired up in `server.go` (currently commented out at lines 152-153, 186-188, 192-194 with TODOs referencing ticket #180).
+- Verify all stage mappings work correctly
+- Verify error handling
+- Run full test suite
+### 4. Acceptance Criteria Verification
+- [ ] `SetStageLabel()` method exists in `labels.go` with correct signature
+- [ ] All stage mappings implemented per specification
+- [ ] Previous stage labels are removed before adding new ones
+- [ ] Fresh issue data fetched and returned
+- [ ] "Done" stage closes the issue
+- [ ] Unit tests cover all stages and error cases
+- [ ] All tests pass
 
