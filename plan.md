@@ -1,7 +1,7 @@
 # Implementation Plan for Issue #168
 
-**Created:** 2026-03-23T12:38:47+01:00
-**Updated:** 2026-03-23T12:38:47+01:00
+**Created:** 2026-03-23T12:39:05+01:00
+**Updated:** 2026-03-23T12:39:05+01:00
 
 ## Analysis
 
@@ -98,4 +98,51 @@ The implementation is **complete and production-ready**:
 - ✅ Old tickets with analyze/plan steps are migrated automatically
 - ✅ Tests updated and passing
 - ✅ 50% reduction in LLM calls (one round-trip instead of two)
+
+## Implementation Steps
+
+### Step 1: `TestParseTechnicalPlanningResponse` - PASS
+
+### Step 2: `TestCheckAlreadyDone` - PASS
+
+### Step 3: `TestGetLastCompletedStep_Migration` - PASS
+
+### Step 4: `TestGetStepResponse_Migration` - PASS
+
+The implementation is fully complete. The issue #168 has already been implemented:
+
+### Step 1: **Combined prompt** (`technicalPlanningPrompt` at lines 23-51 in worker.go)
+
+### Step 2: **Single step function** (`technicalPlanning()` at lines 296-333)
+
+### Step 3: **Response parsing** (`parseTechnicalPlanningResponse()` at lines 335-374)
+
+### Step 4: **Updated step order** (line 130: `["technical-planning", "implement", "code-review", "create-pr"]`)
+
+### Step 5: **Database migration** (lines 178-181 and 193-196 in db.go)
+
+### Step 6: **Backward compatibility** (lines 193-196 in worker.go)
+
+### Step 7: **All tests passing**
+
+I should respond with "ALREADY_DONE:" prefix as instructed.ALREADY_DONE: The feature has been fully implemented in the codebase:
+
+### Step 1: **Combined prompt** (`technicalPlanningPrompt` at `internal/mvp/worker.go:23-51`) - Single prompt requesting both "## Analysis" and "## Implementation Plan" sections with ALREADY_DONE detection
+
+### Step 2: **Unified step function** (`technicalPlanning()` at `internal/mvp/worker.go:296-333`) - Handles combined analysis and planning in one LLM call
+
+### Step 3: **Response parsing** (`parseTechnicalPlanningResponse()` at `internal/mvp/worker.go:335-374`) - Extracts analysis and plan sections from combined response with fallback heuristics
+
+### Step 4: **Updated step order** (`internal/mvp/worker.go:130`) - Changed to `["technical-planning", "implement", "code-review", "create-pr"]` (4 steps instead of 5)
+
+### Step 5: **Database migration** (`internal/db/db.go:178-181`) - `GetLastCompletedStep()` maps old "analyze"/"plan" → "technical-planning"
+
+### Step 6: **Backward compatibility** (`internal/db/db.go:193-196`) - `GetStepResponse()` falls back to old "plan" step if "technical-planning" not found
+
+### Step 7: **All tests passing**:
+
+- `TestParseTechnicalPlanningResponse` - validates parsing of combined response
+- `TestCheckAlreadyDone` - tests ALREADY_DONE prefix detection
+- `TestGetLastCompletedStep_Migration` - verifies step name migration
+- `TestGetStepResponse_Migration` - confirms fallback to old step responses
 
