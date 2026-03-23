@@ -327,7 +327,7 @@ func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 	// Update cache
 	if s.store != nil {
 		milestone := s.activeSprintName()
-		if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+		if err := s.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
 			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
 		}
 	}
@@ -361,7 +361,7 @@ func (s *Server) handleReject(w http.ResponseWriter, r *http.Request) {
 	// Update cache
 	if s.store != nil {
 		milestone := s.activeSprintName()
-		if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+		if err := s.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
 			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
 		}
 	}
@@ -395,7 +395,7 @@ func (s *Server) handleRetry(w http.ResponseWriter, r *http.Request) {
 	// Update cache
 	if s.store != nil {
 		milestone := s.activeSprintName()
-		if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+		if err := s.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
 			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
 		}
 	}
@@ -444,7 +444,7 @@ func (s *Server) handleRetryFresh(w http.ResponseWriter, r *http.Request) {
 	// Update cache
 	if s.store != nil {
 		milestone := s.activeSprintName()
-		if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+		if err := s.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
 			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
 		}
 	}
@@ -488,7 +488,7 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 
 	if s.store != nil {
 		milestone := s.activeSprintName()
-		if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+		if err := s.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
 			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
 		}
 	}
@@ -519,7 +519,7 @@ func (s *Server) handleUnblock(w http.ResponseWriter, r *http.Request) {
 
 	if s.store != nil {
 		milestone := s.activeSprintName()
-		if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+		if err := s.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
 			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
 		}
 	}
@@ -569,7 +569,7 @@ func (s *Server) handleDecline(w http.ResponseWriter, r *http.Request) {
 	// Update cache
 	if s.store != nil {
 		milestone := s.activeSprintName()
-		if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+		if err := s.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
 			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
 		}
 	}
@@ -608,7 +608,7 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 	} else {
 		if s.store != nil {
 			milestone := s.activeSprintName()
-			_ = s.store.SaveIssueCache(mergingIssue, milestone)
+			_ = s.store.SaveIssueCache(mergingIssue, milestone, true)
 		}
 		if s.hub != nil {
 			s.hub.BroadcastIssueUpdate(mergingIssue)
@@ -631,7 +631,7 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 		} else {
 			if s.store != nil {
 				milestone := s.activeSprintName()
-				if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+				if err := s.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
 					log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
 				}
 			}
@@ -669,7 +669,7 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 	// Update cache
 	if s.store != nil {
 		milestone := s.activeSprintName()
-		if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+		if err := s.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
 			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
 		}
 	}

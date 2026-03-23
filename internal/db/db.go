@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/crazy-goat/one-dev-army/internal/github"
@@ -269,7 +270,23 @@ func (s *Store) GetPlanAttachmentURL(issueNumber int) (string, error) {
 }
 
 // SaveIssueCache stores an issue in the cache
-func (s *Store) SaveIssueCache(issue github.Issue, milestone string) error {
+// When force=false (auto-sync), it compares timestamps and skips if local data is newer
+// When force=true (manual actions), it always updates the cache
+func (s *Store) SaveIssueCache(issue github.Issue, milestone string, force bool) error {
+	// If not forcing, check if we should skip due to stale CDN data
+	if !force {
+		existing, err := s.GetIssueCache(issue.Number)
+		if err == nil && existing.UpdatedAt != nil && issue.UpdatedAt != nil {
+			// If local data is newer than GitHub data, skip the update
+			if existing.UpdatedAt.After(*issue.UpdatedAt) {
+				log.Printf("[DB] Skipping cache update for issue #%d: local data is newer (local: %v, GitHub: %v)",
+					issue.Number, existing.UpdatedAt, issue.UpdatedAt)
+				return nil
+			}
+		}
+		// If error getting existing cache (not found), continue with save
+	}
+
 	labelsJSON, err := json.Marshal(issue.GetLabelNames())
 	if err != nil {
 		return fmt.Errorf("marshaling labels: %w", err)
@@ -278,7 +295,7 @@ func (s *Store) SaveIssueCache(issue github.Issue, milestone string) error {
 	_, err = s.db.Exec(
 		`INSERT OR REPLACE INTO issue_cache (issue_number, title, body, state, labels, assignee, milestone, updated_at, cached_at, pr_merged, merged_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		issue.Number, issue.Title, issue.Body, issue.State, string(labelsJSON), issue.GetAssignee(), milestone, time.Now(), time.Now(),
+		issue.Number, issue.Title, issue.Body, issue.State, string(labelsJSON), issue.GetAssignee(), milestone, issue.UpdatedAt, time.Now(),
 		issue.PRMerged, issue.MergedAt,
 	)
 	if err != nil {
@@ -338,6 +355,7 @@ func (s *Store) GetIssueCache(issueNumber int) (github.Issue, error) {
 		Assignees: assignees,
 		PRMerged:  cache.PRMerged,
 		MergedAt:  cache.MergedAt,
+		UpdatedAt: cache.UpdatedAt,
 	}, nil
 }
 
@@ -424,6 +442,7 @@ func (s *Store) scanIssues(rows *sql.Rows) ([]github.Issue, error) {
 			Assignees: assignees,
 			PRMerged:  cache.PRMerged,
 			MergedAt:  cache.MergedAt,
+			UpdatedAt: cache.UpdatedAt,
 		})
 	}
 	if err := rows.Err(); err != nil {

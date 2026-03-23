@@ -17,7 +17,7 @@ type GitHubClient interface {
 
 // Store defines the interface for database operations needed by SyncService
 type Store interface {
-	SaveIssueCache(issue github.Issue, milestone string) error
+	SaveIssueCache(issue github.Issue, milestone string, force bool) error
 }
 
 // SyncService handles periodic synchronization of GitHub issues with the local cache
@@ -167,7 +167,7 @@ func (s *SyncService) syncNow() {
 			}
 		}
 
-		if err := s.store.SaveIssueCache(issue, milestone); err != nil {
+		if err := s.store.SaveIssueCache(issue, milestone, false); err != nil {
 			log.Printf("[SyncService] Error caching issue #%d: %v", issue.Number, err)
 			continue
 		}
