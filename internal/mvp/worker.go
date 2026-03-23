@@ -106,24 +106,26 @@ Instructions:
 - CRITICAL: Do NOT use git worktrees. Work directly in the provided working directory. Do NOT run "git worktree" commands.`
 
 type Worker struct {
-	id      int
-	cfg     *config.Config
-	oc      *opencode.Client
-	gh      *github.Client
-	brMgr   *git.BranchManager
-	store   *db.Store
-	repoDir string
+	id           int
+	cfg          *config.Config
+	oc           *opencode.Client
+	gh           *github.Client
+	brMgr        *git.BranchManager
+	store        *db.Store
+	repoDir      string
+	orchestrator *Orchestrator
 }
 
-func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Client, brMgr *git.BranchManager, store *db.Store) *Worker {
+func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Client, brMgr *git.BranchManager, store *db.Store, orchestrator *Orchestrator) *Worker {
 	return &Worker{
-		id:      id,
-		cfg:     cfg,
-		oc:      oc,
-		gh:      gh,
-		brMgr:   brMgr,
-		store:   store,
-		repoDir: brMgr.RepoDir(),
+		id:           id,
+		cfg:          cfg,
+		oc:           oc,
+		gh:           gh,
+		brMgr:        brMgr,
+		store:        store,
+		repoDir:      brMgr.RepoDir(),
+		orchestrator: orchestrator,
 	}
 }
 
@@ -377,21 +379,21 @@ func (w *Worker) implement(ctx context.Context, task *Task, planStr string) erro
 	w.oc.SetDirectory(task.Worktree)
 	defer w.oc.SetDirectory("")
 
-	// Try to retrieve plan from GitHub if available
-	wt := &git.Worktree{
-		Name:   fmt.Sprintf("worker-%d", w.id),
-		Path:   w.repoDir,
-		Branch: task.Branch,
+	// Fetch all comments from GitHub issue to find technical planning
+	comments, err := w.gh.ListComments(task.Issue.Number)
+	if err == nil && len(comments) > 0 {
+		// Look for technical planning comment
+		for _, comment := range comments {
+			if strings.Contains(comment.Body, "## 📋 Technical Planning") {
+				planStr = comment.Body
+				log.Printf("[Worker %d] Using technical planning from GitHub comment", w.id)
+				break
+			}
+		}
 	}
-	planMgr := plan.NewAttachmentManager(w.gh, wt)
 
-	githubPlan, err := planMgr.GetFromIssue(ctx, task.Issue.Number)
-	if err == nil && githubPlan != nil {
-		// Use the plan from GitHub
-		planStr = githubPlan.ToMarkdown()
-		log.Printf("[Worker %d] Using plan.md from GitHub", w.id)
-	} else {
-		log.Printf("[Worker %d] Falling back to context-based plan", w.id)
+	if planStr == "" {
+		log.Printf("[Worker %d] No technical planning comment found, using context-based plan", w.id)
 	}
 
 	testCmd := w.cfg.Tools.TestCmd
