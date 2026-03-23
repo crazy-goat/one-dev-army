@@ -45,7 +45,7 @@ const (
 	WizardStepNew    WizardStep = "new"
 	WizardStepRefine WizardStep = "refine"
 	// REMOVED: WizardStepBreakdown WizardStep = "breakdown"
-	WizardStepTitle  WizardStep = "title" // NEW: Title generation step
+	// REMOVED: WizardStepTitle  WizardStep = "title" (merged into refine step)
 	WizardStepCreate WizardStep = "create"
 	WizardStepDone   WizardStep = "done"
 )
@@ -87,6 +87,8 @@ type WizardSession struct {
 	GeneratedTitle    string         `json:"generated_title"`    // NEW: LLM-generated title
 	CustomTitle       string         `json:"custom_title"`       // NEW: User-edited title
 	UseCustomTitle    bool           `json:"use_custom_title"`   // NEW: Whether to use custom title
+	Priority          string         `json:"priority"`           // LLM-estimated priority: high, medium, low
+	Complexity        string         `json:"complexity"`         // LLM-estimated complexity: S, M, L, XL
 	CreatedIssues     []CreatedIssue `json:"created_issues"`
 	EpicNumber        int            `json:"epic_number"`
 	AddToSprint       bool           `json:"add_to_sprint"`
@@ -175,6 +177,22 @@ func (s *WizardSession) SetLanguage(lang string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.Language = lang
+	s.UpdatedAt = time.Now()
+}
+
+// SetPriority updates the LLM-estimated priority (thread-safe)
+func (s *WizardSession) SetPriority(priority string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Priority = priority
+	s.UpdatedAt = time.Now()
+}
+
+// SetComplexity updates the LLM-estimated complexity (thread-safe)
+func (s *WizardSession) SetComplexity(complexity string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Complexity = complexity
 	s.UpdatedAt = time.Now()
 }
 

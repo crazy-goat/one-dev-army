@@ -36,10 +36,6 @@
 .card .card-pr a:hover{text-decoration:underline}
 .badge-merged { background: #6f42c1; color: white; font-size: .65rem; padding: .1rem .4rem; border-radius: 4px; display: inline-flex; align-items: center; gap: .25rem; }
 .badge-closed { background: #6c757d; color: white; font-size: .65rem; padding: .1rem .4rem; border-radius: 4px; display: inline-flex; align-items: center; gap: .25rem; }
-.done-filter { display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem; }
-.done-filter select { padding: .2rem .5rem; font-size: .75rem; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); }
-.workers-panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem}
-.workers-panel h2{margin-bottom:.75rem}
 .empty-state{color:var(--muted);font-size:.85rem;text-align:center;padding:2rem 1rem;font-style:italic}
 </style>
 
@@ -77,13 +73,6 @@
 </div>
 
 {{template "board-columns" .}}
-
-<div class="workers-panel">
-  <h2>Workers</h2>
-  <div id="workers" hx-get="/api/workers" hx-swap="innerHTML">
-    <p style="color:var(--muted);font-size:.85rem">Loading worker status...</p>
-  </div>
-</div>
 
 <!-- Decline modal -->
 <div id="decline-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center">
@@ -269,14 +258,6 @@ function triggerSync() {
 
   <div class="column">
     <div class="column-title">Done <span class="count">{{len .Done}}</span></div>
-    <div class="done-filter">
-      <label for="done-filter" style="font-size: .75rem; color: var(--muted);">Show:</label>
-      <select id="done-filter" name="done_filter" hx-get="/api/board-data" hx-target="#board-container" hx-trigger="change">
-        <option value="all" {{if eq .DoneFilter "all"}}selected{{end}}>All Done</option>
-        <option value="merged" {{if eq .DoneFilter "merged"}}selected{{end}}>Merged Only</option>
-        <option value="closed" {{if eq .DoneFilter "closed"}}selected{{end}}>Closed Only</option>
-      </select>
-    </div>
     {{range .Done}}
     <div class="card">
       <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>

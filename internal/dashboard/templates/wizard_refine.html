@@ -1,14 +1,35 @@
 {{define "content"}}
 {{template "wizard-steps" .}}
 <div class="wizard-step">
-  <h2>Technical Planning</h2>
+  <h2>Review Issue</h2>
   
-  <form id="refine-form" hx-post="/wizard/title{{if .IsPage}}?page=1{{end}}" hx-target="#wizard-content" hx-swap="innerHTML" hx-disabled-elt="button[type='submit']" data-is-page="{{.IsPage}}">
+  <form id="refine-form" hx-post="/wizard/create{{if .IsPage}}?page=1{{end}}" hx-target="#wizard-content" hx-swap="innerHTML" hx-disabled-elt="button[type='submit']" data-is-page="{{.IsPage}}">
     <input type="hidden" name="session_id" value="{{.SessionID}}">
     {{if .IsPage}}<input type="hidden" name="page" value="1">{{end}}
     
     <div class="form-group">
-      <label for="technical_planning">Technical Planning:</label>
+      <label for="issue_title">Issue Title:</label>
+      <input type="text" id="issue_title" name="issue_title" value="{{.Title}}" maxlength="80" class="title-input" oninput="updateCharCounter(this)">
+      <div class="char-counter">
+        <span id="char-count">0</span> / 80 characters
+        <span id="char-warning" class="warning" style="display:none;">Title too long</span>
+      </div>
+    </div>
+    
+    {{if or .Priority .Complexity}}
+    <div class="form-group estimate-badges">
+      {{if .Priority}}
+      <span class="badge badge-priority badge-priority-{{.Priority}}">Priority: {{.Priority}}</span>
+      {{end}}
+      {{if .Complexity}}
+      <span class="badge badge-complexity badge-complexity-{{.Complexity}}">Size: {{.Complexity}}</span>
+      {{end}}
+      <span class="badge-hint">Estimated by AI — labels will be added automatically</span>
+    </div>
+    {{end}}
+    
+    <div class="form-group">
+      <label for="technical_planning">Description:</label>
       <div class="markdown-tabs">
         <button type="button" class="tab-btn active" data-tab="preview" onclick="switchTab('preview')">Preview</button>
         <button type="button" class="tab-btn" data-tab="edit" onclick="switchTab('edit')">Edit</button>
@@ -36,15 +57,15 @@
       {{end}}
       <div class="nav-buttons">
         <button type="button" class="btn" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}{{if .IsPage}}&amp;page=1{{end}}" hx-target="#wizard-content">
-          ← Back
+          &#8592; Back
         </button>
         <button type="button" class="btn btn-secondary" hx-post="/wizard/refine{{if .IsPage}}?page=1{{end}}" hx-target="#wizard-content" hx-disabled-elt="button[type='submit']" hx-vals='{"current_description": "{{.TechnicalPlanning}}"}'>
-          <span class="spinner" style="display:none;">⏳</span>
+          <span class="spinner" style="display:none;">&#9203;</span>
           <span class="label">Regenerate</span>
         </button>
         <button type="submit" class="btn btn-primary">
-          <span class="spinner" style="display:none;">⏳</span>
-          <span class="label">Accept &amp; Continue</span>
+          <span class="spinner" style="display:none;">&#9203;</span>
+          <span class="label">Accept &amp; Create Issue</span>
         </button>
       </div>
     </div>
@@ -53,6 +74,40 @@
 </div>
 
 <style>
+.title-input {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color 0.15s;
+}
+
+.title-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.title-input.too-long {
+  border-color: var(--error);
+}
+
+.char-counter {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.char-counter .warning {
+  color: var(--error);
+  font-weight: 500;
+}
+
 .markdown-tabs {
   display: flex;
   gap: 0.5rem;
@@ -176,12 +231,98 @@
   background: var(--bg);
   font-weight: 600;
 }
+
+.sprint-option {
+  margin-top: 1rem;
+}
+
+.sprint-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.sprint-checkbox input[type="checkbox"] {
+  width: 1.2rem;
+  height: 1.2rem;
+  cursor: pointer;
+}
+
+.sprint-checkbox-label {
+  color: var(--text);
+}
+
+.estimate-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.badge-priority-high {
+  background: #B6020520;
+  color: #B60205;
+  border: 1px solid #B6020540;
+}
+
+.badge-priority-medium {
+  background: #FBCA0420;
+  color: #9A7D04;
+  border: 1px solid #FBCA0440;
+}
+
+.badge-priority-low {
+  background: #0E8A1620;
+  color: #0E8A16;
+  border: 1px solid #0E8A1640;
+}
+
+.badge-complexity-S {
+  background: #C2E0C640;
+  color: #2D6A2E;
+  border: 1px solid #C2E0C6;
+}
+
+.badge-complexity-M {
+  background: #BFDADC40;
+  color: #2D5F63;
+  border: 1px solid #BFDADC;
+}
+
+.badge-complexity-L {
+  background: #BFD4F240;
+  color: #2D4F7A;
+  border: 1px solid #BFD4F2;
+}
+
+.badge-complexity-XL {
+  background: #D4C5F940;
+  color: #5B3FA0;
+  border: 1px solid #D4C5F9;
+}
+
+.badge-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-style: italic;
+}
 </style>
 
 <script>
 (function() {
-  const textarea = document.getElementById('technical_planning');
-  const previewContainer = document.getElementById('preview-container');
+  var textarea = document.getElementById('technical_planning');
+  var previewContainer = document.getElementById('preview-container');
   
   function renderMarkdown() {
     if (typeof marked !== 'undefined' && textarea && previewContainer) {
@@ -190,8 +331,8 @@
   }
   
   window.switchTab = function(tabName) {
-    const previewTab = document.querySelector('[data-tab="preview"]');
-    const editTab = document.querySelector('[data-tab="edit"]');
+    var previewTab = document.querySelector('[data-tab="preview"]');
+    var editTab = document.querySelector('[data-tab="edit"]');
     
     if (tabName === 'preview') {
       previewTab.classList.add('active');
@@ -207,10 +348,39 @@
     }
   };
   
+  function updateCharCounter(input) {
+    var count = input.value.length;
+    var counter = document.getElementById('char-count');
+    var warning = document.getElementById('char-warning');
+    
+    if (counter) {
+      counter.textContent = count;
+    }
+    
+    if (warning) {
+      if (count > 80) {
+        warning.style.display = 'inline';
+        input.classList.add('too-long');
+      } else {
+        warning.style.display = 'none';
+        input.classList.remove('too-long');
+      }
+    }
+  }
+  
+  // Initialize
   if (textarea) {
     textarea.addEventListener('input', renderMarkdown);
     renderMarkdown();
   }
+  
+  var titleInput = document.getElementById('issue_title');
+  if (titleInput) {
+    updateCharCounter(titleInput);
+  }
+  
+  // Expose to global scope for HTMX and inline handlers
+  window.updateCharCounter = updateCharCounter;
 })();
 </script>
 

@@ -75,7 +75,7 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 	tmpls["wizard_modal.html"] = wizardModalTmpl
 
 	// Parse wizard partial templates (no layout)
-	wizardPartials := []string{"wizard_new.html", "wizard_refine.html", "wizard_title.html", "wizard_create.html", "wizard_error.html", "wizard_logs.html"}
+	wizardPartials := []string{"wizard_new.html", "wizard_refine.html", "wizard_create.html", "wizard_error.html", "wizard_logs.html"}
 	for _, page := range wizardPartials {
 		t, err := template.ParseFiles(
 			filepath.Join(templateDir, "wizard_steps.html"),
@@ -86,12 +86,6 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 		}
 		tmpls[page] = t
 	}
-
-	t, err := template.ParseFiles(filepath.Join(templateDir, "workers.html"))
-	if err != nil {
-		return nil, fmt.Errorf("parsing workers.html: %w", err)
-	}
-	tmpls["workers.html"] = t
 
 	return tmpls, nil
 }
@@ -457,15 +451,16 @@ func TestHandleWizardCreate(t *testing.T) {
 	}
 }
 
-// TestHandleWizardCreate_UsesTechnicalPlanningForTitle verifies that issue title uses technical planning
-func TestHandleWizardCreate_UsesTechnicalPlanningForTitle(t *testing.T) {
+// TestHandleWizardCreate_UsesGeneratedTitle verifies that issue title uses the generated title from refine step
+func TestHandleWizardCreate_UsesGeneratedTitle(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	srv.gh = nil
 	defer srv.wizardStore.Stop()
 
 	session, _ := srv.wizardStore.Create("feature")
 	session.SetIdeaText("Raw user input")
-	session.SetTechnicalPlanning("## Technical Planning\n\nLLM generated technical planning with architecture overview, files, and implementation boundaries")
+	session.SetTechnicalPlanning("## Description\n\nLLM generated description")
+	session.SetGeneratedTitle("[Feature] Add authentication system")
 
 	req := httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader("session_id="+session.ID))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -473,13 +468,13 @@ func TestHandleWizardCreate_UsesTechnicalPlanningForTitle(t *testing.T) {
 
 	srv.handleWizardCreate(rec, req)
 
-	// Verify response contains the technical planning as title, not raw idea text
+	// Verify response contains the generated title, not raw idea text
 	body := rec.Body.String()
-	if !strings.Contains(body, "Technical Planning") {
-		t.Errorf("expected response to contain technical planning as title, got: %s", body)
+	if !strings.Contains(body, "[Feature] Add authentication system") {
+		t.Errorf("expected response to contain generated title, got: %s", body)
 	}
-	if strings.Contains(body, "Raw user input") && !strings.Contains(body, "Technical Planning") {
-		t.Error("expected title to come from technical planning, not raw idea text")
+	if strings.Contains(body, "Raw user input") {
+		t.Error("expected title to come from generated title, not raw idea text")
 	}
 }
 
@@ -1952,14 +1947,15 @@ func TestHandleWizardRefine_SkipBreakdown(t *testing.T) {
 	}
 }
 
-// TestHandleWizardCreateSingle_UsesTechnicalPlanningForTitle verifies single issue uses technical planning
-func TestHandleWizardCreateSingle_UsesRefinedDescriptionForTitle(t *testing.T) {
+// TestHandleWizardCreateSingle_UsesGeneratedTitle verifies single issue uses the generated title
+func TestHandleWizardCreateSingle_UsesGeneratedTitle(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
 
 	session, _ := srv.wizardStore.Create("feature")
 	session.SetIdeaText("Raw user input")
-	session.SetTechnicalPlanning("## Technical Planning\n\nLLM generated technical planning")
+	session.SetTechnicalPlanning("## Description\n\nLLM generated description")
+	session.SetGeneratedTitle("[Feature] Implement user dashboard")
 
 	form := url.Values{}
 	form.Set("session_id", session.ID)
@@ -1971,8 +1967,8 @@ func TestHandleWizardCreateSingle_UsesRefinedDescriptionForTitle(t *testing.T) {
 	srv.handleWizardCreate(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "Technical Planning") {
-		t.Errorf("expected response to contain technical planning as title, got: %s", body)
+	if !strings.Contains(body, "[Feature] Implement user dashboard") {
+		t.Errorf("expected response to contain generated title, got: %s", body)
 	}
 }
 
@@ -2483,18 +2479,21 @@ func TestWizardStepIndicator_ShowBreakdownStep_FeatureType(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// For feature type, should show 3 steps (Idea, Technical Planning, Create) - no more breakdown
+	// For feature type, should show 3 steps (Idea, Review, Create) - no more breakdown or title steps
 	// Count the step-label spans
-	stepLabels := []string{"Idea", "Technical Planning", "Create"}
+	stepLabels := []string{"Idea", "Review", "Create"}
 	for _, label := range stepLabels {
 		if !strings.Contains(body, `<span class="step-label">`+label+`</span>`) {
 			t.Errorf("step indicator missing '%s' label for feature type", label)
 		}
 	}
 
-	// Should NOT show Breakdown step anymore
+	// Should NOT show Breakdown or Title steps anymore
 	if strings.Contains(body, `<span class="step-label">Breakdown</span>`) {
 		t.Error("step indicator should NOT show 'Breakdown' step (removed in new flow)")
+	}
+	if strings.Contains(body, `<span class="step-label">Title</span>`) {
+		t.Error("step indicator should NOT show 'Title' step (merged into Review)")
 	}
 }
 
@@ -2514,13 +2513,16 @@ func TestWizardStepIndicator_ShowBreakdownStep_BugType(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// For bug type, should NOT show Breakdown step (removed in new flow)
+	// For bug type, should NOT show Breakdown or Title steps (removed in new flow)
 	if strings.Contains(body, `<span class="step-label">Breakdown</span>`) {
 		t.Error("step indicator should NOT show 'Breakdown' step for bug type (removed in new flow)")
 	}
+	if strings.Contains(body, `<span class="step-label">Title</span>`) {
+		t.Error("step indicator should NOT show 'Title' step for bug type (merged into Review)")
+	}
 
-	// Should have 3 steps (Idea, Technical Planning, Create) - same as feature now
-	stepLabels := []string{"Idea", "Technical Planning", "Create"}
+	// Should have 3 steps (Idea, Review, Create) - same as feature now
+	stepLabels := []string{"Idea", "Review", "Create"}
 	for _, label := range stepLabels {
 		if !strings.Contains(body, `<span class="step-label">`+label+`</span>`) {
 			t.Errorf("step indicator missing '%s' label for bug type", label)
@@ -2723,8 +2725,8 @@ func TestHandleWizardRefine_AcceptsLanguageParameter(t *testing.T) {
 	}
 }
 
-// TestHandleWizardGenerateTitle tests the title generation handler
-func TestHandleWizardGenerateTitle(t *testing.T) {
+// TestHandleWizardRefine_GeneratesTitleAndDescription tests that refine generates both title and description
+func TestHandleWizardRefine_GeneratesTitleAndDescription(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
 
@@ -2734,61 +2736,61 @@ func TestHandleWizardGenerateTitle(t *testing.T) {
 		t.Fatalf("Failed to create session: %v", err)
 	}
 
-	// Set up technical planning
-	session.SetTechnicalPlanning("## Problem Statement\n\nAdd user authentication to the system.")
-
-	// Test title generation
+	// Submit idea for refinement (mock mode - no LLM client)
 	formData := url.Values{}
 	formData.Set("session_id", session.ID)
+	formData.Set("idea", "Add user authentication to the system")
 
-	req := httptest.NewRequest("POST", "/wizard/title", strings.NewReader(formData.Encode()))
+	req := httptest.NewRequest("POST", "/wizard/refine", strings.NewReader(formData.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 
-	srv.handleWizardGenerateTitle(rec, req)
+	srv.handleWizardRefine(rec, req)
 
 	// Should return 200 OK
 	if rec.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", rec.Code)
 	}
 
-	// Verify session has generated title
+	// Verify session has both generated title and description
 	updatedSession, ok := srv.wizardStore.Get(session.ID)
 	if !ok {
-		t.Fatal("Session not found after title generation")
+		t.Fatal("Session not found after refinement")
 	}
 
 	if updatedSession.GeneratedTitle == "" {
-		t.Error("Expected GeneratedTitle to be set")
+		t.Error("Expected GeneratedTitle to be set after refine")
+	}
+
+	if updatedSession.TechnicalPlanning == "" {
+		t.Error("Expected TechnicalPlanning to be set after refine")
 	}
 
 	// Verify title has proper prefix
-	if !strings.HasPrefix(updatedSession.GeneratedTitle, "[") {
-		t.Errorf("Expected title to have prefix, got: %s", updatedSession.GeneratedTitle)
+	if !strings.HasPrefix(updatedSession.GeneratedTitle, "[Feature]") {
+		t.Errorf("Expected title to have [Feature] prefix, got: %s", updatedSession.GeneratedTitle)
 	}
 }
 
-// TestHandleWizardGenerateTitle_BugType tests title generation for bug type
-func TestHandleWizardGenerateTitle_BugType(t *testing.T) {
+// TestHandleWizardRefine_BugType_GeneratesTitle tests title generation for bug type during refine
+func TestHandleWizardRefine_BugType_GeneratesTitle(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
 
-	// Create a bug session
 	session, err := srv.wizardStore.Create("bug")
 	if err != nil {
 		t.Fatalf("Failed to create session: %v", err)
 	}
 
-	session.SetTechnicalPlanning("## Problem Statement\n\nFix login error when user enters wrong password.")
-
 	formData := url.Values{}
 	formData.Set("session_id", session.ID)
+	formData.Set("idea", "Fix login error when user enters wrong password")
 
-	req := httptest.NewRequest("POST", "/wizard/title", strings.NewReader(formData.Encode()))
+	req := httptest.NewRequest("POST", "/wizard/refine", strings.NewReader(formData.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 
-	srv.handleWizardGenerateTitle(rec, req)
+	srv.handleWizardRefine(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", rec.Code)
@@ -2805,8 +2807,8 @@ func TestHandleWizardGenerateTitle_BugType(t *testing.T) {
 	}
 }
 
-// TestHandleWizardGenerateTitle_CustomTitle tests custom title override
-func TestHandleWizardGenerateTitle_CustomTitle(t *testing.T) {
+// TestHandleWizardCreate_CustomTitleFromForm tests custom title override via form submission
+func TestHandleWizardCreate_CustomTitleFromForm(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
 
@@ -2815,65 +2817,29 @@ func TestHandleWizardGenerateTitle_CustomTitle(t *testing.T) {
 		t.Fatalf("Failed to create session: %v", err)
 	}
 
-	session.SetTechnicalPlanning("## Problem Statement\n\nAdd user authentication.")
+	session.SetTechnicalPlanning("## Description\n\nAdd user authentication.")
+	session.SetGeneratedTitle("[Feature] Generated title")
 
-	// Submit custom title
+	// Submit with custom title via form
 	formData := url.Values{}
 	formData.Set("session_id", session.ID)
 	formData.Set("issue_title", "[Feature] Custom authentication title")
 
-	req := httptest.NewRequest("POST", "/wizard/title", strings.NewReader(formData.Encode()))
+	req := httptest.NewRequest("POST", "/wizard/create", strings.NewReader(formData.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 
-	srv.handleWizardGenerateTitle(rec, req)
+	srv.handleWizardCreate(rec, req)
 
-	updatedSession, ok := srv.wizardStore.Get(session.ID)
-	if !ok {
-		t.Fatal("Session not found")
+	// Should return 200 OK (mock mode)
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", rec.Code)
 	}
 
-	if updatedSession.CustomTitle != "[Feature] Custom authentication title" {
-		t.Errorf("Expected CustomTitle to be set, got: %s", updatedSession.CustomTitle)
-	}
-
-	if !updatedSession.UseCustomTitle {
-		t.Error("Expected UseCustomTitle to be true")
-	}
-}
-
-// TestHandleWizardGenerateTitle_MissingSession tests error handling for missing session
-func TestHandleWizardGenerateTitle_MissingSession(t *testing.T) {
-	srv := createTestServerWithTemplates(t)
-	defer srv.wizardStore.Stop()
-
-	formData := url.Values{}
-	formData.Set("session_id", "non-existent-session")
-
-	req := httptest.NewRequest("POST", "/wizard/title", strings.NewReader(formData.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-
-	srv.handleWizardGenerateTitle(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("Expected status 400 for missing session, got %d", rec.Code)
-	}
-}
-
-// TestHandleWizardGenerateTitle_MissingSessionID tests error handling for missing session_id
-func TestHandleWizardGenerateTitle_MissingSessionID(t *testing.T) {
-	srv := createTestServerWithTemplates(t)
-	defer srv.wizardStore.Stop()
-
-	req := httptest.NewRequest("POST", "/wizard/title", strings.NewReader(""))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-
-	srv.handleWizardGenerateTitle(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("Expected status 400 for missing session_id, got %d", rec.Code)
+	// Verify the response contains the custom title
+	body := rec.Body.String()
+	if !strings.Contains(body, "[Feature] Custom authentication title") {
+		t.Errorf("Expected response to contain custom title, got: %s", body)
 	}
 }
 
@@ -2888,9 +2854,9 @@ func TestHandleWizardCreate_UsesSessionTitle(t *testing.T) {
 		t.Fatalf("Failed to create session: %v", err)
 	}
 
-	session.SetTechnicalPlanning("## Problem Statement\n\nAdd user authentication.")
+	session.SetTechnicalPlanning("## Description\n\nAdd user authentication.")
 	session.SetGeneratedTitle("[Feature] Add user authentication system")
-	session.SetStep(WizardStepTitle)
+	session.SetStep(WizardStepRefine)
 
 	// Create issue
 	formData := url.Values{}
@@ -3216,58 +3182,49 @@ func TestInferColumnFromIssue_LabelCaseInsensitivity(t *testing.T) {
 	}
 }
 
-// TestGenerateMockTitle tests the mock title generation function
-func TestGenerateMockTitle(t *testing.T) {
-	// Test feature type
-	planning := "## Problem Statement\n\nAdd user authentication to the system."
-	title := generateMockTitle(WizardTypeFeature, planning)
-
-	if !strings.HasPrefix(title, "[Feature]") {
-		t.Errorf("Expected feature title to have [Feature] prefix, got: %s", title)
-	}
-
-	// Test bug type
-	planning = "## Problem Statement\n\nFix login error when user enters wrong password."
-	title = generateMockTitle(WizardTypeBug, planning)
-
-	if !strings.HasPrefix(title, "[Bug]") {
-		t.Errorf("Expected bug title to have [Bug] prefix, got: %s", title)
-	}
-
-	// Test with empty planning
-	title = generateMockTitle(WizardTypeFeature, "")
-	if title == "" {
-		t.Error("Expected non-empty title even with empty planning")
-	}
-}
-
-// TestWizardRoutes_TitleRoute tests that the title route is registered
-func TestWizardRoutes_TitleRoute(t *testing.T) {
+// TestWizardRefine_MockTitleGeneration tests that mock refine generates proper titles
+func TestWizardRefine_MockTitleGeneration(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
 
-	// Create a session
-	session, err := srv.wizardStore.Create("feature")
-	if err != nil {
-		t.Fatalf("Failed to create session: %v", err)
-	}
-
-	session.SetTechnicalPlanning("## Problem Statement\n\nAdd user authentication.")
-
-	// Test that the route exists and is accessible
+	// Test feature type
+	session, _ := srv.wizardStore.Create("feature")
 	formData := url.Values{}
 	formData.Set("session_id", session.ID)
+	formData.Set("idea", "Add user authentication to the system")
 
-	req := httptest.NewRequest("POST", "/wizard/title", strings.NewReader(formData.Encode()))
+	req := httptest.NewRequest("POST", "/wizard/refine", strings.NewReader(formData.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
+	srv.handleWizardRefine(rec, req)
 
-	// The handler should exist and process the request
-	srv.handleWizardGenerateTitle(rec, req)
+	updatedSession, ok := srv.wizardStore.Get(session.ID)
+	if !ok {
+		t.Fatal("Session not found")
+	}
 
-	// Should not return 404
-	if rec.Code == http.StatusNotFound {
-		t.Error("Title route should be registered")
+	if !strings.HasPrefix(updatedSession.GeneratedTitle, "[Feature]") {
+		t.Errorf("Expected feature title to have [Feature] prefix, got: %s", updatedSession.GeneratedTitle)
+	}
+
+	// Test bug type
+	session2, _ := srv.wizardStore.Create("bug")
+	formData2 := url.Values{}
+	formData2.Set("session_id", session2.ID)
+	formData2.Set("idea", "Fix login error when user enters wrong password")
+
+	req2 := httptest.NewRequest("POST", "/wizard/refine", strings.NewReader(formData2.Encode()))
+	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec2 := httptest.NewRecorder()
+	srv.handleWizardRefine(rec2, req2)
+
+	updatedSession2, ok := srv.wizardStore.Get(session2.ID)
+	if !ok {
+		t.Fatal("Session not found")
+	}
+
+	if !strings.HasPrefix(updatedSession2.GeneratedTitle, "[Bug]") {
+		t.Errorf("Expected bug title to have [Bug] prefix, got: %s", updatedSession2.GeneratedTitle)
 	}
 }
 
@@ -3312,90 +3269,6 @@ func TestAddCardToColumn_MergedStatus(t *testing.T) {
 
 			if data.Done[0].IsMerged != tt.wantMerged {
 				t.Errorf("expected IsMerged=%v, got %v", tt.wantMerged, data.Done[0].IsMerged)
-			}
-		})
-	}
-}
-
-// TestBuildBoardData_DoneFilter verifies that Done column filtering works correctly
-func TestBuildBoardData_DoneFilter(t *testing.T) {
-	tests := []struct {
-		name          string
-		filter        string
-		mergedIssues  int
-		closedIssues  int
-		expectedCount int
-	}{
-		{
-			name:          "all filter shows all done issues",
-			filter:        "all",
-			mergedIssues:  2,
-			closedIssues:  3,
-			expectedCount: 5,
-		},
-		{
-			name:          "merged filter shows only merged issues",
-			filter:        "merged",
-			mergedIssues:  2,
-			closedIssues:  3,
-			expectedCount: 2,
-		},
-		{
-			name:          "closed filter shows only closed issues",
-			filter:        "closed",
-			mergedIssues:  2,
-			closedIssues:  3,
-			expectedCount: 3,
-		},
-		{
-			name:          "empty filter defaults to all",
-			filter:        "",
-			mergedIssues:  1,
-			closedIssues:  1,
-			expectedCount: 2,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create test data with merged and closed issues
-			data := boardData{
-				DoneFilter: tt.filter,
-			}
-
-			// Add merged issues
-			for i := 0; i < tt.mergedIssues; i++ {
-				data.Done = append(data.Done, taskCard{
-					ID:       i + 1,
-					Title:    fmt.Sprintf("Merged Issue %d", i+1),
-					IsMerged: true,
-				})
-			}
-
-			// Add closed (not merged) issues
-			for i := 0; i < tt.closedIssues; i++ {
-				data.Done = append(data.Done, taskCard{
-					ID:       i + 100,
-					Title:    fmt.Sprintf("Closed Issue %d", i+1),
-					IsMerged: false,
-				})
-			}
-
-			// Apply filter logic (same as in buildBoardData)
-			if data.DoneFilter != "all" && data.DoneFilter != "" && len(data.Done) > 0 {
-				var filteredDone []taskCard
-				for _, card := range data.Done {
-					if data.DoneFilter == "merged" && card.IsMerged {
-						filteredDone = append(filteredDone, card)
-					} else if data.DoneFilter == "closed" && !card.IsMerged {
-						filteredDone = append(filteredDone, card)
-					}
-				}
-				data.Done = filteredDone
-			}
-
-			if len(data.Done) != tt.expectedCount {
-				t.Errorf("expected %d issues in Done column, got %d", tt.expectedCount, len(data.Done))
 			}
 		})
 	}
