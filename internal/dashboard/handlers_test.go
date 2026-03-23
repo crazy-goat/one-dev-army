@@ -2291,7 +2291,7 @@ func TestBoardLayout_ValidHTMLStructure(t *testing.T) {
 		"board-header":  `class="board-header"`,
 		"board-actions": `class="board-actions"`,
 		"board grid":    `class="board"`,
-		"8 columns":     "grid-template-columns:repeat(8,1fr)",
+		"9 columns":     "grid-template-columns:repeat(9,1fr)",
 	}
 
 	for name, pattern := range structureChecks {
@@ -2988,9 +2988,9 @@ func TestInferColumnFromIssue(t *testing.T) {
 			expected: "Approve",
 		},
 		{
-			name:     "stage:merging maps to Approve",
+			name:     "stage:merging maps to Merge",
 			labels:   []string{"stage:merging"},
-			expected: "Approve",
+			expected: "Merge",
 		},
 		{
 			name:     "closed state maps to Done",
@@ -3478,7 +3478,8 @@ func TestBuildBoardData_CanCloseSprint_True(t *testing.T) {
 		len(data.Plan) == 0 &&
 		len(data.Code) == 0 &&
 		len(data.AIReview) == 0 &&
-		len(data.Approve) == 0 {
+		len(data.Approve) == 0 &&
+		len(data.Merge) == 0 {
 		data.CanCloseSprint = true
 	}
 
@@ -3519,7 +3520,8 @@ func TestBuildBoardData_CanCloseSprint_False_WhenProcessing(t *testing.T) {
 		len(data.Plan) == 0 &&
 		len(data.Code) == 0 &&
 		len(data.AIReview) == 0 &&
-		len(data.Approve) == 0 {
+		len(data.Approve) == 0 &&
+		len(data.Merge) == 0 {
 		data.CanCloseSprint = true
 	}
 
@@ -3538,6 +3540,7 @@ func TestBuildBoardData_CanCloseSprint_False_WhenActiveTasks(t *testing.T) {
 		code          []taskCard
 		aiReview      []taskCard
 		approve       []taskCard
+		merge         []taskCard
 		expectedClose bool
 	}{
 		{
@@ -3571,6 +3574,11 @@ func TestBuildBoardData_CanCloseSprint_False_WhenActiveTasks(t *testing.T) {
 			expectedClose: false,
 		},
 		{
+			name:          "tasks in Merge column",
+			merge:         []taskCard{{ID: 1, Title: "Merge task"}},
+			expectedClose: false,
+		},
+		{
 			name:          "no tasks in active columns",
 			expectedClose: true,
 		},
@@ -3587,6 +3595,7 @@ func TestBuildBoardData_CanCloseSprint_False_WhenActiveTasks(t *testing.T) {
 				Code:       tt.code,
 				AIReview:   tt.aiReview,
 				Approve:    tt.approve,
+				Merge:      tt.merge,
 				Done:       []taskCard{{ID: 100, Title: "Done task"}},
 				Failed:     []taskCard{{ID: 101, Title: "Failed task"}},
 			}
@@ -3598,7 +3607,8 @@ func TestBuildBoardData_CanCloseSprint_False_WhenActiveTasks(t *testing.T) {
 				len(data.Plan) == 0 &&
 				len(data.Code) == 0 &&
 				len(data.AIReview) == 0 &&
-				len(data.Approve) == 0 {
+				len(data.Approve) == 0 &&
+				len(data.Merge) == 0 {
 				data.CanCloseSprint = true
 			}
 

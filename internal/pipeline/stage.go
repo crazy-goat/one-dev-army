@@ -26,6 +26,7 @@ const (
 	ColumnCode     Column = "Code"
 	ColumnAIReview Column = "AI Review"
 	ColumnApprove  Column = "Approve"
+	ColumnMerge    Column = "Merge"
 	ColumnDone     Column = "Done"
 	ColumnFailed   Column = "Failed"
 	ColumnBlocked  Column = "Blocked"
@@ -53,8 +54,10 @@ func (s Stage) Column() Column {
 		return ColumnCode
 	case StageCodeReview, StageCreatePR:
 		return ColumnAIReview
-	case StageApprove, StageMerging:
+	case StageApprove:
 		return ColumnApprove
+	case StageMerging:
+		return ColumnMerge
 	case StageDone:
 		return ColumnDone
 	case StageFailed:

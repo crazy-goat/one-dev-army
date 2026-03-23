@@ -4,7 +4,7 @@
 .board-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem}
 .board-actions{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
 @media (max-width:768px){.board-header{flex-direction:column;align-items:flex-start}.board-actions{width:100%;justify-content:flex-start}}
-.board{display:grid;grid-template-columns:repeat(8,1fr);gap:1rem;margin-bottom:2rem}
+.board{display:grid;grid-template-columns:repeat(9,1fr);gap:1rem;margin-bottom:2rem}
 .column{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem;min-height:300px}
 .column-title{font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.75rem;display:flex;justify-content:space-between;align-items:center}
 .column-title .count{background:var(--border);padding:.1rem .5rem;border-radius:10px;font-size:.75rem}
@@ -29,6 +29,8 @@
 .col-code .column-title{color:#3498db}
 .col-approve .card{border-color:#9b59b6;background:rgba(155,89,182,0.05)}
 .col-approve .column-title{color:#9b59b6}
+.col-merge .card{border-color:#6f42c1;background:rgba(111,66,193,0.05)}
+.col-merge .column-title{color:#6f42c1}
 .card .card-pr{margin-top:.3rem}
 .card .card-pr a{color:#9b59b6;font-size:.8rem;font-weight:600;text-decoration:none}
 .card .card-pr a:hover{text-decoration:underline}
@@ -248,6 +250,20 @@ function triggerSync() {
     </div>
     {{else}}
     <div class="empty-state">No tickets awaiting approval</div>
+    {{end}}
+  </div>
+
+  <div class="column col-merge">
+    <div class="column-title">Merge <span class="count">{{len .Merge}}</span></div>
+    {{range .Merge}}
+    <div class="card">
+      <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
+      <div class="card-title">{{.Title}}</div>
+      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
+      {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
+    </div>
+    {{else}}
+    <div class="empty-state">No tickets merging</div>
     {{end}}
   </div>
 

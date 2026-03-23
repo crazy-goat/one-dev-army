@@ -177,7 +177,7 @@ Dashboard columns are determined by the current label with the following priorit
 
 1. `stage:blocked` → **Blocked**
 2. `stage:failed` → **Failed**
-3. `stage:merging` → **Approve** (part of Approve column)
+3. `stage:merging` → **Merge**
 4. `stage:awaiting-approval` → **Approve**
 5. `stage:create-pr` → **AI Review** (part of AI Review column)
 6. `stage:code-review` → **AI Review**

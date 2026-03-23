@@ -41,6 +41,7 @@ type boardData struct {
 	Code           []taskCard
 	AIReview       []taskCard
 	Approve        []taskCard
+	Merge          []taskCard
 	Done           []taskCard
 	Failed         []taskCard
 	DoneFilter     string // Filter for Done column: "all", "merged", "closed"
@@ -171,7 +172,8 @@ func (s *Server) buildBoardData(r *http.Request) boardData {
 		len(data.Plan) == 0 &&
 		len(data.Code) == 0 &&
 		len(data.AIReview) == 0 &&
-		len(data.Approve) == 0 {
+		len(data.Approve) == 0 &&
+		len(data.Merge) == 0 {
 		data.CanCloseSprint = true
 	}
 
@@ -202,7 +204,7 @@ func inferColumnFromIssue(issue github.Issue) string {
 		return "Failed"
 	}
 	if labelSet["stage:merging"] {
-		return "Approve" // Merge is part of Approve column
+		return "Merge"
 	}
 	if labelSet["stage:awaiting-approval"] || labelSet["awaiting-approval"] {
 		return "Approve"
@@ -253,6 +255,8 @@ func (s *Server) addCardToColumn(data *boardData, col string, issue github.Issue
 			}
 		}
 		data.Approve = append(data.Approve, card)
+	case "Merge":
+		data.Merge = append(data.Merge, card)
 	case "Done":
 		data.Done = append(data.Done, card)
 	case "Blocked":

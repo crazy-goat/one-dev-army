@@ -42,7 +42,7 @@ func TestStageColumns(t *testing.T) {
 		{pipeline.StageCodeReview, pipeline.ColumnAIReview},
 		{pipeline.StageCreatePR, pipeline.ColumnAIReview},
 		{pipeline.StageApprove, pipeline.ColumnApprove},
-		{pipeline.StageMerging, pipeline.ColumnApprove},
+		{pipeline.StageMerging, pipeline.ColumnMerge},
 		{pipeline.StageDone, pipeline.ColumnDone},
 		{pipeline.StageFailed, pipeline.ColumnFailed},
 		{pipeline.StageBlocked, pipeline.ColumnBlocked},
