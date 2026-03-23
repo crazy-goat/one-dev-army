@@ -40,6 +40,7 @@ NEXT: #<number>`
 
 type StageBroadcaster interface {
 	BroadcastIssueUpdate(issue github.Issue)
+	BroadcastWorkerUpdate(workerID, status string, taskID int, taskTitle, stage string, elapsedSeconds int)
 }
 
 type Orchestrator struct {
@@ -389,6 +390,12 @@ func (o *Orchestrator) BroadcastStageUpdate(issueNumber int, stage string) {
 	// Broadcast the update via hub if available
 	if o.hub != nil {
 		o.hub.BroadcastIssueUpdate(updatedIssue)
+	}
+}
+
+func (o *Orchestrator) BroadcastWorkerStatus(workerID, status string, taskID int, taskTitle, stage string, elapsedSeconds int) {
+	if o.hub != nil {
+		o.hub.BroadcastWorkerUpdate(workerID, status, taskID, taskTitle, stage, elapsedSeconds)
 	}
 }
 

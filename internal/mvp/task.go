@@ -2,6 +2,7 @@ package mvp
 
 import (
 	"sync"
+	"time"
 
 	"github.com/crazy-goat/one-dev-army/internal/github"
 )
@@ -26,6 +27,7 @@ type Task struct {
 	Worktree  string
 	Status    TaskStatus
 	Result    *TaskResult
+	StartTime time.Time
 
 	mu        sync.Mutex
 	sessionID string

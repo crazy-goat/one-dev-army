@@ -99,7 +99,7 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
                 const msg = JSON.parse(event.data);
                 console.log('[WebSocket] Received:', msg.type);
                 
-                if (msg.type === 'issue_update' || msg.type === 'sync_complete') {
+                if (msg.type === 'issue_update' || msg.type === 'sync_complete' || msg.type === 'worker_update') {
                     refreshBoard();
                 }
             };
