@@ -46,20 +46,57 @@ func (s *Setup) checkAgentsMD() error {
 		return nil
 	}
 
-	fmt.Println("AGENTS.md not found. Generating via opencode init...")
+	fmt.Println("AGENTS.md not found. Creating with template...")
 
-	session, err := s.oc.CreateSession("generate-agents-md")
-	if err != nil {
-		return fmt.Errorf("creating session: %w", err)
-	}
+	projectName := filepath.Base(s.projectDir)
+	language := detectLanguage(s.projectDir)
+	content := generateAgentsTemplate(projectName, language)
 
-	model := opencode.ParseModelRef(s.cfg.Planning.LLM)
-	if err := s.oc.InitSession(session.ID, model); err != nil {
-		return fmt.Errorf("generating AGENTS.md: %w", err)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("writing AGENTS.md: %w", err)
 	}
 
 	fmt.Println("AGENTS.md created.")
 	return nil
+}
+
+func detectLanguage(projectDir string) string {
+	patterns := map[string]string{
+		"go.mod":           "Go",
+		"Cargo.toml":       "Rust",
+		"package.json":     "JavaScript/TypeScript",
+		"requirements.txt": "Python",
+		"pyproject.toml":   "Python",
+		"composer.json":    "PHP",
+		"pom.xml":          "Java",
+		"build.gradle":     "Java/Kotlin",
+		"Gemfile":          "Ruby",
+		"Cargo.lock":       "Rust",
+	}
+
+	for file, lang := range patterns {
+		if fileExists(filepath.Join(projectDir, file)) {
+			return lang
+		}
+	}
+
+	return "Unknown"
+}
+
+func generateAgentsTemplate(projectName, language string) string {
+	return fmt.Sprintf(`# %s
+
+## Project Overview
+
+- **Language**: %s
+- **Project**: %s
+
+## Development Guidelines
+
+- Follow existing code conventions
+- Write tests for new functionality
+- Update documentation as needed
+`, projectName, language, projectName)
 }
 
 func (s *Setup) checkGitHubActions() error {
