@@ -162,6 +162,16 @@ func (am *AttachmentManager) UpdatePlanWithImplementation(
 	return am.CreateAndAttach(context.Background(), issueNum, branch, analysis, implementationPlan)
 }
 
+// CreateFullPlan creates a plan.md with both analysis and implementation in one call
+func (am *AttachmentManager) CreateFullPlan(
+	issueNum int,
+	branch string,
+	analysis string,
+	implementationPlan string,
+) (string, error) {
+	return am.CreateAndAttach(context.Background(), issueNum, branch, analysis, implementationPlan)
+}
+
 // commitFile commits a file to the repository
 func (am *AttachmentManager) commitFile(filePath, message string) error {
 	// Add the file
