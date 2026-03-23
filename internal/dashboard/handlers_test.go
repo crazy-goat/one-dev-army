@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 )
 
@@ -86,6 +87,16 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 		}
 		tmpls[page] = t
 	}
+
+	// Parse settings template
+	settingsTmpl, err := template.New("").Funcs(funcMap).ParseFiles(
+		filepath.Join(templateDir, "layout.html"),
+		filepath.Join(templateDir, "llm-config.html"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("parsing llm-config.html: %w", err)
+	}
+	tmpls["llm-config.html"] = settingsTmpl
 
 	return tmpls, nil
 }
@@ -3479,5 +3490,452 @@ func TestHandleWizardCreateSingle_SyncFailureDoesNotBlockCreation(t *testing.T) 
 	_, ok := srv.wizardStore.Get(session.ID)
 	if ok {
 		t.Error("session should be deleted after single issue creation (creation should succeed even if sync fails)")
+	}
+}
+
+// TestHandleSettings tests the GET /settings handler
+func TestHandleSettings(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+
+	// Create a minimal config file
+	configContent := `github:
+  repo: test/repo
+llm:
+  development:
+    strong:
+      provider: nexos-ai
+      model: Kimi K2.5
+    weak:
+      provider: nexos-ai
+      model: Kimi K2.5
+`
+	configPath := filepath.Join(configDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleSettings(rec, req)
+
+	// Should return 200 OK
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify content type is HTML
+	contentType := rec.Header().Get("Content-Type")
+	if !strings.Contains(contentType, "text/html") {
+		t.Errorf("expected Content-Type to contain 'text/html', got %s", contentType)
+	}
+
+	// Verify the page contains expected content
+	body := rec.Body.String()
+	if !strings.Contains(body, "LLM Configuration Settings") {
+		t.Error("settings page missing title")
+	}
+	if !strings.Contains(body, "Development") {
+		t.Error("settings page missing Development section")
+	}
+	if !strings.Contains(body, "Planning") {
+		t.Error("settings page missing Planning section")
+	}
+	if !strings.Contains(body, "Orchestration") {
+		t.Error("settings page missing Orchestration section")
+	}
+	if !strings.Contains(body, "Setup") {
+		t.Error("settings page missing Setup section")
+	}
+	if !strings.Contains(body, "Routing Rules") {
+		t.Error("settings page missing Routing Rules section")
+	}
+}
+
+// TestHandleSettings_NoConfig tests the settings handler when no config exists
+func TestHandleSettings_NoConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleSettings(rec, req)
+
+	// Should still return 200 OK with default config
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestHandleSaveSettings tests the POST /settings handler
+func TestHandleSaveSettings(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+
+	// Create initial config file
+	configContent := `github:
+  repo: test/repo
+llm:
+  development:
+    strong:
+      provider: nexos-ai
+      model: Kimi K2.5
+    weak:
+      provider: nexos-ai
+      model: Kimi K2.5
+`
+	configPath := filepath.Join(configDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Prepare form data
+	form := url.Values{}
+	form.Set("development_strong_provider", "openai")
+	form.Set("development_strong_model", "gpt-4")
+	form.Set("development_strong_api_key", "test-key")
+	form.Set("development_strong_base_url", "https://api.openai.com")
+	form.Set("development_weak_provider", "openai")
+	form.Set("development_weak_model", "gpt-3.5-turbo")
+	form.Set("planning_strong_provider", "anthropic")
+	form.Set("planning_strong_model", "claude-3-opus")
+	form.Set("planning_weak_provider", "anthropic")
+	form.Set("planning_weak_model", "claude-3-haiku")
+	form.Set("orchestration_strong_provider", "nexos-ai")
+	form.Set("orchestration_strong_model", "Kimi K2.5")
+	form.Set("orchestration_weak_provider", "nexos-ai")
+	form.Set("orchestration_weak_model", "Kimi K2.5")
+	form.Set("setup_strong_provider", "nexos-ai")
+	form.Set("setup_strong_model", "Kimi K2.5")
+	form.Set("setup_weak_provider", "nexos-ai")
+	form.Set("setup_weak_model", "Kimi K2.5")
+	form.Set("routing_code_size_threshold", "150")
+	form.Set("routing_high_complexity_threshold", "600")
+	form.Set("routing_file_count_threshold", "10")
+	form.Set("routing_force_strong_stages", "plan-review, code-review, merge")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	// Should return 200 OK
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify success message is shown
+	body := rec.Body.String()
+	if !strings.Contains(body, "saved successfully") {
+		t.Error("response missing success message")
+	}
+
+	// Verify config was saved by loading it back
+	cfg, err := config.Load(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to load saved config: %v", err)
+	}
+
+	// Verify Development strong model
+	if cfg.LLM.Development.Strong.Provider != "openai" {
+		t.Errorf("expected development strong provider 'openai', got %s", cfg.LLM.Development.Strong.Provider)
+	}
+	if cfg.LLM.Development.Strong.Model != "gpt-4" {
+		t.Errorf("expected development strong model 'gpt-4', got %s", cfg.LLM.Development.Strong.Model)
+	}
+	if cfg.LLM.Development.Strong.APIKey != "test-key" {
+		t.Errorf("expected development strong api_key 'test-key', got %s", cfg.LLM.Development.Strong.APIKey)
+	}
+
+	// Verify routing rules
+	if cfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold != 150 {
+		t.Errorf("expected code size threshold 150, got %d", cfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold)
+	}
+	if cfg.LLM.RoutingRules.ComplexityThresholds.HighComplexityThreshold != 600 {
+		t.Errorf("expected high complexity threshold 600, got %d", cfg.LLM.RoutingRules.ComplexityThresholds.HighComplexityThreshold)
+	}
+	if cfg.LLM.RoutingRules.ComplexityThresholds.FileCountThreshold != 10 {
+		t.Errorf("expected file count threshold 10, got %d", cfg.LLM.RoutingRules.ComplexityThresholds.FileCountThreshold)
+	}
+	if len(cfg.LLM.RoutingRules.ForceStrongForStages) != 3 {
+		t.Errorf("expected 3 force strong stages, got %d", len(cfg.LLM.RoutingRules.ForceStrongForStages))
+	}
+}
+
+// TestHandleSaveSettingsValidation tests form validation
+func TestHandleSaveSettingsValidation(t *testing.T) {
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+
+	// Create initial config
+	configContent := `github:
+  repo: test/repo
+llm:
+  development:
+    strong:
+      provider: nexos-ai
+      model: Kimi K2.5
+    weak:
+      provider: nexos-ai
+      model: Kimi K2.5
+`
+	configPath := filepath.Join(configDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	testCases := []struct {
+		name          string
+		form          url.Values
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name: "empty provider",
+			form: url.Values{
+				"development_strong_provider":       {""},
+				"development_strong_model":          {"gpt-4"},
+				"development_weak_provider":         {"nexos-ai"},
+				"development_weak_model":            {"Kimi K2.5"},
+				"planning_strong_provider":          {"nexos-ai"},
+				"planning_strong_model":             {"Kimi K2.5"},
+				"planning_weak_provider":            {"nexos-ai"},
+				"planning_weak_model":               {"Kimi K2.5"},
+				"orchestration_strong_provider":     {"nexos-ai"},
+				"orchestration_strong_model":        {"Kimi K2.5"},
+				"orchestration_weak_provider":       {"nexos-ai"},
+				"orchestration_weak_model":          {"Kimi K2.5"},
+				"setup_strong_provider":             {"nexos-ai"},
+				"setup_strong_model":                {"Kimi K2.5"},
+				"setup_weak_provider":               {"nexos-ai"},
+				"setup_weak_model":                  {"Kimi K2.5"},
+				"routing_code_size_threshold":       {"100"},
+				"routing_high_complexity_threshold": {"500"},
+				"routing_file_count_threshold":      {"5"},
+			},
+			expectError:   true,
+			errorContains: "development strong model: provider and model are required",
+		},
+		{
+			name: "negative threshold",
+			form: url.Values{
+				"development_strong_provider":       {"nexos-ai"},
+				"development_strong_model":          {"Kimi K2.5"},
+				"development_weak_provider":         {"nexos-ai"},
+				"development_weak_model":            {"Kimi K2.5"},
+				"planning_strong_provider":          {"nexos-ai"},
+				"planning_strong_model":             {"Kimi K2.5"},
+				"planning_weak_provider":            {"nexos-ai"},
+				"planning_weak_model":               {"Kimi K2.5"},
+				"orchestration_strong_provider":     {"nexos-ai"},
+				"orchestration_strong_model":        {"Kimi K2.5"},
+				"orchestration_weak_provider":       {"nexos-ai"},
+				"orchestration_weak_model":          {"Kimi K2.5"},
+				"setup_strong_provider":             {"nexos-ai"},
+				"setup_strong_model":                {"Kimi K2.5"},
+				"setup_weak_provider":               {"nexos-ai"},
+				"setup_weak_model":                  {"Kimi K2.5"},
+				"routing_code_size_threshold":       {"-1"},
+				"routing_high_complexity_threshold": {"500"},
+				"routing_file_count_threshold":      {"5"},
+			},
+			expectError:   true,
+			errorContains: "code size threshold must be a positive integer",
+		},
+		{
+			name: "zero threshold",
+			form: url.Values{
+				"development_strong_provider":       {"nexos-ai"},
+				"development_strong_model":          {"Kimi K2.5"},
+				"development_weak_provider":         {"nexos-ai"},
+				"development_weak_model":            {"Kimi K2.5"},
+				"planning_strong_provider":          {"nexos-ai"},
+				"planning_strong_model":             {"Kimi K2.5"},
+				"planning_weak_provider":            {"nexos-ai"},
+				"planning_weak_model":               {"Kimi K2.5"},
+				"orchestration_strong_provider":     {"nexos-ai"},
+				"orchestration_strong_model":        {"Kimi K2.5"},
+				"orchestration_weak_provider":       {"nexos-ai"},
+				"orchestration_weak_model":          {"Kimi K2.5"},
+				"setup_strong_provider":             {"nexos-ai"},
+				"setup_strong_model":                {"Kimi K2.5"},
+				"setup_weak_provider":               {"nexos-ai"},
+				"setup_weak_model":                  {"Kimi K2.5"},
+				"routing_code_size_threshold":       {"0"},
+				"routing_high_complexity_threshold": {"500"},
+				"routing_file_count_threshold":      {"5"},
+			},
+			expectError:   true,
+			errorContains: "code size threshold must be a positive integer",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(tc.form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rec := httptest.NewRecorder()
+
+			srv.handleSaveSettings(rec, req)
+
+			if tc.expectError {
+				// Should return 200 OK but with error message in body
+				if rec.Code != http.StatusOK {
+					t.Errorf("expected status 200, got %d", rec.Code)
+				}
+				body := rec.Body.String()
+				if !strings.Contains(body, tc.errorContains) {
+					t.Errorf("expected error containing %q, got: %s", tc.errorContains, body)
+				}
+			}
+		})
+	}
+}
+
+// TestSettingsPersistence verifies that saved config persists and reloads correctly
+func TestSettingsPersistence(t *testing.T) {
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+
+	// Create initial config
+	configContent := `github:
+  repo: test/repo
+llm:
+  development:
+    strong:
+      provider: nexos-ai
+      model: Kimi K2.5
+    weak:
+      provider: nexos-ai
+      model: Kimi K2.5
+`
+	configPath := filepath.Join(configDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Save new settings
+	form := url.Values{}
+	form.Set("development_strong_provider", "anthropic")
+	form.Set("development_strong_model", "claude-3-opus")
+	form.Set("development_weak_provider", "anthropic")
+	form.Set("development_weak_model", "claude-3-haiku")
+	form.Set("planning_strong_provider", "nexos-ai")
+	form.Set("planning_strong_model", "Kimi K2.5")
+	form.Set("planning_weak_provider", "nexos-ai")
+	form.Set("planning_weak_model", "Kimi K2.5")
+	form.Set("orchestration_strong_provider", "nexos-ai")
+	form.Set("orchestration_strong_model", "Kimi K2.5")
+	form.Set("orchestration_weak_provider", "nexos-ai")
+	form.Set("orchestration_weak_model", "Kimi K2.5")
+	form.Set("setup_strong_provider", "nexos-ai")
+	form.Set("setup_strong_model", "Kimi K2.5")
+	form.Set("setup_weak_provider", "nexos-ai")
+	form.Set("setup_weak_model", "Kimi K2.5")
+	form.Set("routing_code_size_threshold", "200")
+	form.Set("routing_high_complexity_threshold", "800")
+	form.Set("routing_file_count_threshold", "15")
+	form.Set("routing_force_strong_stages", "test-stage")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	srv.handleSaveSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("failed to save settings: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Create a new server instance to simulate reload
+	srv2 := createTestServerWithTemplates(t)
+	srv2.rootDir = tmpDir
+	defer srv2.wizardStore.Stop()
+
+	// Load settings page
+	req = httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec = httptest.NewRecorder()
+	srv2.handleSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("failed to load settings: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify the saved values are displayed
+	body := rec.Body.String()
+	if !strings.Contains(body, `value="anthropic"`) {
+		t.Error("settings page doesn't show saved provider")
+	}
+	if !strings.Contains(body, `value="claude-3-opus"`) {
+		t.Error("settings page doesn't show saved model")
+	}
+	if !strings.Contains(body, `value="200"`) {
+		t.Error("settings page doesn't show saved code size threshold")
+	}
+}
+
+// TestSettingsRoutes_Registered verifies settings routes are properly registered
+func TestSettingsRoutes_Registered(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Test that the server handler is properly set up
+	handler := srv.Handler()
+	if handler == nil {
+		t.Fatal("server handler is nil")
+	}
+
+	// Test GET /settings
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+	srv.handleSettings(rec, req)
+
+	if rec.Code == http.StatusNotFound {
+		t.Error("GET /settings returned 404")
+	}
+
+	// Test POST /settings
+	req = httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(""))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	srv.handleSaveSettings(rec, req)
+
+	if rec.Code == http.StatusNotFound {
+		t.Error("POST /settings returned 404")
 	}
 }

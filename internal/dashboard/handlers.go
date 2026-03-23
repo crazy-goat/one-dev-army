@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
@@ -1770,4 +1771,177 @@ func (s *Server) handleRateLimitRefresh(w http.ResponseWriter, r *http.Request) 
 	}
 	// Return the updated status
 	s.handleRateLimit(w, r)
+}
+
+// handleSettings displays the LLM configuration settings page
+func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
+	// Load current config
+	cfg, err := config.Load(s.rootDir)
+	if err != nil {
+		log.Printf("[Dashboard] Error loading config: %v", err)
+		// Use default config if load fails
+		cfg = &config.Config{LLM: config.DefaultLLMConfig()}
+	}
+
+	// Build force strong stages string
+	forceStrongStages := strings.Join(cfg.LLM.RoutingRules.ForceStrongForStages, ", ")
+
+	data := struct {
+		Active            string
+		Config            config.LLMConfig
+		ForceStrongStages string
+		SuccessMessage    string
+		ErrorMessage      string
+	}{
+		Active:            "settings",
+		Config:            cfg.LLM,
+		ForceStrongStages: forceStrongStages,
+	}
+
+	s.render(w, "llm-config.html", data)
+}
+
+// handleSaveSettings processes the settings form submission
+func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	// Load existing config
+	cfg, err := config.Load(s.rootDir)
+	if err != nil {
+		log.Printf("[Dashboard] Error loading config: %v", err)
+		cfg = &config.Config{LLM: config.DefaultLLMConfig()}
+	}
+
+	// Parse form data for all categories
+	categories := []struct {
+		name   string
+		strong *config.ModelConfig
+		weak   *config.ModelConfig
+	}{
+		{"development", &cfg.LLM.Development.Strong, &cfg.LLM.Development.Weak},
+		{"planning", &cfg.LLM.Planning.Strong, &cfg.LLM.Planning.Weak},
+		{"orchestration", &cfg.LLM.Orchestration.Strong, &cfg.LLM.Orchestration.Weak},
+		{"setup", &cfg.LLM.Setup.Strong, &cfg.LLM.Setup.Weak},
+	}
+
+	var validationErrors []string
+
+	for _, cat := range categories {
+		// Parse strong model
+		cat.strong.Provider = r.FormValue(cat.name + "_strong_provider")
+		cat.strong.Model = r.FormValue(cat.name + "_strong_model")
+		cat.strong.APIKey = r.FormValue(cat.name + "_strong_api_key")
+		cat.strong.BaseURL = r.FormValue(cat.name + "_strong_base_url")
+
+		// Parse weak model
+		cat.weak.Provider = r.FormValue(cat.name + "_weak_provider")
+		cat.weak.Model = r.FormValue(cat.name + "_weak_model")
+		cat.weak.APIKey = r.FormValue(cat.name + "_weak_api_key")
+		cat.weak.BaseURL = r.FormValue(cat.name + "_weak_base_url")
+
+		// Validate
+		if cat.strong.Provider == "" || cat.strong.Model == "" {
+			validationErrors = append(validationErrors, cat.name+" strong model: provider and model are required")
+		}
+		if cat.weak.Provider == "" || cat.weak.Model == "" {
+			validationErrors = append(validationErrors, cat.name+" weak model: provider and model are required")
+		}
+	}
+
+	// Parse routing rules
+	codeSizeThreshold, err := strconv.Atoi(r.FormValue("routing_code_size_threshold"))
+	if err != nil || codeSizeThreshold < 1 {
+		validationErrors = append(validationErrors, "code size threshold must be a positive integer")
+	} else {
+		cfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold = codeSizeThreshold
+	}
+
+	highComplexityThreshold, err := strconv.Atoi(r.FormValue("routing_high_complexity_threshold"))
+	if err != nil || highComplexityThreshold < 1 {
+		validationErrors = append(validationErrors, "high complexity threshold must be a positive integer")
+	} else {
+		cfg.LLM.RoutingRules.ComplexityThresholds.HighComplexityThreshold = highComplexityThreshold
+	}
+
+	fileCountThreshold, err := strconv.Atoi(r.FormValue("routing_file_count_threshold"))
+	if err != nil || fileCountThreshold < 1 {
+		validationErrors = append(validationErrors, "file count threshold must be a positive integer")
+	} else {
+		cfg.LLM.RoutingRules.ComplexityThresholds.FileCountThreshold = fileCountThreshold
+	}
+
+	// Parse force strong stages
+	forceStrongStagesStr := r.FormValue("routing_force_strong_stages")
+	if forceStrongStagesStr != "" {
+		stages := strings.Split(forceStrongStagesStr, ",")
+		cfg.LLM.RoutingRules.ForceStrongForStages = make([]string, 0, len(stages))
+		for _, stage := range stages {
+			stage = strings.TrimSpace(stage)
+			if stage != "" {
+				cfg.LLM.RoutingRules.ForceStrongForStages = append(cfg.LLM.RoutingRules.ForceStrongForStages, stage)
+			}
+		}
+	} else {
+		cfg.LLM.RoutingRules.ForceStrongForStages = []string{}
+	}
+
+	// If validation errors, re-render form with errors
+	if len(validationErrors) > 0 {
+		forceStrongStages := strings.Join(cfg.LLM.RoutingRules.ForceStrongForStages, ", ")
+		data := struct {
+			Active            string
+			Config            config.LLMConfig
+			ForceStrongStages string
+			SuccessMessage    string
+			ErrorMessage      string
+		}{
+			Active:            "settings",
+			Config:            cfg.LLM,
+			ForceStrongStages: forceStrongStages,
+			ErrorMessage:      strings.Join(validationErrors, "; "),
+		}
+		s.render(w, "llm-config.html", data)
+		return
+	}
+
+	// Save config
+	if err := config.SaveConfig(s.rootDir, cfg); err != nil {
+		log.Printf("[Dashboard] Error saving config: %v", err)
+		forceStrongStages := strings.Join(cfg.LLM.RoutingRules.ForceStrongForStages, ", ")
+		data := struct {
+			Active            string
+			Config            config.LLMConfig
+			ForceStrongStages string
+			SuccessMessage    string
+			ErrorMessage      string
+		}{
+			Active:            "settings",
+			Config:            cfg.LLM,
+			ForceStrongStages: forceStrongStages,
+			ErrorMessage:      "Failed to save configuration: " + err.Error(),
+		}
+		s.render(w, "llm-config.html", data)
+		return
+	}
+
+	log.Printf("[Dashboard] LLM configuration saved successfully")
+
+	// Re-render with success message
+	forceStrongStages := strings.Join(cfg.LLM.RoutingRules.ForceStrongForStages, ", ")
+	data := struct {
+		Active            string
+		Config            config.LLMConfig
+		ForceStrongStages string
+		SuccessMessage    string
+		ErrorMessage      string
+	}{
+		Active:            "settings",
+		Config:            cfg.LLM,
+		ForceStrongStages: forceStrongStages,
+		SuccessMessage:    "Configuration saved successfully. Changes will take effect immediately.",
+	}
+	s.render(w, "llm-config.html", data)
 }
