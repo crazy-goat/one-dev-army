@@ -24,7 +24,7 @@ type Issue struct {
 	// PR merge status fields for distinguishing merged vs manually closed issues
 	PRMerged  bool       `json:"pr_merged,omitempty"`
 	MergedAt  *time.Time `json:"merged_at,omitempty"`
-	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	UpdatedAt *time.Time `json:"updatedAt,omitempty"`
 }
 
 // GetAssignee returns the first assignee's login or empty string if unassigned
@@ -77,7 +77,7 @@ func (c *Client) CreateIssue(title, body string, labels []string) (int, error) {
 }
 
 func (c *Client) ListIssues(milestone string) ([]Issue, error) {
-	args := []string{"issue", "list", "--state", "all", "--json", "number,title,body,state,labels"}
+	args := []string{"issue", "list", "--state", "all", "--json", "number,title,body,state,labels,updatedAt"}
 	if milestone != "" {
 		args = append(args, "--milestone", milestone)
 	}
@@ -276,7 +276,7 @@ func (c *Client) ListOpenIssues() ([]Issue, error) {
 
 // ListIssuesForMilestone fetches all issues assigned to a specific milestone with full details
 func (c *Client) ListIssuesForMilestone(milestone string) ([]Issue, error) {
-	args := []string{"issue", "list", "--state", "all", "--json", "number,title,body,state,assignees,labels", "--milestone", milestone, "--limit", "500"}
+	args := []string{"issue", "list", "--state", "all", "--json", "number,title,body,state,assignees,labels,updatedAt", "--milestone", milestone, "--limit", "500"}
 
 	out, err := c.gh(args...)
 	if err != nil {

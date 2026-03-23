@@ -299,9 +299,10 @@ func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update cache
+	// Update cache with current timestamp to prevent sync from overwriting
 	if s.store != nil {
 		milestone := s.activeSprintName()
+		updatedIssue.UpdatedAt = &[]time.Time{time.Now().UTC()}[0]
 		if err := s.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
 			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
 		}
@@ -333,9 +334,10 @@ func (s *Server) handleReject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update cache
+	// Update cache with current timestamp to prevent sync from overwriting
 	if s.store != nil {
 		milestone := s.activeSprintName()
+		updatedIssue.UpdatedAt = &[]time.Time{time.Now().UTC()}[0]
 		if err := s.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
 			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
 		}
@@ -367,9 +369,10 @@ func (s *Server) handleRetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update cache
+	// Update cache with current timestamp to prevent sync from overwriting
 	if s.store != nil {
 		milestone := s.activeSprintName()
+		updatedIssue.UpdatedAt = &[]time.Time{time.Now().UTC()}[0]
 		if err := s.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
 			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
 		}
@@ -416,9 +419,10 @@ func (s *Server) handleRetryFresh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Update cache
+	// Update cache with current timestamp to prevent sync from overwriting
 	if s.store != nil {
 		milestone := s.activeSprintName()
+		updatedIssue.UpdatedAt = &[]time.Time{time.Now().UTC()}[0]
 		if err := s.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
 			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
 		}
@@ -541,9 +545,10 @@ func (s *Server) handleDecline(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Update cache
+	// Update cache with current timestamp to prevent sync from overwriting
 	if s.store != nil {
 		milestone := s.activeSprintName()
+		updatedIssue.UpdatedAt = &[]time.Time{time.Now().UTC()}[0]
 		if err := s.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
 			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
 		}
@@ -641,9 +646,10 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update cache
+	// Update cache with current timestamp to prevent sync from overwriting
 	if s.store != nil {
 		milestone := s.activeSprintName()
+		updatedIssue.UpdatedAt = &[]time.Time{time.Now().UTC()}[0]
 		if err := s.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
 			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
 		}
