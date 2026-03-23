@@ -9,6 +9,7 @@ import (
 )
 
 // RateLimitInfo holds the rate limit data from GitHub API
+// Deprecated: Use APILimit for individual limits or RateLimitSummary for all limits
 type RateLimitInfo struct {
 	Limit     int       `json:"limit"`
 	Remaining int       `json:"remaining"`
@@ -17,7 +18,130 @@ type RateLimitInfo struct {
 	Error     string    `json:"error,omitempty"`
 }
 
+// APILimit represents an individual API rate limit type (core, graphql, search)
+type APILimit struct {
+	Name      string    `json:"name"`
+	Limit     int       `json:"limit"`
+	Remaining int       `json:"remaining"`
+	Reset     int64     `json:"reset"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// GetUsagePercentage returns the percentage of API quota used
+func (a *APILimit) GetUsagePercentage() float64 {
+	if a.Limit == 0 {
+		return 0
+	}
+	return float64(a.Limit-a.Remaining) / float64(a.Limit) * 100
+}
+
+// GetResetTimeFormatted returns the reset time in a human-readable format
+func (a *APILimit) GetResetTimeFormatted() string {
+	if a.Reset == 0 {
+		return "Unknown"
+	}
+
+	resetTime := time.Unix(a.Reset, 0)
+	duration := time.Until(resetTime)
+
+	if duration <= 0 {
+		return "Resets soon"
+	}
+
+	minutes := int(duration.Minutes())
+	if minutes < 1 {
+		return "Resets in <1 min"
+	}
+	if minutes < 60 {
+		return fmt.Sprintf("Resets in %d min", minutes)
+	}
+
+	hours := minutes / 60
+	remainingMinutes := minutes % 60
+	if remainingMinutes == 0 {
+		return fmt.Sprintf("Resets in %d hr", hours)
+	}
+	return fmt.Sprintf("Resets in %d hr %d min", hours, remainingMinutes)
+}
+
+// RateLimitSummary holds all three API rate limit types
+type RateLimitSummary struct {
+	Core      *APILimit `json:"core"`
+	GraphQL   *APILimit `json:"graphql"`
+	Search    *APILimit `json:"search"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Error     string    `json:"error,omitempty"`
+}
+
+// GetWorstLimit returns the API limit with the highest usage percentage
+func (r *RateLimitSummary) GetWorstLimit() *APILimit {
+	if r.Core == nil && r.GraphQL == nil && r.Search == nil {
+		return nil
+	}
+
+	var worst *APILimit
+	maxPercentage := -1.0
+
+	limits := []*APILimit{r.Core, r.GraphQL, r.Search}
+	for _, limit := range limits {
+		if limit != nil && limit.Limit > 0 {
+			percentage := limit.GetUsagePercentage()
+			if percentage > maxPercentage {
+				maxPercentage = percentage
+				worst = limit
+			}
+		}
+	}
+
+	return worst
+}
+
+// GetWorstPercentage returns the highest usage percentage across all API types
+func (r *RateLimitSummary) GetWorstPercentage() float64 {
+	worst := r.GetWorstLimit()
+	if worst == nil {
+		return 0
+	}
+	return worst.GetUsagePercentage()
+}
+
+// GetColorByPercentage returns the color code based on usage percentage
+// Green (<50%), Yellow (50-80%), Red (>80%)
+func GetColorByPercentage(percentage float64) string {
+	if percentage > 80 {
+		return "red"
+	}
+	if percentage > 50 {
+		return "yellow"
+	}
+	return "green"
+}
+
+// GetColorCSSByPercentage returns the CSS color variable based on usage percentage
+func GetColorCSSByPercentage(percentage float64) string {
+	color := GetColorByPercentage(percentage)
+	switch color {
+	case "red":
+		return "var(--red)"
+	case "yellow":
+		return "var(--orange)"
+	default:
+		return "var(--green)"
+	}
+}
+
+// GetWorstColor returns the color code for the worst limit
+func (r *RateLimitSummary) GetWorstColor() string {
+	return GetColorByPercentage(r.GetWorstPercentage())
+}
+
+// GetWorstColorCSS returns the CSS color variable for the worst limit
+func (r *RateLimitSummary) GetWorstColorCSS() string {
+	return GetColorCSSByPercentage(r.GetWorstPercentage())
+}
+
 // GetColor returns the color code based on remaining requests
+// Deprecated: Use GetColorByPercentage for percentage-based coloring
 // Green (>1000), Yellow (500-1000), Red (<500)
 func (r *RateLimitInfo) GetColor() string {
 	if r.Remaining < 500 {
@@ -30,6 +154,7 @@ func (r *RateLimitInfo) GetColor() string {
 }
 
 // GetColorCSS returns the CSS color variable based on remaining requests
+// Deprecated: Use GetColorCSSByPercentage for percentage-based coloring
 func (r *RateLimitInfo) GetColorCSS() string {
 	color := r.GetColor()
 	switch color {
@@ -75,6 +200,7 @@ func (r *RateLimitInfo) GetResetTimeFormatted() string {
 type RateLimitService struct {
 	mu       sync.RWMutex
 	data     *RateLimitInfo
+	summary  *RateLimitSummary
 	client   *http.Client
 	token    string
 	interval time.Duration
@@ -93,6 +219,13 @@ func NewRateLimitService(token string) *RateLimitService {
 			Limit:     0,
 			Remaining: 0,
 			Reset:     0,
+			UpdatedAt: time.Time{},
+			Error:     "Initializing...",
+		},
+		summary: &RateLimitSummary{
+			Core:      nil,
+			GraphQL:   nil,
+			Search:    nil,
 			UpdatedAt: time.Time{},
 			Error:     "Initializing...",
 		},
@@ -171,6 +304,16 @@ func (s *RateLimitService) fetch() {
 				Remaining int   `json:"remaining"`
 				Reset     int64 `json:"reset"`
 			} `json:"core"`
+			GraphQL struct {
+				Limit     int   `json:"limit"`
+				Remaining int   `json:"remaining"`
+				Reset     int64 `json:"reset"`
+			} `json:"graphql"`
+			Search struct {
+				Limit     int   `json:"limit"`
+				Remaining int   `json:"remaining"`
+				Reset     int64 `json:"reset"`
+			} `json:"search"`
 		} `json:"resources"`
 	}
 
@@ -179,12 +322,42 @@ func (s *RateLimitService) fetch() {
 		return
 	}
 
+	now := time.Now()
+
 	s.mu.Lock()
+	// Update legacy data for backward compatibility
 	s.data = &RateLimitInfo{
 		Limit:     result.Resources.Core.Limit,
 		Remaining: result.Resources.Core.Remaining,
 		Reset:     result.Resources.Core.Reset,
-		UpdatedAt: time.Now(),
+		UpdatedAt: now,
+		Error:     "",
+	}
+
+	// Update new summary data
+	s.summary = &RateLimitSummary{
+		Core: &APILimit{
+			Name:      "REST API",
+			Limit:     result.Resources.Core.Limit,
+			Remaining: result.Resources.Core.Remaining,
+			Reset:     result.Resources.Core.Reset,
+			UpdatedAt: now,
+		},
+		GraphQL: &APILimit{
+			Name:      "GraphQL",
+			Limit:     result.Resources.GraphQL.Limit,
+			Remaining: result.Resources.GraphQL.Remaining,
+			Reset:     result.Resources.GraphQL.Reset,
+			UpdatedAt: now,
+		},
+		Search: &APILimit{
+			Name:      "Search",
+			Limit:     result.Resources.Search.Limit,
+			Remaining: result.Resources.Search.Remaining,
+			Reset:     result.Resources.Search.Reset,
+			UpdatedAt: now,
+		},
+		UpdatedAt: now,
 		Error:     "",
 	}
 	s.mu.Unlock()
@@ -202,10 +375,17 @@ func (s *RateLimitService) updateWithError(errMsg string) {
 		// The UI will show cached values with a warning indicator
 		s.data.Error = errMsg
 	}
+	// Also update summary error
+	if s.summary.UpdatedAt.IsZero() {
+		s.summary.Error = errMsg
+	} else {
+		s.summary.Error = errMsg
+	}
 	s.mu.Unlock()
 }
 
 // GetData returns the current rate limit data (thread-safe)
+// Deprecated: Use GetSummary() for multi-type rate limit data
 func (s *RateLimitService) GetData() *RateLimitInfo {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -213,6 +393,33 @@ func (s *RateLimitService) GetData() *RateLimitInfo {
 	// Return a copy to prevent external modification
 	data := *s.data
 	return &data
+}
+
+// GetSummary returns the current rate limit summary for all API types (thread-safe)
+func (s *RateLimitService) GetSummary() *RateLimitSummary {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Return a copy to prevent external modification
+	if s.summary == nil {
+		return nil
+	}
+
+	summary := *s.summary
+	// Deep copy the limit pointers
+	if s.summary.Core != nil {
+		core := *s.summary.Core
+		summary.Core = &core
+	}
+	if s.summary.GraphQL != nil {
+		graphql := *s.summary.GraphQL
+		summary.GraphQL = &graphql
+	}
+	if s.summary.Search != nil {
+		search := *s.summary.Search
+		summary.Search = &search
+	}
+	return &summary
 }
 
 // Refresh triggers an immediate refresh of the rate limit data

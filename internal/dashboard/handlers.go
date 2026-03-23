@@ -1692,28 +1692,99 @@ func (s *Server) handleRateLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := s.rateLimitService.GetData()
+	summary := s.rateLimitService.GetSummary()
+	if summary == nil {
+		w.Write([]byte(`<span class="rate-limit-unknown">GitHub API: Loading...</span>`))
+		return
+	}
 
-	// Build the HTML response
-	color := data.GetColorCSS()
-	statusText := fmt.Sprintf("GitHub API: %d/%d", data.Remaining, data.Limit)
-	resetText := data.GetResetTimeFormatted()
+	// Calculate worst percentage
+	worstPercentage := summary.GetWorstPercentage()
+	color := summary.GetWorstColorCSS()
+	worstLimit := summary.GetWorstLimit()
 
-	// Add warning indicator if there's an error but we have cached data
+	// Build the compressed indicator HTML with tooltip
+	var html strings.Builder
+
+	// Warning icon if there's an error but we have cached data
 	warningIcon := ""
-	if data.Error != "" && !data.UpdatedAt.IsZero() {
+	if summary.Error != "" && !summary.UpdatedAt.IsZero() {
 		warningIcon = " ⚠"
 	}
 
-	html := fmt.Sprintf(
-		`<div class="rate-limit-container" style="color: %s; cursor: pointer;" title="Click to refresh" hx-post="/api/rate-limit/refresh" hx-swap="outerHTML">
-			<span class="rate-limit-status">%s%s</span>
-			<span class="rate-limit-reset">%s</span>
-		</div>`,
-		color, statusText, warningIcon, resetText,
-	)
+	// Compressed indicator showing worst percentage
+	html.WriteString(fmt.Sprintf(
+		`<div class="rate-limit-compressed" style="color: %s;" title="Click to refresh" hx-post="/api/rate-limit/refresh" hx-swap="outerHTML">`,
+		color,
+	))
+	html.WriteString(fmt.Sprintf(
+		`<span class="rate-limit-percentage">%.0f%% used%s</span>`,
+		worstPercentage,
+		warningIcon,
+	))
 
-	w.Write([]byte(html))
+	// Add tooltip panel with detailed breakdown
+	html.WriteString(`<div class="rate-limit-tooltip">`)
+	html.WriteString(`<div class="rate-limit-tooltip-header">GitHub API Rate Limits</div>`)
+	html.WriteString(`<div class="rate-limit-tooltip-content">`)
+
+	// Core API
+	if summary.Core != nil {
+		corePercentage := summary.Core.GetUsagePercentage()
+		coreColor := GetColorCSSByPercentage(corePercentage)
+		html.WriteString(fmt.Sprintf(
+			`<div class="rate-limit-row"><span class="rate-limit-label">REST API:</span><span class="rate-limit-value" style="color: %s">%d/%d (%.0f%%)</span><span class="rate-limit-reset">%s</span></div>`,
+			coreColor,
+			summary.Core.Remaining,
+			summary.Core.Limit,
+			corePercentage,
+			summary.Core.GetResetTimeFormatted(),
+		))
+	}
+
+	// GraphQL API
+	if summary.GraphQL != nil {
+		graphqlPercentage := summary.GraphQL.GetUsagePercentage()
+		graphqlColor := GetColorCSSByPercentage(graphqlPercentage)
+		html.WriteString(fmt.Sprintf(
+			`<div class="rate-limit-row"><span class="rate-limit-label">GraphQL:</span><span class="rate-limit-value" style="color: %s">%d/%d (%.0f%%)</span><span class="rate-limit-reset">%s</span></div>`,
+			graphqlColor,
+			summary.GraphQL.Remaining,
+			summary.GraphQL.Limit,
+			graphqlPercentage,
+			summary.GraphQL.GetResetTimeFormatted(),
+		))
+	}
+
+	// Search API
+	if summary.Search != nil {
+		searchPercentage := summary.Search.GetUsagePercentage()
+		searchColor := GetColorCSSByPercentage(searchPercentage)
+		html.WriteString(fmt.Sprintf(
+			`<div class="rate-limit-row"><span class="rate-limit-label">Search:</span><span class="rate-limit-value" style="color: %s">%d/%d (%.0f%%)</span><span class="rate-limit-reset">%s</span></div>`,
+			searchColor,
+			summary.Search.Remaining,
+			summary.Search.Limit,
+			searchPercentage,
+			summary.Search.GetResetTimeFormatted(),
+		))
+	}
+
+	html.WriteString(`</div>`) // Close tooltip-content
+
+	// Show which limit is the worst
+	if worstLimit != nil {
+		html.WriteString(fmt.Sprintf(
+			`<div class="rate-limit-tooltip-footer">Worst: %s (%.0f%% used)</div>`,
+			worstLimit.Name,
+			worstPercentage,
+		))
+	}
+
+	html.WriteString(`</div>`) // Close tooltip
+	html.WriteString(`</div>`) // Close rate-limit-compressed
+
+	w.Write([]byte(html.String()))
 }
 
 // handleRateLimitRefresh triggers a manual refresh of the rate limit data

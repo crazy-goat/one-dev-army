@@ -259,11 +259,16 @@ func TestHandleRateLimit(t *testing.T) {
 // TestHandleRateLimit_WithService tests the handler with a configured service
 func TestHandleRateLimit_WithService(t *testing.T) {
 	service := NewRateLimitService("")
-	service.data = &RateLimitInfo{
-		Limit:     5000,
-		Remaining: 4500,
-		Reset:     time.Now().Add(30 * time.Minute).Unix(),
-		UpdatedAt: time.Now(),
+	now := time.Now()
+	service.summary = &RateLimitSummary{
+		Core: &APILimit{
+			Name:      "REST API",
+			Limit:     5000,
+			Remaining: 4500,
+			Reset:     now.Add(30 * time.Minute).Unix(),
+			UpdatedAt: now,
+		},
+		UpdatedAt: now,
 		Error:     "",
 	}
 
@@ -284,27 +289,35 @@ func TestHandleRateLimit_WithService(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "4500/5000") {
-		t.Errorf("expected '4500/5000' in response, got: %s", body)
-	}
-	if !strings.Contains(body, "rate-limit-container") {
-		t.Errorf("expected rate-limit-container class, got: %s", body)
+	// Should contain compressed format with percentage (10% used for core)
+	if !strings.Contains(body, "rate-limit-compressed") {
+		t.Errorf("expected 'rate-limit-compressed' class, got: %s", body)
 	}
 
-	// Should have green color for high remaining
+	// Should show percentage (10% for core at 4500/5000)
+	if !strings.Contains(body, "10%") {
+		t.Errorf("expected percentage in response, got: %s", body)
+	}
+
+	// Should have green color for low usage
 	if !strings.Contains(body, "var(--green)") {
-		t.Errorf("expected green color for high remaining, got: %s", body)
+		t.Errorf("expected green color for low usage, got: %s", body)
 	}
 }
 
 // TestHandleRateLimit_WithError tests the handler when service has error but cached data
 func TestHandleRateLimit_WithError(t *testing.T) {
 	service := NewRateLimitService("")
-	service.data = &RateLimitInfo{
-		Limit:     5000,
-		Remaining: 4500,
-		Reset:     time.Now().Add(30 * time.Minute).Unix(),
-		UpdatedAt: time.Now(),
+	now := time.Now()
+	service.summary = &RateLimitSummary{
+		Core: &APILimit{
+			Name:      "REST API",
+			Limit:     5000,
+			Remaining: 4500,
+			Reset:     now.Add(30 * time.Minute).Unix(),
+			UpdatedAt: now,
+		},
+		UpdatedAt: now,
 		Error:     "API connection failed",
 	}
 
@@ -330,11 +343,16 @@ func TestHandleRateLimit_WithError(t *testing.T) {
 // TestHandleRateLimitRefresh tests the refresh handler
 func TestHandleRateLimitRefresh(t *testing.T) {
 	service := NewRateLimitService("")
-	service.data = &RateLimitInfo{
-		Limit:     5000,
-		Remaining: 4500,
-		Reset:     time.Now().Add(30 * time.Minute).Unix(),
-		UpdatedAt: time.Now(),
+	now := time.Now()
+	service.summary = &RateLimitSummary{
+		Core: &APILimit{
+			Name:      "REST API",
+			Limit:     5000,
+			Remaining: 4500,
+			Reset:     now.Add(30 * time.Minute).Unix(),
+			UpdatedAt: now,
+		},
+		UpdatedAt: now,
 		Error:     "",
 	}
 
@@ -355,7 +373,8 @@ func TestHandleRateLimitRefresh(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "4500/5000") {
+	// Should show compressed format with percentage
+	if !strings.Contains(body, "rate-limit-compressed") {
 		t.Errorf("expected rate limit data after refresh, got: %s", body)
 	}
 }
@@ -478,5 +497,424 @@ func TestRateLimitInfo_JSONSerialization(t *testing.T) {
 	}
 	if decoded.Reset != original.Reset {
 		t.Errorf("Reset mismatch: got %v, want %v", decoded.Reset, original.Reset)
+	}
+}
+
+// TestAPILimit_GetUsagePercentage tests percentage calculation
+func TestAPILimit_GetUsagePercentage(t *testing.T) {
+	tests := []struct {
+		name      string
+		limit     int
+		remaining int
+		want      float64
+	}{
+		{"no usage", 5000, 5000, 0},
+		{"25% used", 5000, 3750, 25},
+		{"50% used", 5000, 2500, 50},
+		{"75% used", 5000, 1250, 75},
+		{"100% used", 5000, 0, 100},
+		{"zero limit", 0, 0, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			limit := &APILimit{
+				Limit:     tt.limit,
+				Remaining: tt.remaining,
+			}
+			got := limit.GetUsagePercentage()
+			if got != tt.want {
+				t.Errorf("GetUsagePercentage() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAPILimit_GetResetTimeFormatted tests reset time formatting
+func TestAPILimit_GetResetTimeFormatted(t *testing.T) {
+	now := time.Now()
+
+	tests := []struct {
+		name          string
+		reset         int64
+		shouldContain string
+	}{
+		{"zero reset", 0, "Unknown"},
+		{"past time", now.Add(-5 * time.Minute).Unix(), "Resets soon"},
+		{"less than 1 minute", now.Add(30 * time.Second).Unix(), "<1 min"},
+		{"5 minutes", now.Add(5 * time.Minute).Unix(), "min"},
+		{"1 hour", now.Add(61 * time.Minute).Unix(), "hr"},
+		{"2 hours", now.Add(120 * time.Minute).Unix(), "hr"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			limit := &APILimit{Reset: tt.reset}
+			got := limit.GetResetTimeFormatted()
+			if !strings.Contains(got, tt.shouldContain) {
+				t.Errorf("GetResetTimeFormatted() = %v, should contain %v", got, tt.shouldContain)
+			}
+		})
+	}
+}
+
+// TestGetColorByPercentage tests color determination by percentage
+func TestGetColorByPercentage(t *testing.T) {
+	tests := []struct {
+		name       string
+		percentage float64
+		want       string
+	}{
+		{"0% - green", 0, "green"},
+		{"25% - green", 25, "green"},
+		{"49% - green", 49, "green"},
+		{"50% - green", 50, "green"}, // 50% is green (yellow starts at >50%)
+		{"51% - yellow", 51, "yellow"},
+		{"65% - yellow", 65, "yellow"},
+		{"80% - yellow", 80, "yellow"}, // 80% is yellow (red starts at >80%)
+		{"81% - red", 81, "red"},
+		{"100% - red", 100, "red"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GetColorByPercentage(tt.percentage)
+			if got != tt.want {
+				t.Errorf("GetColorByPercentage(%v) = %v, want %v", tt.percentage, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestGetColorCSSByPercentage tests CSS color variable mapping
+func TestGetColorCSSByPercentage(t *testing.T) {
+	tests := []struct {
+		name       string
+		percentage float64
+		want       string
+	}{
+		{"green", 25, "var(--green)"},
+		{"yellow", 65, "var(--orange)"},
+		{"red", 85, "var(--red)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GetColorCSSByPercentage(tt.percentage)
+			if got != tt.want {
+				t.Errorf("GetColorCSSByPercentage(%v) = %v, want %v", tt.percentage, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRateLimitSummary_GetWorstLimit tests worst limit selection
+func TestRateLimitSummary_GetWorstLimit(t *testing.T) {
+	now := time.Now()
+
+	tests := []struct {
+		name     string
+		summary  *RateLimitSummary
+		wantName string
+	}{
+		{
+			name: "core is worst",
+			summary: &RateLimitSummary{
+				Core:    &APILimit{Name: "REST API", Limit: 5000, Remaining: 1000, UpdatedAt: now},
+				GraphQL: &APILimit{Name: "GraphQL", Limit: 5000, Remaining: 4000, UpdatedAt: now},
+				Search:  &APILimit{Name: "Search", Limit: 5000, Remaining: 4000, UpdatedAt: now},
+			},
+			wantName: "REST API",
+		},
+		{
+			name: "graphql is worst",
+			summary: &RateLimitSummary{
+				Core:    &APILimit{Name: "REST API", Limit: 5000, Remaining: 4000, UpdatedAt: now},
+				GraphQL: &APILimit{Name: "GraphQL", Limit: 5000, Remaining: 500, UpdatedAt: now},
+				Search:  &APILimit{Name: "Search", Limit: 5000, Remaining: 4000, UpdatedAt: now},
+			},
+			wantName: "GraphQL",
+		},
+		{
+			name: "search is worst",
+			summary: &RateLimitSummary{
+				Core:    &APILimit{Name: "REST API", Limit: 5000, Remaining: 4000, UpdatedAt: now},
+				GraphQL: &APILimit{Name: "GraphQL", Limit: 5000, Remaining: 4000, UpdatedAt: now},
+				Search:  &APILimit{Name: "Search", Limit: 5000, Remaining: 500, UpdatedAt: now},
+			},
+			wantName: "Search",
+		},
+		{
+			name:     "all nil",
+			summary:  &RateLimitSummary{},
+			wantName: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.summary.GetWorstLimit()
+			if tt.wantName == "" {
+				if got != nil {
+					t.Errorf("GetWorstLimit() = %v, want nil", got)
+				}
+			} else {
+				if got == nil {
+					t.Errorf("GetWorstLimit() = nil, want %v", tt.wantName)
+				} else if got.Name != tt.wantName {
+					t.Errorf("GetWorstLimit().Name = %v, want %v", got.Name, tt.wantName)
+				}
+			}
+		})
+	}
+}
+
+// TestRateLimitSummary_GetWorstPercentage tests worst percentage calculation
+func TestRateLimitSummary_GetWorstPercentage(t *testing.T) {
+	now := time.Now()
+
+	summary := &RateLimitSummary{
+		Core:    &APILimit{Limit: 5000, Remaining: 1000, UpdatedAt: now}, // 80% used
+		GraphQL: &APILimit{Limit: 5000, Remaining: 500, UpdatedAt: now},  // 90% used
+		Search:  &APILimit{Limit: 5000, Remaining: 4000, UpdatedAt: now}, // 20% used
+	}
+
+	got := summary.GetWorstPercentage()
+	want := 90.0
+	if got != want {
+		t.Errorf("GetWorstPercentage() = %v, want %v", got, want)
+	}
+}
+
+// TestRateLimitSummary_GetWorstColor tests worst color determination
+func TestRateLimitSummary_GetWorstColor(t *testing.T) {
+	now := time.Now()
+
+	tests := []struct {
+		name      string
+		summary   *RateLimitSummary
+		wantColor string
+	}{
+		{
+			name: "green - low usage",
+			summary: &RateLimitSummary{
+				Core: &APILimit{Limit: 5000, Remaining: 4000, UpdatedAt: now}, // 20% used
+			},
+			wantColor: "green",
+		},
+		{
+			name: "yellow - medium usage",
+			summary: &RateLimitSummary{
+				Core: &APILimit{Limit: 5000, Remaining: 2000, UpdatedAt: now}, // 60% used
+			},
+			wantColor: "yellow",
+		},
+		{
+			name: "red - high usage",
+			summary: &RateLimitSummary{
+				Core: &APILimit{Limit: 5000, Remaining: 500, UpdatedAt: now}, // 90% used
+			},
+			wantColor: "red",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.summary.GetWorstColor()
+			if got != tt.wantColor {
+				t.Errorf("GetWorstColor() = %v, want %v", got, tt.wantColor)
+			}
+		})
+	}
+}
+
+// TestRateLimitService_GetSummary tests the GetSummary method
+func TestRateLimitService_GetSummary(t *testing.T) {
+	service := NewRateLimitService("")
+
+	// Set test summary data
+	now := time.Now()
+	service.summary = &RateLimitSummary{
+		Core: &APILimit{
+			Name:      "REST API",
+			Limit:     5000,
+			Remaining: 4500,
+			Reset:     now.Add(1 * time.Hour).Unix(),
+			UpdatedAt: now,
+		},
+		GraphQL: &APILimit{
+			Name:      "GraphQL",
+			Limit:     5000,
+			Remaining: 4000,
+			Reset:     now.Add(1 * time.Hour).Unix(),
+			UpdatedAt: now,
+		},
+		Search: &APILimit{
+			Name:      "Search",
+			Limit:     30,
+			Remaining: 25,
+			Reset:     now.Add(1 * time.Hour).Unix(),
+			UpdatedAt: now,
+		},
+		UpdatedAt: now,
+		Error:     "",
+	}
+
+	summary := service.GetSummary()
+
+	if summary == nil {
+		t.Fatal("GetSummary() returned nil")
+	}
+
+	if summary.Core == nil {
+		t.Error("Core limit is nil")
+	} else if summary.Core.Limit != 5000 {
+		t.Errorf("Core.Limit = %v, want 5000", summary.Core.Limit)
+	}
+
+	if summary.GraphQL == nil {
+		t.Error("GraphQL limit is nil")
+	} else if summary.GraphQL.Remaining != 4000 {
+		t.Errorf("GraphQL.Remaining = %v, want 4000", summary.GraphQL.Remaining)
+	}
+
+	if summary.Search == nil {
+		t.Error("Search limit is nil")
+	} else if summary.Search.Limit != 30 {
+		t.Errorf("Search.Limit = %v, want 30", summary.Search.Limit)
+	}
+
+	// Verify we got a copy, not the original
+	summary.Core.Remaining = 100
+	originalSummary := service.GetSummary()
+	if originalSummary.Core.Remaining != 4500 {
+		t.Error("GetSummary should return a copy, not the original")
+	}
+}
+
+// TestRateLimitService_GetSummary_Nil tests GetSummary when summary is nil
+func TestRateLimitService_GetSummary_Nil(t *testing.T) {
+	service := NewRateLimitService("")
+	service.summary = nil
+
+	summary := service.GetSummary()
+	if summary != nil {
+		t.Error("GetSummary() should return nil when summary is nil")
+	}
+}
+
+// TestHandleRateLimit_WithSummary tests the handler with new summary data
+func TestHandleRateLimit_WithSummary(t *testing.T) {
+	service := NewRateLimitService("")
+	now := time.Now()
+	service.summary = &RateLimitSummary{
+		Core: &APILimit{
+			Name:      "REST API",
+			Limit:     5000,
+			Remaining: 4500,
+			Reset:     now.Add(30 * time.Minute).Unix(),
+			UpdatedAt: now,
+		},
+		GraphQL: &APILimit{
+			Name:      "GraphQL",
+			Limit:     5000,
+			Remaining: 4000,
+			Reset:     now.Add(30 * time.Minute).Unix(),
+			UpdatedAt: now,
+		},
+		Search: &APILimit{
+			Name:      "Search",
+			Limit:     30,
+			Remaining: 25,
+			Reset:     now.Add(1 * time.Minute).Unix(),
+			UpdatedAt: now,
+		},
+		UpdatedAt: now,
+		Error:     "",
+	}
+
+	srv := &Server{
+		tmpls:            make(map[string]*template.Template),
+		wizardStore:      NewWizardSessionStore(),
+		rateLimitService: service,
+	}
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/rate-limit", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleRateLimit(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Should contain compressed format with percentage
+	if !strings.Contains(body, "rate-limit-compressed") {
+		t.Errorf("expected 'rate-limit-compressed' class, got: %s", body)
+	}
+
+	// Should show worst percentage (GraphQL at 20%)
+	if !strings.Contains(body, "20%") && !strings.Contains(body, "10%") {
+		// GraphQL is 20% used, but we might round differently
+		t.Errorf("expected percentage in response, got: %s", body)
+	}
+
+	// Should have tooltip panel
+	if !strings.Contains(body, "rate-limit-tooltip") {
+		t.Errorf("expected 'rate-limit-tooltip' class, got: %s", body)
+	}
+
+	// Should show all three API types
+	if !strings.Contains(body, "REST API") {
+		t.Errorf("expected 'REST API' in response, got: %s", body)
+	}
+	if !strings.Contains(body, "GraphQL") {
+		t.Errorf("expected 'GraphQL' in response, got: %s", body)
+	}
+	if !strings.Contains(body, "Search") {
+		t.Errorf("expected 'Search' in response, got: %s", body)
+	}
+
+	// Should have color coding
+	if !strings.Contains(body, "var(--") {
+		t.Errorf("expected CSS color variable, got: %s", body)
+	}
+}
+
+// TestHandleRateLimit_WithSummaryError tests the handler with summary error but cached data
+func TestHandleRateLimit_WithSummaryError(t *testing.T) {
+	service := NewRateLimitService("")
+	now := time.Now()
+	service.summary = &RateLimitSummary{
+		Core: &APILimit{
+			Name:      "REST API",
+			Limit:     5000,
+			Remaining: 4500,
+			Reset:     now.Add(30 * time.Minute).Unix(),
+			UpdatedAt: now,
+		},
+		UpdatedAt: now,
+		Error:     "API connection failed",
+	}
+
+	srv := &Server{
+		tmpls:            make(map[string]*template.Template),
+		wizardStore:      NewWizardSessionStore(),
+		rateLimitService: service,
+	}
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/rate-limit", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleRateLimit(rec, req)
+
+	body := rec.Body.String()
+	// Should show warning icon when there's an error but cached data
+	if !strings.Contains(body, "⚠") {
+		t.Errorf("expected warning icon for error state, got: %s", body)
 	}
 }
