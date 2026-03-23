@@ -1248,9 +1248,9 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 
 	// If no GitHub client, return mock confirmation for testing
 	if s.gh == nil {
-		mockTitle := session.IdeaText
+		mockTitle := session.RefinedDescription
 		if mockTitle == "" {
-			mockTitle = session.RefinedDescription
+			mockTitle = session.IdeaText
 		}
 		if len(mockTitle) > 200 {
 			mockTitle = mockTitle[:197] + "..."
@@ -1303,9 +1303,9 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 		epicLabels = append(epicLabels, "bug")
 	}
 
-	epicTitle := session.IdeaText
+	epicTitle := session.RefinedDescription
 	if epicTitle == "" {
-		epicTitle = session.RefinedDescription
+		epicTitle = session.IdeaText
 	}
 	// GitHub issue titles have a 256 character limit
 	if len(epicTitle) > 200 {
@@ -1484,9 +1484,9 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 
 	// If no GitHub client, return mock confirmation for testing
 	if s.gh == nil {
-		mockTitle := session.IdeaText
+		mockTitle := session.RefinedDescription
 		if mockTitle == "" {
-			mockTitle = session.RefinedDescription
+			mockTitle = session.IdeaText
 		}
 		if len(mockTitle) > 200 {
 			mockTitle = mockTitle[:197] + "..."
@@ -1534,10 +1534,10 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 		labels = append(labels, "bug")
 	}
 
-	// Build title from idea text (truncated to 200 chars)
-	title := session.IdeaText
+	// Build title from refined description (truncated to 200 chars)
+	title := session.RefinedDescription
 	if title == "" {
-		title = session.RefinedDescription
+		title = session.IdeaText
 	}
 	if len(title) > 200 {
 		title = title[:197] + "..."
