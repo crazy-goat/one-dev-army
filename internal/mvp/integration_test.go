@@ -174,6 +174,30 @@ func startMockOpencode(t *testing.T) (*httptest.Server, *requestLog) {
 			return
 		}
 
+		if strings.HasPrefix(r.URL.Path, "/session/") && strings.HasSuffix(r.URL.Path, "/message") && r.Method == http.MethodPost {
+			pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/session/"), "/")
+			sessID := pathParts[0]
+
+			response := map[string]interface{}{
+				"info": map[string]interface{}{
+					"id":        "msg-cr-1",
+					"sessionID": sessID,
+					"role":      "assistant",
+					"structured": map[string]interface{}{
+						"approved":     true,
+						"already_done": false,
+						"issues":       []string{},
+						"suggestions":  []string{},
+						"verdict":      "Code looks good",
+					},
+				},
+				"parts": []interface{}{},
+			}
+
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
 		if strings.HasPrefix(r.URL.Path, "/session/") && r.Method == http.MethodDelete {
 			w.WriteHeader(http.StatusNoContent)
 			return
