@@ -13,26 +13,13 @@
   <div class="step-connector"></div>
   <div class="step {{if eq .CurrentStep 3}}active{{end}} {{if gt .CurrentStep 3}}completed{{end}}">
     <span class="step-number">3</span>
-    <span class="step-label">Refine</span>
+    <span class="step-label">Technical Planning</span>
   </div>
-  {{if .ShowBreakdownStep}}
-  <div class="step-connector"></div>
-  <div class="step {{if eq .CurrentStep 4}}active{{end}} {{if gt .CurrentStep 4}}completed{{end}}">
-    <span class="step-number">4</span>
-    <span class="step-label">Breakdown</span>
-  </div>
-  <div class="step-connector"></div>
-  <div class="step {{if eq .CurrentStep 5}}active{{end}}">
-    <span class="step-number">5</span>
-    <span class="step-label">Create</span>
-  </div>
-  {{else}}
   <div class="step-connector"></div>
   <div class="step {{if eq .CurrentStep 4}}active{{end}}">
     <span class="step-number">4</span>
     <span class="step-label">Create</span>
   </div>
-  {{end}}
   {{else}}
   <div class="step {{if eq .CurrentStep 1}}active{{end}} {{if gt .CurrentStep 1}}completed{{end}}">
     <span class="step-number">1</span>
@@ -41,26 +28,13 @@
   <div class="step-connector"></div>
   <div class="step {{if eq .CurrentStep 2}}active{{end}} {{if gt .CurrentStep 2}}completed{{end}}">
     <span class="step-number">2</span>
-    <span class="step-label">Refine</span>
+    <span class="step-label">Technical Planning</span>
   </div>
-  {{if .ShowBreakdownStep}}
-  <div class="step-connector"></div>
-  <div class="step {{if eq .CurrentStep 3}}active{{end}} {{if gt .CurrentStep 3}}completed{{end}}">
-    <span class="step-number">3</span>
-    <span class="step-label">Breakdown</span>
-  </div>
-  <div class="step-connector"></div>
-  <div class="step {{if eq .CurrentStep 4}}active{{end}}">
-    <span class="step-number">4</span>
-    <span class="step-label">Create</span>
-  </div>
-  {{else}}
   <div class="step-connector"></div>
   <div class="step {{if eq .CurrentStep 3}}active{{end}}">
     <span class="step-number">3</span>
     <span class="step-label">Create</span>
   </div>
-  {{end}}
   {{end}}
 </div>
 {{end}}
