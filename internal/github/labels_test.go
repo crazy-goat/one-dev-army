@@ -242,9 +242,10 @@ func TestRequiredLabelsCount(t *testing.T) {
 	// Verify we have the expected number of labels
 	// Original: 16 labels
 	// Added: 4 labels (priority:high, priority:medium, priority:low, epic)
-	// Expected total: 20 labels
+	// Added: 1 label (wizard)
+	// Expected total: 21 labels
 
-	expectedCount := 20
+	expectedCount := 21
 	if len(RequiredLabels) != expectedCount {
 		t.Errorf("Expected %d labels, got %d", expectedCount, len(RequiredLabels))
 	}

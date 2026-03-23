@@ -23,6 +23,15 @@
     <input type="hidden" name="session_id" value="{{.SessionID}}">
     {{if .IsPage}}<input type="hidden" name="page" value="1">{{end}}
     
+    {{if .SprintName}}
+    <div class="sprint-option">
+      <label class="sprint-checkbox">
+        <input type="checkbox" name="add_to_sprint" value="1" checked>
+        <span class="sprint-checkbox-label">Add to current sprint <strong>{{.SprintName}}</strong></span>
+      </label>
+    </div>
+    {{end}}
+    
     <div class="form-actions">
       {{if .IsPage}}
       <a href="/" class="btn">Cancel</a>
@@ -80,6 +89,30 @@
   color: var(--muted);
   font-size: 0.9rem;
   margin: 0;
+}
+.sprint-option {
+  margin: 1.25rem 0;
+  padding: 0.75rem 1rem;
+  background: rgba(14, 138, 22, 0.08);
+  border: 1px solid rgba(14, 138, 22, 0.25);
+  border-radius: 6px;
+}
+.sprint-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+.sprint-checkbox input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--green, #0E8A16);
+  cursor: pointer;
+}
+.sprint-checkbox-label {
+  font-size: 0.9rem;
+  color: var(--text);
 }
 .form-actions { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1.5rem; }
 .nav-buttons { display: flex; gap: 0.5rem; }
