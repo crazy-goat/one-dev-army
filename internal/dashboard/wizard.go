@@ -84,6 +84,7 @@ type WizardSession struct {
 	Tasks              []WizardTask   `json:"tasks"`
 	CreatedIssues      []CreatedIssue `json:"created_issues"`
 	EpicNumber         int            `json:"epic_number"`
+	AddToSprint        bool           `json:"add_to_sprint"`
 	LLMLogs            []LLMLogEntry  `json:"llm_logs"`
 	CreatedAt          time.Time      `json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
@@ -132,6 +133,14 @@ func (s *WizardSession) SetIdeaText(idea string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.IdeaText = idea
+	s.UpdatedAt = time.Now()
+}
+
+// SetAddToSprint updates the add-to-sprint flag (thread-safe)
+func (s *WizardSession) SetAddToSprint(add bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.AddToSprint = add
 	s.UpdatedAt = time.Now()
 }
 

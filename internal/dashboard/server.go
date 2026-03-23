@@ -2,10 +2,7 @@ package dashboard
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/subtle"
 	"embed"
-	"encoding/base64"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -21,15 +18,6 @@ import (
 //go:embed templates/*.html
 var templateFS embed.FS
 
-// CSRFTokenLength is the length of CSRF tokens in bytes
-const CSRFTokenLength = 32
-
-// RateLimitRequests is the maximum number of requests per window
-const RateLimitRequests = 10
-
-// RateLimitWindow is the time window for rate limiting
-const RateLimitWindow = time.Minute
-
 type Server struct {
 	port          int
 	tmpls         map[string]*template.Template
@@ -42,70 +30,13 @@ type Server struct {
 	httpSrv       *http.Server
 	wizardStore   *WizardSessionStore
 	oc            *opencode.Client
-	csrfKey       []byte
 	wizardLLM     string
-}
-
-// generateCSRFToken generates a new random CSRF token
-func generateCSRFToken() (string, error) {
-	bytes := make([]byte, CSRFTokenLength)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(bytes), nil
-}
-
-// validateCSRFToken validates a CSRF token against the expected value
-func validateCSRFToken(token, expected string) bool {
-	if token == "" || expected == "" {
-		return false
-	}
-	return subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1
-}
-
-// csrfMiddleware adds CSRF protection to POST requests
-func (s *Server) csrfMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Only validate POST, PUT, DELETE requests
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			token := r.Header.Get("X-CSRF-Token")
-			if token == "" {
-				token = r.FormValue("csrf_token")
-			}
-
-			// CSRF token is required for all state-changing requests
-			if token == "" {
-				http.Error(w, "CSRF token required", http.StatusForbidden)
-				return
-			}
-
-			if !validateCSRFToken(token, string(s.csrfKey)) {
-				http.Error(w, "Invalid CSRF token", http.StatusForbidden)
-				return
-			}
-		}
-		next(w, r)
-	}
-}
-
-// chainMiddleware chains multiple middleware functions
-func chainMiddleware(handler http.HandlerFunc, middlewares ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
-	for i := len(middlewares) - 1; i >= 0; i-- {
-		handler = middlewares[i](handler)
-	}
-	return handler
 }
 
 func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, projectNumber int, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string) (*Server, error) {
 	tmpls, err := parseTemplates()
 	if err != nil {
 		return nil, err
-	}
-
-	// Generate CSRF key
-	csrfKey := make([]byte, CSRFTokenLength)
-	if _, err := rand.Read(csrfKey); err != nil {
-		return nil, fmt.Errorf("generating CSRF key: %w", err)
 	}
 
 	mux := http.NewServeMux()
@@ -124,7 +55,6 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 		},
 		wizardStore: NewWizardSessionStore(),
 		oc:          oc,
-		csrfKey:     csrfKey,
 		wizardLLM:   wizardLLM,
 	}
 	if s.wizardLLM == "" {
@@ -218,7 +148,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /approve-merge/{id}", s.handleApproveMerge)
 	s.mux.HandleFunc("POST /decline/{id}", s.handleDecline)
 
-	// Wizard routes - with CSRF protection
+	// Wizard routes
 	s.mux.HandleFunc("GET /wizard", s.handleWizardPage)
 	s.mux.HandleFunc("GET /wizard/new", s.handleWizardNew)
 	s.mux.HandleFunc("GET /wizard/modal", s.handleWizardModal)

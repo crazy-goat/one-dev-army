@@ -194,6 +194,14 @@ func (s *Server) buildBoardData() boardData {
 	return data
 }
 
+// activeSprintName returns the title of the active sprint milestone, or empty string if none.
+func (s *Server) activeSprintName() string {
+	if s.gh != nil && s.gh.GetActiveMilestone() != nil {
+		return s.gh.GetActiveMilestone().Title
+	}
+	return ""
+}
+
 func inferColumnFromIssue(issue github.Issue) string {
 	// Check labels first
 	labels := issue.GetLabelNames()
@@ -1041,13 +1049,15 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 		session.AddLog("assistant", "Generated 2 tasks")
 
 		data := struct {
-			SessionID string
-			Tasks     []WizardTask
-			IsPage    bool
+			SessionID  string
+			Tasks      []WizardTask
+			IsPage     bool
+			SprintName string
 		}{
-			SessionID: session.ID,
-			Tasks:     mockTasks,
-			IsPage:    isPage,
+			SessionID:  session.ID,
+			Tasks:      mockTasks,
+			IsPage:     isPage,
+			SprintName: s.activeSprintName(),
 		}
 
 		s.renderFragment(w, "wizard_breakdown.html", data)
@@ -1095,13 +1105,15 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 	session.AddLog("assistant", fmt.Sprintf("Generated %d tasks", len(tasks)))
 
 	data := struct {
-		SessionID string
-		Tasks     []WizardTask
-		IsPage    bool
+		SessionID  string
+		Tasks      []WizardTask
+		IsPage     bool
+		SprintName string
 	}{
-		SessionID: session.ID,
-		Tasks:     tasks,
-		IsPage:    isPage,
+		SessionID:  session.ID,
+		Tasks:      tasks,
+		IsPage:     isPage,
+		SprintName: s.activeSprintName(),
 	}
 
 	s.renderFragment(w, "wizard_breakdown.html", data)
@@ -1159,6 +1171,10 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no tasks to create", http.StatusBadRequest)
 		return
 	}
+
+	// Read sprint assignment preference from form
+	addToSprint := r.FormValue("add_to_sprint") == "1"
+	session.SetAddToSprint(addToSprint)
 
 	session.SetStep(WizardStepCreate)
 	session.AddLog("system", fmt.Sprintf("Creating epic + %d sub-tasks", len(session.Tasks)))
@@ -1243,6 +1259,17 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 	session.AddCreatedIssue(epicIssue)
 	session.AddLog("system", fmt.Sprintf("Created epic #%d", epicNum))
 
+	// Assign epic to active sprint if requested
+	sprintName := s.activeSprintName()
+	if addToSprint && sprintName != "" {
+		if err := s.gh.SetMilestone(epicNum, sprintName); err != nil {
+			log.Printf("[Wizard] Error assigning epic #%d to sprint %s: %v", epicNum, sprintName, err)
+			session.AddLog("system", fmt.Sprintf("Warning: could not assign epic to sprint: %v", err))
+		} else {
+			session.AddLog("system", fmt.Sprintf("Assigned epic #%d to %s", epicNum, sprintName))
+		}
+	}
+
 	// Step 2: Create Sub-tasks (continue on individual failures)
 	var subTaskLinks []string
 	for _, task := range session.Tasks {
@@ -1312,6 +1339,14 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 			Success: true,
 		})
 		session.AddLog("system", fmt.Sprintf("Created sub-task #%d: %s", issueNum, task.Title))
+
+		// Assign sub-task to active sprint if requested
+		if addToSprint && sprintName != "" {
+			if err := s.gh.SetMilestone(issueNum, sprintName); err != nil {
+				log.Printf("[Wizard] Error assigning #%d to sprint %s: %v", issueNum, sprintName, err)
+				session.AddLog("system", fmt.Sprintf("Warning: could not assign #%d to sprint: %v", issueNum, err))
+			}
+		}
 	}
 
 	// Step 3: Update Epic Body with sub-task links

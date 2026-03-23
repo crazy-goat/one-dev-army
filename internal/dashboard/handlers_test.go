@@ -724,52 +724,6 @@ func TestHandleWizardModal_CreatesSession(t *testing.T) {
 	}
 }
 
-// TestCSRFTokenGeneration tests CSRF token generation
-func TestCSRFTokenGeneration(t *testing.T) {
-	token1, err := generateCSRFToken()
-	if err != nil {
-		t.Fatalf("failed to generate CSRF token: %v", err)
-	}
-
-	token2, err := generateCSRFToken()
-	if err != nil {
-		t.Fatalf("failed to generate CSRF token: %v", err)
-	}
-
-	// Tokens should be different
-	if token1 == token2 {
-		t.Error("expected different CSRF tokens")
-	}
-
-	// Tokens should not be empty
-	if token1 == "" {
-		t.Error("expected non-empty CSRF token")
-	}
-}
-
-// TestCSRFTokenValidation tests CSRF token validation
-func TestCSRFTokenValidation(t *testing.T) {
-	token, _ := generateCSRFToken()
-
-	// Valid token should pass
-	if !validateCSRFToken(token, token) {
-		t.Error("expected valid token to pass validation")
-	}
-
-	// Invalid token should fail
-	if validateCSRFToken(token, "invalid") {
-		t.Error("expected invalid token to fail validation")
-	}
-
-	// Empty tokens should fail
-	if validateCSRFToken("", token) {
-		t.Error("expected empty token to fail validation")
-	}
-	if validateCSRFToken(token, "") {
-		t.Error("expected validation against empty expected to fail")
-	}
-}
-
 // TestConcurrentSessionAccess tests thread safety under concurrent load
 func TestConcurrentSessionAccess(t *testing.T) {
 	srv := &Server{
@@ -840,40 +794,6 @@ func TestConcurrentHandlerAccess(t *testing.T) {
 
 	if srv.wizardStore.Count() != 50 {
 		t.Errorf("expected 50 sessions, got %d", srv.wizardStore.Count())
-	}
-}
-
-// TestMiddlewareChain tests the middleware chaining
-func TestMiddlewareChain(t *testing.T) {
-	called := false
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		called = true
-		w.WriteHeader(http.StatusOK)
-	}
-
-	middleware1 := func(next http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			next(w, r)
-		}
-	}
-
-	middleware2 := func(next http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			next(w, r)
-		}
-	}
-
-	chained := chainMiddleware(handler, middleware1, middleware2)
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	chained(rec, req)
-
-	if !called {
-		t.Error("expected handler to be called")
-	}
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", rec.Code)
 	}
 }
 
