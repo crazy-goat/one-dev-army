@@ -182,6 +182,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 
 	if resumeFrom <= 0 {
 		log.Printf("[Worker %d] [1/4] Technical planning for #%d...", w.id, task.Issue.Number)
+		w.setStageLabel("Plan")
 		stepStart := time.Now()
 		analysis, implPlan, err = w.technicalPlanning(ctx, task)
 		if err != nil {
@@ -280,6 +281,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	if resumeFrom <= 3 {
 		task.Status = StatusCreatingPR
 		log.Printf("[Worker %d] [4/4] Creating PR for #%d...", w.id, task.Issue.Number)
+		w.setStageLabel("Approve")
 		stepStart := time.Now()
 		prURL, err = w.createPR(ctx, task)
 		if err != nil {
