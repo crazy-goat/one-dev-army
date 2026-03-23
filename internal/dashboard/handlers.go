@@ -29,20 +29,21 @@ type taskCard struct {
 }
 
 type boardData struct {
-	Active       string
-	SprintName   string
-	Paused       bool
-	Processing   bool
-	CurrentIssue string
-	Blocked      []taskCard
-	Backlog      []taskCard
-	Plan         []taskCard
-	Code         []taskCard
-	AIReview     []taskCard
-	Approve      []taskCard
-	Done         []taskCard
-	Failed       []taskCard
-	DoneFilter   string // Filter for Done column: "all", "merged", "closed"
+	Active         string
+	SprintName     string
+	Paused         bool
+	Processing     bool
+	CanCloseSprint bool
+	CurrentIssue   string
+	Blocked        []taskCard
+	Backlog        []taskCard
+	Plan           []taskCard
+	Code           []taskCard
+	AIReview       []taskCard
+	Approve        []taskCard
+	Done           []taskCard
+	Failed         []taskCard
+	DoneFilter     string // Filter for Done column: "all", "merged", "closed"
 }
 
 type backlogData struct {
@@ -161,6 +162,17 @@ func (s *Server) buildBoardData(r *http.Request) boardData {
 			}
 		}
 		data.Done = filteredDone
+	}
+
+	// Check if sprint can be closed: all tasks in Done/Failed columns and not processing
+	if !data.Processing &&
+		len(data.Blocked) == 0 &&
+		len(data.Backlog) == 0 &&
+		len(data.Plan) == 0 &&
+		len(data.Code) == 0 &&
+		len(data.AIReview) == 0 &&
+		len(data.Approve) == 0 {
+		data.CanCloseSprint = true
 	}
 
 	return data
@@ -771,6 +783,37 @@ func (s *Server) handleSprintPause(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.orchestrator.Pause()
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (s *Server) handleSprintClose(w http.ResponseWriter, r *http.Request) {
+	// Validate orchestrator is not processing
+	if s.orchestrator != nil && s.orchestrator.IsProcessing() {
+		http.Error(w, "cannot close sprint while processing tasks", http.StatusConflict)
+		return
+	}
+
+	// Get active milestone
+	if s.gh == nil || s.gh.GetActiveMilestone() == nil {
+		http.Error(w, "no active milestone", http.StatusBadRequest)
+		return
+	}
+
+	milestone := s.gh.GetActiveMilestone()
+
+	// Close the milestone via GitHub API
+	if err := s.gh.CloseMilestone(milestone.Number); err != nil {
+		log.Printf("[Dashboard] Error closing milestone %s: %v", milestone.Title, err)
+		http.Error(w, fmt.Sprintf("failed to close milestone: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[Dashboard] Closed milestone: %s", milestone.Title)
+
+	// Clear active milestone
+	s.gh.SetActiveMilestone(nil)
+
+	// Redirect to board
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

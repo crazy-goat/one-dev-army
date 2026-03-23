@@ -324,6 +324,14 @@ func (c *Client) GetIssuePRStatus(issueNumber int) (bool, *time.Time, error) {
 	return false, nil, nil
 }
 
+func (c *Client) CloseMilestone(number int) error {
+	_, err := c.ghNoRepo("api", "repos/"+c.Repo+"/milestones/"+strconv.Itoa(number), "-f", "state=closed")
+	if err != nil {
+		return fmt.Errorf("closing milestone %d: %w", number, err)
+	}
+	return nil
+}
+
 func parseJSON(data []byte, v interface{}) error {
 	if err := json.Unmarshal(data, v); err != nil {
 		return fmt.Errorf("parsing JSON: %w", err)
