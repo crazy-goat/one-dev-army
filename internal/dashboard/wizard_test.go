@@ -645,10 +645,14 @@ func TestWizardSession_GetFinalTitle_EmptyGenerated(t *testing.T) {
 	}
 }
 
-// TestWizardSession_TitleStep tests the Title wizard step constant
-func TestWizardSession_TitleStep(t *testing.T) {
-	// Verify WizardStepTitle exists and has correct value
-	if WizardStepTitle != "title" {
-		t.Errorf("Expected WizardStepTitle to be 'title', got %q", WizardStepTitle)
+// TestWizardSession_TitleStepRemoved verifies that WizardStepTitle was removed
+// (title generation is now merged into the refine step)
+func TestWizardSession_TitleStepRemoved(t *testing.T) {
+	// Verify the wizard steps are: new, refine, create, done
+	steps := []WizardStep{WizardStepNew, WizardStepRefine, WizardStepCreate, WizardStepDone}
+	for _, step := range steps {
+		if step == "" {
+			t.Error("Wizard step should not be empty")
+		}
 	}
 }

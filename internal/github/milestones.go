@@ -5,28 +5,31 @@ import (
 	"time"
 )
 
-// EnsureMilestone checks if at least one milestone exists for the repository.
-// If no milestones exist, it creates a default "Sprint 1" milestone with
-// a due date 2 weeks from now.
-// Returns true if a milestone was created, false if one already existed.
-func (c *Client) EnsureMilestone() (bool, error) {
+// EnsureMilestone checks if at least one open milestone exists for the repository.
+// If no open milestones exist, it creates a new one with a timestamp-based name
+// (e.g. "Sprint 2026-03-23 14:35") and a due date 2 weeks from now.
+// Returns the title of the created milestone (empty string if one already existed) and an error.
+func (c *Client) EnsureMilestone() (string, error) {
 	milestones, err := c.ListMilestones()
 	if err != nil {
-		return false, fmt.Errorf("listing milestones: %w", err)
+		return "", fmt.Errorf("listing milestones: %w", err)
 	}
 
 	if len(milestones) > 0 {
-		return false, nil
+		return "", nil
 	}
 
-	// No milestones exist, create a default one using gh api
-	dueDate := time.Now().AddDate(0, 0, 14).Format("2006-01-02T15:04:05Z")
+	// No open milestones — create a new one with a timestamp-based title
+	now := time.Now()
+	title := "Sprint " + now.Format("2006-01-02 15:04")
+	dueDate := now.AddDate(0, 0, 14).Format("2006-01-02T15:04:05Z")
+
 	_, err = c.ghNoRepo("api", "repos/"+c.Repo+"/milestones",
-		"-f", "title=Sprint 1",
+		"-f", "title="+title,
 		"-f", "due_on="+dueDate)
 	if err != nil {
-		return false, fmt.Errorf("creating milestone: %w", err)
+		return "", fmt.Errorf("creating milestone: %w", err)
 	}
 
-	return true, nil
+	return title, nil
 }

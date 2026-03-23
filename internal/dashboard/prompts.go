@@ -1,9 +1,77 @@
 package dashboard
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
+
+// GeneratedIssue is the JSON structure returned by the LLM for issue generation.
+type GeneratedIssue struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Priority    string `json:"priority"`
+	Complexity  string `json:"complexity"`
+}
+
+// PriorityLabel returns the GitHub label for the priority (e.g. "priority:high").
+// Returns empty string if the priority is not recognized.
+func (g GeneratedIssue) PriorityLabel() string {
+	switch strings.ToLower(g.Priority) {
+	case "high":
+		return "priority:high"
+	case "medium":
+		return "priority:medium"
+	case "low":
+		return "priority:low"
+	default:
+		return ""
+	}
+}
+
+// ComplexityLabel returns the GitHub label for the complexity (e.g. "size:M").
+// Returns empty string if the complexity is not recognized.
+func (g GeneratedIssue) ComplexityLabel() string {
+	switch strings.ToUpper(g.Complexity) {
+	case "S":
+		return "size:S"
+	case "M":
+		return "size:M"
+	case "L":
+		return "size:L"
+	case "XL":
+		return "size:XL"
+	default:
+		return ""
+	}
+}
+
+// GeneratedIssueSchema is the JSON schema for structured LLM output.
+var GeneratedIssueSchema = json.RawMessage(`{
+	"type": "object",
+	"properties": {
+		"title": {
+			"type": "string",
+			"description": "Concise GitHub issue title, 5-10 words, max 80 characters. Must start with [Feature] or [Bug] prefix."
+		},
+		"description": {
+			"type": "string",
+			"description": "GitHub issue body in markdown format with sections: Description, Tasks, Files to Modify, Acceptance Criteria."
+		},
+		"priority": {
+			"type": "string",
+			"enum": ["high", "medium", "low"],
+			"description": "Priority based on business impact and urgency. high = critical/blocking, medium = important but not urgent, low = nice-to-have."
+		},
+		"complexity": {
+			"type": "string",
+			"enum": ["S", "M", "L", "XL"],
+			"description": "Estimated implementation complexity. S = 1-2 hours, M = half day, L = 1-2 days, XL = 3+ days."
+		}
+	},
+	"required": ["title", "description", "priority", "complexity"],
+	"additionalProperties": false
+}`)
 
 // Prompt templates for the Feature/Bug Creation Wizard
 // These prompts are designed to work with LLMs to refine ideas and break them down into tasks
@@ -17,7 +85,7 @@ RULES:
 - Do NOT start with "Now I", "Let me", "Here's", "Based on", "I'll", "After analyzing", or ANY preamble.
 - Do NOT include phrases like "comprehensive understanding", "I have analyzed", "Let me create".
 - First character of your response MUST be "#" (a markdown heading) or "-" (a list item).
-- Output MUST be in %s regardless of input language.
+- ALL output MUST be in English. Even if the user's input is in another language, translate and write everything in English. No exceptions.
 
 Codebase context (for your reference only, do NOT discuss it):
 %s
@@ -66,75 +134,74 @@ Return ONLY a JSON array in this exact format:
 
 No markdown, no explanation, just the JSON array.`
 
-// TechnicalPlanningPromptTemplate is the unified template for both refinement and technical analysis
-// It outputs a structured technical planning document without implementation code
-const TechnicalPlanningPromptTemplate = `You are a technical architect creating a GitHub issue with technical planning.
+// IssueGenerationPromptTemplate is the unified template for generating a complete GitHub issue
+// with both title and description in a single LLM call using structured JSON output.
+// NOTE: The language parameter is accepted but ignored — output is ALWAYS English.
+// This is critical because GitHub issues must be in English for consistency.
+const IssueGenerationPromptTemplate = `You are a GitHub issue generator. You produce a JSON object with "title" and "description" fields.
 
-CRITICAL RULE: Output MUST be in %s regardless of input language.
+CRITICAL LANGUAGE RULE: ALL output MUST be in English. The title and description MUST be written entirely in English. Even if the user's request is in Polish, German, Chinese, or any other language — you MUST translate it and write the issue in English. No exceptions.
 
-Your output MUST be a markdown document with exactly these sections:
+The "title" field:
+- 5-10 words, maximum 80 characters
+- Must start with [Feature] or [Bug] prefix based on issue type
+- Written in English
+- Scannable and descriptive
 
-## Problem Statement / Feature Description
-[Clear, professional description of what needs to be done]
+The "priority" field — assess based on business impact and urgency:
+- "high" — critical functionality, blocking other work, security issue, or data loss risk
+- "medium" — important improvement, affects users but has workarounds
+- "low" — nice-to-have, cosmetic, minor improvement
 
-## Architecture Overview
-[High-level description of the system architecture needed]
-- Key components involved
-- Data flow overview
-- Integration points
+The "complexity" field — estimate implementation effort:
+- "S" — 1-2 hours, small change, single file, well-defined scope
+- "M" — half day, a few files, moderate logic changes
+- "L" — 1-2 days, multiple files/components, requires careful design
+- "XL" — 3+ days, cross-cutting changes, significant new functionality
 
-## Files Requiring Changes
-[List specific file paths that will need modification]
-- Path to each file with brief explanation of what changes are needed
-- Include both existing files to modify and new files to create
+The "description" field is a markdown document with exactly these sections:
 
-## Component Dependencies
-[Describe how components interact]
-- Dependencies between modules
-- External dependencies (libraries, APIs, services)
-- Database schema changes if applicable
+## Description
+[1-3 sentences in English: what needs to be done and why]
 
-## Implementation Boundaries
-[Clear boundaries of what to do and what NOT to do]
-- What is in scope for this issue
-- What is explicitly out of scope
-- Constraints and limitations
+## Tasks
+[Numbered list of concrete implementation steps in English. Each step is one action a developer can complete in 2-15 minutes. Be specific about file paths.]
+
+## Files to Modify
+[List of file paths that need changes, with a brief note in English on what changes]
 
 ## Acceptance Criteria
-[2-4 specific, verifiable criteria for completion]
+[2-5 specific, verifiable criteria for completion, in English]
 
 CRITICAL RULES:
-- NO implementation code or algorithms
-- NO specific technical solutions or design patterns
-- NO "how to" instructions
-- Focus on WHAT and WHERE, not HOW
-- Be specific about file paths and component names
-- Keep architecture description at a high level
+- ALL text MUST be in English — title, description, tasks, criteria, everything
+- NO implementation code, algorithms, or design patterns
+- NO architecture overviews or component dependency analysis
+- Focus on WHAT to do, not HOW
+- Be specific about file paths
+- Tasks should be actionable steps, not abstract descriptions
+- Keep it concise — a developer should read this in under 2 minutes
 
 Codebase context (for reference only):
 %s
 
-Original %s:
+Issue type: %s
+
+Original request:
 %s`
 
 // BuildRefinementPrompt creates the prompt for idea refinement with codebase context
 // wizardType: the type of wizard (feature or bug)
 // idea: the original user idea
 // codebaseContext: information about the existing codebase (file structure, key files, etc.)
-// language: the output language (e.g., "en-US", "pl-PL")
+// language: accepted for API compatibility but ignored — output is always English
 func BuildRefinementPrompt(wizardType WizardType, idea string, codebaseContext string, language string) string {
 	if codebaseContext == "" {
 		codebaseContext = "No codebase context provided."
 	}
 
-	// Default to English if no language specified
-	if language == "" {
-		language = "en-US"
-	}
-
 	if wizardType == WizardTypeBug {
 		return fmt.Sprintf(RefinementPromptTemplate,
-			language,                      // %s - language requirement
 			codebaseContext,               // %s - codebase context
 			"bug description",             // %s - original type
 			idea,                          // %s - original content
@@ -149,7 +216,6 @@ func BuildRefinementPrompt(wizardType WizardType, idea string, codebaseContext s
 	}
 
 	return fmt.Sprintf(RefinementPromptTemplate,
-		language,                     // %s - language requirement
 		codebaseContext,              // %s - codebase context
 		"idea",                       // %s - original type
 		idea,                         // %s - original content
@@ -177,41 +243,12 @@ func BuildBreakdownPrompt(wizardType WizardType, description string) string {
 	return fmt.Sprintf(BreakdownPromptTemplate, typeLabel, description)
 }
 
-// BuildTechnicalPlanningPrompt creates the unified prompt for technical planning
-// This combines refinement + technical analysis into a single LLM call
-func BuildTechnicalPlanningPrompt(wizardType WizardType, idea string, codebaseContext string, language string) string {
+// BuildIssueGenerationPrompt creates the unified prompt for issue generation.
+// This generates both title and description in a single LLM call using structured JSON output.
+// The language parameter is accepted for API compatibility but ignored — output is always English.
+func BuildIssueGenerationPrompt(wizardType WizardType, idea string, codebaseContext string, language string) string {
 	if codebaseContext == "" {
 		codebaseContext = "No codebase context provided."
-	}
-
-	// Default to English if no language specified
-	if language == "" {
-		language = "en-US"
-	}
-
-	var typeLabel string
-	if wizardType == WizardTypeBug {
-		typeLabel = "bug report"
-	} else {
-		typeLabel = "feature request"
-	}
-
-	return fmt.Sprintf(TechnicalPlanningPromptTemplate,
-		language, // %s - language requirement
-		codebaseContext,
-		typeLabel,
-		idea,
-	)
-}
-
-// BuildTitleGenerationPrompt creates the prompt for generating a concise issue title
-// wizardType: the type of wizard (feature or bug)
-// technicalPlanning: the technical planning content to base the title on
-// language: the output language (e.g., "en-US", "pl-PL")
-func BuildTitleGenerationPrompt(wizardType WizardType, technicalPlanning string, language string) string {
-	// Default to English if no language specified
-	if language == "" {
-		language = "en-US"
 	}
 
 	var typeLabel string
@@ -221,11 +258,16 @@ func BuildTitleGenerationPrompt(wizardType WizardType, technicalPlanning string,
 		typeLabel = "Feature"
 	}
 
-	return fmt.Sprintf(TitleGenerationPromptTemplate,
-		language,
+	return fmt.Sprintf(IssueGenerationPromptTemplate,
+		codebaseContext,
 		typeLabel,
-		technicalPlanning,
+		idea,
 	)
+}
+
+// BuildTechnicalPlanningPrompt is an alias for backward compatibility.
+func BuildTechnicalPlanningPrompt(wizardType WizardType, idea string, codebaseContext string, language string) string {
+	return BuildIssueGenerationPrompt(wizardType, idea, codebaseContext, language)
 }
 
 // GetCodebaseContext gathers context about the existing codebase
@@ -251,49 +293,4 @@ func GetCodebaseContext() string {
 	context.WriteString("- LLM integration via OpenCode API\n")
 
 	return context.String()
-}
-
-// TitleGenerationPromptTemplate generates concise GitHub issue titles from technical planning
-// It instructs the LLM to create a short, scannable title with a type prefix
-const TitleGenerationPromptTemplate = `You are a GitHub issue title generator. Your ONLY output is a concise issue title.
-
-CRITICAL RULES:
-- Output ONLY the title text. Nothing else. No quotes, no explanation, no preamble.
-- Title MUST be 5-8 words, maximum 80 characters.
-- Title MUST start with [Feature] or [Bug] prefix based on the issue type.
-- Title should be scannable and descriptive.
-- Output MUST be in %s regardless of input language.
-
-Issue Type: %s
-
-Technical Planning:
-%s
-
-Generate a concise title:`
-
-// stripLLMPreamble removes conversational preamble that LLMs sometimes prepend
-// before the actual content. It looks for the first markdown heading or list item
-// and discards everything before it.
-func stripLLMPreamble(text string) string {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return ""
-	}
-
-	// If it already starts with markdown content, return as-is
-	if text[0] == '#' || text[0] == '-' || text[0] == '*' {
-		return text
-	}
-
-	// Find the first markdown heading
-	lines := strings.Split(text, "\n")
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "#") {
-			return strings.TrimSpace(strings.Join(lines[i:], "\n"))
-		}
-	}
-
-	// No heading found — return the whole thing (better than nothing)
-	return text
 }

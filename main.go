@@ -179,12 +179,12 @@ func runServe() error {
 		return fmt.Errorf("ensuring labels: %w", err)
 	}
 
-	created, err := gh.EnsureMilestone()
+	sprintTitle, err := gh.EnsureMilestone()
 	if err != nil {
 		return fmt.Errorf("ensuring milestone: %w", err)
 	}
-	if created {
-		fmt.Println("  ✓ sprint created (Sprint 1)")
+	if sprintTitle != "" {
+		fmt.Printf("  ✓ sprint created (%s)\n", sprintTitle)
 	} else {
 		fmt.Println("  ✓ sprint found")
 	}

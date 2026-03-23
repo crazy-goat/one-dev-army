@@ -164,7 +164,9 @@ type Milestone struct {
 	DueOn     time.Time `json:"due_on"`
 }
 
-// ListMilestones returns all milestones sorted by creation date (newest first)
+// ListMilestones returns open milestones sorted by creation date (newest first).
+// GitHub API defaults to state=open which is the desired behavior — EnsureMilestone
+// only needs to know if there's an active sprint to work with.
 func (c *Client) ListMilestones() ([]Milestone, error) {
 	var milestones []Milestone
 	if err := c.ghNoRepoJSON(&milestones, "api", "repos/"+c.Repo+"/milestones"); err != nil {
