@@ -30,9 +30,10 @@ nav .nav-actions{display:flex;gap:.5rem;margin-left:auto}
 .btn-success:hover{background:var(--green);color:#fff}
 h1{font-size:1.4rem;margin-bottom:1rem}
 h2{font-size:1.1rem;margin-bottom:.75rem;color:var(--muted)}
-.ws-status{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:0.5rem}
-.ws-connected{background:var(--green)}
-.ws-disconnected{background:var(--red)}
+.ws-status{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-right:0.5rem}
+.ws-status svg{width:16px;height:16px;display:none}
+.ws-connected .ws-icon-connected{display:block;color:var(--green)}
+.ws-disconnected .ws-icon-disconnected{display:block;color:var(--red)}
 footer{background:var(--surface);border-top:1px solid var(--border);padding:.5rem 1.5rem;position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:flex-end;align-items:center;font-size:.8rem;color:var(--muted);z-index:100}
 .rate-limit-container{display:flex;align-items:center;gap:.5rem;padding:.25rem .5rem;border-radius:4px;background:var(--bg);border:1px solid var(--border);transition:opacity .2s}
 .rate-limit-container:hover{opacity:.8}
@@ -50,7 +51,6 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
     <a href="/costs" {{if eq .Active "costs"}}class="active"{{end}}>Costs</a>
   </div>
   <div class="nav-actions">
-    <span id="ws-status" class="ws-status ws-disconnected" title="Disconnected"></span>
     <a href="/wizard" class="btn btn-primary">+ New Issue</a>
   </div>
 </nav>
@@ -58,6 +58,10 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
 {{template "content" .}}
 </div>
 <footer>
+  <span id="ws-status" class="ws-status ws-disconnected" title="Disconnected">
+    <svg class="ws-icon-connected" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-9"/></svg>
+    <svg class="ws-icon-disconnected" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </span>
   <div hx-get="/api/rate-limit" hx-trigger="load, every 30s" hx-swap="innerHTML">
     <span class="rate-limit-unknown">GitHub API: Loading...</span>
   </div>
