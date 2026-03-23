@@ -887,6 +887,16 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	if idea != "" {
 		session.SetIdeaText(idea)
 	}
+
+	// Parse skip_breakdown checkbox (only for features)
+	skipBreakdown := r.FormValue("skip_breakdown") == "1"
+	if session.Type == WizardTypeFeature {
+		session.SetSkipBreakdown(skipBreakdown)
+	} else {
+		// Bugs never skip breakdown (they don't have the checkbox)
+		session.SetSkipBreakdown(true)
+	}
+
 	session.SetStep(WizardStepRefine)
 	session.AddLog("user", inputText)
 
@@ -901,11 +911,13 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 			Type               string
 			RefinedDescription string
 			IsPage             bool
+			SkipBreakdown      bool
 		}{
 			SessionID:          session.ID,
 			Type:               string(session.Type),
 			RefinedDescription: mockRefined,
 			IsPage:             isPage,
+			SkipBreakdown:      session.SkipBreakdown,
 		}
 
 		s.renderFragment(w, "wizard_refine.html", data)
@@ -975,11 +987,13 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		Type               string
 		RefinedDescription string
 		IsPage             bool
+		SkipBreakdown      bool
 	}{
 		SessionID:          session.ID,
 		Type:               string(session.Type),
 		RefinedDescription: refinedDesc,
 		IsPage:             isPage,
+		SkipBreakdown:      session.SkipBreakdown,
 	}
 
 	s.renderFragment(w, "wizard_refine.html", data)
@@ -1171,16 +1185,25 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(session.Tasks) == 0 {
-		http.Error(w, "no tasks to create", http.StatusBadRequest)
-		return
-	}
-
 	// Read sprint assignment preference from form
 	addToSprint := r.FormValue("add_to_sprint") == "1"
 	session.SetAddToSprint(addToSprint)
 
 	session.SetStep(WizardStepCreate)
+
+	// If skipping breakdown, create a single issue instead of epic + sub-tasks
+	if session.SkipBreakdown {
+		session.AddLog("system", "Creating single issue (breakdown skipped)")
+		s.handleWizardCreateSingle(w, r, session, isPage)
+		return
+	}
+
+	// Only check for tasks if not skipping breakdown
+	if len(session.Tasks) == 0 {
+		http.Error(w, "no tasks to create", http.StatusBadRequest)
+		return
+	}
+
 	session.AddLog("system", fmt.Sprintf("Creating epic + %d sub-tasks", len(session.Tasks)))
 
 	// If no GitHub client, return mock confirmation for testing
@@ -1208,15 +1231,17 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 		session.AddLog("system", "Mock: Created epic #100 with 2 sub-tasks")
 
 		data := struct {
-			Epic      CreatedIssue
-			SubTasks  []CreatedIssue
-			HasErrors bool
-			IsPage    bool
+			Epic          CreatedIssue
+			SubTasks      []CreatedIssue
+			HasErrors     bool
+			IsPage        bool
+			IsSingleIssue bool
 		}{
-			Epic:      mockEpic,
-			SubTasks:  mockSubTasks,
-			HasErrors: false,
-			IsPage:    isPage,
+			Epic:          mockEpic,
+			SubTasks:      mockSubTasks,
+			HasErrors:     false,
+			IsPage:        isPage,
+			IsSingleIssue: false,
 		}
 
 		s.wizardStore.Delete(sessionID)
@@ -1380,19 +1405,133 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		Epic      CreatedIssue
-		SubTasks  []CreatedIssue
-		HasErrors bool
-		IsPage    bool
+		Epic          CreatedIssue
+		SubTasks      []CreatedIssue
+		HasErrors     bool
+		IsPage        bool
+		IsSingleIssue bool
 	}{
-		Epic:      epicIssue,
-		SubTasks:  subTasks,
-		HasErrors: hasErrors,
-		IsPage:    isPage,
+		Epic:          epicIssue,
+		SubTasks:      subTasks,
+		HasErrors:     hasErrors,
+		IsPage:        isPage,
+		IsSingleIssue: false,
 	}
 
 	// Clean up session after creation to free memory
 	s.wizardStore.Delete(sessionID)
+
+	s.renderFragment(w, "wizard_create.html", data)
+}
+
+// handleWizardCreateSingle creates a single GitHub issue (for small tasks/bugs without breakdown)
+func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request, session *WizardSession, isPage bool) {
+	// Read sprint assignment preference from form
+	addToSprint := r.FormValue("add_to_sprint") == "1"
+	session.SetAddToSprint(addToSprint)
+
+	// If no GitHub client, return mock confirmation for testing
+	if s.gh == nil {
+		mockTitle := session.IdeaText
+		if mockTitle == "" {
+			mockTitle = session.RefinedDescription
+		}
+		if len(mockTitle) > 200 {
+			mockTitle = mockTitle[:197] + "..."
+		}
+		mockIssue := CreatedIssue{
+			Number:  100,
+			Title:   mockTitle,
+			URL:     "https://github.com/test/issues/100",
+			IsEpic:  false,
+			Success: true,
+		}
+		session.SetCreatedIssues([]CreatedIssue{mockIssue})
+		session.AddLog("system", "Mock: Created single issue #100")
+
+		data := struct {
+			Epic          CreatedIssue
+			SubTasks      []CreatedIssue
+			HasErrors     bool
+			IsPage        bool
+			IsSingleIssue bool
+		}{
+			Epic:          mockIssue,
+			SubTasks:      []CreatedIssue{},
+			HasErrors:     false,
+			IsPage:        isPage,
+			IsSingleIssue: true,
+		}
+
+		s.wizardStore.Delete(session.ID)
+		s.renderFragment(w, "wizard_create.html", data)
+		return
+	}
+
+	// Build labels for single issue
+	labels := []string{"wizard"}
+	if session.Type == WizardTypeFeature {
+		labels = append(labels, "enhancement")
+	} else if session.Type == WizardTypeBug {
+		labels = append(labels, "bug")
+	}
+
+	// Build title from idea text (truncated to 200 chars)
+	title := session.IdeaText
+	if title == "" {
+		title = session.RefinedDescription
+	}
+	if len(title) > 200 {
+		title = title[:197] + "..."
+	}
+
+	// Create the single issue
+	body := session.RefinedDescription
+	issueNum, err := s.gh.CreateIssue(title, body, labels)
+	if err != nil {
+		log.Printf("[Wizard] Error creating single issue: %v", err)
+		session.AddLog("system", fmt.Sprintf("Error creating single issue: %v", err))
+		http.Error(w, fmt.Sprintf("Failed to create issue: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	issue := CreatedIssue{
+		Number:  issueNum,
+		Title:   title,
+		URL:     fmt.Sprintf("https://github.com/%s/issues/%d", s.gh.Repo, issueNum),
+		IsEpic:  false,
+		Success: true,
+	}
+	session.AddCreatedIssue(issue)
+	session.AddLog("system", fmt.Sprintf("Created single issue #%d", issueNum))
+
+	// Assign to active sprint if requested
+	sprintName := s.activeSprintName()
+	if addToSprint && sprintName != "" {
+		if err := s.gh.SetMilestone(issueNum, sprintName); err != nil {
+			log.Printf("[Wizard] Error assigning #%d to sprint %s: %v", issueNum, sprintName, err)
+			session.AddLog("system", fmt.Sprintf("Warning: could not assign to sprint: %v", err))
+		} else {
+			session.AddLog("system", fmt.Sprintf("Assigned #%d to %s", issueNum, sprintName))
+		}
+	}
+
+	data := struct {
+		Epic          CreatedIssue
+		SubTasks      []CreatedIssue
+		HasErrors     bool
+		IsPage        bool
+		IsSingleIssue bool
+	}{
+		Epic:          issue,
+		SubTasks:      []CreatedIssue{},
+		HasErrors:     false,
+		IsPage:        isPage,
+		IsSingleIssue: true,
+	}
+
+	// Clean up session after creation to free memory
+	s.wizardStore.Delete(session.ID)
 
 	s.renderFragment(w, "wizard_create.html", data)
 }
@@ -1446,17 +1585,19 @@ func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		Active      string
-		Type        string
-		SessionID   string
-		CurrentStep int
-		IsPage      bool
+		Active            string
+		Type              string
+		SessionID         string
+		CurrentStep       int
+		IsPage            bool
+		ShowBreakdownStep bool
 	}{
-		Active:      "wizard",
-		Type:        wizardType,
-		SessionID:   session.ID,
-		CurrentStep: 1,
-		IsPage:      true,
+		Active:            "wizard",
+		Type:              wizardType,
+		SessionID:         session.ID,
+		CurrentStep:       1,
+		IsPage:            true,
+		ShowBreakdownStep: wizardType == "feature" && !session.SkipBreakdown,
 	}
 
 	s.render(w, "wizard_page.html", data)

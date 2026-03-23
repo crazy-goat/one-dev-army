@@ -85,6 +85,7 @@ type WizardSession struct {
 	CreatedIssues      []CreatedIssue `json:"created_issues"`
 	EpicNumber         int            `json:"epic_number"`
 	AddToSprint        bool           `json:"add_to_sprint"`
+	SkipBreakdown      bool           `json:"skip_breakdown"`
 	LLMLogs            []LLMLogEntry  `json:"llm_logs"`
 	CreatedAt          time.Time      `json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
@@ -141,6 +142,14 @@ func (s *WizardSession) SetAddToSprint(add bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.AddToSprint = add
+	s.UpdatedAt = time.Now()
+}
+
+// SetSkipBreakdown updates the skip-breakdown flag (thread-safe)
+func (s *WizardSession) SetSkipBreakdown(skip bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.SkipBreakdown = skip
 	s.UpdatedAt = time.Now()
 }
 
