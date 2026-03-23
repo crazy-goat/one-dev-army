@@ -59,6 +59,26 @@
       </div>
     </div>
     
+    <!-- Language Selector -->
+    <div class="form-group language-selector">
+      <label for="language-select">Language for voice input:</label>
+      <select id="language-select" name="language">
+        <option value="en-US">🇺🇸 English</option>
+        <option value="pl-PL">🇵🇱 Polski</option>
+        <option value="de-DE">🇩🇪 Deutsch</option>
+        <option value="es-ES">🇪🇸 Español</option>
+        <option value="fr-FR">🇫🇷 Français</option>
+        <option value="pt-PT">🇵🇹 Português</option>
+        <option value="it-IT">🇮🇹 Italiano</option>
+        <option value="nl-NL">🇳🇱 Nederlands</option>
+        <option value="ru-RU">🇷🇺 Русский</option>
+        <option value="zh-CN">🇨🇳 中文</option>
+        <option value="ja-JP">🇯🇵 日本語</option>
+        <option value="ko-KR">🇰🇷 한국어</option>
+      </select>
+      <input type="hidden" id="detected-language" value="{{.Language}}">
+    </div>
+    
     <div class="form-actions">
       {{if .IsPage}}
       <a href="/" class="btn">Cancel</a>
@@ -78,15 +98,131 @@
 (function() {
   const textarea = document.getElementById('idea');
   const micBtn = document.getElementById('mic-btn');
+  const languageSelect = document.getElementById('language-select');
+  const detectedLangInput = document.getElementById('detected-language');
   
   if (!textarea || !micBtn) return;
   
   const form = textarea.closest('form');
   
+  // Supported languages mapping
+  const supportedLanguages = {
+    'en': 'en-US', 'en-US': 'en-US', 'en-GB': 'en-US',
+    'pl': 'pl-PL', 'pl-PL': 'pl-PL',
+    'de': 'de-DE', 'de-DE': 'de-DE',
+    'es': 'es-ES', 'es-ES': 'es-ES', 'es-MX': 'es-ES',
+    'fr': 'fr-FR', 'fr-FR': 'fr-FR',
+    'pt': 'pt-PT', 'pt-PT': 'pt-PT', 'pt-BR': 'pt-PT',
+    'it': 'it-IT', 'it-IT': 'it-IT',
+    'nl': 'nl-NL', 'nl-NL': 'nl-NL',
+    'ru': 'ru-RU', 'ru-RU': 'ru-RU',
+    'zh': 'zh-CN', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-CN',
+    'ja': 'ja-JP', 'ja-JP': 'ja-JP',
+    'ko': 'ko-KR', 'ko-KR': 'ko-KR'
+  };
+  
+  // Detect browser language
+  function detectBrowserLanguage() {
+    // Try navigator.languages first (preferred order)
+    if (navigator.languages && navigator.languages.length > 0) {
+      for (const lang of navigator.languages) {
+        const normalized = normalizeLanguage(lang);
+        if (normalized) return normalized;
+      }
+    }
+    
+    // Fallback to navigator.language
+    if (navigator.language) {
+      const normalized = normalizeLanguage(navigator.language);
+      if (normalized) return normalized;
+    }
+    
+    // Default to English
+    return 'en-US';
+  }
+  
+  // Normalize language code to supported format
+  function normalizeLanguage(lang) {
+    if (!lang) return null;
+    
+    // Direct match
+    if (supportedLanguages[lang]) {
+      return supportedLanguages[lang];
+    }
+    
+    // Try base language (e.g., "pl-PL" -> "pl")
+    const baseLang = lang.split('-')[0];
+    if (supportedLanguages[baseLang]) {
+      return supportedLanguages[baseLang];
+    }
+    
+    return null;
+  }
+  
+  // Get stored language preference
+  function getStoredLanguage() {
+    try {
+      return localStorage.getItem('wizard-language');
+    } catch (e) {
+      console.warn('localStorage not available:', e);
+      return null;
+    }
+  }
+  
+  // Store language preference
+  function storeLanguage(lang) {
+    try {
+      localStorage.setItem('wizard-language', lang);
+    } catch (e) {
+      console.warn('Could not store language preference:', e);
+    }
+  }
+  
+  // Initialize language selector
+  function initializeLanguage() {
+    // Priority: 1. Server-provided language, 2. localStorage, 3. Browser detection
+    let selectedLang = detectedLangInput?.value;
+    
+    if (!selectedLang) {
+      selectedLang = getStoredLanguage();
+    }
+    
+    if (!selectedLang) {
+      selectedLang = detectBrowserLanguage();
+    }
+    
+    // Set the selector value
+    if (languageSelect) {
+      languageSelect.value = selectedLang;
+      
+      // Store for future visits
+      storeLanguage(selectedLang);
+      
+      // Listen for changes
+      languageSelect.addEventListener('change', function() {
+        storeLanguage(this.value);
+        
+        // If recording, restart with new language
+        if (isRecording && recognition) {
+          stopRecording();
+          recognition.lang = this.value;
+          startRecording();
+        }
+      });
+    }
+    
+    return selectedLang;
+  }
+  
+  const currentLang = initializeLanguage();
+  
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   
   if (!SpeechRecognition) {
     micBtn.style.display = 'none';
+    if (languageSelect) {
+      languageSelect.parentElement.style.display = 'none';
+    }
     return;
   }
   
@@ -97,7 +233,7 @@
     recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'en-US';
+    recognition.lang = currentLang || 'en-US'; // Use detected/selected language
     
     recognition.onresult = (event) => {
       let finalTranscript = '';
@@ -135,6 +271,12 @@
   
   function startRecording() {
     if (!recognition) initRecognition();
+    
+    // Update language before starting (in case user changed it)
+    if (languageSelect && recognition) {
+      recognition.lang = languageSelect.value;
+    }
+    
     isRecording = true;
     micBtn.classList.add('recording');
     recognition.start();
@@ -282,6 +424,31 @@
 }
 .mic-btn svg {
   fill: currentColor;
+}
+
+/* Language selector styles */
+.language-selector {
+  margin-top: 0.5rem;
+}
+
+.language-selector label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.language-selector select {
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.language-selector select:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 </style>
 {{end}}

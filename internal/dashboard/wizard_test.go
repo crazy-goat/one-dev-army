@@ -267,7 +267,7 @@ func TestParseTaskJSON_MultipleTasks(t *testing.T) {
 
 func TestBuildRefinementPrompt_Feature(t *testing.T) {
 	codebaseContext := "Project uses Go with standard layout"
-	prompt := BuildRefinementPrompt(WizardTypeFeature, "Create a login page", codebaseContext)
+	prompt := BuildRefinementPrompt(WizardTypeFeature, "Create a login page", codebaseContext, "en-US")
 	if !strings.Contains(prompt, "feature description") {
 		t.Error("expected prompt to mention 'feature description'")
 	}
@@ -290,7 +290,7 @@ func TestBuildRefinementPrompt_Feature(t *testing.T) {
 
 func TestBuildRefinementPrompt_Bug(t *testing.T) {
 	codebaseContext := "Project uses Go with standard layout"
-	prompt := BuildRefinementPrompt(WizardTypeBug, "Login is broken", codebaseContext)
+	prompt := BuildRefinementPrompt(WizardTypeBug, "Login is broken", codebaseContext, "en-US")
 	if !strings.Contains(prompt, "bug report") {
 		t.Error("expected prompt to mention 'bug report'")
 	}
@@ -309,7 +309,7 @@ func TestBuildRefinementPrompt_Bug(t *testing.T) {
 }
 
 func TestBuildRefinementPrompt_EmptyCodebaseContext(t *testing.T) {
-	prompt := BuildRefinementPrompt(WizardTypeFeature, "Create a login page", "")
+	prompt := BuildRefinementPrompt(WizardTypeFeature, "Create a login page", "", "en-US")
 	if !strings.Contains(prompt, "No codebase context provided") {
 		t.Error("expected prompt to handle empty codebase context gracefully")
 	}
@@ -560,5 +560,18 @@ func TestWizardSession_TechnicalPlanning(t *testing.T) {
 
 	if session.TechnicalPlanning != planning {
 		t.Errorf("expected TechnicalPlanning to be set correctly")
+	}
+}
+
+func TestWizardSession_SetLanguage(t *testing.T) {
+	session := &WizardSession{
+		ID:   "test-session",
+		Type: WizardTypeFeature,
+	}
+
+	session.SetLanguage("pl-PL")
+
+	if session.Language != "pl-PL" {
+		t.Errorf("Expected Language to be 'pl-PL', got %q", session.Language)
 	}
 }

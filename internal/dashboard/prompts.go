@@ -17,7 +17,7 @@ RULES:
 - Do NOT start with "Now I", "Let me", "Here's", "Based on", "I'll", "After analyzing", or ANY preamble.
 - Do NOT include phrases like "comprehensive understanding", "I have analyzed", "Let me create".
 - First character of your response MUST be "#" (a markdown heading) or "-" (a list item).
-- Output MUST be in English regardless of input language.
+- Output MUST be in %s regardless of input language.
 
 Codebase context (for your reference only, do NOT discuss it):
 %s
@@ -70,6 +70,8 @@ No markdown, no explanation, just the JSON array.`
 // It outputs a structured technical planning document without implementation code
 const TechnicalPlanningPromptTemplate = `You are a technical architect creating a GitHub issue with technical planning.
 
+CRITICAL RULE: Output MUST be in %s regardless of input language.
+
 Your output MUST be a markdown document with exactly these sections:
 
 ## Problem Statement / Feature Description
@@ -119,13 +121,20 @@ Original %s:
 // wizardType: the type of wizard (feature or bug)
 // idea: the original user idea
 // codebaseContext: information about the existing codebase (file structure, key files, etc.)
-func BuildRefinementPrompt(wizardType WizardType, idea string, codebaseContext string) string {
+// language: the output language (e.g., "en-US", "pl-PL")
+func BuildRefinementPrompt(wizardType WizardType, idea string, codebaseContext string, language string) string {
 	if codebaseContext == "" {
 		codebaseContext = "No codebase context provided."
 	}
 
+	// Default to English if no language specified
+	if language == "" {
+		language = "en-US"
+	}
+
 	if wizardType == WizardTypeBug {
 		return fmt.Sprintf(RefinementPromptTemplate,
+			language,                      // %s - language requirement
 			codebaseContext,               // %s - codebase context
 			"bug description",             // %s - original type
 			idea,                          // %s - original content
@@ -140,6 +149,7 @@ func BuildRefinementPrompt(wizardType WizardType, idea string, codebaseContext s
 	}
 
 	return fmt.Sprintf(RefinementPromptTemplate,
+		language,                     // %s - language requirement
 		codebaseContext,              // %s - codebase context
 		"idea",                       // %s - original type
 		idea,                         // %s - original content
@@ -169,9 +179,14 @@ func BuildBreakdownPrompt(wizardType WizardType, description string) string {
 
 // BuildTechnicalPlanningPrompt creates the unified prompt for technical planning
 // This combines refinement + technical analysis into a single LLM call
-func BuildTechnicalPlanningPrompt(wizardType WizardType, idea string, codebaseContext string) string {
+func BuildTechnicalPlanningPrompt(wizardType WizardType, idea string, codebaseContext string, language string) string {
 	if codebaseContext == "" {
 		codebaseContext = "No codebase context provided."
+	}
+
+	// Default to English if no language specified
+	if language == "" {
+		language = "en-US"
 	}
 
 	var typeLabel string
@@ -182,6 +197,7 @@ func BuildTechnicalPlanningPrompt(wizardType WizardType, idea string, codebaseCo
 	}
 
 	return fmt.Sprintf(TechnicalPlanningPromptTemplate,
+		language, // %s - language requirement
 		codebaseContext,
 		typeLabel,
 		idea,
