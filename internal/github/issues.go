@@ -295,32 +295,66 @@ func (c *Client) ListIssuesForMilestone(milestone string) ([]Issue, error) {
 // GetIssuePRStatus checks if an issue was closed via a merged PR
 // Returns true if the issue has a merged PR associated with it
 func (c *Client) GetIssuePRStatus(issueNumber int) (bool, *time.Time, error) {
-	// Use GitHub API to check for linked PRs and their merge status
-	// Query for PRs that reference this issue in their body or title
-	out, err := c.gh("pr", "list", "--state", "all", "--json", "number,title,state,mergedAt,body",
-		"--search", fmt.Sprintf("%s/%d", c.Repo, issueNumber))
+	// Use GraphQL timelineItems to find PRs that closed this issue
+	query := `query($repo: String!, $owner: String!, $number: Int!) {
+		repository(owner: $owner, name: $repo) {
+			issue(number: $number) {
+				timelineItems(first: 25, itemTypes: [CLOSED_EVENT]) {
+					nodes {
+						... on ClosedEvent {
+							closer {
+								... on PullRequest {
+									state
+									mergedAt
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}`
+
+	parts := strings.SplitN(c.Repo, "/", 2)
+	if len(parts) != 2 {
+		return false, nil, fmt.Errorf("invalid repo format: %s", c.Repo)
+	}
+	owner, repo := parts[0], parts[1]
+
+	out, err := c.ghNoRepo("api", "graphql",
+		"-f", fmt.Sprintf("query=%s", query),
+		"-f", fmt.Sprintf("owner=%s", owner),
+		"-f", fmt.Sprintf("repo=%s", repo),
+		"-F", fmt.Sprintf("number=%d", issueNumber),
+	)
 	if err != nil {
-		// No PRs found is not an error
-		return false, nil, nil
+		return false, nil, fmt.Errorf("graphql query for issue #%d: %w", issueNumber, err)
 	}
 
-	type PRInfo struct {
-		Number   int        `json:"number"`
-		Title    string     `json:"title"`
-		State    string     `json:"state"`
-		MergedAt *time.Time `json:"mergedAt"`
-		Body     string     `json:"body"`
+	var result struct {
+		Data struct {
+			Repository struct {
+				Issue struct {
+					TimelineItems struct {
+						Nodes []struct {
+							Closer struct {
+								State    string     `json:"state"`
+								MergedAt *time.Time `json:"mergedAt"`
+							} `json:"closer"`
+						} `json:"nodes"`
+					} `json:"timelineItems"`
+				} `json:"issue"`
+			} `json:"repository"`
+		} `json:"data"`
 	}
 
-	var prs []PRInfo
-	if err := json.Unmarshal(out, &prs); err != nil {
-		return false, nil, fmt.Errorf("parsing PR list for issue #%d: %w", issueNumber, err)
+	if err := json.Unmarshal(out, &result); err != nil {
+		return false, nil, fmt.Errorf("parsing graphql response for issue #%d: %w", issueNumber, err)
 	}
 
-	// Check if any PR is merged
-	for _, pr := range prs {
-		if pr.State == "MERGED" {
-			return true, pr.MergedAt, nil
+	for _, node := range result.Data.Repository.Issue.TimelineItems.Nodes {
+		if node.Closer.State == "MERGED" {
+			return true, node.Closer.MergedAt, nil
 		}
 	}
 
