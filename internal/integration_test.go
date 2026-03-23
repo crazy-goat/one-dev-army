@@ -622,3 +622,102 @@ func truncate(s string, n int) string {
 	}
 	return s[:n] + "..."
 }
+
+// TestDashboard_WizardFlow_Integration tests the complete wizard flow through the HTTP server
+func TestDashboard_WizardFlow_Integration(t *testing.T) {
+	store, err := db.Open(filepath.Join(t.TempDir(), "dash.db"))
+	if err != nil {
+		t.Fatalf("opening db: %v", err)
+	}
+	defer store.Close()
+
+	poolFn := func() []worker.WorkerInfo {
+		return []worker.WorkerInfo{}
+	}
+
+	srv, err := dashboard.NewServer(0, store, poolFn, nil, 0, nil, nil, "")
+	if err != nil {
+		t.Fatalf("creating dashboard server: %v", err)
+	}
+
+	handler := srv.Handler()
+
+	// Test 1: Feature wizard flow via header button
+	t.Run("feature_wizard_via_header", func(t *testing.T) {
+		// Step 1: GET /wizard?type=feature (header button click)
+		req := httptest.NewRequest(http.MethodGet, "/wizard?type=feature", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("GET /wizard?type=feature: status = %d, want %d", rec.Code, http.StatusOK)
+		}
+
+		// Verify response contains wizard form
+		body := rec.Body.String()
+		if !strings.Contains(body, "wizard") && !strings.Contains(body, "feature") {
+			t.Errorf("Response doesn't contain wizard content: %s", truncate(body, 200))
+		}
+	})
+
+	// Test 2: Bug wizard flow via header button
+	t.Run("bug_wizard_via_header", func(t *testing.T) {
+		// Step 1: GET /wizard?type=bug (header button click)
+		req := httptest.NewRequest(http.MethodGet, "/wizard?type=bug", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("GET /wizard?type=bug: status = %d, want %d", rec.Code, http.StatusOK)
+		}
+
+		// Verify response contains wizard form
+		body := rec.Body.String()
+		if !strings.Contains(body, "wizard") && !strings.Contains(body, "bug") {
+			t.Errorf("Response doesn't contain wizard content: %s", truncate(body, 200))
+		}
+	})
+
+	// Test 3: Invalid wizard type defaults to feature (not error)
+	t.Run("invalid_wizard_type", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/wizard?type=invalid", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		// Invalid type defaults to "feature", so it returns 200 OK
+		if rec.Code != http.StatusOK {
+			t.Errorf("GET /wizard?type=invalid: status = %d, want %d (invalid type defaults to feature)", rec.Code, http.StatusOK)
+		}
+	})
+
+	// Test 4: Wizard modal endpoint
+	t.Run("wizard_modal", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/wizard/modal?type=feature", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("GET /wizard/modal: status = %d, want %d", rec.Code, http.StatusOK)
+		}
+	})
+
+	// Test 5: Wizard cancel endpoint
+	t.Run("wizard_cancel", func(t *testing.T) {
+		// First create a session
+		req := httptest.NewRequest(http.MethodGet, "/wizard/new?type=feature", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		// Extract session ID from response (if possible) or use a test session
+		// For now, just test the endpoint returns success
+		req = httptest.NewRequest(http.MethodPost, "/wizard/cancel", strings.NewReader("session_id=test-session"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec = httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		// Should return OK even for invalid session (graceful handling)
+		if rec.Code != http.StatusOK && rec.Code != http.StatusBadRequest {
+			t.Errorf("POST /wizard/cancel: status = %d, want 200 or 400", rec.Code)
+		}
+	})
+}
