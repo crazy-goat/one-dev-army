@@ -1,4 +1,5 @@
 {{define "content"}}
+{{template "wizard-steps" .}}
 <div class="wizard-step">
   <h2>Refined Description</h2>
   
@@ -47,6 +48,4 @@
   
   <div id="wizard-logs" hx-get="/wizard/logs/{{.SessionID}}" hx-trigger="every 1s" hx-swap="innerHTML" hx-headers='{"X-Expected-Step": "refine"}' style="margin-top: 1rem; max-height: 200px; overflow-y: auto;"></div>
 </div>
-
-{{template "wizard-steps" .}}
 {{end}}

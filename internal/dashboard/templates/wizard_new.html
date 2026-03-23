@@ -49,10 +49,9 @@
 .htmx-request .spinner { display: inline !important; }
 .htmx-request .label { display: none; }
 </style>
-
-{{template "wizard-steps" .}}
 {{end}}
 
 {{define "content"}}
+{{template "wizard-steps" .}}
 {{template "wizard-step-content" .}}
 {{end}}

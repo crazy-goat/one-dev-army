@@ -838,7 +838,7 @@ func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 		SessionID:         session.ID,
 		IsPage:            isPage,
 		CurrentStep:       1,
-		ShowBreakdownStep: wizardType == "feature",
+		ShowBreakdownStep: wizardType == "feature" && !session.SkipBreakdown,
 	}
 
 	s.renderFragment(w, "wizard_new.html", data)

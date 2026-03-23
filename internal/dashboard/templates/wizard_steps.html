@@ -1,5 +1,5 @@
 {{define "wizard-steps"}}
-<div class="step-indicator" id="wizard-step-indicator">
+<div class="step-indicator" id="wizard-step-indicator" hx-swap-oob="true">
   <div class="step {{if eq .CurrentStep 1}}active{{end}} {{if gt .CurrentStep 1}}completed{{end}}">
     <span class="step-number">1</span>
     <span class="step-label">Idea</span>

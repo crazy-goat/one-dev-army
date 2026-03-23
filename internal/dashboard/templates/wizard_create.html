@@ -1,4 +1,5 @@
 {{define "content"}}
+{{template "wizard-steps" .}}
 <div class="wizard-step">
   {{if .IsSingleIssue}}
   <h2>✅ Issue Created Successfully</h2>
@@ -68,8 +69,6 @@
     {{end}}
   </div>
 </div>
-
-{{template "wizard-steps" .}}
 {{end}}
 
 <style>
