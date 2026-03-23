@@ -70,6 +70,7 @@ type MessageType string
 const (
 	MessageTypeIssueUpdate  MessageType = "issue_update"
 	MessageTypeSyncComplete MessageType = "sync_complete"
+	MessageTypeWorkerUpdate MessageType = "worker_update"
 	MessageTypePing         MessageType = "ping"
 	MessageTypePong         MessageType = "pong"
 )
@@ -92,6 +93,16 @@ type IssueUpdatePayload struct {
 // SyncCompletePayload represents the payload for sync_complete messages
 type SyncCompletePayload struct {
 	Count int `json:"count"`
+}
+
+// WorkerUpdatePayload represents the payload for worker_update messages
+type WorkerUpdatePayload struct {
+	WorkerID       string `json:"worker_id"`
+	Status         string `json:"status"`
+	TaskID         int    `json:"task_id"`
+	TaskTitle      string `json:"task_title"`
+	Stage          string `json:"stage"`
+	ElapsedSeconds int    `json:"elapsed_seconds"`
 }
 
 // Client represents a single WebSocket connection
@@ -283,6 +294,38 @@ func (h *Hub) BroadcastSyncComplete(count int) {
 
 	h.Broadcast(msgBytes)
 	log.Printf("[WebSocket] Broadcast sync complete (count=%d) to %d clients", count, h.ClientCount())
+}
+
+// BroadcastWorkerUpdate sends a worker status update to all clients
+func (h *Hub) BroadcastWorkerUpdate(workerID, status string, taskID int, taskTitle, stage string, elapsedSeconds int) {
+	payload := WorkerUpdatePayload{
+		WorkerID:       workerID,
+		Status:         status,
+		TaskID:         taskID,
+		TaskTitle:      taskTitle,
+		Stage:          stage,
+		ElapsedSeconds: elapsedSeconds,
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("[WebSocket] Error marshaling worker update payload: %v", err)
+		return
+	}
+
+	msg := Message{
+		Type:    MessageTypeWorkerUpdate,
+		Payload: payloadBytes,
+	}
+
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("[WebSocket] Error marshaling worker update message: %v", err)
+		return
+	}
+
+	h.Broadcast(msgBytes)
+	log.Printf("[WebSocket] Broadcast worker update (worker=%s, task=#%d, stage=%s) to %d clients", workerID, taskID, stage, h.ClientCount())
 }
 
 // readPump pumps messages from the WebSocket connection to the hub

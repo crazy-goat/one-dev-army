@@ -137,6 +137,17 @@ func (w *Worker) setStageLabel(stage string) {
 		return
 	}
 	w.orchestrator.BroadcastStageUpdate(w.orchestrator.currentTask.Issue.Number, stage)
+	w.broadcastWorkerStatus(stage)
+}
+
+func (w *Worker) broadcastWorkerStatus(stage string) {
+	if w.orchestrator == nil || w.orchestrator.currentTask == nil {
+		return
+	}
+	task := w.orchestrator.currentTask
+	elapsed := int(time.Since(task.StartTime).Seconds())
+	workerID := fmt.Sprintf("worker-%d", w.id)
+	w.orchestrator.BroadcastWorkerStatus(workerID, string(task.Status), task.Issue.Number, task.Issue.Title, stage, elapsed)
 }
 
 var stepOrder = []string{"technical-planning", "implement", "code-review", "create-pr"}
@@ -153,6 +164,7 @@ func stepIndex(name string) int {
 func (w *Worker) Process(ctx context.Context, task *Task) error {
 	log.Printf("[Worker %d] ▶ START processing #%d: %s", w.id, task.Issue.Number, task.Issue.Title)
 	start := time.Now()
+	task.StartTime = start
 
 	resumeFrom := 0
 	if w.store != nil {

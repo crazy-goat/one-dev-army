@@ -255,6 +255,112 @@ func TestHubBroadcastSyncComplete(t *testing.T) {
 	}
 }
 
+func TestHubBroadcastWorkerUpdate(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	// Create a test server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ServeWs(hub, w, r)
+	}))
+	defer server.Close()
+
+	// Connect a client
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	// Wait for registration using polling
+	waitForClientCount(t, hub, 1, time.Second)
+
+	// Broadcast worker update
+	hub.BroadcastWorkerUpdate("worker-1", "processing", 42, "Test Issue", "Code", 120)
+
+	// Verify client received the message
+	conn.SetReadDeadline(time.Now().Add(time.Second))
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("Failed to receive message: %v", err)
+	}
+
+	var received Message
+	if err := json.Unmarshal(msg, &received); err != nil {
+		t.Fatalf("Failed to unmarshal message: %v", err)
+	}
+
+	if received.Type != MessageTypeWorkerUpdate {
+		t.Errorf("Expected type %s, got %s", MessageTypeWorkerUpdate, received.Type)
+	}
+
+	var payload WorkerUpdatePayload
+	if err := json.Unmarshal(received.Payload, &payload); err != nil {
+		t.Fatalf("Failed to unmarshal payload: %v", err)
+	}
+
+	if payload.WorkerID != "worker-1" {
+		t.Errorf("Expected worker_id 'worker-1', got %s", payload.WorkerID)
+	}
+	if payload.Status != "processing" {
+		t.Errorf("Expected status 'processing', got %s", payload.Status)
+	}
+	if payload.TaskID != 42 {
+		t.Errorf("Expected task_id 42, got %d", payload.TaskID)
+	}
+	if payload.TaskTitle != "Test Issue" {
+		t.Errorf("Expected task_title 'Test Issue', got %s", payload.TaskTitle)
+	}
+	if payload.Stage != "Code" {
+		t.Errorf("Expected stage 'Code', got %s", payload.Stage)
+	}
+	if payload.ElapsedSeconds != 120 {
+		t.Errorf("Expected elapsed_seconds 120, got %d", payload.ElapsedSeconds)
+	}
+}
+
+func TestWorkerUpdatePayloadMarshal(t *testing.T) {
+	payload := WorkerUpdatePayload{
+		WorkerID:       "worker-1",
+		Status:         "processing",
+		TaskID:         42,
+		TaskTitle:      "Test Issue",
+		Stage:          "Code",
+		ElapsedSeconds: 120,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("Failed to marshal payload: %v", err)
+	}
+
+	var decoded WorkerUpdatePayload
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Failed to unmarshal payload: %v", err)
+	}
+
+	if decoded.WorkerID != payload.WorkerID {
+		t.Errorf("WorkerID mismatch: got %s, want %s", decoded.WorkerID, payload.WorkerID)
+	}
+	if decoded.Status != payload.Status {
+		t.Errorf("Status mismatch: got %s, want %s", decoded.Status, payload.Status)
+	}
+	if decoded.TaskID != payload.TaskID {
+		t.Errorf("TaskID mismatch: got %d, want %d", decoded.TaskID, payload.TaskID)
+	}
+	if decoded.TaskTitle != payload.TaskTitle {
+		t.Errorf("TaskTitle mismatch: got %s, want %s", decoded.TaskTitle, payload.TaskTitle)
+	}
+	if decoded.Stage != payload.Stage {
+		t.Errorf("Stage mismatch: got %s, want %s", decoded.Stage, payload.Stage)
+	}
+	if decoded.ElapsedSeconds != payload.ElapsedSeconds {
+		t.Errorf("ElapsedSeconds mismatch: got %d, want %d", decoded.ElapsedSeconds, payload.ElapsedSeconds)
+	}
+}
+
 func TestHubConnectionLimit(t *testing.T) {
 	hub := NewHubWithLimit(2)
 	go hub.Run()
@@ -419,6 +525,7 @@ func TestMessageTypes(t *testing.T) {
 	}{
 		{MessageTypeIssueUpdate, "issue_update"},
 		{MessageTypeSyncComplete, "sync_complete"},
+		{MessageTypeWorkerUpdate, "worker_update"},
 		{MessageTypePing, "ping"},
 		{MessageTypePong, "pong"},
 	}
