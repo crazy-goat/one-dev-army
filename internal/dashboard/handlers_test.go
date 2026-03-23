@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -794,6 +795,91 @@ func TestConcurrentHandlerAccess(t *testing.T) {
 
 	if srv.wizardStore.Count() != 50 {
 		t.Errorf("expected 50 sessions, got %d", srv.wizardStore.Count())
+	}
+}
+
+// TestBoardLayout_ActionsSection tests that the board-actions section contains expected elements
+// and does not contain duplicate wizard buttons (GitHub issue #113)
+func TestBoardLayout_ActionsSection(t *testing.T) {
+	t.Log("Running TestBoardLayout_ActionsSection")
+	// Parse templates - use relative path from test file location
+	tmpl, err := template.ParseFiles("templates/layout.html", "templates/board.html")
+	if err != nil {
+		t.Fatalf("failed to parse templates: %v", err)
+	}
+
+	// Execute with sample data using boardData struct
+	data := boardData{
+		Active:     "board",
+		Paused:     false,
+		Processing: false,
+	}
+
+	var buf strings.Builder
+	err = tmpl.ExecuteTemplate(&buf, "layout", data)
+	if err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify board-actions contains expected elements
+	if !strings.Contains(output, `class="board-actions"`) {
+		t.Error("board-actions container missing")
+	}
+	if !strings.Contains(output, `action="/api/sprint/pause"`) {
+		t.Error("Pause Sprint button missing")
+	}
+	if !strings.Contains(output, `action="/sync"`) {
+		t.Error("Sync button missing")
+	}
+	if !strings.Contains(output, `id="autosync-toggle"`) {
+		t.Error("Autosync toggle missing")
+	}
+	if !strings.Contains(output, `action="/plan-sprint"`) {
+		t.Error("Plan Sprint button missing")
+	}
+
+	// Verify NO duplicate wizard buttons in board-actions
+	boardActionsStart := strings.Index(output, `class="board-actions"`)
+	boardActionsEnd := strings.Index(output[boardActionsStart:], `</div>`) + boardActionsStart
+	boardActionsSection := output[boardActionsStart:boardActionsEnd]
+
+	if strings.Contains(boardActionsSection, `wizard`) {
+		t.Error("board-actions should not contain wizard buttons")
+	}
+}
+
+// TestBoardLayout_ResponsiveCSS tests that responsive CSS media queries are present
+func TestBoardLayout_ResponsiveCSS(t *testing.T) {
+	// Read the board.html file directly to check CSS - use relative path from test file location
+	content, err := os.ReadFile("templates/board.html")
+	if err != nil {
+		t.Fatalf("failed to read board.html: %v", err)
+	}
+
+	css := string(content)
+
+	// Verify responsive breakpoints exist
+	if !strings.Contains(css, "@media (max-width: 1024px)") {
+		t.Error("Missing tablet breakpoint (1024px)")
+	}
+	if !strings.Contains(css, "@media (max-width: 768px)") {
+		t.Error("Missing mobile breakpoint (768px)")
+	}
+	if !strings.Contains(css, "@media (max-width: 480px)") {
+		t.Error("Missing small mobile breakpoint (480px)")
+	}
+
+	// Verify responsive grid changes
+	if !strings.Contains(css, "grid-template-columns:repeat(4,1fr)") {
+		t.Error("Missing 4-column grid for tablet")
+	}
+	if !strings.Contains(css, "grid-template-columns:repeat(2,1fr)") {
+		t.Error("Missing 2-column grid for mobile")
+	}
+	if !strings.Contains(css, "grid-template-columns:1fr") {
+		t.Error("Missing 1-column grid for small mobile")
 	}
 }
 

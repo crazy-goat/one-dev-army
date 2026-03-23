@@ -596,6 +596,8 @@ func TestDashboardRendering(t *testing.T) {
 		{"/backlog", http.StatusOK, "Backlog"},
 		{"/costs", http.StatusOK, "Costs"},
 		{"/api/workers", http.StatusOK, "worker-1"},
+		{path: "/", wantStatus: http.StatusOK, wantBody: "board-actions"},
+		{path: "/", wantStatus: http.StatusOK, wantBody: "Plan Sprint"},
 	}
 
 	for _, tt := range tests {
@@ -621,6 +623,79 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// TestDashboard_BoardLayout_Responsive tests the board page layout and responsive CSS
+func TestDashboard_BoardLayout_Responsive(t *testing.T) {
+	store, err := db.Open(filepath.Join(t.TempDir(), "dash.db"))
+	if err != nil {
+		t.Fatalf("opening db: %v", err)
+	}
+	defer store.Close()
+
+	poolFn := func() []worker.WorkerInfo { return []worker.WorkerInfo{} }
+	srv, err := dashboard.NewServer(0, store, poolFn, nil, 0, nil, nil, "")
+	if err != nil {
+		t.Fatalf("creating dashboard server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+
+	// Verify CSS responsive classes exist
+	if !strings.Contains(body, "@media") {
+		t.Error("Missing responsive CSS media queries")
+	}
+
+	// Verify board-actions flex layout
+	if !strings.Contains(body, "display:flex") && !strings.Contains(body, "display: flex") {
+		t.Error("board-actions missing flex display")
+	}
+
+	// Verify board-actions contains expected elements
+	if !strings.Contains(body, `class="board-actions"`) {
+		t.Error("board-actions container missing")
+	}
+
+	// Verify no wizard buttons in board-actions section
+	// Extract board-actions section
+	boardActionsStart := strings.Index(body, `class="board-actions"`)
+	if boardActionsStart == -1 {
+		t.Fatal("board-actions section not found")
+	}
+	boardActionsEnd := strings.Index(body[boardActionsStart:], "</div>") + boardActionsStart
+	if boardActionsEnd <= boardActionsStart {
+		t.Fatal("Could not find end of board-actions section")
+	}
+	boardActionsSection := body[boardActionsStart:boardActionsEnd]
+
+	// Check for wizard-related content in board-actions (should NOT be there)
+	if strings.Contains(boardActionsSection, "wizard") {
+		t.Error("board-actions should not contain wizard buttons (they should be in nav-actions only)")
+	}
+
+	// Verify Sprint control buttons exist
+	if !strings.Contains(body, `action="/api/sprint/`) {
+		t.Error("Sprint control button missing")
+	}
+
+	// Verify Sync button exists
+	if !strings.Contains(body, `action="/sync"`) {
+		t.Error("Sync button missing")
+	}
+
+	// Verify Autosync toggle exists
+	if !strings.Contains(body, `id="autosync-toggle"`) {
+		t.Error("Autosync toggle missing")
+	}
+
+	// Verify Plan Sprint button exists
+	if !strings.Contains(body, `action="/plan-sprint"`) {
+		t.Error("Plan Sprint button missing")
+	}
 }
 
 // TestDashboard_WizardFlow_Integration tests the complete wizard flow through the HTTP server
