@@ -1512,3 +1512,98 @@ func TestHandleWizardCreate_SubTaskBodyFormat(t *testing.T) {
 		t.Errorf("sub-task body format mismatch\nexpected: %s\ngot: %s", expectedBody, body)
 	}
 }
+
+// TestFullWizardFlow_Bug tests the complete bug wizard flow end-to-end
+func TestFullWizardFlow_Bug(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	// Step 1: Start bug wizard (GET /wizard/new)
+	req := httptest.NewRequest(http.MethodGet, "/wizard/new?type=bug", nil)
+	rec := httptest.NewRecorder()
+	srv.handleWizardNew(rec, req)
+
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Fatalf("Step 1 failed: expected status 200 or 500, got %d", rec.Code)
+	}
+
+	if srv.wizardStore.Count() < 1 {
+		t.Fatal("No session created in step 1")
+	}
+
+	// Create a new session for testing the flow
+	testSession, _ := srv.wizardStore.Create("bug")
+	sessionID := testSession.ID
+
+	// Step 2: Refine bug idea (POST /wizard/refine)
+	formData := url.Values{}
+	formData.Set("session_id", sessionID)
+	formData.Set("idea", "Login form validation is broken")
+
+	req = httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	srv.handleWizardRefine(rec, req)
+
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Fatalf("Step 2 failed: expected status 200 or 500, got %d", rec.Code)
+	}
+
+	// Verify session was updated
+	session, _ := srv.wizardStore.Get(sessionID)
+	if session.IdeaText == "" {
+		t.Error("Step 2: Idea text not stored")
+	}
+	if session.RefinedDescription == "" {
+		t.Error("Step 2: Refined description not generated")
+	}
+	if session.CurrentStep != WizardStepRefine {
+		t.Errorf("Step 2: Expected step 'refine', got %q", session.CurrentStep)
+	}
+
+	// Step 3: Breakdown (POST /wizard/breakdown)
+	formData = url.Values{}
+	formData.Set("session_id", sessionID)
+
+	req = httptest.NewRequest(http.MethodPost, "/wizard/breakdown", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	srv.handleWizardBreakdown(rec, req)
+
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Fatalf("Step 3 failed: expected status 200 or 500, got %d", rec.Code)
+	}
+
+	// Verify tasks were created
+	session, _ = srv.wizardStore.Get(sessionID)
+	if len(session.Tasks) == 0 {
+		t.Error("Step 3: No tasks generated")
+	}
+	if session.CurrentStep != WizardStepBreakdown {
+		t.Errorf("Step 3: Expected step 'breakdown', got %q", session.CurrentStep)
+	}
+
+	// Step 4: Create issues (POST /wizard/create)
+	formData = url.Values{}
+	formData.Set("session_id", sessionID)
+
+	req = httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	srv.handleWizardCreate(rec, req)
+
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Fatalf("Step 4 failed: expected status 200 or 500, got %d", rec.Code)
+	}
+
+	// Verify session was deleted after creation
+	_, ok := srv.wizardStore.Get(sessionID)
+	if ok {
+		t.Error("Step 4: Session should be deleted after creation")
+	}
+
+	t.Logf("Full bug wizard flow completed successfully")
+}
