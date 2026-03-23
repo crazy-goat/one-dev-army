@@ -559,7 +559,7 @@ func placeholderWorkers() []workerCard {
 }
 
 // LLMRequestTimeout is the timeout for LLM API requests
-const LLMRequestTimeout = 60 * time.Second
+const LLMRequestTimeout = 3 * time.Minute
 
 func (s *Server) handleCurrentTask(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
