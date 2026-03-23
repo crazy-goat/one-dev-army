@@ -37,6 +37,10 @@ Your task:
 Respond with ONLY this format on the last line:
 NEXT: #<number>`
 
+type StageBroadcaster interface {
+	BroadcastIssueUpdate(issue github.Issue)
+}
+
 type Orchestrator struct {
 	cfg         *config.Config
 	worker      *Worker
@@ -44,6 +48,7 @@ type Orchestrator struct {
 	oc          *opencode.Client
 	brMgr       *git.BranchManager
 	store       *db.Store
+	hub         StageBroadcaster
 	running     bool
 	paused      bool
 	processing  bool
@@ -51,16 +56,17 @@ type Orchestrator struct {
 	mu          sync.Mutex
 }
 
-func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client, brMgr *git.BranchManager, store *db.Store) *Orchestrator {
+func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client, brMgr *git.BranchManager, store *db.Store, hub StageBroadcaster) *Orchestrator {
 	o := &Orchestrator{
 		cfg:    cfg,
 		gh:     gh,
 		oc:     oc,
 		brMgr:  brMgr,
 		store:  store,
+		hub:    hub,
 		paused: true,
 	}
-	o.worker = NewWorker(1, cfg, oc, gh, brMgr, store)
+	o.worker = NewWorker(1, cfg, oc, gh, brMgr, store, o)
 	return o
 }
 
@@ -365,6 +371,20 @@ func (o *Orchestrator) recordStep(issueNumber int, stepName, response string) {
 		return
 	}
 	_ = o.store.FinishStep(id, response)
+}
+
+func (o *Orchestrator) BroadcastStageUpdate(issueNumber int, stage string) {
+	// Set the stage label on GitHub
+	updatedIssue, err := o.gh.SetStageLabel(issueNumber, stage)
+	if err != nil {
+		log.Printf("[Orchestrator] Error setting stage label %s for #%d: %v", stage, issueNumber, err)
+		return
+	}
+
+	// Broadcast the update via hub if available
+	if o.hub != nil {
+		o.hub.BroadcastIssueUpdate(updatedIssue)
+	}
 }
 
 func (o *Orchestrator) sleep(ctx context.Context, d time.Duration) {
