@@ -1,7 +1,7 @@
 # Implementation Plan for Issue #168
 
-**Created:** 2026-03-23T12:41:15+01:00
-**Updated:** 2026-03-23T12:41:15+01:00
+**Created:** 2026-03-23T12:41:24+01:00
+**Updated:** 2026-03-23T12:41:24+01:00
 
 ## Analysis
 
@@ -80,4 +80,27 @@ The feature has been fully implemented on branch `oda-168-merge-analyze-and-plan
 2. **Simplicity**: 4 pipeline steps instead of 5
 3. **Consistency**: Matches wizard behavior from issue #148
 4. **Resilience**: Backward compatible with in-flight tickets using old step names
+
+## Implementation Steps
+
+### Step 1: In `worker.go`:
+
+- Line 130: `stepOrder` is set to `["technical-planning", "implement", "code-review", "create-pr"]` - 4 steps instead of 5
+- Lines 23-51: `technicalPlanningPrompt` constant with combined analysis and plan sections
+- Lines 296-333: `technicalPlanning()` function that handles the combined step
+- Lines 335-374: `parseTechnicalPlanningResponse()` function to parse the combined response
+- Lines 174-198: Resume logic that handles both new "technical-planning" step and old "analyze"/"plan" steps
+
+### Step 2: In `db.go`:
+
+- Lines 178-181: `GetLastCompletedStep()` maps old "analyze" and "plan" step names to "technical-planning"
+- Lines 194-196: `GetStepResponse()` has fallback to old "plan" step for backward compatibility
+The analysis provided by the user is correct - this feature is ALREADY IMPLEMENTED. All the requirements from issue #168 have been met:
+- Single "technical-planning" step ✅
+- Combined prompt with Analysis and Implementation Plan sections ✅
+- Response parsing to extract both sections ✅
+- Resume from technical-planning ✅
+- Migration of old analyze/plan steps ✅
+- Tests (mentioned in the analysis) ✅
+I should respond with "ALREADY_DONE:" followed by the concrete evidence.ALREADY_DONE: The feature is fully implemented in internal/mvp/worker.go:130 (stepOrder with 4 steps), worker.go:23-51 (technicalPlanningPrompt constant), worker.go:296-333 (technicalPlanning function), worker.go:335-374 (parseTechnicalPlanningResponse), and internal/db/db.go:178-181 (migration mapping old "analyze"/"plan" → "technical-planning").
 
