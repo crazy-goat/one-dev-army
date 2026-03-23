@@ -900,6 +900,9 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	addToSprint := r.FormValue("add_to_sprint") == "1"
 	session.SetAddToSprint(addToSprint)
 
+	// In new unified flow, always skip breakdown (step removed)
+	session.SetSkipBreakdown(true)
+
 	session.SetStep(WizardStepRefine)
 	session.AddLog("user", inputText)
 
