@@ -140,6 +140,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/sprint/pause", s.handleSprintPause)
 	s.mux.HandleFunc("POST /epic", s.handleAddEpic)
 	s.mux.HandleFunc("POST /sync", s.handleSync)
+	s.mux.HandleFunc("POST /api/sync", s.handleManualSync)
 	s.mux.HandleFunc("GET /api/board-data", s.handleBoardData)
 	s.mux.HandleFunc("POST /plan-sprint", s.handlePlanSprint)
 	s.mux.HandleFunc("GET /task/{id}", s.handleTaskDetail)

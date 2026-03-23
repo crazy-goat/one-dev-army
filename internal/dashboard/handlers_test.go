@@ -2220,7 +2220,6 @@ func TestBoardActions_ContainsExpectedButtons(t *testing.T) {
 	// These buttons should always be present
 	requiredButtons := []string{
 		"Sync",
-		"Autosync",
 		"Plan Sprint",
 	}
 
@@ -2336,7 +2335,6 @@ func TestBoardLayout_SprintControlsFunctional(t *testing.T) {
 
 	// These forms should always be present
 	requiredForms := []string{
-		`action="/sync"`,
 		`action="/plan-sprint"`,
 	}
 
@@ -2346,14 +2344,20 @@ func TestBoardLayout_SprintControlsFunctional(t *testing.T) {
 		}
 	}
 
-	// Verify autosync toggle button exists with correct ID
-	if !strings.Contains(body, `id="autosync-toggle"`) {
-		t.Error("board page missing autosync toggle button")
+	// Verify sync button exists with correct ID and onclick handler
+	if !strings.Contains(body, `id="sync-btn"`) {
+		t.Error("board page missing sync button")
+	}
+	if !strings.Contains(body, `onclick="triggerSync()"`) {
+		t.Error("board page missing triggerSync onclick handler")
 	}
 
-	// Verify HTMX polling is configured for board data
+	// Verify HTMX is configured for board data with refresh trigger (not polling)
 	if !strings.Contains(body, `hx-get="/api/board-data"`) {
-		t.Error("board page missing HTMX polling for board data")
+		t.Error("board page missing HTMX configuration for board data")
+	}
+	if !strings.Contains(body, `hx-trigger="refresh"`) {
+		t.Error("board page missing HTMX refresh trigger for board data")
 	}
 }
 
@@ -2392,7 +2396,7 @@ func TestBoardLayout_NoConsoleErrors(t *testing.T) {
 	requiredFunctions := []string{
 		"function openDeclineModal",
 		"function closeDeclineModal",
-		"function toggleAutosync",
+		"function triggerSync",
 	}
 
 	for _, fn := range requiredFunctions {

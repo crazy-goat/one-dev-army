@@ -119,66 +119,25 @@ func (s *Server) buildBoardData() boardData {
 		log.Printf("[Dashboard] No active milestone set (gh=%v)", s.gh != nil)
 	}
 
-	// If no GitHub client or no active milestone, return empty board
-	if s.gh == nil || s.gh.GetActiveMilestone() == nil {
+	// If no GitHub client, no store, or no active milestone, return empty board
+	if s.gh == nil || s.store == nil || s.gh.GetActiveMilestone() == nil {
 		return data
 	}
 
 	milestone := s.gh.GetActiveMilestone().Title
 
-	// Fetch issues from the active milestone
-	issues, err := s.gh.ListIssuesForMilestone(milestone)
+	// Fetch issues from the cache instead of GitHub API
+	issues, err := s.store.GetIssuesCacheByMilestone(milestone)
 	if err != nil {
-		log.Printf("[Dashboard] Error fetching issues for milestone %s: %v", milestone, err)
+		log.Printf("[Dashboard] Error fetching cached issues for milestone %s: %v", milestone, err)
 		return data
 	}
-	log.Printf("[Dashboard] Found %d issues in milestone %s", len(issues), milestone)
+	log.Printf("[Dashboard] Found %d cached issues in milestone %s", len(issues), milestone)
 
-	// TODO: Replace with cache-based implementation when working on ticket #181
-	// For now, infer status from issue labels
-	itemsByStatus := make(map[string][]github.ProjectItem)
-	for _, col := range github.ProjectColumns {
-		itemsByStatus[col] = []github.ProjectItem{}
-	}
-
-	// Create a map of issue number to issue for quick lookup
-	issueMap := make(map[int]github.Issue)
+	// Infer status from issue labels and build task cards
 	for _, issue := range issues {
-		issueMap[issue.Number] = issue
-	}
-
-	// Build task cards for each column
-	if itemsByStatus != nil {
-		seen := make(map[int]bool)
-		for _, col := range github.ProjectColumns {
-			items := itemsByStatus[col]
-			for _, item := range items {
-				if item.Number == 0 {
-					continue
-				}
-				seen[item.Number] = true
-				issue, exists := issueMap[item.Number]
-				if !exists {
-					issue = github.Issue{
-						Number: item.Number,
-						Title:  item.Title,
-					}
-				}
-				s.addCardToColumn(&data, col, issue)
-			}
-		}
-		for _, issue := range issues {
-			if seen[issue.Number] {
-				continue
-			}
-			col := inferColumnFromIssue(issue)
-			s.addCardToColumn(&data, col, issue)
-		}
-	} else {
-		for _, issue := range issues {
-			col := inferColumnFromIssue(issue)
-			s.addCardToColumn(&data, col, issue)
-		}
+		col := inferColumnFromIssue(issue)
+		s.addCardToColumn(&data, col, issue)
 	}
 
 	return data
@@ -316,6 +275,33 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (s *Server) handleManualSync(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if s.syncService == nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{"success": false, "error": "sync service not configured"}); err != nil {
+			log.Printf("[Dashboard] Error encoding JSON: %v", err)
+		}
+		return
+	}
+
+	if err := s.syncService.SyncNow(); err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{"success": false, "error": err.Error()}); err != nil {
+			log.Printf("[Dashboard] Error encoding JSON: %v", err)
+		}
+		return
+	}
+
+	// Broadcast sync start message via WebSocket hub
+	if s.hub != nil {
+		s.hub.BroadcastSyncComplete(0)
+	}
+
+	if err := json.NewEncoder(w).Encode(map[string]any{"success": true}); err != nil {
+		log.Printf("[Dashboard] Error encoding JSON: %v", err)
+	}
 }
 
 func (s *Server) handlePlanSprint(w http.ResponseWriter, r *http.Request) {
