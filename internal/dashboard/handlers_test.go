@@ -73,7 +73,7 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 	tmpls["wizard_modal.html"] = wizardModalTmpl
 
 	// Parse wizard partial templates (no layout)
-	wizardPartials := []string{"wizard_new.html", "wizard_refine.html", "wizard_breakdown.html", "wizard_create.html", "wizard_error.html", "wizard_logs.html"}
+	wizardPartials := []string{"wizard_new.html", "wizard_refine.html", "wizard_create.html", "wizard_error.html", "wizard_logs.html"}
 	for _, page := range wizardPartials {
 		t, err := template.ParseFiles(
 			filepath.Join(templateDir, "wizard_steps.html"),
@@ -424,57 +424,6 @@ func TestHandleWizardRefine_EmptyLLMResponse(t *testing.T) {
 	}
 }
 
-func TestHandleWizardBreakdown(t *testing.T) {
-	srv := &Server{
-		tmpls:       make(map[string]*template.Template),
-		wizardStore: NewWizardSessionStore(),
-	}
-	defer srv.wizardStore.Stop()
-
-	// Create a session with refined description
-	session, _ := srv.wizardStore.Create("feature")
-	session.SetRefinedDescription("Create a user login system with email and password")
-
-	// Test with valid session
-	req := httptest.NewRequest(http.MethodPost, "/wizard/breakdown", strings.NewReader("session_id="+session.ID))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-
-	srv.handleWizardBreakdown(rec, req)
-
-	// Should accept the request
-	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
-		t.Errorf("expected status 200 or 500, got %d", rec.Code)
-	}
-
-	// Verify session was updated
-	updated, _ := srv.wizardStore.Get(session.ID)
-	if updated.CurrentStep != WizardStepBreakdown {
-		t.Errorf("expected step 'breakdown', got %q", updated.CurrentStep)
-	}
-}
-
-func TestHandleWizardBreakdown_MissingRefinedDescription(t *testing.T) {
-	srv := &Server{
-		tmpls:       make(map[string]*template.Template),
-		wizardStore: NewWizardSessionStore(),
-	}
-	defer srv.wizardStore.Stop()
-
-	session, _ := srv.wizardStore.Create("feature")
-	// Don't set refined description
-
-	req := httptest.NewRequest(http.MethodPost, "/wizard/breakdown", strings.NewReader("session_id="+session.ID))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-
-	srv.handleWizardBreakdown(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400 for missing refined description, got %d", rec.Code)
-	}
-}
-
 func TestHandleWizardCreate(t *testing.T) {
 	srv := &Server{
 		tmpls:       make(map[string]*template.Template),
@@ -483,12 +432,9 @@ func TestHandleWizardCreate(t *testing.T) {
 	}
 	defer srv.wizardStore.Stop()
 
-	// Create a session with tasks
+	// Create a session with technical planning
 	session, _ := srv.wizardStore.Create("feature")
-	session.SetTasks([]WizardTask{
-		{Title: "Task 1", Description: "Desc 1", Priority: "high", Complexity: "M"},
-		{Title: "Task 2", Description: "Desc 2", Priority: "medium", Complexity: "S"},
-	})
+	session.SetTechnicalPlanning("## Technical Planning\n\nTest planning content for feature implementation")
 
 	// Test with valid session
 	req := httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader("session_id="+session.ID))
@@ -509,19 +455,15 @@ func TestHandleWizardCreate(t *testing.T) {
 	}
 }
 
-// TestHandleWizardCreate_UsesRefinedDescriptionForTitle verifies that epic title uses refined description
-func TestHandleWizardCreate_UsesRefinedDescriptionForTitle(t *testing.T) {
+// TestHandleWizardCreate_UsesTechnicalPlanningForTitle verifies that issue title uses technical planning
+func TestHandleWizardCreate_UsesTechnicalPlanningForTitle(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	srv.gh = nil
 	defer srv.wizardStore.Stop()
 
 	session, _ := srv.wizardStore.Create("feature")
 	session.SetIdeaText("Raw user input")
-	session.SetRefinedDescription("LLM refined description")
-	session.SetTasks([]WizardTask{
-		{Title: "Task 1", Description: "Desc 1", Priority: "high", Complexity: "M"},
-		{Title: "Task 2", Description: "Desc 2", Priority: "medium", Complexity: "S"},
-	})
+	session.SetTechnicalPlanning("## Technical Planning\n\nLLM generated technical planning with architecture overview, files, and implementation boundaries")
 
 	req := httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader("session_id="+session.ID))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -529,17 +471,18 @@ func TestHandleWizardCreate_UsesRefinedDescriptionForTitle(t *testing.T) {
 
 	srv.handleWizardCreate(rec, req)
 
-	// Verify response contains the refined description as title, not raw idea text
+	// Verify response contains the technical planning as title, not raw idea text
 	body := rec.Body.String()
-	if !strings.Contains(body, "LLM refined description") {
-		t.Errorf("expected response to contain refined description as title, got: %s", body)
+	if !strings.Contains(body, "Technical Planning") {
+		t.Errorf("expected response to contain technical planning as title, got: %s", body)
 	}
-	if strings.Contains(body, "Raw user input") && !strings.Contains(body, "LLM refined description") {
-		t.Error("expected title to come from refined description, not raw idea text")
+	if strings.Contains(body, "Raw user input") && !strings.Contains(body, "Technical Planning") {
+		t.Error("expected title to come from technical planning, not raw idea text")
 	}
 }
 
-func TestHandleWizardCreate_NoTasks(t *testing.T) {
+// TestHandleWizardCreate_NoTechnicalPlanning verifies error when no technical planning
+func TestHandleWizardCreate_NoTechnicalPlanning(t *testing.T) {
 	srv := &Server{
 		tmpls:       make(map[string]*template.Template),
 		wizardStore: NewWizardSessionStore(),
@@ -547,7 +490,7 @@ func TestHandleWizardCreate_NoTasks(t *testing.T) {
 	defer srv.wizardStore.Stop()
 
 	session, _ := srv.wizardStore.Create("feature")
-	// Don't set any tasks
+	// Don't set any technical planning
 
 	req := httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader("session_id="+session.ID))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -555,8 +498,9 @@ func TestHandleWizardCreate_NoTasks(t *testing.T) {
 
 	srv.handleWizardCreate(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400 for no tasks, got %d", rec.Code)
+	// Should still work - will use idea text as fallback
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 200 or 500, got %d", rec.Code)
 	}
 }
 
@@ -596,7 +540,7 @@ func TestHandleWizardLogs(t *testing.T) {
 	}
 
 	// Test with mismatched step - should return 204 to stop polling
-	session.SetStep(WizardStepBreakdown) // Move session to breakdown step
+	session.SetStep(WizardStepCreate) // Move session to create step
 	req = httptest.NewRequest(http.MethodGet, "/wizard/logs/"+session.ID, nil)
 	req.SetPathValue("sessionId", session.ID)
 	req.Header.Set("X-Expected-Step", "refine") // But expect refine step
@@ -611,7 +555,7 @@ func TestHandleWizardLogs(t *testing.T) {
 	// Test with matching step - should return 200
 	req = httptest.NewRequest(http.MethodGet, "/wizard/logs/"+session.ID, nil)
 	req.SetPathValue("sessionId", session.ID)
-	req.Header.Set("X-Expected-Step", "breakdown") // Expect breakdown step
+	req.Header.Set("X-Expected-Step", "create") // Expect create step
 	rec = httptest.NewRecorder()
 
 	srv.handleWizardLogs(rec, req)
@@ -621,7 +565,7 @@ func TestHandleWizardLogs(t *testing.T) {
 	}
 }
 
-// TestFullWizardFlow tests the complete wizard flow end-to-end
+// TestFullWizardFlow tests the complete wizard flow end-to-end with new 3-step flow
 func TestFullWizardFlow(t *testing.T) {
 	// Create server with minimal dependencies
 	srv := &Server{
@@ -650,7 +594,8 @@ func TestFullWizardFlow(t *testing.T) {
 	testSession, _ := srv.wizardStore.Create("feature")
 	sessionID := testSession.ID
 
-	// Step 2: Refine idea (POST /wizard/refine)
+	// Step 2: Technical Planning (POST /wizard/refine)
+	// This now generates unified technical planning in a single LLM call
 	formData := url.Values{}
 	formData.Set("session_id", sessionID)
 	formData.Set("idea", "Create a user dashboard with analytics")
@@ -664,41 +609,20 @@ func TestFullWizardFlow(t *testing.T) {
 		t.Fatalf("Step 2 failed: expected status 200 or 500, got %d", rec.Code)
 	}
 
-	// Verify session was updated
+	// Verify session was updated with technical planning
 	session, _ := srv.wizardStore.Get(sessionID)
 	if session.IdeaText == "" {
 		t.Error("Step 2: Idea text not stored")
 	}
-	if session.RefinedDescription == "" {
-		t.Error("Step 2: Refined description not generated")
+	if session.TechnicalPlanning == "" {
+		t.Error("Step 2: Technical planning not generated")
 	}
 	if session.CurrentStep != WizardStepRefine {
 		t.Errorf("Step 2: Expected step 'refine', got %q", session.CurrentStep)
 	}
 
-	// Step 3: Breakdown (POST /wizard/breakdown)
-	formData = url.Values{}
-	formData.Set("session_id", sessionID)
-
-	req = httptest.NewRequest(http.MethodPost, "/wizard/breakdown", strings.NewReader(formData.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec = httptest.NewRecorder()
-	srv.handleWizardBreakdown(rec, req)
-
-	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
-		t.Fatalf("Step 3 failed: expected status 200 or 500, got %d", rec.Code)
-	}
-
-	// Verify tasks were created
-	session, _ = srv.wizardStore.Get(sessionID)
-	if len(session.Tasks) == 0 {
-		t.Error("Step 3: No tasks generated")
-	}
-	if session.CurrentStep != WizardStepBreakdown {
-		t.Errorf("Step 3: Expected step 'breakdown', got %q", session.CurrentStep)
-	}
-
-	// Step 4: Create issues (POST /wizard/create)
+	// Step 3: Create issues (POST /wizard/create)
+	// No more breakdown step - create directly from technical planning
 	formData = url.Values{}
 	formData.Set("session_id", sessionID)
 
@@ -708,16 +632,16 @@ func TestFullWizardFlow(t *testing.T) {
 	srv.handleWizardCreate(rec, req)
 
 	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
-		t.Fatalf("Step 4 failed: expected status 200 or 500, got %d", rec.Code)
+		t.Fatalf("Step 3 failed: expected status 200 or 500, got %d", rec.Code)
 	}
 
 	// Verify session was deleted after creation
 	_, ok := srv.wizardStore.Get(sessionID)
 	if ok {
-		t.Error("Step 4: Session should be deleted after creation")
+		t.Error("Step 3: Session should be deleted after creation")
 	}
 
-	t.Logf("Full wizard flow completed successfully")
+	t.Logf("Full wizard flow completed successfully with new 3-step flow")
 }
 
 // TestHandleWizardModal tests the modal endpoint
@@ -1177,20 +1101,7 @@ func TestWizardFlow_FromBacklog(t *testing.T) {
 		t.Fatalf("Step 4 failed: expected status 200 or 500, got %d", rec.Code)
 	}
 
-	// Step 5: Request breakdown
-	formData = url.Values{}
-	formData.Set("session_id", sessionID)
-
-	req = httptest.NewRequest(http.MethodPost, "/wizard/breakdown", strings.NewReader(formData.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec = httptest.NewRecorder()
-	srv.handleWizardBreakdown(rec, req)
-
-	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
-		t.Fatalf("Step 5 failed: expected status 200 or 500, got %d", rec.Code)
-	}
-
-	// Step 6: Create issues
+	// Step 5: Create issues (no more breakdown step in new 3-step flow)
 	formData = url.Values{}
 	formData.Set("session_id", sessionID)
 
@@ -1200,10 +1111,10 @@ func TestWizardFlow_FromBacklog(t *testing.T) {
 	srv.handleWizardCreate(rec, req)
 
 	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
-		t.Fatalf("Step 6 failed: expected status 200 or 500, got %d", rec.Code)
+		t.Fatalf("Step 5 failed: expected status 200 or 500, got %d", rec.Code)
 	}
 
-	t.Log("Wizard flow from backlog completed successfully")
+	t.Log("Wizard flow from backlog completed successfully with new 3-step flow")
 }
 
 // TestWizardFlow_FromCosts tests the complete wizard flow starting from costs page
@@ -1283,20 +1194,7 @@ func TestWizardFlow_FromCosts(t *testing.T) {
 		t.Fatalf("Step 4 failed: expected status 200 or 500, got %d", rec.Code)
 	}
 
-	// Step 5: Request breakdown
-	formData = url.Values{}
-	formData.Set("session_id", sessionID)
-
-	req = httptest.NewRequest(http.MethodPost, "/wizard/breakdown", strings.NewReader(formData.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec = httptest.NewRecorder()
-	srv.handleWizardBreakdown(rec, req)
-
-	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
-		t.Fatalf("Step 5 failed: expected status 200 or 500, got %d", rec.Code)
-	}
-
-	// Step 6: Create issues
+	// Step 5: Create issues (no more breakdown step in new 3-step flow)
 	formData = url.Values{}
 	formData.Set("session_id", sessionID)
 
@@ -1306,10 +1204,10 @@ func TestWizardFlow_FromCosts(t *testing.T) {
 	srv.handleWizardCreate(rec, req)
 
 	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
-		t.Fatalf("Step 6 failed: expected status 200 or 500, got %d", rec.Code)
+		t.Fatalf("Step 5 failed: expected status 200 or 500, got %d", rec.Code)
 	}
 
-	t.Log("Wizard flow from costs completed successfully")
+	t.Log("Wizard flow from costs completed successfully with new 3-step flow")
 }
 
 // TestWizardRoutes_Registered verifies all wizard routes are properly registered
@@ -1334,7 +1232,7 @@ func TestWizardRoutes_Registered(t *testing.T) {
 		{"GET", "/wizard/modal", func(s *Server, w http.ResponseWriter, r *http.Request) { s.handleWizardModal(w, r) }},
 		{"POST", "/wizard/cancel", func(s *Server, w http.ResponseWriter, r *http.Request) { s.handleWizardCancel(w, r) }},
 		{"POST", "/wizard/refine", func(s *Server, w http.ResponseWriter, r *http.Request) { s.handleWizardRefine(w, r) }},
-		{"POST", "/wizard/breakdown", func(s *Server, w http.ResponseWriter, r *http.Request) { s.handleWizardBreakdown(w, r) }},
+		// REMOVED: {"POST", "/wizard/breakdown", func(s *Server, w http.ResponseWriter, r *http.Request) { s.handleWizardBreakdown(w, r) }},
 		{"POST", "/wizard/create", func(s *Server, w http.ResponseWriter, r *http.Request) { s.handleWizardCreate(w, r) }},
 	}
 
@@ -1427,11 +1325,7 @@ func TestHandleWizardCreate_EpicFirst(t *testing.T) {
 	defer srv.wizardStore.Stop()
 
 	session, _ := srv.wizardStore.Create("feature")
-	session.SetRefinedDescription("Test Epic")
-	session.SetTasks([]WizardTask{
-		{Title: "Sub-task 1", Description: "Description 1", Priority: "high", Complexity: "M"},
-		{Title: "Sub-task 2", Description: "Description 2", Priority: "medium", Complexity: "S"},
-	})
+	session.SetTechnicalPlanning("## Technical Planning\n\nTest technical planning with architecture overview and implementation details")
 
 	req := httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader("session_id="+session.ID))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -1736,17 +1630,6 @@ func TestWizardFlow_ValidationErrors(t *testing.T) {
 			wantError:  "idea",
 		},
 		{
-			name: "missing session_id on breakdown",
-			setup: func() (*http.Request, *httptest.ResponseRecorder) {
-				req := httptest.NewRequest(http.MethodPost, "/wizard/breakdown", strings.NewReader(""))
-				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-				return req, httptest.NewRecorder()
-			},
-			handler:    srv.handleWizardBreakdown,
-			wantStatus: http.StatusBadRequest,
-			wantError:  "session_id",
-		},
-		{
 			name: "missing session_id on create",
 			setup: func() (*http.Request, *httptest.ResponseRecorder) {
 				req := httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader(""))
@@ -1836,42 +1719,37 @@ func TestWizardFlow_ConcurrentUsers(t *testing.T) {
 				return
 			}
 
-			// Step 3: Breakdown
+			// Step 3: Create issues (no more breakdown step in new 3-step flow)
 			formData = url.Values{}
 			formData.Set("session_id", session.ID)
 
-			req = httptest.NewRequest(http.MethodPost, "/wizard/breakdown", strings.NewReader(formData.Encode()))
+			req = httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader(formData.Encode()))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			rec = httptest.NewRecorder()
-			srv.handleWizardBreakdown(rec, req)
+			srv.handleWizardCreate(rec, req)
 
 			if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
-				t.Errorf("User %d: breakdown failed with status %d", userID, rec.Code)
+				t.Errorf("User %d: create failed with status %d", userID, rec.Code)
 				return
 			}
 
-			// Verify session still exists and has tasks
-			session, ok := srv.wizardStore.Get(session.ID)
-			if !ok {
-				t.Errorf("User %d: session not found after breakdown", userID)
-				return
-			}
-
-			if len(session.Tasks) == 0 {
-				t.Errorf("User %d: no tasks generated", userID)
+			// Verify session was deleted after creation
+			_, ok := srv.wizardStore.Get(session.ID)
+			if ok {
+				t.Errorf("User %d: session should be deleted after creation", userID)
 			}
 		}(i)
 	}
 
 	wg.Wait()
 
-	// Verify all sessions still exist (not cleaned up yet)
+	// Verify all sessions were cleaned up after creation
 	count := srv.wizardStore.Count()
-	if count != numUsers {
-		t.Errorf("expected %d sessions, got %d", numUsers, count)
+	if count != 0 {
+		t.Errorf("expected 0 sessions after creation, got %d", count)
 	}
 
-	t.Logf("Concurrent wizard flow test completed: %d users, %d sessions", numUsers, count)
+	t.Logf("Concurrent wizard flow test completed: %d users, all sessions cleaned up", numUsers)
 }
 
 // TestWizardFlow_PostCreationVerification tests redirect and cleanup after creation
@@ -1884,13 +1762,8 @@ func TestWizardFlow_PostCreationVerification(t *testing.T) {
 
 	// Create and complete a wizard session
 	session, _ := srv.wizardStore.Create("feature")
-	session.IdeaText = "Test feature idea"
-	session.RefinedDescription = "Refined description of the test feature"
-	session.Tasks = []WizardTask{
-		{Title: "Task 1", Description: "Description 1", Priority: "high", Complexity: "M"},
-		{Title: "Task 2", Description: "Description 2", Priority: "medium", Complexity: "S"},
-	}
-	session.CurrentStep = WizardStepBreakdown
+	session.SetIdeaText("Test feature idea")
+	session.SetTechnicalPlanning("## Technical Planning\n\nTest technical planning for the feature")
 
 	// Store the session
 	srv.wizardStore.sessions[session.ID] = session
@@ -1901,7 +1774,7 @@ func TestWizardFlow_PostCreationVerification(t *testing.T) {
 		t.Fatal("Session should exist before creation")
 	}
 
-	// Step 4: Create issues
+	// Step 3: Create issues (no more breakdown step)
 	formData := url.Values{}
 	formData.Set("session_id", session.ID)
 
@@ -1978,41 +1851,19 @@ func TestFullWizardFlow_Bug(t *testing.T) {
 		t.Fatalf("Step 2 failed: expected status 200 or 500, got %d", rec.Code)
 	}
 
-	// Verify session was updated
+	// Verify session was updated with technical planning
 	session, _ := srv.wizardStore.Get(sessionID)
 	if session.IdeaText == "" {
 		t.Error("Step 2: Idea text not stored")
 	}
-	if session.RefinedDescription == "" {
-		t.Error("Step 2: Refined description not generated")
+	if session.TechnicalPlanning == "" {
+		t.Error("Step 2: Technical planning not generated")
 	}
 	if session.CurrentStep != WizardStepRefine {
 		t.Errorf("Step 2: Expected step 'refine', got %q", session.CurrentStep)
 	}
 
-	// Step 3: Breakdown (POST /wizard/breakdown)
-	formData = url.Values{}
-	formData.Set("session_id", sessionID)
-
-	req = httptest.NewRequest(http.MethodPost, "/wizard/breakdown", strings.NewReader(formData.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec = httptest.NewRecorder()
-	srv.handleWizardBreakdown(rec, req)
-
-	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
-		t.Fatalf("Step 3 failed: expected status 200 or 500, got %d", rec.Code)
-	}
-
-	// Verify tasks were created
-	session, _ = srv.wizardStore.Get(sessionID)
-	if len(session.Tasks) == 0 {
-		t.Error("Step 3: No tasks generated")
-	}
-	if session.CurrentStep != WizardStepBreakdown {
-		t.Errorf("Step 3: Expected step 'breakdown', got %q", session.CurrentStep)
-	}
-
-	// Step 4: Create issues (POST /wizard/create)
+	// Step 3: Create issues (POST /wizard/create) - no more breakdown step
 	formData = url.Values{}
 	formData.Set("session_id", sessionID)
 
@@ -2022,19 +1873,19 @@ func TestFullWizardFlow_Bug(t *testing.T) {
 	srv.handleWizardCreate(rec, req)
 
 	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
-		t.Fatalf("Step 4 failed: expected status 200 or 500, got %d", rec.Code)
+		t.Fatalf("Step 3 failed: expected status 200 or 500, got %d", rec.Code)
 	}
 
 	// Verify session was deleted after creation
 	_, ok := srv.wizardStore.Get(sessionID)
 	if ok {
-		t.Error("Step 4: Session should be deleted after creation")
+		t.Error("Step 3: Session should be deleted after creation")
 	}
 
-	t.Logf("Full bug wizard flow completed successfully")
+	t.Logf("Full bug wizard flow completed successfully with new 3-step flow")
 }
 
-// TestHandleWizardRefine_SkipBreakdown tests do_breakdown checkbox parsing
+// TestHandleWizardRefine_SkipBreakdown tests that SkipBreakdown is always true in new unified flow
 func TestHandleWizardRefine_SkipBreakdown(t *testing.T) {
 	srv := &Server{
 		tmpls:       make(map[string]*template.Template),
@@ -2042,13 +1893,12 @@ func TestHandleWizardRefine_SkipBreakdown(t *testing.T) {
 	}
 	defer srv.wizardStore.Stop()
 
-	// Test with feature type and do_breakdown checked (should NOT skip)
+	// In the new unified flow, breakdown step is removed, so SkipBreakdown should always be true
 	session, _ := srv.wizardStore.Create("feature")
 
 	form := url.Values{}
 	form.Set("session_id", session.ID)
 	form.Set("idea", "Create a login page")
-	form.Set("do_breakdown", "1")
 
 	req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -2056,19 +1906,18 @@ func TestHandleWizardRefine_SkipBreakdown(t *testing.T) {
 
 	srv.handleWizardRefine(rec, req)
 
-	// Verify session has SkipBreakdown set to false (don't skip when do_breakdown is checked)
+	// Verify session has SkipBreakdown set to true (always skip in new flow)
 	updatedSession, _ := srv.wizardStore.Get(session.ID)
-	if updatedSession.SkipBreakdown {
-		t.Error("expected SkipBreakdown to be false when do_breakdown checkbox is checked")
+	if !updatedSession.SkipBreakdown {
+		t.Error("expected SkipBreakdown to be true in new unified flow (breakdown step removed)")
 	}
 
-	// Test with feature type and do_breakdown unchecked (should skip)
-	session2, _ := srv.wizardStore.Create("feature")
+	// Test with bug type (should also skip breakdown)
+	session2, _ := srv.wizardStore.Create("bug")
 
 	form2 := url.Values{}
 	form2.Set("session_id", session2.ID)
-	form2.Set("idea", "Create a signup page")
-	// do_breakdown not set
+	form2.Set("idea", "Fix login bug")
 
 	req2 := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(form2.Encode()))
 	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -2076,41 +1925,21 @@ func TestHandleWizardRefine_SkipBreakdown(t *testing.T) {
 
 	srv.handleWizardRefine(rec2, req2)
 
-	// Verify session has SkipBreakdown set to true (skip when do_breakdown is unchecked)
+	// Verify session has SkipBreakdown set to true for bugs as well
 	updatedSession2, _ := srv.wizardStore.Get(session2.ID)
 	if !updatedSession2.SkipBreakdown {
-		t.Error("expected SkipBreakdown to be true when do_breakdown checkbox is unchecked")
-	}
-
-	// Test with bug type (should always skip breakdown)
-	session3, _ := srv.wizardStore.Create("bug")
-
-	form3 := url.Values{}
-	form3.Set("session_id", session3.ID)
-	form3.Set("idea", "Fix login bug")
-
-	req3 := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(form3.Encode()))
-	req3.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec3 := httptest.NewRecorder()
-
-	srv.handleWizardRefine(rec3, req3)
-
-	// Verify session has SkipBreakdown set to true for bugs
-	updatedSession3, _ := srv.wizardStore.Get(session3.ID)
-	if !updatedSession3.SkipBreakdown {
-		t.Error("expected SkipBreakdown to be true for bug type")
+		t.Error("expected SkipBreakdown to be true for bug type in new unified flow")
 	}
 }
 
-// TestHandleWizardCreateSingle_UsesRefinedDescriptionForTitle verifies single issue uses refined description
+// TestHandleWizardCreateSingle_UsesTechnicalPlanningForTitle verifies single issue uses technical planning
 func TestHandleWizardCreateSingle_UsesRefinedDescriptionForTitle(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
 
 	session, _ := srv.wizardStore.Create("feature")
 	session.SetIdeaText("Raw user input")
-	session.SetRefinedDescription("LLM refined description")
-	session.SetSkipBreakdown(true)
+	session.SetTechnicalPlanning("## Technical Planning\n\nLLM generated technical planning")
 
 	form := url.Values{}
 	form.Set("session_id", session.ID)
@@ -2122,8 +1951,8 @@ func TestHandleWizardCreateSingle_UsesRefinedDescriptionForTitle(t *testing.T) {
 	srv.handleWizardCreate(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "LLM refined description") {
-		t.Errorf("expected response to contain refined description as title, got: %s", body)
+	if !strings.Contains(body, "Technical Planning") {
+		t.Errorf("expected response to contain technical planning as title, got: %s", body)
 	}
 }
 
@@ -2135,11 +1964,10 @@ func TestHandleWizardCreateSingle(t *testing.T) {
 	}
 	defer srv.wizardStore.Stop()
 
-	// Create a session with SkipBreakdown enabled
+	// Create a session with technical planning
 	session, _ := srv.wizardStore.Create("feature")
 	session.SetIdeaText("Small feature idea")
-	session.SetRefinedDescription("This is a small feature that doesn't need breakdown")
-	session.SetSkipBreakdown(true)
+	session.SetTechnicalPlanning("## Technical Planning\n\nThis is a small feature technical planning")
 
 	// Test creating single issue
 	form := url.Values{}
@@ -2200,7 +2028,7 @@ func TestHandleWizardCreateSingle_WithSprint(t *testing.T) {
 	}
 }
 
-// TestWizardFlow_SkipBreakdown tests the complete flow with breakdown skipped (do_breakdown unchecked)
+// TestWizardFlow_SkipBreakdown tests the complete flow in new unified 3-step flow (breakdown always skipped)
 func TestWizardFlow_SkipBreakdown(t *testing.T) {
 	srv := &Server{
 		tmpls:       make(map[string]*template.Template),
@@ -2212,11 +2040,10 @@ func TestWizardFlow_SkipBreakdown(t *testing.T) {
 	session, _ := srv.wizardStore.Create("feature")
 	sessionID := session.ID
 
-	// Step 2: Refine with do_breakdown unchecked (skips breakdown)
+	// Step 2: Refine (generates technical planning in unified flow)
 	form := url.Values{}
 	form.Set("session_id", sessionID)
-	form.Set("idea", "Small feature that doesn't need sub-tasks")
-	// do_breakdown not set (unchecked)
+	form.Set("idea", "Feature with technical planning")
 
 	req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -2227,13 +2054,18 @@ func TestWizardFlow_SkipBreakdown(t *testing.T) {
 		t.Fatalf("Refine step failed: expected status 200 or 500, got %d", rec.Code)
 	}
 
-	// Verify SkipBreakdown is set to true (skip breakdown when do_breakdown is unchecked)
+	// Verify SkipBreakdown is set to true (always skip in new unified flow)
 	session, _ = srv.wizardStore.Get(sessionID)
 	if !session.SkipBreakdown {
-		t.Error("expected SkipBreakdown to be true after refine when do_breakdown is unchecked")
+		t.Error("expected SkipBreakdown to be true in new unified flow (breakdown step removed)")
 	}
 
-	// Step 3: Create single issue (skips breakdown)
+	// Verify technical planning was generated
+	if session.TechnicalPlanning == "" {
+		t.Error("expected technical planning to be generated")
+	}
+
+	// Step 3: Create single issue (no breakdown step in new flow)
 	form2 := url.Values{}
 	form2.Set("session_id", sessionID)
 
@@ -2252,7 +2084,7 @@ func TestWizardFlow_SkipBreakdown(t *testing.T) {
 		t.Error("session should be deleted after single issue creation")
 	}
 
-	t.Logf("Skip breakdown flow completed successfully")
+	t.Logf("Unified 3-step flow completed successfully (breakdown step removed)")
 }
 
 // TestWizardSession_SetSkipBreakdown tests the SetSkipBreakdown method
@@ -2611,7 +2443,7 @@ func TestWizardStepIndicator_Step1Active(t *testing.T) {
 	}
 }
 
-// TestWizardStepIndicator_ShowBreakdownStep_FeatureType verifies breakdown step is shown for feature type
+// TestWizardStepIndicator_ShowBreakdownStep_FeatureType verifies 3-step flow for feature type
 func TestWizardStepIndicator_ShowBreakdownStep_FeatureType(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
@@ -2627,17 +2459,22 @@ func TestWizardStepIndicator_ShowBreakdownStep_FeatureType(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// For feature type, should show 4 steps (Idea, Refine, Breakdown, Create)
+	// For feature type, should show 3 steps (Idea, Technical Planning, Create) - no more breakdown
 	// Count the step-label spans
-	stepLabels := []string{"Idea", "Refine", "Breakdown", "Create"}
+	stepLabels := []string{"Idea", "Technical Planning", "Create"}
 	for _, label := range stepLabels {
 		if !strings.Contains(body, `<span class="step-label">`+label+`</span>`) {
 			t.Errorf("step indicator missing '%s' label for feature type", label)
 		}
 	}
+
+	// Should NOT show Breakdown step anymore
+	if strings.Contains(body, `<span class="step-label">Breakdown</span>`) {
+		t.Error("step indicator should NOT show 'Breakdown' step (removed in new flow)")
+	}
 }
 
-// TestWizardStepIndicator_ShowBreakdownStep_BugType verifies breakdown step is hidden for bug type
+// TestWizardStepIndicator_ShowBreakdownStep_BugType verifies 3-step flow for bug type
 func TestWizardStepIndicator_ShowBreakdownStep_BugType(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
@@ -2653,13 +2490,13 @@ func TestWizardStepIndicator_ShowBreakdownStep_BugType(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// For bug type, should NOT show Breakdown step
+	// For bug type, should NOT show Breakdown step (removed in new flow)
 	if strings.Contains(body, `<span class="step-label">Breakdown</span>`) {
-		t.Error("step indicator should NOT show 'Breakdown' step for bug type")
+		t.Error("step indicator should NOT show 'Breakdown' step for bug type (removed in new flow)")
 	}
 
-	// Should only have 3 steps (Idea, Refine, Create)
-	stepLabels := []string{"Idea", "Refine", "Create"}
+	// Should have 3 steps (Idea, Technical Planning, Create) - same as feature now
+	stepLabels := []string{"Idea", "Technical Planning", "Create"}
 	for _, label := range stepLabels {
 		if !strings.Contains(body, `<span class="step-label">`+label+`</span>`) {
 			t.Errorf("step indicator missing '%s' label for bug type", label)

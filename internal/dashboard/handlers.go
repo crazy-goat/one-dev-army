@@ -896,32 +896,26 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		session.SetIdeaText(idea)
 	}
 
-	// Parse do_breakdown checkbox (only for features)
-	doBreakdown := r.FormValue("do_breakdown") == "1"
-	if session.Type == WizardTypeFeature {
-		session.SetSkipBreakdown(!doBreakdown) // Inverted: unchecked = skip breakdown
-	} else {
-		// Bugs never do breakdown (they don't have the checkbox)
-		session.SetSkipBreakdown(true)
-	}
-
 	// Parse add_to_sprint checkbox
 	addToSprint := r.FormValue("add_to_sprint") == "1"
 	session.SetAddToSprint(addToSprint)
+
+	// In new unified flow, always skip breakdown (step removed)
+	session.SetSkipBreakdown(true)
 
 	session.SetStep(WizardStepRefine)
 	session.AddLog("user", inputText)
 
 	// If no opencode client, return mock response for testing
 	if s.oc == nil {
-		mockRefined := "Refined: " + inputText + "\n\nThis feature would allow users to authenticate securely."
-		session.SetRefinedDescription(mockRefined)
-		session.AddLog("assistant", mockRefined)
+		mockPlanning := "## Problem Statement / Feature Description\n\nAdd user authentication to the system.\n\n## Architecture Overview\n\nKey components involved: auth service, user database, session management.\n\n## Files Requiring Changes\n\n- `internal/auth/service.go`: Add authentication logic\n- `internal/db/users.go`: Add user storage\n\n## Component Dependencies\n\n- Database for user storage\n- Session management library\n\n## Implementation Boundaries\n\n- In scope: Login/logout functionality\n- Out of scope: Password reset, OAuth\n\n## Acceptance Criteria\n\n- [ ] Users can log in with username and password\n- [ ] Sessions are maintained across requests\n- [ ] Invalid credentials are rejected"
+		session.SetTechnicalPlanning(mockPlanning)
+		session.AddLog("assistant", mockPlanning)
 
 		data := struct {
 			SessionID          string
 			Type               string
-			RefinedDescription string
+			TechnicalPlanning  string
 			IsPage             bool
 			SkipBreakdown      bool
 			SprintName         string
@@ -931,12 +925,12 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		}{
 			SessionID:          session.ID,
 			Type:               string(session.Type),
-			RefinedDescription: mockRefined,
+			TechnicalPlanning:  mockPlanning,
 			IsPage:             isPage,
-			SkipBreakdown:      session.SkipBreakdown,
+			SkipBreakdown:      true, // Always skip breakdown in new flow
 			SprintName:         s.activeSprintName(),
-			CurrentStep:        2,
-			ShowBreakdownStep:  session.Type == WizardTypeFeature && !session.SkipBreakdown,
+			CurrentStep:        2,     // Now step 2 is Technical Planning
+			ShowBreakdownStep:  false, // No more breakdown step
 			NeedsTypeSelection: false,
 		}
 
@@ -958,10 +952,10 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// Build refinement prompt with codebase context
+	// Build unified technical planning prompt with codebase context
 	codebaseContext := GetCodebaseContext()
-	prompt := BuildRefinementPrompt(session.Type, inputText, codebaseContext)
-	session.AddLog("system", "Sending refinement request to LLM")
+	prompt := BuildTechnicalPlanningPrompt(session.Type, inputText, codebaseContext)
+	session.AddLog("system", "Sending technical planning request to LLM")
 
 	// Send message to LLM with timeout
 	ctx, cancel := context.WithTimeout(r.Context(), LLMRequestTimeout)
@@ -974,7 +968,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[Wizard] Error from LLM: %v", err)
 		session.AddLog("system", "LLM error: "+err.Error())
 
-		errorMsg := "Failed to refine idea. "
+		errorMsg := "Failed to generate technical planning. "
 		if ctx.Err() == context.DeadlineExceeded {
 			errorMsg += "The AI service timed out. Please try again with a shorter description."
 		} else {
@@ -985,27 +979,27 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract refined description from response, stripping any LLM preamble
-	var refinedDesc string
+	// Extract technical planning from response
+	var technicalPlanning string
 	if len(response.Parts) > 0 {
-		refinedDesc = stripLLMPreamble(response.Parts[0].Text)
+		technicalPlanning = stripLLMPreamble(response.Parts[0].Text)
 	}
 
 	// Validate that we got a non-empty response
-	if refinedDesc == "" {
+	if technicalPlanning == "" {
 		log.Printf("[Wizard] LLM returned empty response for session %s", session.ID)
 		session.AddLog("system", "Error: LLM returned empty response")
 		s.renderError(w, "The AI returned an empty response. Please try again with a more detailed description.", session.ID, string(session.Type), isPage)
 		return
 	}
 
-	session.SetRefinedDescription(refinedDesc)
-	session.AddLog("assistant", refinedDesc)
+	session.SetTechnicalPlanning(technicalPlanning)
+	session.AddLog("assistant", technicalPlanning)
 
 	data := struct {
 		SessionID          string
 		Type               string
-		RefinedDescription string
+		TechnicalPlanning  string
 		IsPage             bool
 		SkipBreakdown      bool
 		SprintName         string
@@ -1015,12 +1009,12 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	}{
 		SessionID:          session.ID,
 		Type:               string(session.Type),
-		RefinedDescription: refinedDesc,
+		TechnicalPlanning:  technicalPlanning,
 		IsPage:             isPage,
-		SkipBreakdown:      session.SkipBreakdown,
+		SkipBreakdown:      true, // Always skip breakdown in new flow
 		SprintName:         s.activeSprintName(),
-		CurrentStep:        2,
-		ShowBreakdownStep:  session.Type == WizardTypeFeature && !session.SkipBreakdown,
+		CurrentStep:        2,     // Now step 2 is Technical Planning
+		ShowBreakdownStep:  false, // No more breakdown step
 		NeedsTypeSelection: false,
 	}
 
@@ -1043,164 +1037,6 @@ func (s *Server) renderError(w http.ResponseWriter, errorMsg, sessionID, wizardT
 
 	w.WriteHeader(http.StatusOK) // Return 200 so HTMX displays the content
 	s.renderFragment(w, "wizard_error.html", data)
-}
-
-// handleWizardBreakdown sends description to LLM and returns task list
-func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid form data", http.StatusBadRequest)
-		return
-	}
-
-	sessionID := r.FormValue("session_id")
-	if sessionID == "" {
-		http.Error(w, "missing session_id", http.StatusBadRequest)
-		return
-	}
-
-	// Check for page mode
-	isPage := r.FormValue("page") == "1" || r.URL.Query().Get("page") == "1"
-
-	session, ok := s.wizardStore.Get(sessionID)
-	if !ok {
-		http.Error(w, "session not found", http.StatusBadRequest)
-		return
-	}
-
-	if session.RefinedDescription == "" {
-		http.Error(w, "no refined description found", http.StatusBadRequest)
-		return
-	}
-
-	session.SetStep(WizardStepBreakdown)
-	session.AddLog("system", "Starting task breakdown")
-
-	// If no opencode client, return mock tasks for testing
-	if s.oc == nil {
-		mockTasks := []WizardTask{
-			{
-				Title:       "Set up authentication database schema",
-				Description: "Create tables for users, sessions, and credentials",
-				Priority:    "high",
-				Complexity:  "M",
-			},
-			{
-				Title:       "Implement login form UI",
-				Description: "Create HTML/CSS form with email and password fields",
-				Priority:    "medium",
-				Complexity:  "S",
-			},
-		}
-		session.SetTasks(mockTasks)
-		session.AddLog("assistant", "Generated 2 tasks")
-
-		data := struct {
-			SessionID          string
-			Tasks              []WizardTask
-			IsPage             bool
-			SprintName         string
-			CurrentStep        int
-			ShowBreakdownStep  bool
-			NeedsTypeSelection bool
-		}{
-			SessionID:          session.ID,
-			Tasks:              mockTasks,
-			IsPage:             isPage,
-			SprintName:         s.activeSprintName(),
-			CurrentStep:        3,
-			ShowBreakdownStep:  true,
-			NeedsTypeSelection: false,
-		}
-
-		s.renderFragment(w, "wizard_breakdown.html", data)
-		return
-	}
-
-	// Create LLM session for breakdown
-	llmSession, err := s.oc.CreateSession("Wizard Breakdown")
-	if err != nil {
-		log.Printf("[Wizard] Error creating LLM session: %v", err)
-		http.Error(w, "failed to create LLM session", http.StatusInternalServerError)
-		return
-	}
-	defer func() {
-		if err := s.oc.DeleteSession(llmSession.ID); err != nil {
-			log.Printf("[Wizard] Error deleting LLM session %s: %v", llmSession.ID, err)
-		}
-	}()
-
-	// Build breakdown prompt with JSON schema requirement
-	prompt := BuildBreakdownPrompt(session.Type, session.RefinedDescription)
-	session.AddLog("system", "Sending breakdown request to LLM")
-
-	// Send message to LLM with timeout
-	ctx, cancel := context.WithTimeout(r.Context(), LLMRequestTimeout)
-	defer cancel()
-
-	model := opencode.ParseModelRef(s.wizardLLM)
-	var output strings.Builder
-	response, err := s.oc.SendMessageStream(ctx, llmSession.ID, prompt, model, &output)
-	if err != nil {
-		log.Printf("[Wizard] Error from LLM: %v", err)
-		session.AddLog("system", "LLM error: "+err.Error())
-		http.Error(w, "failed to break down tasks", http.StatusInternalServerError)
-		return
-	}
-
-	// Parse JSON response into tasks
-	var tasks []WizardTask
-	if len(response.Parts) > 0 {
-		tasks = parseTaskJSON(response.Parts[0].Text)
-	}
-
-	session.SetTasks(tasks)
-	session.AddLog("assistant", fmt.Sprintf("Generated %d tasks", len(tasks)))
-
-	data := struct {
-		SessionID          string
-		Tasks              []WizardTask
-		IsPage             bool
-		SprintName         string
-		CurrentStep        int
-		ShowBreakdownStep  bool
-		NeedsTypeSelection bool
-	}{
-		SessionID:          session.ID,
-		Tasks:              tasks,
-		IsPage:             isPage,
-		SprintName:         s.activeSprintName(),
-		CurrentStep:        3,
-		ShowBreakdownStep:  true,
-		NeedsTypeSelection: false,
-	}
-
-	s.renderFragment(w, "wizard_breakdown.html", data)
-}
-
-// buildBreakdownPrompt creates the prompt for task breakdown
-func buildBreakdownPrompt(wizardType WizardType, description string) string {
-	return fmt.Sprintf(`You are a technical project manager breaking down work into GitHub issues.
-
-%s description:
-%s
-
-Break this down into 3-7 specific, actionable tasks. For each task provide:
-- title: concise task title (max 80 chars)
-- description: detailed technical description
-- priority: one of [low, medium, high, critical]
-- complexity: one of [S, M, L, XL] (S=1-2 hours, M=half day, L=1-2 days, XL=3+ days)
-
-Return ONLY a JSON array in this exact format:
-[
-  {
-    "title": "Task title",
-    "description": "Task description",
-    "priority": "high",
-    "complexity": "M"
-  }
-]
-
-No markdown, no explanation, just the JSON array.`, wizardType, description)
 }
 
 // handleWizardCreate creates GitHub issues with epic + sub-task structure
@@ -1231,254 +1067,12 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 
 	session.SetStep(WizardStepCreate)
 
-	// If skipping breakdown, create a single issue instead of epic + sub-tasks
-	if session.SkipBreakdown {
-		session.AddLog("system", "Creating single issue (breakdown skipped)")
-		s.handleWizardCreateSingle(w, r, session, isPage)
-		return
-	}
-
-	// Only check for tasks if not skipping breakdown
-	if len(session.Tasks) == 0 {
-		http.Error(w, "no tasks to create", http.StatusBadRequest)
-		return
-	}
-
-	session.AddLog("system", fmt.Sprintf("Creating epic + %d sub-tasks", len(session.Tasks)))
-
-	// If no GitHub client, return mock confirmation for testing
-	if s.gh == nil {
-		mockTitle := session.RefinedDescription
-		if mockTitle == "" {
-			mockTitle = session.IdeaText
-		}
-		if len(mockTitle) > 200 {
-			mockTitle = mockTitle[:197] + "..."
-		}
-		mockEpic := CreatedIssue{
-			Number:  100,
-			Title:   mockTitle,
-			URL:     "https://github.com/test/issues/100",
-			IsEpic:  true,
-			Success: true,
-		}
-		mockSubTasks := []CreatedIssue{
-			{Number: 101, Title: session.Tasks[0].Title, URL: "https://github.com/test/issues/101", IsEpic: false, Success: true},
-			{Number: 102, Title: session.Tasks[1].Title, URL: "https://github.com/test/issues/102", IsEpic: false, Success: true},
-		}
-		session.SetCreatedIssues(append([]CreatedIssue{mockEpic}, mockSubTasks...))
-		session.SetEpicNumber(100)
-		session.AddLog("system", "Mock: Created epic #100 with 2 sub-tasks")
-
-		data := struct {
-			Epic               CreatedIssue
-			SubTasks           []CreatedIssue
-			HasErrors          bool
-			IsPage             bool
-			IsSingleIssue      bool
-			CurrentStep        int
-			ShowBreakdownStep  bool
-			NeedsTypeSelection bool
-		}{
-			Epic:               mockEpic,
-			SubTasks:           mockSubTasks,
-			HasErrors:          false,
-			IsPage:             isPage,
-			IsSingleIssue:      false,
-			CurrentStep:        4,
-			ShowBreakdownStep:  !session.SkipBreakdown,
-			NeedsTypeSelection: false,
-		}
-
-		s.wizardStore.Delete(sessionID)
-		s.renderFragment(w, "wizard_create.html", data)
-		return
-	}
-
-	// Step 1: Create Epic First (abort on failure)
-	epicLabels := []string{"epic"}
-	if session.Type == WizardTypeFeature {
-		epicLabels = append(epicLabels, "enhancement")
-	} else if session.Type == WizardTypeBug {
-		epicLabels = append(epicLabels, "bug")
-	}
-
-	epicTitle := session.RefinedDescription
-	if epicTitle == "" {
-		epicTitle = session.IdeaText
-	}
-	// GitHub issue titles have a 256 character limit
-	if len(epicTitle) > 200 {
-		epicTitle = epicTitle[:197] + "..."
-	}
-
-	epicBody := fmt.Sprintf("## Summary\n\n%s\n\n## Sub-tasks\n\n*Sub-tasks will be linked here after creation.*",
-		session.RefinedDescription)
-
-	epicNum, err := s.gh.CreateIssue(epicTitle, epicBody, epicLabels)
-	if err != nil {
-		log.Printf("[Wizard] Error creating epic: %v", err)
-		session.AddLog("system", fmt.Sprintf("Error creating epic: %v", err))
-		http.Error(w, fmt.Sprintf("Failed to create epic: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	session.SetEpicNumber(epicNum)
-	epicIssue := CreatedIssue{
-		Number:  epicNum,
-		Title:   epicTitle,
-		URL:     fmt.Sprintf("https://github.com/%s/issues/%d", s.gh.Repo, epicNum),
-		IsEpic:  true,
-		Success: true,
-	}
-	session.AddCreatedIssue(epicIssue)
-	session.AddLog("system", fmt.Sprintf("Created epic #%d", epicNum))
-
-	// Assign epic to active sprint if requested
-	sprintName := s.activeSprintName()
-	if addToSprint && sprintName != "" {
-		if err := s.gh.SetMilestone(epicNum, sprintName); err != nil {
-			log.Printf("[Wizard] Error assigning epic #%d to sprint %s: %v", epicNum, sprintName, err)
-			session.AddLog("system", fmt.Sprintf("Warning: could not assign epic to sprint: %v", err))
-		} else {
-			session.AddLog("system", fmt.Sprintf("Assigned epic #%d to %s", epicNum, sprintName))
-		}
-	}
-
-	// Step 2: Create Sub-tasks (continue on individual failures)
-	var subTaskLinks []string
-	for _, task := range session.Tasks {
-		// Map priority to label
-		priorityLabel := ""
-		switch strings.ToLower(task.Priority) {
-		case "critical", "high":
-			priorityLabel = "priority:high"
-		case "medium":
-			priorityLabel = "priority:medium"
-		case "low":
-			priorityLabel = "priority:low"
-		}
-
-		// Map complexity to size label
-		sizeLabel := ""
-		switch strings.ToUpper(task.Complexity) {
-		case "S":
-			sizeLabel = "size:S"
-		case "M":
-			sizeLabel = "size:M"
-		case "L":
-			sizeLabel = "size:L"
-		case "XL":
-			sizeLabel = "size:XL"
-		}
-
-		// Build labels array
-		labels := []string{"wizard"}
-		if priorityLabel != "" {
-			labels = append(labels, priorityLabel)
-		}
-		if sizeLabel != "" {
-			labels = append(labels, sizeLabel)
-		}
-
-		// Build sub-task body with parent reference
-		body := fmt.Sprintf("## Description\n\n%s\n\n---\n\n**Parent Epic:** #%d\n**Priority:** %s\n**Complexity:** %s",
-			task.Description,
-			epicNum,
-			task.Priority,
-			task.Complexity,
-		)
-
-		// Create the sub-task issue
-		issueNum, err := s.gh.CreateIssue(task.Title, body, labels)
-		if err != nil {
-			log.Printf("[Wizard] Error creating sub-task %q: %v", task.Title, err)
-			session.AddLog("system", fmt.Sprintf("Error creating sub-task %q: %v", task.Title, err))
-			session.AddCreatedIssue(CreatedIssue{
-				Title:   task.Title,
-				IsEpic:  false,
-				Success: false,
-				Error:   err.Error(),
-			})
-			continue
-		}
-
-		issueURL := fmt.Sprintf("https://github.com/%s/issues/%d", s.gh.Repo, issueNum)
-		subTaskLinks = append(subTaskLinks, fmt.Sprintf("- #%d: %s", issueNum, task.Title))
-
-		session.AddCreatedIssue(CreatedIssue{
-			Number:  issueNum,
-			Title:   task.Title,
-			URL:     issueURL,
-			IsEpic:  false,
-			Success: true,
-		})
-		session.AddLog("system", fmt.Sprintf("Created sub-task #%d: %s", issueNum, task.Title))
-
-		// Assign sub-task to active sprint if requested
-		if addToSprint && sprintName != "" {
-			if err := s.gh.SetMilestone(issueNum, sprintName); err != nil {
-				log.Printf("[Wizard] Error assigning #%d to sprint %s: %v", issueNum, sprintName, err)
-				session.AddLog("system", fmt.Sprintf("Warning: could not assign #%d to sprint: %v", issueNum, err))
-			}
-		}
-	}
-
-	// Step 3: Update Epic Body with sub-task links
-	if len(subTaskLinks) > 0 {
-		updatedEpicBody := fmt.Sprintf("## Summary\n\n%s\n\n## Sub-tasks\n\n%s",
-			session.RefinedDescription,
-			strings.Join(subTaskLinks, "\n"),
-		)
-		if err := s.gh.UpdateIssueBody(epicNum, updatedEpicBody); err != nil {
-			log.Printf("[Wizard] Error updating epic body: %v", err)
-			session.AddLog("system", fmt.Sprintf("Error updating epic body: %v", err))
-		} else {
-			session.AddLog("system", fmt.Sprintf("Updated epic #%d with %d sub-task links", epicNum, len(subTaskLinks)))
-		}
-	}
-
-	// Prepare data for template
-	var subTasks []CreatedIssue
-	hasErrors := false
-	for _, issue := range session.CreatedIssues {
-		if !issue.IsEpic {
-			subTasks = append(subTasks, issue)
-			if !issue.Success {
-				hasErrors = true
-			}
-		}
-	}
-
-	data := struct {
-		Epic               CreatedIssue
-		SubTasks           []CreatedIssue
-		HasErrors          bool
-		IsPage             bool
-		IsSingleIssue      bool
-		CurrentStep        int
-		ShowBreakdownStep  bool
-		NeedsTypeSelection bool
-		Type               string
-	}{
-		Epic:               epicIssue,
-		SubTasks:           subTasks,
-		HasErrors:          hasErrors,
-		IsPage:             isPage,
-		IsSingleIssue:      false,
-		CurrentStep:        4,
-		ShowBreakdownStep:  !session.SkipBreakdown,
-		NeedsTypeSelection: false,
-		Type:               string(session.Type),
-	}
-
-	// Clean up session after creation to free memory
-	s.wizardStore.Delete(sessionID)
-
-	s.renderFragment(w, "wizard_create.html", data)
+	// Always create a single issue in the new unified flow
+	session.AddLog("system", "Creating single issue from technical planning")
+	s.handleWizardCreateSingle(w, r, session, isPage)
 }
 
-// handleWizardCreateSingle creates a single GitHub issue (for small tasks/bugs without breakdown)
+// handleWizardCreateSingle creates a single GitHub issue (for the unified technical planning flow)
 func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request, session *WizardSession, isPage bool) {
 	// Read sprint assignment preference from form
 	addToSprint := r.FormValue("add_to_sprint") == "1"
@@ -1486,7 +1080,7 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 
 	// If no GitHub client, return mock confirmation for testing
 	if s.gh == nil {
-		mockTitle := session.RefinedDescription
+		mockTitle := session.TechnicalPlanning
 		if mockTitle == "" {
 			mockTitle = session.IdeaText
 		}
@@ -1519,7 +1113,7 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 			HasErrors:          false,
 			IsPage:             isPage,
 			IsSingleIssue:      true,
-			CurrentStep:        4,
+			CurrentStep:        3, // Step 3 is Create in new 3-step flow
 			ShowBreakdownStep:  false,
 			NeedsTypeSelection: false,
 			Type:               string(session.Type),
@@ -1538,8 +1132,8 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 		labels = append(labels, "bug")
 	}
 
-	// Build title from refined description (truncated to 200 chars)
-	title := session.RefinedDescription
+	// Build title from technical planning (truncated to 200 chars)
+	title := session.TechnicalPlanning
 	if title == "" {
 		title = session.IdeaText
 	}
@@ -1548,7 +1142,7 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 	}
 
 	// Create the single issue
-	body := session.RefinedDescription
+	body := session.TechnicalPlanning
 	issueNum, err := s.gh.CreateIssue(title, body, labels)
 	if err != nil {
 		log.Printf("[Wizard] Error creating single issue: %v", err)
@@ -1594,7 +1188,7 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 		HasErrors:          false,
 		IsPage:             isPage,
 		IsSingleIssue:      true,
-		CurrentStep:        4,
+		CurrentStep:        3, // Step 3 is Create in new 3-step flow
 		ShowBreakdownStep:  false,
 		NeedsTypeSelection: false,
 		Type:               string(session.Type),

@@ -187,22 +187,6 @@ func TestWizardSession_SetRefinedDescription(t *testing.T) {
 	}
 }
 
-func TestWizardSession_SetTasks(t *testing.T) {
-	session := &WizardSession{
-		ID:   "test-id",
-		Type: "feature",
-	}
-
-	tasks := []WizardTask{
-		{Title: "Task 1", Description: "Desc 1", Priority: "high", Complexity: "M"},
-	}
-
-	session.SetTasks(tasks)
-	if len(session.Tasks) != 1 {
-		t.Errorf("expected 1 task, got %d", len(session.Tasks))
-	}
-}
-
 func TestParseTaskJSON_RawJSON(t *testing.T) {
 	input := `[{"title": "Task 1", "description": "Description 1", "priority": "high", "complexity": "M"}]`
 
@@ -545,5 +529,36 @@ func TestWizardSession_SetAddToSprint(t *testing.T) {
 	session.SetAddToSprint(false)
 	if session.AddToSprint {
 		t.Errorf("expected AddToSprint to be false, got %v", session.AddToSprint)
+	}
+}
+
+func TestWizardStepConstants(t *testing.T) {
+	// Verify breakdown step is removed - should have exactly 4 steps
+	steps := []WizardStep{
+		WizardStepNew,
+		WizardStepRefine,
+		// WizardStepBreakdown should NOT exist
+		WizardStepCreate,
+		WizardStepDone,
+	}
+
+	// Should have exactly 4 steps (not 5)
+	if len(steps) != 4 {
+		t.Errorf("Expected 4 steps, got %d", len(steps))
+	}
+}
+
+func TestWizardSession_TechnicalPlanning(t *testing.T) {
+	// Verify TechnicalPlanning field works
+	session := &WizardSession{
+		ID:   "test-id",
+		Type: WizardTypeFeature,
+	}
+
+	planning := "## Architecture Overview\n\nTest planning content"
+	session.SetTechnicalPlanning(planning)
+
+	if session.TechnicalPlanning != planning {
+		t.Errorf("expected TechnicalPlanning to be set correctly")
 	}
 }

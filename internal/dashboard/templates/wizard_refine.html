@@ -1,31 +1,21 @@
 {{define "content"}}
 {{template "wizard-steps" .}}
 <div class="wizard-step">
-  <h2>Refined Description</h2>
+  <h2>Technical Planning</h2>
   
   <form id="refine-form" hx-post="/wizard/create{{if .IsPage}}?page=1{{end}}" hx-target="#wizard-content" hx-swap="innerHTML" hx-disabled-elt="button[type='submit']" data-is-page="{{.IsPage}}">
     <input type="hidden" name="session_id" value="{{.SessionID}}">
     {{if .IsPage}}<input type="hidden" name="page" value="1">{{end}}
     
     <div class="form-group">
-      <label for="refined_description">Refined Description:</label>
+      <label for="technical_planning">Technical Planning:</label>
       <div class="markdown-tabs">
         <button type="button" class="tab-btn active" data-tab="preview" onclick="switchTab('preview')">Preview</button>
         <button type="button" class="tab-btn" data-tab="edit" onclick="switchTab('edit')">Edit</button>
       </div>
       <div id="preview-container" class="markdown-preview"></div>
-      <textarea id="refined_description" name="refined_description" rows="8" style="display:none;">{{.RefinedDescription}}</textarea>
+      <textarea id="technical_planning" name="technical_planning" rows="12" style="display:none;">{{.TechnicalPlanning}}</textarea>
     </div>
-    
-    {{if eq .Type "feature"}}
-    <div class="form-group breakdown-option">
-      <label class="breakdown-checkbox">
-        <input type="checkbox" name="do_breakdown" value="1">
-        <span class="breakdown-checkbox-label">Break down into sub-tasks</span>
-      </label>
-      <p class="breakdown-hint">Check to create epic with sub-tasks</p>
-    </div>
-    {{end}}
     
     {{if .SprintName}}
     <div class="form-group sprint-option">
@@ -48,13 +38,13 @@
         <button type="button" class="btn" hx-get="/wizard/new?type={{.Type}}&amp;session_id={{.SessionID}}{{if .IsPage}}&amp;page=1{{end}}" hx-target="#wizard-content">
           ← Back
         </button>
-        <button type="button" class="btn btn-secondary" hx-post="/wizard/refine{{if .IsPage}}?page=1{{end}}" hx-target="#wizard-content" hx-disabled-elt="button[type='submit']" hx-vals='{"current_description": "{{.RefinedDescription}}"}'>
+        <button type="button" class="btn btn-secondary" hx-post="/wizard/refine{{if .IsPage}}?page=1{{end}}" hx-target="#wizard-content" hx-disabled-elt="button[type='submit']" hx-vals='{"current_description": "{{.TechnicalPlanning}}"}'>
           <span class="spinner" style="display:none;">⏳</span>
-          <span class="label">Refine Again</span>
+          <span class="label">Regenerate</span>
         </button>
         <button type="submit" class="btn btn-primary">
           <span class="spinner" style="display:none;">⏳</span>
-          <span class="label">Accept &amp; Continue</span>
+          <span class="label">Accept &amp; Create Issue</span>
         </button>
       </div>
     </div>
@@ -190,7 +180,7 @@
 
 <script>
 (function() {
-  const textarea = document.getElementById('refined_description');
+  const textarea = document.getElementById('technical_planning');
   const previewContainer = document.getElementById('preview-container');
   
   function renderMarkdown() {

@@ -66,6 +66,55 @@ Return ONLY a JSON array in this exact format:
 
 No markdown, no explanation, just the JSON array.`
 
+// TechnicalPlanningPromptTemplate is the unified template for both refinement and technical analysis
+// It outputs a structured technical planning document without implementation code
+const TechnicalPlanningPromptTemplate = `You are a technical architect creating a GitHub issue with technical planning.
+
+Your output MUST be a markdown document with exactly these sections:
+
+## Problem Statement / Feature Description
+[Clear, professional description of what needs to be done]
+
+## Architecture Overview
+[High-level description of the system architecture needed]
+- Key components involved
+- Data flow overview
+- Integration points
+
+## Files Requiring Changes
+[List specific file paths that will need modification]
+- Path to each file with brief explanation of what changes are needed
+- Include both existing files to modify and new files to create
+
+## Component Dependencies
+[Describe how components interact]
+- Dependencies between modules
+- External dependencies (libraries, APIs, services)
+- Database schema changes if applicable
+
+## Implementation Boundaries
+[Clear boundaries of what to do and what NOT to do]
+- What is in scope for this issue
+- What is explicitly out of scope
+- Constraints and limitations
+
+## Acceptance Criteria
+[2-4 specific, verifiable criteria for completion]
+
+CRITICAL RULES:
+- NO implementation code or algorithms
+- NO specific technical solutions or design patterns
+- NO "how to" instructions
+- Focus on WHAT and WHERE, not HOW
+- Be specific about file paths and component names
+- Keep architecture description at a high level
+
+Codebase context (for reference only):
+%s
+
+Original %s:
+%s`
+
 // BuildRefinementPrompt creates the prompt for idea refinement with codebase context
 // wizardType: the type of wizard (feature or bug)
 // idea: the original user idea
@@ -116,6 +165,27 @@ func BuildBreakdownPrompt(wizardType WizardType, description string) string {
 	}
 
 	return fmt.Sprintf(BreakdownPromptTemplate, typeLabel, description)
+}
+
+// BuildTechnicalPlanningPrompt creates the unified prompt for technical planning
+// This combines refinement + technical analysis into a single LLM call
+func BuildTechnicalPlanningPrompt(wizardType WizardType, idea string, codebaseContext string) string {
+	if codebaseContext == "" {
+		codebaseContext = "No codebase context provided."
+	}
+
+	var typeLabel string
+	if wizardType == WizardTypeBug {
+		typeLabel = "bug report"
+	} else {
+		typeLabel = "feature request"
+	}
+
+	return fmt.Sprintf(TechnicalPlanningPromptTemplate,
+		codebaseContext,
+		typeLabel,
+		idea,
+	)
 }
 
 // GetCodebaseContext gathers context about the existing codebase
