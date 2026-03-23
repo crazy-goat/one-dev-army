@@ -130,6 +130,23 @@ func (s *WizardSession) SetTechnicalPlanning(planning string) {
 	s.UpdatedAt = time.Now()
 }
 
+// MigrateOldSession converts an old session format to the new format
+// This handles sessions that were in the breakdown step
+func (s *WizardSession) MigrateOldSession() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// If session was in breakdown step, move it to refine
+	if s.CurrentStep == "breakdown" {
+		s.CurrentStep = WizardStepRefine
+	}
+
+	// If session has RefinedDescription but no TechnicalPlanning, convert it
+	if s.RefinedDescription != "" && s.TechnicalPlanning == "" {
+		s.TechnicalPlanning = s.RefinedDescription
+	}
+}
+
 // SetIdeaText updates the idea text (thread-safe)
 func (s *WizardSession) SetIdeaText(idea string) {
 	s.mu.Lock()
@@ -260,12 +277,15 @@ func (ws *WizardSessionStore) Create(wizardType string) (*WizardSession, error) 
 	return session, nil
 }
 
-// Get retrieves a session by ID
+// Get retrieves a session by ID and migrates it if needed
 func (ws *WizardSessionStore) Get(id string) (*WizardSession, bool) {
 	ws.mu.RLock()
 	defer ws.mu.RUnlock()
 
 	session, ok := ws.sessions[id]
+	if ok {
+		session.MigrateOldSession()
+	}
 	return session, ok
 }
 

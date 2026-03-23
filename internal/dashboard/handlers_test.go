@@ -73,7 +73,7 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 	tmpls["wizard_modal.html"] = wizardModalTmpl
 
 	// Parse wizard partial templates (no layout)
-	wizardPartials := []string{"wizard_new.html", "wizard_refine.html", "wizard_breakdown.html", "wizard_create.html", "wizard_error.html", "wizard_logs.html"}
+	wizardPartials := []string{"wizard_new.html", "wizard_refine.html", "wizard_create.html", "wizard_error.html", "wizard_logs.html"}
 	for _, page := range wizardPartials {
 		t, err := template.ParseFiles(
 			filepath.Join(templateDir, "wizard_steps.html"),
@@ -2443,7 +2443,7 @@ func TestWizardStepIndicator_Step1Active(t *testing.T) {
 	}
 }
 
-// TestWizardStepIndicator_ShowBreakdownStep_FeatureType verifies breakdown step is shown for feature type
+// TestWizardStepIndicator_ShowBreakdownStep_FeatureType verifies 3-step flow for feature type
 func TestWizardStepIndicator_ShowBreakdownStep_FeatureType(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
@@ -2459,17 +2459,22 @@ func TestWizardStepIndicator_ShowBreakdownStep_FeatureType(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// For feature type, should show 4 steps (Idea, Refine, Breakdown, Create)
+	// For feature type, should show 3 steps (Idea, Technical Planning, Create) - no more breakdown
 	// Count the step-label spans
-	stepLabels := []string{"Idea", "Refine", "Breakdown", "Create"}
+	stepLabels := []string{"Idea", "Technical Planning", "Create"}
 	for _, label := range stepLabels {
 		if !strings.Contains(body, `<span class="step-label">`+label+`</span>`) {
 			t.Errorf("step indicator missing '%s' label for feature type", label)
 		}
 	}
+
+	// Should NOT show Breakdown step anymore
+	if strings.Contains(body, `<span class="step-label">Breakdown</span>`) {
+		t.Error("step indicator should NOT show 'Breakdown' step (removed in new flow)")
+	}
 }
 
-// TestWizardStepIndicator_ShowBreakdownStep_BugType verifies breakdown step is hidden for bug type
+// TestWizardStepIndicator_ShowBreakdownStep_BugType verifies 3-step flow for bug type
 func TestWizardStepIndicator_ShowBreakdownStep_BugType(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
@@ -2485,13 +2490,13 @@ func TestWizardStepIndicator_ShowBreakdownStep_BugType(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// For bug type, should NOT show Breakdown step
+	// For bug type, should NOT show Breakdown step (removed in new flow)
 	if strings.Contains(body, `<span class="step-label">Breakdown</span>`) {
-		t.Error("step indicator should NOT show 'Breakdown' step for bug type")
+		t.Error("step indicator should NOT show 'Breakdown' step for bug type (removed in new flow)")
 	}
 
-	// Should only have 3 steps (Idea, Refine, Create)
-	stepLabels := []string{"Idea", "Refine", "Create"}
+	// Should have 3 steps (Idea, Technical Planning, Create) - same as feature now
+	stepLabels := []string{"Idea", "Technical Planning", "Create"}
 	for _, label := range stepLabels {
 		if !strings.Contains(body, `<span class="step-label">`+label+`</span>`) {
 			t.Errorf("step indicator missing '%s' label for bug type", label)
