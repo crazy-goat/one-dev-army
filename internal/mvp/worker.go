@@ -83,7 +83,8 @@ Instructions:
 - Run the test command and ensure all tests pass
 - Commit your fixes with a descriptive message
 - You are in a fully automated pipeline. NEVER ask questions or wait for input.
-- Make your best judgment and proceed immediately.`
+- Make your best judgment and proceed immediately.
+- CRITICAL: Do NOT use git worktrees. Work directly in the provided working directory. Do NOT run "git worktree" commands.`
 
 const implementationPrompt = `Implement the following plan for GitHub issue #%d: %s
 
@@ -102,7 +103,8 @@ Instructions:
 - Do NOT proceed until tests pass — iterate on the code until they do
 - Commit your changes with a descriptive message
 - You are in a fully automated pipeline. NEVER ask questions or wait for input.
-- Make your best judgment and proceed immediately.`
+- Make your best judgment and proceed immediately.
+- CRITICAL: Do NOT use git worktrees. Work directly in the provided working directory. Do NOT run "git worktree" commands.`
 
 type Worker struct {
 	id      int
