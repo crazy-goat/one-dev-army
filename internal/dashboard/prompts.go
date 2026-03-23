@@ -10,36 +10,30 @@ import (
 
 // RefinementPromptTemplate is the base template for idea refinement
 // It instructs the LLM to analyze the idea in the context of the existing codebase
-const RefinementPromptTemplate = `You are a technical product manager helping to refine a %s.
+const RefinementPromptTemplate = `You are a GitHub issue writer. Your ONLY output is a markdown issue body. You NEVER explain, narrate, or think out loud.
 
-Analyze the following in the context of the existing codebase:
+RULES:
+- Output ONLY the issue body in markdown. Nothing else.
+- Do NOT start with "Now I", "Let me", "Here's", "Based on", "I'll", "After analyzing", or ANY preamble.
+- Do NOT include phrases like "comprehensive understanding", "I have analyzed", "Let me create".
+- First character of your response MUST be "#" (a markdown heading) or "-" (a list item).
+- Output MUST be in English regardless of input language.
 
-=== EXISTING CODEBASE CONTEXT ===
+Codebase context (for your reference only, do NOT discuss it):
 %s
-=== END CODEBASE CONTEXT ===
 
 Original %s:
 %s
 
-Please refine this %s to include:
-1. Clear %s
+Write a professional GitHub issue body for this %s that covers:
+1. %s
 2. %s
 3. %s
 4. %s
 5. %s
-6. Analysis of how this fits with existing codebase patterns and architecture
+6. How it fits with existing codebase patterns
 
-IMPORTANT: Consider the codebase context above when refining. Look for:
-- Existing similar features or patterns you should follow
-- Technical constraints or requirements from the current stack
-- Integration points with existing code
-- Consistency with current architecture
-
-Return a well-structured, professional %s suitable for a GitHub issue.
-
-CRITICAL: Return ONLY the markdown content. No introduction, no preamble, no conversational text, no "Let me summarize". Start directly with the structured content. No "Here's the refined description" or similar phrases. Just the content itself.
-
-CRITICAL: Output MUST be in English regardless of input language.`
+Format as a well-structured markdown %s suitable for a GitHub issue.`
 
 // BreakdownPromptTemplate is the base template for task breakdown
 // It instructs the LLM to break down a technical description into actionable tasks
@@ -83,7 +77,6 @@ func BuildRefinementPrompt(wizardType WizardType, idea string, codebaseContext s
 
 	if wizardType == WizardTypeBug {
 		return fmt.Sprintf(RefinementPromptTemplate,
-			"bug report",                  // %s - role context
 			codebaseContext,               // %s - codebase context
 			"bug description",             // %s - original type
 			idea,                          // %s - original content
@@ -98,7 +91,6 @@ func BuildRefinementPrompt(wizardType WizardType, idea string, codebaseContext s
 	}
 
 	return fmt.Sprintf(RefinementPromptTemplate,
-		"feature idea",               // %s - role context
 		codebaseContext,              // %s - codebase context
 		"idea",                       // %s - original type
 		idea,                         // %s - original content
@@ -149,4 +141,31 @@ func GetCodebaseContext() string {
 	context.WriteString("- LLM integration via OpenCode API\n")
 
 	return context.String()
+}
+
+// stripLLMPreamble removes conversational preamble that LLMs sometimes prepend
+// before the actual content. It looks for the first markdown heading or list item
+// and discards everything before it.
+func stripLLMPreamble(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+
+	// If it already starts with markdown content, return as-is
+	if text[0] == '#' || text[0] == '-' || text[0] == '*' {
+		return text
+	}
+
+	// Find the first markdown heading
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			return strings.TrimSpace(strings.Join(lines[i:], "\n"))
+		}
+	}
+
+	// No heading found — return the whole thing (better than nothing)
+	return text
 }

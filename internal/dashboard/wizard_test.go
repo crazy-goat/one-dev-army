@@ -284,8 +284,8 @@ func TestParseTaskJSON_MultipleTasks(t *testing.T) {
 func TestBuildRefinementPrompt_Feature(t *testing.T) {
 	codebaseContext := "Project uses Go with standard layout"
 	prompt := BuildRefinementPrompt(WizardTypeFeature, "Create a login page", codebaseContext)
-	if !strings.Contains(prompt, "feature idea") {
-		t.Error("expected prompt to mention 'feature idea'")
+	if !strings.Contains(prompt, "feature description") {
+		t.Error("expected prompt to mention 'feature description'")
 	}
 	if !strings.Contains(prompt, "Create a login page") {
 		t.Error("expected prompt to contain the original idea")
@@ -293,16 +293,13 @@ func TestBuildRefinementPrompt_Feature(t *testing.T) {
 	if !strings.Contains(prompt, codebaseContext) {
 		t.Error("expected prompt to contain codebase context")
 	}
-	if !strings.Contains(prompt, "EXISTING CODEBASE CONTEXT") {
-		t.Error("expected prompt to contain codebase context section header")
-	}
-	if !strings.Contains(prompt, "how this fits with existing codebase patterns") {
+	if !strings.Contains(prompt, "existing codebase patterns") {
 		t.Error("expected prompt to instruct analyzing codebase patterns")
 	}
-	if !strings.Contains(prompt, "CRITICAL: Return ONLY") {
-		t.Error("expected prompt to contain anti-preamble instruction")
+	if !strings.Contains(prompt, "ONLY output is a markdown issue body") {
+		t.Error("expected prompt to enforce markdown-only output")
 	}
-	if !strings.Contains(prompt, "No introduction, no preamble") {
+	if !strings.Contains(prompt, "Do NOT start with") {
 		t.Error("expected prompt to forbid conversational preamble")
 	}
 }
@@ -319,13 +316,10 @@ func TestBuildRefinementPrompt_Bug(t *testing.T) {
 	if !strings.Contains(prompt, codebaseContext) {
 		t.Error("expected prompt to contain codebase context")
 	}
-	if !strings.Contains(prompt, "EXISTING CODEBASE CONTEXT") {
-		t.Error("expected prompt to contain codebase context section header")
+	if !strings.Contains(prompt, "ONLY output is a markdown issue body") {
+		t.Error("expected prompt to enforce markdown-only output")
 	}
-	if !strings.Contains(prompt, "CRITICAL: Return ONLY") {
-		t.Error("expected prompt to contain anti-preamble instruction")
-	}
-	if !strings.Contains(prompt, "No introduction, no preamble") {
+	if !strings.Contains(prompt, "Do NOT start with") {
 		t.Error("expected prompt to forbid conversational preamble")
 	}
 }

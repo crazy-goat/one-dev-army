@@ -985,10 +985,10 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract refined description from response
+	// Extract refined description from response, stripping any LLM preamble
 	var refinedDesc string
 	if len(response.Parts) > 0 {
-		refinedDesc = strings.TrimSpace(response.Parts[0].Text)
+		refinedDesc = stripLLMPreamble(response.Parts[0].Text)
 	}
 
 	// Validate that we got a non-empty response
