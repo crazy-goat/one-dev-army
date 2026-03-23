@@ -33,12 +33,12 @@ type boardData struct {
 	Paused       bool
 	Processing   bool
 	CurrentIssue string
+	Blocked      []taskCard
 	Backlog      []taskCard
 	Progress     []taskCard
 	AIReview     []taskCard
 	Approve      []taskCard
 	Done         []taskCard
-	Blocked      []taskCard
 	Failed       []taskCard
 }
 
