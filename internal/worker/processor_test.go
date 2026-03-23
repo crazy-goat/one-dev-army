@@ -74,10 +74,7 @@ func testConfig() *config.Config {
 			MaxRetries: 3,
 			Stages: []config.Stage{
 				{Name: "analysis", LLM: "claude-sonnet-4"},
-				{Name: "planning", LLM: "claude-opus-4"},
-				{Name: "plan-review", LLM: "claude-opus-4"},
 				{Name: "coding", LLM: "claude-sonnet-4"},
-				{Name: "testing", LLM: "claude-sonnet-4"},
 				{Name: "code-review", LLM: "claude-opus-4"},
 				{Name: "merge", ManualApproval: false},
 			},
@@ -346,7 +343,7 @@ func TestStageExecutor_PlanReview_Approved(t *testing.T) {
 
 	executor := worker.NewStageExecutor(cfg, oc, nil, task, wt)
 
-	result, err := executor.Execute(1, pipeline.StagePlanReview, `{"steps": []}`)
+	result, err := executor.Execute(1, pipeline.StageCodeReview, `{"steps": []}`)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -356,11 +353,8 @@ func TestStageExecutor_PlanReview_Approved(t *testing.T) {
 	}
 }
 
-func TestStageExecutor_Testing_Success(t *testing.T) {
+func TestStageExecutor_CreatePR(t *testing.T) {
 	cfg := testConfig()
-	cfg.Tools.LintCmd = "echo ok"
-	cfg.Tools.TestCmd = "echo ok"
-	cfg.Tools.E2ECmd = ""
 
 	task := &worker.Task{
 		ID:          1,
@@ -372,56 +366,20 @@ func TestStageExecutor_Testing_Success(t *testing.T) {
 	repoDir := t.TempDir()
 	initGitRepo(t, repoDir)
 	brMgr := git.NewBranchManager(repoDir)
-	if err := brMgr.CreateBranch("task/10-test-task-success"); err != nil {
+	if err := brMgr.CreateBranch("task/10-test-task-createpr"); err != nil {
 		t.Fatalf("creating branch: %v", err)
 	}
-	wt := &git.Worktree{Name: "test-worker-ts", Path: repoDir, Branch: "task/10-test-task-success"}
+	wt := &git.Worktree{Name: "test-worker-cpr", Path: repoDir, Branch: "task/10-test-task-createpr"}
 
 	executor := worker.NewStageExecutor(cfg, nil, nil, task, wt)
 
-	result, err := executor.Execute(1, pipeline.StageTesting, "")
+	result, err := executor.Execute(1, pipeline.StageCreatePR, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	if !result.Success {
 		t.Errorf("expected success, got failure: %s", result.Output)
-	}
-}
-
-func TestStageExecutor_Testing_Failure(t *testing.T) {
-	cfg := testConfig()
-	cfg.Tools.LintCmd = "echo ok"
-	cfg.Tools.TestCmd = "false"
-	cfg.Tools.E2ECmd = ""
-
-	task := &worker.Task{
-		ID:          1,
-		IssueNumber: 10,
-		Title:       "Test task",
-		Body:        "Test body",
-	}
-
-	repoDir := t.TempDir()
-	initGitRepo(t, repoDir)
-	brMgr := git.NewBranchManager(repoDir)
-	if err := brMgr.CreateBranch("task/10-test-task-fail"); err != nil {
-		t.Fatalf("creating branch: %v", err)
-	}
-	wt := &git.Worktree{Name: "test-worker-tf", Path: repoDir, Branch: "task/10-test-task-fail"}
-
-	executor := worker.NewStageExecutor(cfg, nil, nil, task, wt)
-
-	result, err := executor.Execute(1, pipeline.StageTesting, "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result.Success {
-		t.Error("expected failure when test command fails")
-	}
-	if !strings.Contains(result.Output, "test:") {
-		t.Errorf("output should mention test failure, got: %s", result.Output)
 	}
 }
 
@@ -499,7 +457,7 @@ func TestProcess_FullPipeline(t *testing.T) {
 	log.mu.Lock()
 	defer log.mu.Unlock()
 
-	expectedStages := []string{"analysis", "planning", "plan-review", "coding", "code-review"}
+	expectedStages := []string{"analysis", "coding", "code-review"}
 	if len(log.sessions) < len(expectedStages) {
 		t.Fatalf("expected at least %d sessions, got %d: %v", len(expectedStages), len(log.sessions), log.sessions)
 	}

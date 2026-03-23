@@ -6,11 +6,11 @@ This document describes the complete state machine for ticket processing in the 
 
 ## States
 
-The system has 11 distinct states, each represented by a GitHub label:
+The system has 10 distinct states, each represented by a GitHub label with the `stage:` prefix:
 
 | State | Label | Description |
 |-------|-------|-------------|
-| **Backlog** | `stage:backlog` or no label | Initial state, ticket waiting to be picked up |
+| **Backlog** | no `stage:*` label | Initial state, ticket waiting to be picked up |
 | **Plan** | `stage:analysis` | Technical planning phase |
 | **Code** | `stage:coding` | Implementation phase |
 | **AI Review** | `stage:code-review` | AI code review phase |
@@ -18,7 +18,7 @@ The system has 11 distinct states, each represented by a GitHub label:
 | **Approve** | `stage:awaiting-approval` | PR created, waiting for manual approval |
 | **Merge** | `stage:merging` | Merging PR to main branch |
 | **Done** | *no label* | Ticket completed, issue closed |
-| **Failed** | `stage:failed` + previous stage label | Error occurred during processing |
+| **Failed** | `stage:failed` | Error occurred during processing |
 | **Blocked** | `stage:blocked` | Manually blocked by user |
 
 ## State Transitions
@@ -51,13 +51,13 @@ Failed → [User: Cancel] → Backlog
 
 **Entry Conditions:**
 - Ticket is in milestone
-- No `stage:*` label OR has `stage:backlog` label
+- No `stage:*` label
 
 **Exit Transitions:**
 
 | To | Trigger | Actions |
 |----|---------|---------|
-| **Plan** | Orchestrator picks ticket | Remove `stage:backlog`, add `stage:analysis` |
+| **Plan** | Orchestrator picks ticket | `SetStageLabel("Plan")` → adds `stage:analysis` |
 | **Done** | User closes ticket manually | Close issue (e.g., duplicate, wontfix) |
 
 ### Plan
@@ -69,8 +69,8 @@ Failed → [User: Cancel] → Backlog
 
 | To | Trigger | Actions |
 |----|---------|---------|
-| **Code** | Technical planning completed successfully | Remove `stage:analysis`, add `stage:coding` |
-| **Done** | AI detects "Already Done" in another ticket | Remove `stage:analysis`, close issue with comment |
+| **Code** | Technical planning completed successfully | `SetStageLabel("Code")` → adds `stage:coding` |
+| **Done** | AI detects "Already Done" in another ticket | `SetStageLabel("Done")` → closes issue with comment |
 
 **Note:** Technical planning always produces a result. If the AI determines the ticket is already implemented elsewhere, it transitions to Done instead of Code.
 
@@ -83,7 +83,7 @@ Failed → [User: Cancel] → Backlog
 
 | To | Trigger | Actions |
 |----|---------|---------|
-| **AI Review** | Implementation completed successfully | Remove `stage:coding`, add `stage:code-review` |
+| **AI Review** | Implementation completed successfully | `SetStageLabel("AI Review")` → adds `stage:code-review` |
 
 **Note:** Implementation always succeeds. The worker will retry internally if needed, but never fails at this stage.
 
@@ -96,8 +96,8 @@ Failed → [User: Cancel] → Backlog
 
 | To | Trigger | Actions |
 |----|---------|---------|
-| **Create PR** | AI review approved | Remove `stage:code-review`, add `stage:create-pr` |
-| **Code** | AI review has comments/issues | Remove `stage:code-review`, add `stage:coding` (retry implementation) |
+| **Create PR** | AI review approved | `SetStageLabel("Create PR")` → adds `stage:create-pr` |
+| **Code** | AI review has comments/issues | `SetStageLabel("Code")` → adds `stage:coding` (retry implementation) |
 
 ### Create PR
 
@@ -108,8 +108,8 @@ Failed → [User: Cancel] → Backlog
 
 | To | Trigger | Actions |
 |----|---------|---------|
-| **Approve** | PR created successfully | Remove `stage:create-pr`, add `stage:awaiting-approval` |
-| **Failed** | Error creating PR (permissions, conflicts, etc.) | Add `stage:failed` (keep `stage:create-pr`) |
+| **Approve** | PR created successfully | `SetStageLabel("Approve")` → adds `stage:awaiting-approval` |
+| **Failed** | Error creating PR (permissions, conflicts, etc.) | `SetStageLabel("Failed")` → adds `stage:failed` |
 
 ### Approve
 
@@ -120,8 +120,8 @@ Failed → [User: Cancel] → Backlog
 
 | To | Trigger | Actions |
 |----|---------|---------|
-| **Merge** | User clicks "Approve & Merge" | Remove `stage:awaiting-approval`, add `stage:merging` |
-| **Code** | User has comments/rejects PR | Remove `stage:awaiting-approval`, add `stage:coding` (retry) |
+| **Merge** | User clicks "Approve & Merge" | `SetStageLabel("Merge")` → adds `stage:merging` |
+| **Code** | User has comments/rejects PR | `SetStageLabel("Code")` → adds `stage:coding` (retry) |
 
 ### Merge
 
@@ -132,20 +132,20 @@ Failed → [User: Cancel] → Backlog
 
 | To | Trigger | Actions |
 |----|---------|---------|
-| **Done** | Merge successful | Remove all `stage:*` labels, close issue |
-| **Failed** | Merge conflict | Add `stage:failed` (keep `stage:merging`) |
+| **Done** | Merge successful | `SetStageLabel("Done")` → removes all labels, closes issue |
+| **Failed** | Merge conflict | `SetStageLabel("Failed")` → adds `stage:failed` |
 
 ### Failed
 
 **Entry Conditions:**
-- Label: `stage:failed` + previous stage label
+- Label: `stage:failed`
 
 **Exit Transitions:**
 
 | To | Trigger | Actions |
 |----|---------|---------|
-| **Code** | User clicks "Retry" | Remove `stage:failed`, add `stage:coding` (always restart from Code) |
-| **Backlog** | User clicks "Cancel" | Remove `stage:failed`, add `stage:backlog` |
+| **Code** | User clicks "Retry" | `SetStageLabel("Code")` → adds `stage:coding` |
+| **Backlog** | User clicks "Cancel" | `SetStageLabel("Backlog")` → removes all stage labels |
 
 **Note:** Retry always goes back to **Code** state, regardless of which stage originally failed.
 
@@ -158,7 +158,7 @@ Failed → [User: Cancel] → Backlog
 
 | To | Trigger | Actions |
 |----|---------|---------|
-| **Backlog** | User unblocks ticket | Remove `stage:blocked`, add `stage:backlog` |
+| **Backlog** | User clicks "Unblock" | `SetStageLabel("Backlog")` → removes all stage labels |
 
 **Note:** When unblocking, ticket always returns to Backlog, not to the previous state.
 
@@ -177,13 +177,25 @@ Dashboard columns are determined by the current label with the following priorit
 
 1. `stage:blocked` → **Blocked**
 2. `stage:failed` → **Failed**
-3. `stage:merging` → **Merge** (or part of Approve column)
+3. `stage:merging` → **Approve** (part of Approve column)
 4. `stage:awaiting-approval` → **Approve**
-5. `stage:create-pr` → **Create PR** (or part of AI Review column)
+5. `stage:create-pr` → **AI Review** (part of AI Review column)
 6. `stage:code-review` → **AI Review**
 7. `stage:coding` → **Code**
 8. `stage:analysis` → **Plan**
-9. `stage:backlog` or no label → **Backlog**
+9. No `stage:*` label → **Backlog**
+10. Issue closed → **Done**
+
+## Dashboard Actions
+
+| Column | Action | Transition |
+|--------|--------|------------|
+| **Backlog** | Block | → Blocked |
+| **Blocked** | Unblock | → Backlog |
+| **Approve** | Approve & Merge | → Merge → Done (or → Failed on conflict) |
+| **Approve** | Decline | → Code |
+| **Failed** | Retry | → Code |
+| **Failed** | Cancel | → Backlog |
 
 ## Special Cases
 
@@ -191,28 +203,38 @@ Dashboard columns are determined by the current label with the following priorit
 
 During the **Plan** phase, the AI may detect that the ticket is already implemented in another issue or PR. In this case:
 - Transition: Plan → Done
-- Actions: Remove `stage:analysis`, add comment explaining why, close issue
+- Actions: `SetStageLabel("Done")`, add comment explaining why
 
 ### Retry Behavior
 
 When retrying from **Failed** state:
 - Always transition to **Code** state
-- Remove `stage:failed` label
-- Add `stage:coding` label
+- `SetStageLabel("Code")` removes `stage:failed` and adds `stage:coding`
 - Worker restarts implementation from scratch
 
 ### Block/Unblock
 
 When a ticket is blocked:
-- Add `stage:blocked` label (keep existing stage label)
+- `SetStageLabel("Blocked")` removes all previous stage labels and adds `stage:blocked`
 - Ticket appears in Blocked column
 
 When unblocked:
-- Remove `stage:blocked`
-- Add `stage:backlog` (return to Backlog)
+- `SetStageLabel("Backlog")` removes `stage:blocked`
+- Ticket returns to Backlog
 - User must manually restart processing
 
 ## Implementation Notes
+
+### Universal Stage Transition: `SetStageLabel`
+
+All stage transitions go through `github.Client.SetStageLabel(issueNumber, stageName)`:
+
+1. Validates the stage name against `StageToLabels` map
+2. Gets current issue labels
+3. **Removes ALL `stage:*` labels** (and legacy bare labels for backward compatibility)
+4. Adds the new stage's labels
+5. Special case: "Done" also closes the issue
+6. Returns the updated issue
 
 ### GitHub Labels Required
 
@@ -232,14 +254,15 @@ stage:blocked
 
 ### State Consistency
 
-- A ticket should never have more than one `stage:*` label (except when in Failed state)
-- Failed state is the only state where two labels coexist: `stage:failed` + the stage where error occurred
-- When transitioning, always remove the old label before adding the new one
+- A ticket should never have more than one `stage:*` label
+- `SetStageLabel` enforces this by removing ALL stage labels before adding the new one
+- When transitioning, the old label is always removed before the new one is added
 - Done state has no `stage:*` labels at all
+- Backlog state has no `stage:*` labels (or optionally `stage:backlog`)
 
 ### Error Handling
 
-All errors during processing (except "Already Done") result in Failed state:
+All errors during processing result in Failed state:
 - Technical planning errors: Not applicable (always succeeds or detects Already Done)
 - Implementation errors: Not applicable (always succeeds)
 - AI review errors: Transition to Code for fixes
@@ -251,3 +274,4 @@ All errors during processing (except "Already Done") result in Failed state:
 - **2026-03-23**: Initial state machine definition
 - **2026-03-23**: Added Merge state between Approve and Done
 - **2026-03-23**: Simplified error handling - all errors go to Failed, all retries go to Code
+- **2026-03-23**: Aligned all labels to use `stage:` prefix, added Create PR stage, added Block/Unblock actions, documented `SetStageLabel` as universal transition method

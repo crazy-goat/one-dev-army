@@ -220,7 +220,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	if resumeFrom <= 1 {
 		task.Status = StatusCoding
 		log.Printf("[Worker %d] [2/4] Implementing #%d (includes tests)...", w.id, task.Issue.Number)
-		w.setStageLabel("stage:coding")
+		w.setStageLabel("Code")
 		stepStart := time.Now()
 		if err := w.implement(ctx, task, implPlan); err != nil {
 			task.Status = StatusFailed
@@ -228,7 +228,6 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			log.Printf("[Worker %d] ✗ FAILED implementing: %v", w.id, err)
 			return task.Result.Error
 		}
-		w.setStageLabel("stage:testing")
 		log.Printf("[Worker %d] [2/4] Implementation done (%s)", w.id, time.Since(stepStart).Round(time.Second))
 	} else {
 		log.Printf("[Worker %d] [2/4] Skipping implement (completed previously)", w.id)
@@ -237,7 +236,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	if resumeFrom <= 2 {
 		task.Status = StatusReviewing
 		log.Printf("[Worker %d] [3/4] Code review #%d...", w.id, task.Issue.Number)
-		w.setStageLabel("stage:code-review")
+		w.setStageLabel("AI Review")
 		stepStart := time.Now()
 		approved, review, crErr := w.codeReview(ctx, task, "")
 		if crErr != nil {
@@ -291,7 +290,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	if resumeFrom <= 3 {
 		task.Status = StatusCreatingPR
 		log.Printf("[Worker %d] [4/4] Creating PR for #%d...", w.id, task.Issue.Number)
-		w.setStageLabel("Approve")
+		w.setStageLabel("Create PR")
 		stepStart := time.Now()
 		prURL, err = w.createPR(ctx, task)
 		if err != nil {

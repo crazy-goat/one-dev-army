@@ -175,14 +175,14 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				continue
 			}
 			openCount++
-			if hasLabel(issues[i], "in-progress") {
+			if hasLabel(issues[i], "in-progress") || hasLabel(issues[i], "stage:coding") || hasLabel(issues[i], "stage:analysis") || hasLabel(issues[i], "stage:code-review") || hasLabel(issues[i], "stage:create-pr") {
 				if inProgressIssue == nil {
 					inProgressIssue = &issues[i]
 				}
 				continue
 			}
 			// Issues with active branches — block the entire queue
-			if hasLabel(issues[i], "awaiting-approval") || hasLabel(issues[i], "failed") {
+			if hasLabel(issues[i], "stage:awaiting-approval") || hasLabel(issues[i], "awaiting-approval") || hasLabel(issues[i], "stage:failed") || hasLabel(issues[i], "failed") {
 				blocking = append(blocking, issues[i])
 				log.Printf("[Orchestrator]   blocking #%d %q (%s)", issues[i].Number, issues[i].Title, labelNames(issues[i]))
 				continue
@@ -223,9 +223,6 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		log.Printf("[Orchestrator] ▶ Picking up #%d: %s", nextIssue.Number, nextIssue.Title)
 
-		if err := o.gh.AddLabel(nextIssue.Number, "in-progress"); err != nil {
-			log.Printf("[Orchestrator] Error adding in-progress label: %v", err)
-		}
 		if err := o.gh.RemoveLabel(nextIssue.Number, "merge-failed"); err != nil {
 			log.Printf("[Orchestrator] Error removing merge-failed label: %v", err)
 		}
@@ -263,21 +260,15 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if err := o.gh.AddComment(nextIssue.Number, comment); err != nil {
 				log.Printf("[Orchestrator] Error adding comment: %v", err)
 			}
-			if err := o.gh.RemoveLabel(nextIssue.Number, "in-progress"); err != nil {
-				log.Printf("[Orchestrator] Error removing in-progress label: %v", err)
-			}
-			if err := o.gh.CloseIssue(nextIssue.Number); err != nil {
-				log.Printf("[Orchestrator] Error closing issue: %v", err)
+			if _, err := o.gh.SetStageLabel(nextIssue.Number, "Done"); err != nil {
+				log.Printf("[Orchestrator] Error setting Done stage for #%d: %v", nextIssue.Number, err)
 			}
 			o.recordStep(nextIssue.Number, "done", "Closed as already done")
 		} else if processErr != nil {
 			log.Printf("[Orchestrator] ✗ Failed #%d: %v", nextIssue.Number, processErr)
 			o.recordStep(nextIssue.Number, "failed", processErr.Error())
-			if err := o.gh.RemoveLabel(nextIssue.Number, "in-progress"); err != nil {
-				log.Printf("[Orchestrator] Error removing in-progress label: %v", err)
-			}
-			if err := o.gh.AddLabel(nextIssue.Number, "failed"); err != nil {
-				log.Printf("[Orchestrator] Error adding failed label: %v", err)
+			if _, err := o.gh.SetStageLabel(nextIssue.Number, "Failed"); err != nil {
+				log.Printf("[Orchestrator] Error setting Failed stage for #%d: %v", nextIssue.Number, err)
 			}
 		} else {
 			prURL := ""
@@ -286,11 +277,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 			log.Printf("[Orchestrator] ✓ Completed #%d → awaiting approval: %s", nextIssue.Number, prURL)
 			o.recordStep(nextIssue.Number, "waiting-for-approval", prURL)
-			if err := o.gh.RemoveLabel(nextIssue.Number, "in-progress"); err != nil {
-				log.Printf("[Orchestrator] Error removing in-progress label: %v", err)
-			}
-			if err := o.gh.AddLabel(nextIssue.Number, "awaiting-approval"); err != nil {
-				log.Printf("[Orchestrator] Error adding awaiting-approval label: %v", err)
+			if _, err := o.gh.SetStageLabel(nextIssue.Number, "Approve"); err != nil {
+				log.Printf("[Orchestrator] Error setting Approve stage for #%d: %v", nextIssue.Number, err)
 			}
 			if prURL != "" {
 				comment := fmt.Sprintf("AI review passed ✓ — awaiting manual approval.\n\nPR: %s", prURL)

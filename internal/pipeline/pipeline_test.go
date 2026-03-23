@@ -11,11 +11,10 @@ func TestStageProgression(t *testing.T) {
 	expected := []pipeline.Stage{
 		pipeline.StageQueued,
 		pipeline.StageAnalysis,
-		pipeline.StagePlanning,
-		pipeline.StagePlanReview,
 		pipeline.StageCoding,
-		pipeline.StageTesting,
 		pipeline.StageCodeReview,
+		pipeline.StageCreatePR,
+		pipeline.StageApprove,
 		pipeline.StageMerging,
 		pipeline.StageDone,
 	}
@@ -39,13 +38,13 @@ func TestStageColumns(t *testing.T) {
 	}{
 		{pipeline.StageQueued, pipeline.ColumnBacklog},
 		{pipeline.StageAnalysis, pipeline.ColumnPlan},
-		{pipeline.StagePlanning, pipeline.ColumnPlan},
-		{pipeline.StagePlanReview, pipeline.ColumnAIReview},
 		{pipeline.StageCoding, pipeline.ColumnCode},
-		{pipeline.StageTesting, pipeline.ColumnCode},
 		{pipeline.StageCodeReview, pipeline.ColumnAIReview},
+		{pipeline.StageCreatePR, pipeline.ColumnAIReview},
+		{pipeline.StageApprove, pipeline.ColumnApprove},
 		{pipeline.StageMerging, pipeline.ColumnApprove},
 		{pipeline.StageDone, pipeline.ColumnDone},
+		{pipeline.StageFailed, pipeline.ColumnFailed},
 		{pipeline.StageBlocked, pipeline.ColumnBlocked},
 	}
 
@@ -66,14 +65,14 @@ func TestStageLabels(t *testing.T) {
 	}{
 		{pipeline.StageQueued, ""},
 		{pipeline.StageAnalysis, "stage:analysis"},
-		{pipeline.StagePlanning, "stage:planning"},
-		{pipeline.StagePlanReview, "stage:plan-review"},
 		{pipeline.StageCoding, "stage:coding"},
-		{pipeline.StageTesting, "stage:testing"},
 		{pipeline.StageCodeReview, "stage:code-review"},
-		{pipeline.StageMerging, ""},
+		{pipeline.StageCreatePR, "stage:create-pr"},
+		{pipeline.StageApprove, "stage:awaiting-approval"},
+		{pipeline.StageMerging, "stage:merging"},
+		{pipeline.StageFailed, "stage:failed"},
+		{pipeline.StageBlocked, "stage:blocked"},
 		{pipeline.StageDone, ""},
-		{pipeline.StageBlocked, ""},
 	}
 
 	for _, tt := range tests {
@@ -93,12 +92,10 @@ func TestRetryTarget(t *testing.T) {
 	}{
 		{pipeline.StageQueued, pipeline.StageQueued},
 		{pipeline.StageAnalysis, pipeline.StageAnalysis},
-		{pipeline.StagePlanning, pipeline.StagePlanning},
-		{pipeline.StagePlanReview, pipeline.StagePlanning},
 		{pipeline.StageCoding, pipeline.StageCoding},
-		{pipeline.StageTesting, pipeline.StageCoding},
 		{pipeline.StageCodeReview, pipeline.StageCoding},
-		{pipeline.StageMerging, pipeline.StageMerging},
+		{pipeline.StageCreatePR, pipeline.StageCoding},
+		{pipeline.StageMerging, pipeline.StageCoding},
 	}
 
 	for _, tt := range tests {
@@ -120,7 +117,6 @@ func (m *mockExecutor) Execute(taskID int, stage pipeline.Stage, context string)
 }
 
 func TestPipelineSuccess(t *testing.T) {
-	var stages []pipeline.Stage
 	exec := &mockExecutor{
 		fn: func(_ int, stage pipeline.Stage, _ string) (*pipeline.StageResult, error) {
 			return &pipeline.StageResult{Stage: stage, Success: true, Output: "ok"}, nil
@@ -142,11 +138,10 @@ func TestPipelineSuccess(t *testing.T) {
 
 	expectedStages := []pipeline.Stage{
 		pipeline.StageAnalysis,
-		pipeline.StagePlanning,
-		pipeline.StagePlanReview,
 		pipeline.StageCoding,
-		pipeline.StageTesting,
 		pipeline.StageCodeReview,
+		pipeline.StageCreatePR,
+		pipeline.StageApprove,
 		pipeline.StageMerging,
 		pipeline.StageDone,
 	}
@@ -158,14 +153,12 @@ func TestPipelineSuccess(t *testing.T) {
 			t.Errorf("change[%d] = %q, want %q", i, changes[i], want)
 		}
 	}
-
-	_ = stages
 }
 
 func TestPipelineRetryAndBlock(t *testing.T) {
 	exec := &mockExecutor{
 		fn: func(_ int, stage pipeline.Stage, _ string) (*pipeline.StageResult, error) {
-			if stage == pipeline.StagePlanReview {
+			if stage == pipeline.StageCodeReview {
 				return &pipeline.StageResult{Stage: stage, Success: false, Output: "review failed"}, nil
 			}
 			return &pipeline.StageResult{Stage: stage, Success: true, Output: "ok"}, nil
@@ -187,12 +180,12 @@ func TestPipelineRetryAndBlock(t *testing.T) {
 
 	expectedChanges := []pipeline.Stage{
 		pipeline.StageAnalysis,
-		pipeline.StagePlanning,
-		pipeline.StagePlanReview,
-		pipeline.StagePlanning,
-		pipeline.StagePlanReview,
-		pipeline.StagePlanning,
-		pipeline.StagePlanReview,
+		pipeline.StageCoding,
+		pipeline.StageCodeReview,
+		pipeline.StageCoding,
+		pipeline.StageCodeReview,
+		pipeline.StageCoding,
+		pipeline.StageCodeReview,
 		pipeline.StageBlocked,
 	}
 	if len(changes) != len(expectedChanges) {
@@ -209,10 +202,10 @@ func TestPipelineRetryThenSucceed(t *testing.T) {
 	callCount := 0
 	exec := &mockExecutor{
 		fn: func(_ int, stage pipeline.Stage, _ string) (*pipeline.StageResult, error) {
-			if stage == pipeline.StageTesting {
+			if stage == pipeline.StageCodeReview {
 				callCount++
 				if callCount <= 2 {
-					return &pipeline.StageResult{Stage: stage, Success: false, Output: "test failed"}, nil
+					return &pipeline.StageResult{Stage: stage, Success: false, Output: "review failed"}, nil
 				}
 			}
 			return &pipeline.StageResult{Stage: stage, Success: true, Output: "ok"}, nil

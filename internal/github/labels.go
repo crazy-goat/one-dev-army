@@ -7,24 +7,29 @@ import (
 	"sync"
 )
 
-// StageToLabels maps stage names to their corresponding GitHub labels
+// StageToLabels maps stage names to their corresponding GitHub labels.
+// All stage labels use the "stage:" prefix for consistency.
 var StageToLabels = map[string][]string{
 	"Backlog":   {},
-	"Plan":      {"stage:analysis", "stage:planning"},
-	"Code":      {"stage:coding", "stage:testing"},
+	"Plan":      {"stage:analysis"},
+	"Code":      {"stage:coding"},
 	"AI Review": {"stage:code-review"},
-	"Approve":   {"awaiting-approval"},
+	"Create PR": {"stage:create-pr"},
+	"Approve":   {"stage:awaiting-approval"},
+	"Merge":     {"stage:merging"},
 	"Done":      {},
-	"Failed":    {"failed"},
-	"Blocked":   {"blocked"},
+	"Failed":    {"stage:failed"},
+	"Blocked":   {"stage:blocked"},
 }
 
-// StageLabelPrefixes contains all label prefixes that should be removed when changing stages
+// StageLabelPrefixes contains all label prefixes that should be removed when changing stages.
+// Includes legacy bare labels for backward compatibility during migration.
 var StageLabelPrefixes = []string{
 	"stage:",
 	"awaiting-approval",
 	"failed",
 	"blocked",
+	"in-progress",
 }
 
 type Label struct {
@@ -35,28 +40,25 @@ type Label struct {
 var RequiredLabels = []Label{
 	{Name: "sprint", Color: "0E8A16"},
 	{Name: "insight", Color: "D93F0B"},
-	{Name: "in-progress", Color: "FBCA04"},
-	{Name: "failed", Color: "D93F0B"},
 	{Name: "size:S", Color: "C2E0C6"},
 	{Name: "size:M", Color: "BFDADC"},
 	{Name: "size:L", Color: "BFD4F2"},
 	{Name: "size:XL", Color: "D4C5F9"},
+	{Name: "stage:backlog", Color: "EEEEEE"},
 	{Name: "stage:analysis", Color: "FBCA04"},
-	{Name: "stage:planning", Color: "FBCA04"},
-	{Name: "stage:plan-review", Color: "FBCA04"},
 	{Name: "stage:coding", Color: "1D76DB"},
-	{Name: "stage:testing", Color: "1D76DB"},
 	{Name: "stage:code-review", Color: "1D76DB"},
-	{Name: "stage:needs-user", Color: "B60205"},
-	{Name: "stage:cancelled", Color: "EEEEEE"},
+	{Name: "stage:create-pr", Color: "1D76DB"},
+	{Name: "stage:awaiting-approval", Color: "0E8A16"},
+	{Name: "stage:merging", Color: "0E8A16"},
+	{Name: "stage:failed", Color: "D93F0B"},
+	{Name: "stage:blocked", Color: "B60205"},
 	{Name: "priority:high", Color: "B60205"},
 	{Name: "priority:medium", Color: "FBCA04"},
 	{Name: "priority:low", Color: "0E8A16"},
 	{Name: "epic", Color: "5319E7"},
 	{Name: "wizard", Color: "7C3AED"},
 	{Name: "merge-failed", Color: "D93F0B"},
-	{Name: "awaiting-approval", Color: "0E8A16"},
-	{Name: "blocked", Color: "B60205"},
 }
 
 // SetStageLabel sets the stage label for an issue, removing all previous stage labels.

@@ -2948,13 +2948,13 @@ func TestInferColumnFromIssue(t *testing.T) {
 			expected: "Code",
 		},
 		{
-			name:     "wip label maps to Code",
-			labels:   []string{"wip"},
-			expected: "Code",
-		},
-		{
 			name:     "failed label takes precedence",
 			labels:   []string{"stage:coding", "failed"},
+			expected: "Failed",
+		},
+		{
+			name:     "stage:failed label takes precedence",
+			labels:   []string{"stage:coding", "stage:failed"},
 			expected: "Failed",
 		},
 		{
@@ -2963,19 +2963,34 @@ func TestInferColumnFromIssue(t *testing.T) {
 			expected: "Blocked",
 		},
 		{
-			name:     "review label maps to AI Review",
-			labels:   []string{"review"},
+			name:     "stage:blocked takes precedence over Plan",
+			labels:   []string{"stage:analysis", "stage:blocked"},
+			expected: "Blocked",
+		},
+		{
+			name:     "stage:code-review maps to AI Review",
+			labels:   []string{"stage:code-review"},
 			expected: "AI Review",
 		},
 		{
-			name:     "awaiting-approval maps to Approve",
+			name:     "stage:create-pr maps to AI Review",
+			labels:   []string{"stage:create-pr"},
+			expected: "AI Review",
+		},
+		{
+			name:     "awaiting-approval maps to Approve (legacy)",
 			labels:   []string{"awaiting-approval"},
 			expected: "Approve",
 		},
 		{
-			name:     "done label maps to Done",
-			labels:   []string{"done"},
-			expected: "Done",
+			name:     "stage:awaiting-approval maps to Approve",
+			labels:   []string{"stage:awaiting-approval"},
+			expected: "Approve",
+		},
+		{
+			name:     "stage:merging maps to Approve",
+			labels:   []string{"stage:merging"},
+			expected: "Approve",
 		},
 		{
 			name:     "closed state maps to Done",

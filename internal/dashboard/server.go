@@ -159,6 +159,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /retry-fresh/{id}", s.handleRetryFresh)
 	s.mux.HandleFunc("POST /approve-merge/{id}", s.handleApproveMerge)
 	s.mux.HandleFunc("POST /decline/{id}", s.handleDecline)
+	s.mux.HandleFunc("POST /block/{id}", s.handleBlock)
+	s.mux.HandleFunc("POST /unblock/{id}", s.handleUnblock)
 
 	// WebSocket endpoint
 	s.mux.HandleFunc("GET /ws", s.handleWebSocket)

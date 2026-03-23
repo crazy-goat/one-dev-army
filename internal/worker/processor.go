@@ -50,66 +50,6 @@ Respond with a JSON object:
 }
 `
 
-const promptPlanning = `You are creating an implementation plan for a GitHub issue.
-
-## Issue #%d: %s
-
-%s
-
-## Analysis from previous stage
-
-%s
-
-## Instructions
-
-Create a detailed implementation plan. Include:
-1. Step-by-step implementation order
-2. Specific code changes needed
-3. Test cases to write
-4. Any refactoring needed
-
-Do NOT ask any questions - just produce the output.
-
-Respond with a JSON object:
-{
-  "steps": [
-    {"order": 1, "description": "what to do", "files": ["affected files"], "details": "specific changes"}
-  ],
-  "test_plan": ["list of test cases to write"],
-  "estimated_complexity": "low|medium|high"
-}
-`
-
-const promptPlanReview = `You are reviewing an implementation plan for correctness and completeness.
-
-## Issue #%d: %s
-
-%s
-
-## Implementation Plan
-
-%s
-
-## Instructions
-
-Review this plan critically. Check for:
-1. Missing steps or edge cases
-2. Incorrect assumptions about the codebase
-3. Missing test coverage
-4. Potential breaking changes
-5. Security concerns
-
-Do NOT ask any questions - just produce the output.
-
-Respond with a JSON object:
-{
-  "approved": true/false,
-  "issues": ["list of issues found, if any"],
-  "suggestions": ["list of improvements, if any"],
-  "verdict": "brief summary of review"
-}
-`
-
 const promptCoding = `You are implementing code changes for a GitHub issue.
 
 ## Issue #%d: %s
@@ -297,16 +237,14 @@ func (e *StageExecutor) Execute(taskID int, stage pipeline.Stage, context string
 	switch stage {
 	case pipeline.StageAnalysis:
 		return e.executeSession(taskID, stage, context, promptAnalysis)
-	case pipeline.StagePlanning:
-		return e.executeSession(taskID, stage, context, promptPlanning)
-	case pipeline.StagePlanReview:
-		return e.executeReview(taskID, stage, context, promptPlanReview)
 	case pipeline.StageCoding:
 		return e.executeCoding(taskID, stage, context)
-	case pipeline.StageTesting:
-		return e.executeTesting(taskID, stage)
 	case pipeline.StageCodeReview:
 		return e.executeReview(taskID, stage, context, promptCodeReview)
+	case pipeline.StageCreatePR:
+		return &pipeline.StageResult{Stage: stage, Success: true, Output: "ready to create PR"}, nil
+	case pipeline.StageApprove:
+		return &pipeline.StageResult{Stage: stage, Success: true, Output: "awaiting approval"}, nil
 	case pipeline.StageMerging:
 		return &pipeline.StageResult{Stage: stage, Success: true, Output: "ready to merge"}, nil
 	default:
@@ -404,50 +342,6 @@ func (e *StageExecutor) executeCoding(taskID int, stage pipeline.Stage, stageCon
 		Stage:   stage,
 		Success: true,
 		Output:  output,
-	}, nil
-}
-
-func (e *StageExecutor) executeTesting(taskID int, stage pipeline.Stage) (*pipeline.StageResult, error) {
-	start := time.Now()
-	var failures []string
-
-	if e.cfg.Tools.LintCmd != "" {
-		parts := strings.Fields(e.cfg.Tools.LintCmd)
-		if _, err := git.RunInWorktree(e.worktree.Path, parts[0], parts[1:]...); err != nil {
-			failures = append(failures, fmt.Sprintf("lint: %v", err))
-		}
-	}
-
-	if e.cfg.Tools.TestCmd != "" {
-		parts := strings.Fields(e.cfg.Tools.TestCmd)
-		if _, err := git.RunInWorktree(e.worktree.Path, parts[0], parts[1:]...); err != nil {
-			failures = append(failures, fmt.Sprintf("test: %v", err))
-		}
-	}
-
-	if e.cfg.Tools.E2ECmd != "" {
-		parts := strings.Fields(e.cfg.Tools.E2ECmd)
-		if _, err := git.RunInWorktree(e.worktree.Path, parts[0], parts[1:]...); err != nil {
-			failures = append(failures, fmt.Sprintf("e2e: %v", err))
-		}
-	}
-
-	duration := time.Since(start)
-	llm := e.llmForStage(stage)
-	e.recordMetric(taskID, stage, llm, duration)
-
-	if len(failures) > 0 {
-		return &pipeline.StageResult{
-			Stage:   stage,
-			Success: false,
-			Output:  strings.Join(failures, "\n"),
-		}, nil
-	}
-
-	return &pipeline.StageResult{
-		Stage:   stage,
-		Success: true,
-		Output:  "all checks passed",
 	}, nil
 }
 

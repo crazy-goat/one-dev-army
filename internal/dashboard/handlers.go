@@ -187,43 +187,43 @@ func (s *Server) activeSprintName() string {
 }
 
 func inferColumnFromIssue(issue github.Issue) string {
-	// Check labels first
 	labels := issue.GetLabelNames()
 	labelSet := make(map[string]bool)
 	for _, l := range labels {
 		labelSet[strings.ToLower(l)] = true
 	}
 
-	// Map labels to columns
-	if labelSet["failed"] {
-		return "Failed"
-	}
-	if labelSet["blocked"] || labelSet["blocker"] {
+	// Priority order matches state-machine.md Column Mapping.
+	// Legacy bare labels kept for backward compatibility with existing issues.
+	if labelSet["stage:blocked"] || labelSet["blocked"] {
 		return "Blocked"
 	}
-	// Plan column: analysis and planning stages
-	if labelSet["stage:analysis"] || labelSet["stage:planning"] {
-		return "Plan"
+	if labelSet["stage:failed"] || labelSet["failed"] {
+		return "Failed"
 	}
-	// Code column: coding and testing stages, or legacy in-progress label
-	if labelSet["stage:coding"] || labelSet["stage:testing"] || labelSet["in-progress"] || labelSet["in progress"] || labelSet["wip"] || labelSet["working"] {
-		return "Code"
+	if labelSet["stage:merging"] {
+		return "Approve" // Merge is part of Approve column
 	}
-	if labelSet["review"] || labelSet["in-review"] || labelSet["pr-ready"] || labelSet["stage:plan-review"] || labelSet["stage:code-review"] {
-		return "AI Review"
-	}
-	if labelSet["awaiting-approval"] || labelSet["approve"] || labelSet["merge-ready"] {
+	if labelSet["stage:awaiting-approval"] || labelSet["awaiting-approval"] {
 		return "Approve"
 	}
-	if labelSet["done"] || labelSet["completed"] || labelSet["finished"] {
-		return "Done"
+	if labelSet["stage:create-pr"] {
+		return "AI Review" // Create PR is part of AI Review column
+	}
+	if labelSet["stage:code-review"] {
+		return "AI Review"
+	}
+	if labelSet["stage:coding"] || labelSet["stage:testing"] || labelSet["in-progress"] {
+		return "Code"
+	}
+	if labelSet["stage:analysis"] || labelSet["stage:planning"] {
+		return "Plan"
 	}
 
 	if strings.EqualFold(issue.State, "CLOSED") {
 		return "Done"
 	}
 
-	// Default to Backlog
 	return "Backlog"
 }
 
@@ -511,6 +511,68 @@ func (s *Server) recordStep(issueNum int, stepName, response string) {
 	_ = s.store.FinishStep(id, response)
 }
 
+func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	issueNum := 0
+	fmt.Sscanf(id, "%d", &issueNum)
+	if issueNum == 0 || s.gh == nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	updatedIssue, err := s.gh.SetStageLabel(issueNum, "Blocked")
+	if err != nil {
+		log.Printf("[Dashboard] Error setting Blocked stage on #%d: %v", issueNum, err)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	if s.store != nil {
+		milestone := s.activeSprintName()
+		if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
+		}
+	}
+
+	if s.hub != nil {
+		s.hub.BroadcastIssueUpdate(updatedIssue)
+	}
+
+	log.Printf("[Dashboard] Blocked #%d", issueNum)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (s *Server) handleUnblock(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	issueNum := 0
+	fmt.Sscanf(id, "%d", &issueNum)
+	if issueNum == 0 || s.gh == nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	updatedIssue, err := s.gh.SetStageLabel(issueNum, "Backlog")
+	if err != nil {
+		log.Printf("[Dashboard] Error setting Backlog stage on #%d: %v", issueNum, err)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	if s.store != nil {
+		milestone := s.activeSprintName()
+		if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
+			log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
+		}
+	}
+
+	if s.hub != nil {
+		s.hub.BroadcastIssueUpdate(updatedIssue)
+	}
+
+	log.Printf("[Dashboard] Unblocked #%d — moved to Backlog", issueNum)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
 func (s *Server) handleDecline(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	issueNum := 0
@@ -580,6 +642,20 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 
 	s.recordStep(issueNum, "approved", "Manual approval granted")
 
+	// Transition to Merge stage before attempting merge
+	mergingIssue, mergeStageErr := s.gh.SetStageLabel(issueNum, "Merge")
+	if mergeStageErr != nil {
+		log.Printf("[Dashboard] Error setting Merge stage on #%d: %v", issueNum, mergeStageErr)
+	} else {
+		if s.store != nil {
+			milestone := s.activeSprintName()
+			_ = s.store.SaveIssueCache(mergingIssue, milestone)
+		}
+		if s.hub != nil {
+			s.hub.BroadcastIssueUpdate(mergingIssue)
+		}
+	}
+
 	log.Printf("[Dashboard] Approving & merging PR for #%d (branch: %s)", issueNum, branch)
 	if err := s.gh.MergePR(branch); err != nil {
 		log.Printf("[Dashboard] ✗ Merge failed for #%d (likely conflict): %v", issueNum, err)
@@ -589,19 +665,17 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[Dashboard] Error closing PR for #%d: %v", issueNum, closeErr)
 		}
 
-		// Set stage label to "Backlog" on merge failure
-		updatedIssue, labelErr := s.gh.SetStageLabel(issueNum, "Backlog")
+		// Set stage label to "Failed" on merge failure
+		updatedIssue, labelErr := s.gh.SetStageLabel(issueNum, "Failed")
 		if labelErr != nil {
-			log.Printf("[Dashboard] Error setting Backlog stage on #%d: %v", issueNum, labelErr)
+			log.Printf("[Dashboard] Error setting Failed stage on #%d: %v", issueNum, labelErr)
 		} else {
-			// Update cache
 			if s.store != nil {
 				milestone := s.activeSprintName()
 				if err := s.store.SaveIssueCache(updatedIssue, milestone); err != nil {
 					log.Printf("[Dashboard] Error saving issue cache for #%d: %v", issueNum, err)
 				}
 			}
-			// Broadcast update via WebSocket
 			if s.hub != nil {
 				s.hub.BroadcastIssueUpdate(updatedIssue)
 			}
@@ -613,12 +687,12 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		comment := fmt.Sprintf("Merge failed (likely conflict). PR closed, task reset for fresh start.\n\nError: %s", err.Error())
+		comment := fmt.Sprintf("Merge failed (likely conflict). PR closed, task moved to Failed.\n\nError: %s", err.Error())
 		if cmtErr := s.gh.AddComment(issueNum, comment); cmtErr != nil {
 			log.Printf("[Dashboard] Error adding comment to #%d: %v", issueNum, cmtErr)
 		}
 
-		log.Printf("[Dashboard] ✗ Merge conflict on #%d — PR closed, reset to backlog", issueNum)
+		log.Printf("[Dashboard] ✗ Merge conflict on #%d — PR closed, moved to Failed", issueNum)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}

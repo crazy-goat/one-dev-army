@@ -163,8 +163,7 @@ function triggerSync() {
       {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
       <div class="card-actions">
-        <form method="post" action="/approve/{{.ID}}"><button type="submit" class="btn btn-success">Approve</button></form>
-        <form method="post" action="/reject/{{.ID}}"><button type="submit" class="btn btn-danger">Reject</button></form>
+        <form method="post" action="/unblock/{{.ID}}"><button type="submit" class="btn btn-success">Unblock</button></form>
       </div>
     </div>
     {{else}}
@@ -180,6 +179,9 @@ function triggerSync() {
       <div class="card-title">{{.Title}}</div>
       {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
+      <div class="card-actions">
+        <form method="post" action="/block/{{.ID}}"><button type="submit" class="btn" title="Block this ticket">Block</button></form>
+      </div>
     </div>
     {{else}}
     <div class="empty-state">No tickets in backlog</div>
@@ -287,7 +289,7 @@ function triggerSync() {
       {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
       <div class="card-actions">
         <form method="post" action="/retry/{{.ID}}"><button type="submit" class="btn btn-success">Retry</button></form>
-        <form method="post" action="/retry-fresh/{{.ID}}"><button type="submit" class="btn btn-primary">Retry Fresh</button></form>
+        <form method="post" action="/retry-fresh/{{.ID}}"><button type="submit" class="btn btn-primary">Cancel</button></form>
       </div>
     </div>
     {{else}}

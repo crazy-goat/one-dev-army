@@ -56,10 +56,7 @@ func integrationConfig(opencodeURL string) *config.Config {
 			MaxRetries: 3,
 			Stages: []config.Stage{
 				{Name: "analysis", LLM: "claude-sonnet-4"},
-				{Name: "planning", LLM: "claude-opus-4"},
-				{Name: "plan-review", LLM: "claude-opus-4"},
 				{Name: "coding", LLM: "claude-sonnet-4"},
-				{Name: "testing", LLM: "claude-sonnet-4"},
 				{Name: "code-review", LLM: "claude-opus-4"},
 				{Name: "merge", ManualApproval: false},
 			},
@@ -316,7 +313,7 @@ func TestFullPipelineWithMockOpencode(t *testing.T) {
 	for _, m := range metrics {
 		stagesSeen[m.Stage] = true
 	}
-	for _, expected := range []string{"analysis", "planning", "plan-review", "coding", "testing", "code-review"} {
+	for _, expected := range []string{"analysis", "coding", "code-review"} {
 		if !stagesSeen[expected] {
 			t.Errorf("missing metric for stage %q", expected)
 		}
@@ -325,7 +322,7 @@ func TestFullPipelineWithMockOpencode(t *testing.T) {
 	log.mu.Lock()
 	defer log.mu.Unlock()
 
-	expectedStages := []string{"analysis", "planning", "plan-review", "coding", "code-review"}
+	expectedStages := []string{"analysis", "coding", "code-review"}
 	for _, stage := range expectedStages {
 		found := false
 		for _, title := range log.sessions {
@@ -512,11 +509,9 @@ func TestConfigToProcessorWiring(t *testing.T) {
 			MaxRetries: 3,
 			Stages: []config.Stage{
 				{Name: "analysis", LLM: "custom-model-for-analysis"},
-				{Name: "planning", LLM: "claude-opus-4"},
-				{Name: "plan-review", LLM: "claude-opus-4"},
 				{Name: "coding", LLM: "claude-sonnet-4"},
-				{Name: "testing", LLM: "claude-sonnet-4"},
 				{Name: "code-review", LLM: "claude-opus-4"},
+				{Name: "merge", ManualApproval: false},
 			},
 		},
 	}
