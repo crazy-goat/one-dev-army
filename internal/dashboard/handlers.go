@@ -472,10 +472,6 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[Dashboard] Error adding comment to #%d: %v", issueNum, cmtErr)
 		}
 
-		if lblErr := s.gh.AddLabel(issueNum, "merge-failed"); lblErr != nil {
-			log.Printf("[Dashboard] Error adding merge-failed label to #%d: %v", issueNum, lblErr)
-		}
-
 		if s.projectNumber > 0 {
 			s.gh.MoveItemToColumn(s.projectNumber, issueNum, "Backlog")
 		}
@@ -892,12 +888,12 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		session.SetIdeaText(idea)
 	}
 
-	// Parse skip_breakdown checkbox (only for features)
-	skipBreakdown := r.FormValue("skip_breakdown") == "1"
+	// Parse do_breakdown checkbox (only for features)
+	doBreakdown := r.FormValue("do_breakdown") == "1"
 	if session.Type == WizardTypeFeature {
-		session.SetSkipBreakdown(skipBreakdown)
+		session.SetSkipBreakdown(!doBreakdown) // Inverted: unchecked = skip breakdown
 	} else {
-		// Bugs never skip breakdown (they don't have the checkbox)
+		// Bugs never do breakdown (they don't have the checkbox)
 		session.SetSkipBreakdown(true)
 	}
 
@@ -1623,13 +1619,15 @@ func (s *Server) handleWizardModal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		Type        string
-		SessionID   string
-		CurrentStep int
+		Type              string
+		SessionID         string
+		CurrentStep       int
+		ShowBreakdownStep bool
 	}{
-		Type:        wizardType,
-		SessionID:   session.ID,
-		CurrentStep: 1,
+		Type:              wizardType,
+		SessionID:         session.ID,
+		CurrentStep:       1,
+		ShowBreakdownStep: wizardType == "feature" && !session.SkipBreakdown,
 	}
 
 	s.renderFragment(w, "wizard_modal.html", data)

@@ -1862,7 +1862,7 @@ func TestFullWizardFlow_Bug(t *testing.T) {
 	t.Logf("Full bug wizard flow completed successfully")
 }
 
-// TestHandleWizardRefine_SkipBreakdown tests skip_breakdown checkbox parsing
+// TestHandleWizardRefine_SkipBreakdown tests do_breakdown checkbox parsing
 func TestHandleWizardRefine_SkipBreakdown(t *testing.T) {
 	srv := &Server{
 		tmpls:       make(map[string]*template.Template),
@@ -1870,13 +1870,13 @@ func TestHandleWizardRefine_SkipBreakdown(t *testing.T) {
 	}
 	defer srv.wizardStore.Stop()
 
-	// Test with feature type and skip_breakdown checked
+	// Test with feature type and do_breakdown checked (should NOT skip)
 	session, _ := srv.wizardStore.Create("feature")
 
 	form := url.Values{}
 	form.Set("session_id", session.ID)
 	form.Set("idea", "Create a login page")
-	form.Set("skip_breakdown", "1")
+	form.Set("do_breakdown", "1")
 
 	req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -1884,19 +1884,19 @@ func TestHandleWizardRefine_SkipBreakdown(t *testing.T) {
 
 	srv.handleWizardRefine(rec, req)
 
-	// Verify session has SkipBreakdown set to true
+	// Verify session has SkipBreakdown set to false (don't skip when do_breakdown is checked)
 	updatedSession, _ := srv.wizardStore.Get(session.ID)
-	if !updatedSession.SkipBreakdown {
-		t.Error("expected SkipBreakdown to be true when checkbox is checked")
+	if updatedSession.SkipBreakdown {
+		t.Error("expected SkipBreakdown to be false when do_breakdown checkbox is checked")
 	}
 
-	// Test with feature type and skip_breakdown unchecked
+	// Test with feature type and do_breakdown unchecked (should skip)
 	session2, _ := srv.wizardStore.Create("feature")
 
 	form2 := url.Values{}
 	form2.Set("session_id", session2.ID)
 	form2.Set("idea", "Create a signup page")
-	// skip_breakdown not set
+	// do_breakdown not set
 
 	req2 := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(form2.Encode()))
 	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -1904,10 +1904,10 @@ func TestHandleWizardRefine_SkipBreakdown(t *testing.T) {
 
 	srv.handleWizardRefine(rec2, req2)
 
-	// Verify session has SkipBreakdown set to false
+	// Verify session has SkipBreakdown set to true (skip when do_breakdown is unchecked)
 	updatedSession2, _ := srv.wizardStore.Get(session2.ID)
-	if updatedSession2.SkipBreakdown {
-		t.Error("expected SkipBreakdown to be false when checkbox is unchecked")
+	if !updatedSession2.SkipBreakdown {
+		t.Error("expected SkipBreakdown to be true when do_breakdown checkbox is unchecked")
 	}
 
 	// Test with bug type (should always skip breakdown)
@@ -2003,7 +2003,7 @@ func TestHandleWizardCreateSingle_WithSprint(t *testing.T) {
 	}
 }
 
-// TestWizardFlow_SkipBreakdown tests the complete flow with skip_breakdown enabled
+// TestWizardFlow_SkipBreakdown tests the complete flow with breakdown skipped (do_breakdown unchecked)
 func TestWizardFlow_SkipBreakdown(t *testing.T) {
 	srv := &Server{
 		tmpls:       make(map[string]*template.Template),
@@ -2015,11 +2015,11 @@ func TestWizardFlow_SkipBreakdown(t *testing.T) {
 	session, _ := srv.wizardStore.Create("feature")
 	sessionID := session.ID
 
-	// Step 2: Refine with skip_breakdown enabled
+	// Step 2: Refine with do_breakdown unchecked (skips breakdown)
 	form := url.Values{}
 	form.Set("session_id", sessionID)
 	form.Set("idea", "Small feature that doesn't need sub-tasks")
-	form.Set("skip_breakdown", "1")
+	// do_breakdown not set (unchecked)
 
 	req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -2030,10 +2030,10 @@ func TestWizardFlow_SkipBreakdown(t *testing.T) {
 		t.Fatalf("Refine step failed: expected status 200 or 500, got %d", rec.Code)
 	}
 
-	// Verify SkipBreakdown is set
+	// Verify SkipBreakdown is set to true (skip breakdown when do_breakdown is unchecked)
 	session, _ = srv.wizardStore.Get(sessionID)
 	if !session.SkipBreakdown {
-		t.Error("expected SkipBreakdown to be true after refine")
+		t.Error("expected SkipBreakdown to be true after refine when do_breakdown is unchecked")
 	}
 
 	// Step 3: Create single issue (skips breakdown)
