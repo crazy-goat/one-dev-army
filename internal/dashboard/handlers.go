@@ -830,6 +830,7 @@ func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 		CurrentStep        int
 		ShowBreakdownStep  bool
 		NeedsTypeSelection bool
+		Language           string // NEW FIELD
 	}{
 		Type:               wizardType,
 		SessionID:          "",
@@ -837,12 +838,14 @@ func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 		CurrentStep:        1,
 		ShowBreakdownStep:  false,
 		NeedsTypeSelection: needsTypeSelection,
+		Language:           "", // Will be set from session if available
 	}
 
 	if session != nil {
 		data.SessionID = session.ID
 		data.Type = string(session.Type)
 		data.ShowBreakdownStep = session.Type == WizardTypeFeature && !session.SkipBreakdown
+		data.Language = session.Language // Pass stored language to template
 	}
 
 	s.renderFragment(w, "wizard_new.html", data)
@@ -858,6 +861,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.FormValue("session_id")
 	idea := r.FormValue("idea")
 	currentDesc := r.FormValue("current_description")
+	language := r.FormValue("language") // NEW: Read language parameter
 
 	if sessionID == "" {
 		http.Error(w, "missing session_id", http.StatusBadRequest)
@@ -894,6 +898,11 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	// Store the idea using thread-safe setter (only if it's a new idea, not re-refinement)
 	if idea != "" {
 		session.SetIdeaText(idea)
+	}
+
+	// Store language preference if provided
+	if language != "" {
+		session.SetLanguage(language)
 	}
 
 	// Parse add_to_sprint checkbox
@@ -954,8 +963,8 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 
 	// Build unified technical planning prompt with codebase context
 	codebaseContext := GetCodebaseContext()
-	prompt := BuildTechnicalPlanningPrompt(session.Type, inputText, codebaseContext)
-	session.AddLog("system", "Sending technical planning request to LLM")
+	prompt := BuildTechnicalPlanningPrompt(session.Type, inputText, codebaseContext, session.Language)
+	session.AddLog("system", "Sending technical planning request to LLM (language: "+session.Language+")")
 
 	// Send message to LLM with timeout
 	ctx, cancel := context.WithTimeout(r.Context(), LLMRequestTimeout)

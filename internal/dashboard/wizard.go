@@ -87,6 +87,7 @@ type WizardSession struct {
 	EpicNumber        int            `json:"epic_number"`
 	AddToSprint       bool           `json:"add_to_sprint"`
 	SkipBreakdown     bool           `json:"skip_breakdown"` // Keep for backward compatibility
+	Language          string         `json:"language"`       // NEW FIELD
 	LLMLogs           []LLMLogEntry  `json:"llm_logs"`
 	CreatedAt         time.Time      `json:"created_at"`
 	UpdatedAt         time.Time      `json:"updated_at"`
@@ -127,6 +128,14 @@ func (s *WizardSession) SetTechnicalPlanning(planning string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.TechnicalPlanning = planning
+	s.UpdatedAt = time.Now()
+}
+
+// SetLanguage updates the language preference (thread-safe)
+func (s *WizardSession) SetLanguage(lang string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Language = lang
 	s.UpdatedAt = time.Now()
 }
 

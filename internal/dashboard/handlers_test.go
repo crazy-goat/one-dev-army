@@ -2645,3 +2645,56 @@ func TestHandleWizardRefine_SprintNameInTemplate(t *testing.T) {
 		t.Error("sprint checkbox should NOT appear when there is no active sprint")
 	}
 }
+
+// TestHandleWizardRefine_AcceptsLanguageParameter tests that language parameter is accepted and stored
+func TestHandleWizardRefine_AcceptsLanguageParameter(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// First create a session
+	req1 := httptest.NewRequest("GET", "/wizard/new?type=feature", nil)
+	rec1 := httptest.NewRecorder()
+	srv.handleWizardNew(rec1, req1)
+
+	// Extract session ID from response
+	body := rec1.Body.String()
+	// Parse session_id from HTML form
+	var sessionID string
+	if strings.Contains(body, `name="session_id"`) {
+		// Extract value from: value="..."
+		start := strings.Index(body, `name="session_id" value="`)
+		if start != -1 {
+			start += len(`name="session_id" value="`)
+			end := strings.Index(body[start:], `"`)
+			if end != -1 {
+				sessionID = body[start : start+end]
+			}
+		}
+	}
+
+	if sessionID == "" {
+		t.Fatal("Could not extract session ID from response")
+	}
+
+	// Submit form with language parameter
+	formData := url.Values{}
+	formData.Set("session_id", sessionID)
+	formData.Set("idea", "Test feature idea")
+	formData.Set("language", "pl-PL")
+
+	req2 := httptest.NewRequest("POST", "/wizard/refine", strings.NewReader(formData.Encode()))
+	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec2 := httptest.NewRecorder()
+
+	srv.handleWizardRefine(rec2, req2)
+
+	// Verify session has language stored
+	session, ok := srv.wizardStore.Get(sessionID)
+	if !ok {
+		t.Fatal("Session not found")
+	}
+
+	if session.Language != "pl-PL" {
+		t.Errorf("Expected Language to be 'pl-PL', got %q", session.Language)
+	}
+}
