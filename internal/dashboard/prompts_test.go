@@ -16,14 +16,14 @@ func TestBuildTechnicalPlanningPrompt(t *testing.T) {
 	prompt := BuildTechnicalPlanningPrompt(WizardTypeFeature, "Add user authentication", "Go web service", "en-US")
 
 	// Verify prompt contains required sections
-	if !strings.Contains(prompt, "Architecture Overview") {
-		t.Error("Prompt missing Architecture Overview section")
+	if !strings.Contains(prompt, "Suggested Approach") {
+		t.Error("Prompt missing Suggested Approach section")
 	}
-	if !strings.Contains(prompt, "Files Requiring Changes") {
-		t.Error("Prompt missing Files Requiring Changes section")
+	if !strings.Contains(prompt, "Files to Modify") {
+		t.Error("Prompt missing Files to Modify section")
 	}
-	if !strings.Contains(prompt, "Component Dependencies") {
-		t.Error("Prompt missing Component Dependencies section")
+	if !strings.Contains(prompt, "Key Considerations") {
+		t.Error("Prompt missing Key Considerations section")
 	}
 	if !strings.Contains(prompt, "Implementation Boundaries") {
 		t.Error("Prompt missing Implementation Boundaries section")

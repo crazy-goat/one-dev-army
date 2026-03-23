@@ -77,22 +77,25 @@ Your output MUST be a markdown document with exactly these sections:
 ## Problem Statement / Feature Description
 [Clear, professional description of what needs to be done]
 
-## Architecture Overview
-[High-level description of the system architecture needed]
-- Key components involved
-- Data flow overview
-- Integration points
+## Suggested Approach
+[Based on the codebase analysis, suggest the best approach to solve this]
+- Recommended solution strategy
+- Key implementation steps
+- Alternative approaches considered and why this one is preferred
 
-## Files Requiring Changes
-[List specific file paths that will need modification]
-- Path to each file with brief explanation of what changes are needed
+## Files to Modify
+[List specific file paths that will need modification with explanations]
+- Path to each file with detailed explanation of WHY it needs changes and WHAT needs to change
 - Include both existing files to modify and new files to create
+- Be specific about the purpose of each file change
 
-## Component Dependencies
-[Describe how components interact]
-- Dependencies between modules
-- External dependencies (libraries, APIs, services)
-- Database schema changes if applicable
+## Key Considerations
+[Important factors to consider when implementing]
+- Performance implications and optimization strategies
+- Security concerns and mitigation approaches
+- Error handling and edge cases
+- Testing requirements
+- Integration with existing systems
 
 ## Implementation Boundaries
 [Clear boundaries of what to do and what NOT to do]
@@ -104,12 +107,12 @@ Your output MUST be a markdown document with exactly these sections:
 [2-4 specific, verifiable criteria for completion]
 
 CRITICAL RULES:
-- NO implementation code or algorithms
-- NO specific technical solutions or design patterns
-- NO "how to" instructions
-- Focus on WHAT and WHERE, not HOW
-- Be specific about file paths and component names
-- Keep architecture description at a high level
+- Focus on HOW to solve the problem, not just describing the system
+- Provide actionable guidance that developers can follow
+- Be specific about file paths and what changes are needed
+- Include concrete implementation recommendations
+- Address practical concerns like performance, security, and testing
+- Keep descriptions solution-oriented rather than purely descriptive
 
 Codebase context (for reference only):
 %s
