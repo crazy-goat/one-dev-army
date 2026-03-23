@@ -152,8 +152,8 @@ func TestHandleBoardData(t *testing.T) {
 
 // TestHandleBoardData_WithTemplate tests the endpoint with a loaded template
 func TestHandleBoardData_WithTemplate(t *testing.T) {
-	// Create a minimal template for testing
-	tmplContent := `{{define "content"}}<div>Board Data</div>{{end}}`
+	// Create a minimal template for testing with board-columns block
+	tmplContent := `{{define "board-columns"}}<div class="board"><div>Board Data</div></div>{{end}}`
 	tmpl, err := template.New("board.html").Parse(tmplContent)
 	if err != nil {
 		t.Fatalf("failed to parse template: %v", err)

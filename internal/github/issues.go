@@ -280,14 +280,12 @@ func (c *Client) ListIssuesForMilestone(milestone string) ([]Issue, error) {
 		return nil, fmt.Errorf("listing issues for milestone %s: %w", milestone, err)
 	}
 
-	log.Printf("[GitHub] Issue list for milestone '%s' output: %s", milestone, string(out))
-
 	var issues []Issue
 	if err := json.Unmarshal(out, &issues); err != nil {
 		return nil, fmt.Errorf("parsing issues for milestone %s: %w", milestone, err)
 	}
 
-	log.Printf("[GitHub] Parsed %d issues for milestone '%s'", len(issues), milestone)
+	log.Printf("[GitHub] Fetched %d issues for milestone '%s'", len(issues), milestone)
 	return issues, nil
 }
 

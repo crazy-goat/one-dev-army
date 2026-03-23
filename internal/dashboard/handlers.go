@@ -96,7 +96,7 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleBoardData(w http.ResponseWriter, r *http.Request) {
 	data := s.buildBoardData(r)
-	s.renderFragment(w, "board.html", data)
+	s.renderTemplateBlock(w, "board.html", "board-columns", data)
 }
 
 func (s *Server) buildBoardData(r *http.Request) boardData {
@@ -657,14 +657,18 @@ func (s *Server) render(w http.ResponseWriter, name string, data any) {
 }
 
 func (s *Server) renderFragment(w http.ResponseWriter, name string, data any) {
+	s.renderTemplateBlock(w, name, "content", data)
+}
+
+func (s *Server) renderTemplateBlock(w http.ResponseWriter, name string, block string, data any) {
 	t, ok := s.tmpls[name]
 	if !ok {
 		http.Error(w, "template not found", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := t.ExecuteTemplate(w, "content", data); err != nil {
-		log.Printf("[Dashboard] Error rendering fragment %s: %v", name, err)
+	if err := t.ExecuteTemplate(w, block, data); err != nil {
+		log.Printf("[Dashboard] Error rendering block %s from %s: %v", block, name, err)
 		http.Error(w, "template error", http.StatusInternalServerError)
 	}
 }
