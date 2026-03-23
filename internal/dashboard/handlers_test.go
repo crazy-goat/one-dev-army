@@ -2290,7 +2290,7 @@ func TestBoardLayout_ValidHTMLStructure(t *testing.T) {
 		"board-header":  `class="board-header"`,
 		"board-actions": `class="board-actions"`,
 		"board grid":    `class="board"`,
-		"7 columns":     "grid-template-columns:repeat(7,1fr)",
+		"8 columns":     "grid-template-columns:repeat(8,1fr)",
 	}
 
 	for name, pattern := range structureChecks {

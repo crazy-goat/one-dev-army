@@ -38,11 +38,11 @@ func TestStageColumns(t *testing.T) {
 		want  pipeline.Column
 	}{
 		{pipeline.StageQueued, pipeline.ColumnBacklog},
-		{pipeline.StageAnalysis, pipeline.ColumnInProgress},
-		{pipeline.StagePlanning, pipeline.ColumnInProgress},
+		{pipeline.StageAnalysis, pipeline.ColumnPlan},
+		{pipeline.StagePlanning, pipeline.ColumnPlan},
 		{pipeline.StagePlanReview, pipeline.ColumnAIReview},
-		{pipeline.StageCoding, pipeline.ColumnInProgress},
-		{pipeline.StageTesting, pipeline.ColumnInProgress},
+		{pipeline.StageCoding, pipeline.ColumnCode},
+		{pipeline.StageTesting, pipeline.ColumnCode},
 		{pipeline.StageCodeReview, pipeline.ColumnAIReview},
 		{pipeline.StageMerging, pipeline.ColumnApprove},
 		{pipeline.StageDone, pipeline.ColumnDone},
