@@ -223,7 +223,6 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		if err := o.gh.RemoveLabel(nextIssue.Number, "merge-failed"); err != nil {
 			log.Printf("[Orchestrator] Error removing merge-failed label: %v", err)
 		}
-		o.moveToColumn(nextIssue.Number, "Plan")
 
 		task := &Task{
 			Issue:     *nextIssue,
@@ -256,7 +255,6 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if err := o.gh.CloseIssue(nextIssue.Number); err != nil {
 				log.Printf("[Orchestrator] Error closing issue: %v", err)
 			}
-			o.moveToColumn(nextIssue.Number, "Done")
 			o.recordStep(nextIssue.Number, "done", "Closed as already done")
 		} else if processErr != nil {
 			log.Printf("[Orchestrator] ✗ Failed #%d: %v", nextIssue.Number, processErr)
@@ -267,7 +265,6 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if err := o.gh.AddLabel(nextIssue.Number, "failed"); err != nil {
 				log.Printf("[Orchestrator] Error adding failed label: %v", err)
 			}
-			o.moveToColumn(nextIssue.Number, "Blocked")
 		} else {
 			prURL := ""
 			if task.Result != nil {
@@ -281,7 +278,6 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if err := o.gh.AddLabel(nextIssue.Number, "awaiting-approval"); err != nil {
 				log.Printf("[Orchestrator] Error adding awaiting-approval label: %v", err)
 			}
-			o.moveToColumn(nextIssue.Number, "Approve")
 			if prURL != "" {
 				comment := fmt.Sprintf("AI review passed ✓ — awaiting manual approval.\n\nPR: %s", prURL)
 				if err := o.gh.AddComment(nextIssue.Number, comment); err != nil {
@@ -369,12 +365,6 @@ func (o *Orchestrator) recordStep(issueNumber int, stepName, response string) {
 		return
 	}
 	_ = o.store.FinishStep(id, response)
-}
-
-func (o *Orchestrator) moveToColumn(issueNumber int, column string) {
-	// TODO: Replace with SetStageLabel when implementing ticket #182
-	// For now, this is a no-op as we're removing GitHub Projects dependency
-	log.Printf("[Orchestrator] Would move #%d to %q (label-based implementation pending)", issueNumber, column)
 }
 
 func (o *Orchestrator) sleep(ctx context.Context, d time.Duration) {
