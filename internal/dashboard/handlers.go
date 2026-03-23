@@ -897,6 +897,10 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		session.SetSkipBreakdown(true)
 	}
 
+	// Parse add_to_sprint checkbox (available for all ticket types in refine step)
+	addToSprint := r.FormValue("add_to_sprint") == "1"
+	session.SetAddToSprint(addToSprint)
+
 	session.SetStep(WizardStepRefine)
 	session.AddLog("user", inputText)
 
@@ -912,12 +916,14 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 			RefinedDescription string
 			IsPage             bool
 			SkipBreakdown      bool
+			SprintName         string
 		}{
 			SessionID:          session.ID,
 			Type:               string(session.Type),
 			RefinedDescription: mockRefined,
 			IsPage:             isPage,
 			SkipBreakdown:      session.SkipBreakdown,
+			SprintName:         s.activeSprintName(),
 		}
 
 		s.renderFragment(w, "wizard_refine.html", data)
@@ -988,12 +994,14 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		RefinedDescription string
 		IsPage             bool
 		SkipBreakdown      bool
+		SprintName         string
 	}{
 		SessionID:          session.ID,
 		Type:               string(session.Type),
 		RefinedDescription: refinedDesc,
 		IsPage:             isPage,
 		SkipBreakdown:      session.SkipBreakdown,
+		SprintName:         s.activeSprintName(),
 	}
 
 	s.renderFragment(w, "wizard_refine.html", data)
