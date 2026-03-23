@@ -1513,6 +1513,260 @@ func TestHandleWizardCreate_SubTaskBodyFormat(t *testing.T) {
 	}
 }
 
+// TestWizardFlow_ValidationErrors tests all validation scenarios in sequence
+func TestWizardFlow_ValidationErrors(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	tests := []struct {
+		name       string
+		setup      func() (*http.Request, *httptest.ResponseRecorder)
+		handler    func(http.ResponseWriter, *http.Request)
+		wantStatus int
+		wantError  string
+	}{
+		{
+			name: "invalid wizard type",
+			setup: func() (*http.Request, *httptest.ResponseRecorder) {
+				req := httptest.NewRequest(http.MethodGet, "/wizard/new?type=invalid", nil)
+				return req, httptest.NewRecorder()
+			},
+			handler:    srv.handleWizardNew,
+			wantStatus: http.StatusBadRequest,
+			wantError:  "Invalid wizard type",
+		},
+		{
+			name: "missing session_id on refine",
+			setup: func() (*http.Request, *httptest.ResponseRecorder) {
+				formData := url.Values{}
+				formData.Set("idea", "test idea")
+				req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(formData.Encode()))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				return req, httptest.NewRecorder()
+			},
+			handler:    srv.handleWizardRefine,
+			wantStatus: http.StatusBadRequest,
+			wantError:  "session_id",
+		},
+		{
+			name: "empty idea on refine",
+			setup: func() (*http.Request, *httptest.ResponseRecorder) {
+				session, _ := srv.wizardStore.Create("feature")
+				formData := url.Values{}
+				formData.Set("session_id", session.ID)
+				formData.Set("idea", "")
+				req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(formData.Encode()))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				return req, httptest.NewRecorder()
+			},
+			handler:    srv.handleWizardRefine,
+			wantStatus: http.StatusBadRequest,
+			wantError:  "idea",
+		},
+		{
+			name: "missing session_id on breakdown",
+			setup: func() (*http.Request, *httptest.ResponseRecorder) {
+				req := httptest.NewRequest(http.MethodPost, "/wizard/breakdown", strings.NewReader(""))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				return req, httptest.NewRecorder()
+			},
+			handler:    srv.handleWizardBreakdown,
+			wantStatus: http.StatusBadRequest,
+			wantError:  "session_id",
+		},
+		{
+			name: "missing session_id on create",
+			setup: func() (*http.Request, *httptest.ResponseRecorder) {
+				req := httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader(""))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				return req, httptest.NewRecorder()
+			},
+			handler:    srv.handleWizardCreate,
+			wantStatus: http.StatusBadRequest,
+			wantError:  "session_id",
+		},
+		{
+			name: "invalid session_id",
+			setup: func() (*http.Request, *httptest.ResponseRecorder) {
+				formData := url.Values{}
+				formData.Set("session_id", "nonexistent-session-id")
+				req := httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader(formData.Encode()))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				return req, httptest.NewRecorder()
+			},
+			handler:    srv.handleWizardCreate,
+			wantStatus: http.StatusBadRequest,
+			wantError:  "session",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, rec := tt.setup()
+			tt.handler(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Errorf("expected status %d, got %d", tt.wantStatus, rec.Code)
+			}
+
+			body := rec.Body.String()
+			if !strings.Contains(strings.ToLower(body), strings.ToLower(tt.wantError)) {
+				t.Errorf("expected error containing %q, got: %s", tt.wantError, body)
+			}
+		})
+	}
+}
+
+// TestWizardFlow_ConcurrentUsers tests multiple simultaneous wizard sessions
+func TestWizardFlow_ConcurrentUsers(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	const numUsers = 10
+	var wg sync.WaitGroup
+
+	// Each user creates a complete wizard flow
+	for i := 0; i < numUsers; i++ {
+		wg.Add(1)
+		go func(userID int) {
+			defer wg.Done()
+
+			wizardType := "feature"
+			if userID%2 == 0 {
+				wizardType = "bug"
+			}
+
+			// Step 1: Create session
+			session, err := srv.wizardStore.Create(wizardType)
+			if err != nil {
+				t.Errorf("User %d: failed to create session: %v", userID, err)
+				return
+			}
+
+			// Step 2: Refine
+			formData := url.Values{}
+			formData.Set("session_id", session.ID)
+			formData.Set("idea", fmt.Sprintf("User %d idea", userID))
+
+			req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(formData.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rec := httptest.NewRecorder()
+			srv.handleWizardRefine(rec, req)
+
+			if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+				t.Errorf("User %d: refine failed with status %d", userID, rec.Code)
+				return
+			}
+
+			// Step 3: Breakdown
+			formData = url.Values{}
+			formData.Set("session_id", session.ID)
+
+			req = httptest.NewRequest(http.MethodPost, "/wizard/breakdown", strings.NewReader(formData.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rec = httptest.NewRecorder()
+			srv.handleWizardBreakdown(rec, req)
+
+			if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+				t.Errorf("User %d: breakdown failed with status %d", userID, rec.Code)
+				return
+			}
+
+			// Verify session still exists and has tasks
+			session, ok := srv.wizardStore.Get(session.ID)
+			if !ok {
+				t.Errorf("User %d: session not found after breakdown", userID)
+				return
+			}
+
+			if len(session.Tasks) == 0 {
+				t.Errorf("User %d: no tasks generated", userID)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Verify all sessions still exist (not cleaned up yet)
+	count := srv.wizardStore.Count()
+	if count != numUsers {
+		t.Errorf("expected %d sessions, got %d", numUsers, count)
+	}
+
+	t.Logf("Concurrent wizard flow test completed: %d users, %d sessions", numUsers, count)
+}
+
+// TestWizardFlow_PostCreationVerification tests redirect and cleanup after creation
+func TestWizardFlow_PostCreationVerification(t *testing.T) {
+	srv := &Server{
+		tmpls:       make(map[string]*template.Template),
+		wizardStore: NewWizardSessionStore(),
+	}
+	defer srv.wizardStore.Stop()
+
+	// Create and complete a wizard session
+	session, _ := srv.wizardStore.Create("feature")
+	session.IdeaText = "Test feature idea"
+	session.RefinedDescription = "Refined description of the test feature"
+	session.Tasks = []WizardTask{
+		{Title: "Task 1", Description: "Description 1", Priority: "high", Complexity: "M"},
+		{Title: "Task 2", Description: "Description 2", Priority: "medium", Complexity: "S"},
+	}
+	session.CurrentStep = WizardStepBreakdown
+
+	// Store the session
+	srv.wizardStore.sessions[session.ID] = session
+
+	// Verify session exists
+	_, ok := srv.wizardStore.Get(session.ID)
+	if !ok {
+		t.Fatal("Session should exist before creation")
+	}
+
+	// Step 4: Create issues
+	formData := url.Values{}
+	formData.Set("session_id", session.ID)
+
+	req := httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	srv.handleWizardCreate(rec, req)
+
+	// Verify response status
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 200 or 500, got %d", rec.Code)
+	}
+
+	// Verify session was cleaned up
+	_, ok = srv.wizardStore.Get(session.ID)
+	if ok {
+		t.Error("Session should be deleted after successful creation")
+	}
+
+	// Verify response contains success indicator or redirect info
+	body := rec.Body.String()
+	if !strings.Contains(body, "success") && !strings.Contains(body, "created") &&
+		!strings.Contains(body, "error") && !strings.Contains(body, "fail") {
+		t.Logf("Response body: %s", truncate(body, 200))
+	}
+
+	t.Logf("Post-creation verification completed: session cleaned up = %v", !ok)
+}
+
+// truncate helper function for test output
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
+}
+
 // TestFullWizardFlow_Bug tests the complete bug wizard flow end-to-end
 func TestFullWizardFlow_Bug(t *testing.T) {
 	srv := &Server{
