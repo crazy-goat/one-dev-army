@@ -12,6 +12,7 @@
         <span class="step-number">2</span>
         <span class="step-label">Refine</span>
       </div>
+      {{if .ShowBreakdownStep}}
       <div class="step-connector"></div>
       <div class="step {{if eq .CurrentStep 3}}active{{end}} {{if gt .CurrentStep 3}}completed{{end}}">
         <span class="step-number">3</span>
@@ -22,6 +23,13 @@
         <span class="step-number">4</span>
         <span class="step-label">Create</span>
       </div>
+      {{else}}
+      <div class="step-connector"></div>
+      <div class="step {{if eq .CurrentStep 3}}active{{end}}">
+        <span class="step-number">3</span>
+        <span class="step-label">Create</span>
+      </div>
+      {{end}}
     </div>
     <a href="/" class="wizard-close-btn" aria-label="Close wizard">
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">

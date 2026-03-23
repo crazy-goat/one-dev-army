@@ -2,7 +2,7 @@
 <div class="wizard-step">
   <h2>Refined Description</h2>
   
-  <form id="refine-form" hx-post="/wizard/breakdown{{if .IsPage}}?page=1{{end}}" hx-target="#wizard-content" hx-swap="innerHTML" hx-disabled-elt="button[type='submit']" data-is-page="{{.IsPage}}">
+  <form id="refine-form" hx-post="/wizard/create{{if .IsPage}}?page=1{{end}}" hx-target="#wizard-content" hx-swap="innerHTML" hx-disabled-elt="button[type='submit']" data-is-page="{{.IsPage}}">
     <input type="hidden" name="session_id" value="{{.SessionID}}">
     {{if .IsPage}}<input type="hidden" name="page" value="1">{{end}}
     
@@ -14,10 +14,10 @@
     {{if eq .Type "feature"}}
     <div class="form-group breakdown-option">
       <label class="breakdown-checkbox">
-        <input type="checkbox" name="skip_breakdown" value="1" {{if .SkipBreakdown}}checked{{end}}>
-        <span class="breakdown-checkbox-label">Skip breakdown (create single issue)</span>
+        <input type="checkbox" name="do_breakdown" value="1">
+        <span class="breakdown-checkbox-label">Break down into sub-tasks</span>
       </label>
-      <p class="breakdown-hint">Check for small tasks that don't need sub-tasks</p>
+      <p class="breakdown-hint">Check to create epic with sub-tasks</p>
     </div>
     {{end}}
     
@@ -107,19 +107,19 @@
 <script>
 (function() {
   const form = document.getElementById('refine-form');
-  const checkbox = document.querySelector('input[name="skip_breakdown"]');
+  const checkbox = document.querySelector('input[name="do_breakdown"]');
   
   if (form && checkbox) {
     checkbox.addEventListener('change', function() {
-      // When checked (skip_breakdown=1), go directly to create
-      // When unchecked, go to breakdown
+      // When checked (do_breakdown=1), go to breakdown
+      // When unchecked, go directly to create
       const isPage = form.getAttribute('data-is-page') === 'true';
       const pageParam = isPage ? '?page=1' : '';
       
       if (this.checked) {
-        form.setAttribute('hx-post', '/wizard/create' + pageParam);
-      } else {
         form.setAttribute('hx-post', '/wizard/breakdown' + pageParam);
+      } else {
+        form.setAttribute('hx-post', '/wizard/create' + pageParam);
       }
       
       // Re-initialize HTMX on the form to pick up the new attribute
