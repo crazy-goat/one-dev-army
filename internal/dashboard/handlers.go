@@ -792,16 +792,8 @@ func (s *Server) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 
 // handleWizardNew returns the initial wizard modal form
 func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
-	// Get wizard type from query param (default to feature)
+	// Get wizard type from query param
 	wizardType := r.URL.Query().Get("type")
-
-	// Validate wizard type
-	if wizardType == "" {
-		wizardType = "feature"
-	} else if wizardType != "feature" && wizardType != "bug" {
-		http.Error(w, "invalid wizard type: must be 'feature' or 'bug'", http.StatusBadRequest)
-		return
-	}
 
 	// Check for page mode
 	isPage := r.URL.Query().Get("page") == "1"
@@ -817,8 +809,12 @@ func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Create new session if not found
-	if session == nil {
+	// If no type param or invalid type, and no session, show type selector
+	isValidType := wizardType == "feature" || wizardType == "bug"
+	needsTypeSelection := (wizardType == "" || !isValidType) && session == nil
+
+	// Create new session if valid type is provided and no session exists
+	if !needsTypeSelection && session == nil {
 		var err error
 		session, err = s.wizardStore.Create(wizardType)
 		if err != nil {
@@ -828,17 +824,25 @@ func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		Type              string
-		SessionID         string
-		IsPage            bool
-		CurrentStep       int
-		ShowBreakdownStep bool
+		Type               string
+		SessionID          string
+		IsPage             bool
+		CurrentStep        int
+		ShowBreakdownStep  bool
+		NeedsTypeSelection bool
 	}{
-		Type:              wizardType,
-		SessionID:         session.ID,
-		IsPage:            isPage,
-		CurrentStep:       1,
-		ShowBreakdownStep: wizardType == "feature" && !session.SkipBreakdown,
+		Type:               wizardType,
+		SessionID:          "",
+		IsPage:             isPage,
+		CurrentStep:        1,
+		ShowBreakdownStep:  false,
+		NeedsTypeSelection: needsTypeSelection,
+	}
+
+	if session != nil {
+		data.SessionID = session.ID
+		data.Type = string(session.Type)
+		data.ShowBreakdownStep = session.Type == WizardTypeFeature && !session.SkipBreakdown
 	}
 
 	s.renderFragment(w, "wizard_new.html", data)
@@ -918,6 +922,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 			SkipBreakdown      bool
 			CurrentStep        int
 			ShowBreakdownStep  bool
+			NeedsTypeSelection bool
 		}{
 			SessionID:          session.ID,
 			Type:               string(session.Type),
@@ -926,6 +931,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 			SkipBreakdown:      session.SkipBreakdown,
 			CurrentStep:        2,
 			ShowBreakdownStep:  session.Type == WizardTypeFeature && !session.SkipBreakdown,
+			NeedsTypeSelection: false,
 		}
 
 		s.renderFragment(w, "wizard_refine.html", data)
@@ -998,6 +1004,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		SkipBreakdown      bool
 		CurrentStep        int
 		ShowBreakdownStep  bool
+		NeedsTypeSelection bool
 	}{
 		SessionID:          session.ID,
 		Type:               string(session.Type),
@@ -1006,6 +1013,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		SkipBreakdown:      session.SkipBreakdown,
 		CurrentStep:        2,
 		ShowBreakdownStep:  session.Type == WizardTypeFeature && !session.SkipBreakdown,
+		NeedsTypeSelection: false,
 	}
 
 	s.renderFragment(w, "wizard_refine.html", data)
@@ -1079,19 +1087,21 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 		session.AddLog("assistant", "Generated 2 tasks")
 
 		data := struct {
-			SessionID         string
-			Tasks             []WizardTask
-			IsPage            bool
-			SprintName        string
-			CurrentStep       int
-			ShowBreakdownStep bool
+			SessionID          string
+			Tasks              []WizardTask
+			IsPage             bool
+			SprintName         string
+			CurrentStep        int
+			ShowBreakdownStep  bool
+			NeedsTypeSelection bool
 		}{
-			SessionID:         session.ID,
-			Tasks:             mockTasks,
-			IsPage:            isPage,
-			SprintName:        s.activeSprintName(),
-			CurrentStep:       3,
-			ShowBreakdownStep: true,
+			SessionID:          session.ID,
+			Tasks:              mockTasks,
+			IsPage:             isPage,
+			SprintName:         s.activeSprintName(),
+			CurrentStep:        3,
+			ShowBreakdownStep:  true,
+			NeedsTypeSelection: false,
 		}
 
 		s.renderFragment(w, "wizard_breakdown.html", data)
@@ -1139,19 +1149,21 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 	session.AddLog("assistant", fmt.Sprintf("Generated %d tasks", len(tasks)))
 
 	data := struct {
-		SessionID         string
-		Tasks             []WizardTask
-		IsPage            bool
-		SprintName        string
-		CurrentStep       int
-		ShowBreakdownStep bool
+		SessionID          string
+		Tasks              []WizardTask
+		IsPage             bool
+		SprintName         string
+		CurrentStep        int
+		ShowBreakdownStep  bool
+		NeedsTypeSelection bool
 	}{
-		SessionID:         session.ID,
-		Tasks:             tasks,
-		IsPage:            isPage,
-		SprintName:        s.activeSprintName(),
-		CurrentStep:       3,
-		ShowBreakdownStep: true,
+		SessionID:          session.ID,
+		Tasks:              tasks,
+		IsPage:             isPage,
+		SprintName:         s.activeSprintName(),
+		CurrentStep:        3,
+		ShowBreakdownStep:  true,
+		NeedsTypeSelection: false,
 	}
 
 	s.renderFragment(w, "wizard_breakdown.html", data)
@@ -1251,21 +1263,23 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 		session.AddLog("system", "Mock: Created epic #100 with 2 sub-tasks")
 
 		data := struct {
-			Epic              CreatedIssue
-			SubTasks          []CreatedIssue
-			HasErrors         bool
-			IsPage            bool
-			IsSingleIssue     bool
-			CurrentStep       int
-			ShowBreakdownStep bool
+			Epic               CreatedIssue
+			SubTasks           []CreatedIssue
+			HasErrors          bool
+			IsPage             bool
+			IsSingleIssue      bool
+			CurrentStep        int
+			ShowBreakdownStep  bool
+			NeedsTypeSelection bool
 		}{
-			Epic:              mockEpic,
-			SubTasks:          mockSubTasks,
-			HasErrors:         false,
-			IsPage:            isPage,
-			IsSingleIssue:     false,
-			CurrentStep:       4,
-			ShowBreakdownStep: !session.SkipBreakdown,
+			Epic:               mockEpic,
+			SubTasks:           mockSubTasks,
+			HasErrors:          false,
+			IsPage:             isPage,
+			IsSingleIssue:      false,
+			CurrentStep:        4,
+			ShowBreakdownStep:  !session.SkipBreakdown,
+			NeedsTypeSelection: false,
 		}
 
 		s.wizardStore.Delete(sessionID)
@@ -1429,21 +1443,23 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		Epic              CreatedIssue
-		SubTasks          []CreatedIssue
-		HasErrors         bool
-		IsPage            bool
-		IsSingleIssue     bool
-		CurrentStep       int
-		ShowBreakdownStep bool
+		Epic               CreatedIssue
+		SubTasks           []CreatedIssue
+		HasErrors          bool
+		IsPage             bool
+		IsSingleIssue      bool
+		CurrentStep        int
+		ShowBreakdownStep  bool
+		NeedsTypeSelection bool
 	}{
-		Epic:              epicIssue,
-		SubTasks:          subTasks,
-		HasErrors:         hasErrors,
-		IsPage:            isPage,
-		IsSingleIssue:     false,
-		CurrentStep:       4,
-		ShowBreakdownStep: !session.SkipBreakdown,
+		Epic:               epicIssue,
+		SubTasks:           subTasks,
+		HasErrors:          hasErrors,
+		IsPage:             isPage,
+		IsSingleIssue:      false,
+		CurrentStep:        4,
+		ShowBreakdownStep:  !session.SkipBreakdown,
+		NeedsTypeSelection: false,
 	}
 
 	// Clean up session after creation to free memory
@@ -1478,21 +1494,23 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 		session.AddLog("system", "Mock: Created single issue #100")
 
 		data := struct {
-			Epic              CreatedIssue
-			SubTasks          []CreatedIssue
-			HasErrors         bool
-			IsPage            bool
-			IsSingleIssue     bool
-			CurrentStep       int
-			ShowBreakdownStep bool
+			Epic               CreatedIssue
+			SubTasks           []CreatedIssue
+			HasErrors          bool
+			IsPage             bool
+			IsSingleIssue      bool
+			CurrentStep        int
+			ShowBreakdownStep  bool
+			NeedsTypeSelection bool
 		}{
-			Epic:              mockIssue,
-			SubTasks:          []CreatedIssue{},
-			HasErrors:         false,
-			IsPage:            isPage,
-			IsSingleIssue:     true,
-			CurrentStep:       4,
-			ShowBreakdownStep: false,
+			Epic:               mockIssue,
+			SubTasks:           []CreatedIssue{},
+			HasErrors:          false,
+			IsPage:             isPage,
+			IsSingleIssue:      true,
+			CurrentStep:        4,
+			ShowBreakdownStep:  false,
+			NeedsTypeSelection: false,
 		}
 
 		s.wizardStore.Delete(session.ID)
@@ -1549,21 +1567,23 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 	}
 
 	data := struct {
-		Epic              CreatedIssue
-		SubTasks          []CreatedIssue
-		HasErrors         bool
-		IsPage            bool
-		IsSingleIssue     bool
-		CurrentStep       int
-		ShowBreakdownStep bool
+		Epic               CreatedIssue
+		SubTasks           []CreatedIssue
+		HasErrors          bool
+		IsPage             bool
+		IsSingleIssue      bool
+		CurrentStep        int
+		ShowBreakdownStep  bool
+		NeedsTypeSelection bool
 	}{
-		Epic:              issue,
-		SubTasks:          []CreatedIssue{},
-		HasErrors:         false,
-		IsPage:            isPage,
-		IsSingleIssue:     true,
-		CurrentStep:       4,
-		ShowBreakdownStep: false,
+		Epic:               issue,
+		SubTasks:           []CreatedIssue{},
+		HasErrors:          false,
+		IsPage:             isPage,
+		IsSingleIssue:      true,
+		CurrentStep:        4,
+		ShowBreakdownStep:  false,
+		NeedsTypeSelection: false,
 	}
 
 	// Clean up session after creation to free memory
@@ -1607,33 +1627,56 @@ func (s *Server) handleWizardLogs(w http.ResponseWriter, r *http.Request) {
 
 // handleWizardPage returns the full wizard page (not modal)
 func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
-	// Get wizard type from query param (default to feature)
+	// Get wizard type from query param
 	wizardType := r.URL.Query().Get("type")
-	if wizardType != "bug" {
-		wizardType = "feature"
+
+	// Check for existing session ID (for back navigation)
+	sessionID := r.URL.Query().Get("session_id")
+	var session *WizardSession
+
+	if sessionID != "" {
+		// Try to get existing session
+		if existing, ok := s.wizardStore.Get(sessionID); ok {
+			session = existing
+		}
 	}
 
-	// Create new session
-	session, err := s.wizardStore.Create(wizardType)
-	if err != nil {
-		http.Error(w, "invalid wizard type", http.StatusBadRequest)
-		return
+	// If no type param or invalid type, and no session, show type selector
+	isValidType := wizardType == "feature" || wizardType == "bug"
+	needsTypeSelection := (wizardType == "" || !isValidType) && session == nil
+
+	// Create new session if valid type is provided and no session exists
+	if !needsTypeSelection && session == nil {
+		var err error
+		session, err = s.wizardStore.Create(wizardType)
+		if err != nil {
+			http.Error(w, "invalid wizard type", http.StatusBadRequest)
+			return
+		}
 	}
 
 	data := struct {
-		Active            string
-		Type              string
-		SessionID         string
-		CurrentStep       int
-		IsPage            bool
-		ShowBreakdownStep bool
+		Active             string
+		Type               string
+		SessionID          string
+		CurrentStep        int
+		IsPage             bool
+		ShowBreakdownStep  bool
+		NeedsTypeSelection bool
 	}{
-		Active:            "wizard",
-		Type:              wizardType,
-		SessionID:         session.ID,
-		CurrentStep:       1,
-		IsPage:            true,
-		ShowBreakdownStep: wizardType == "feature" && !session.SkipBreakdown,
+		Active:             "wizard",
+		Type:               wizardType,
+		SessionID:          "",
+		CurrentStep:        1,
+		IsPage:             true,
+		ShowBreakdownStep:  false,
+		NeedsTypeSelection: needsTypeSelection,
+	}
+
+	if session != nil {
+		data.SessionID = session.ID
+		data.Type = string(session.Type)
+		data.ShowBreakdownStep = session.Type == WizardTypeFeature && !session.SkipBreakdown
 	}
 
 	s.render(w, "wizard_page.html", data)
@@ -1641,29 +1684,52 @@ func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
 
 // handleWizardModal returns the full modal shell with step 1 loaded
 func (s *Server) handleWizardModal(w http.ResponseWriter, r *http.Request) {
-	// Get wizard type from query param (default to feature)
+	// Get wizard type from query param
 	wizardType := r.URL.Query().Get("type")
-	if wizardType != "bug" {
-		wizardType = "feature"
+
+	// Check for existing session ID (for back navigation)
+	sessionID := r.URL.Query().Get("session_id")
+	var session *WizardSession
+
+	if sessionID != "" {
+		// Try to get existing session
+		if existing, ok := s.wizardStore.Get(sessionID); ok {
+			session = existing
+		}
 	}
 
-	// Create new session
-	session, err := s.wizardStore.Create(wizardType)
-	if err != nil {
-		http.Error(w, "invalid wizard type", http.StatusBadRequest)
-		return
+	// If no type param or invalid type, and no session, show type selector
+	isValidType := wizardType == "feature" || wizardType == "bug"
+	needsTypeSelection := (wizardType == "" || !isValidType) && session == nil
+
+	// Create new session if valid type is provided and no session exists
+	if !needsTypeSelection && session == nil {
+		var err error
+		session, err = s.wizardStore.Create(wizardType)
+		if err != nil {
+			http.Error(w, "invalid wizard type", http.StatusBadRequest)
+			return
+		}
 	}
 
 	data := struct {
-		Type              string
-		SessionID         string
-		CurrentStep       int
-		ShowBreakdownStep bool
+		Type               string
+		SessionID          string
+		CurrentStep        int
+		ShowBreakdownStep  bool
+		NeedsTypeSelection bool
 	}{
-		Type:              wizardType,
-		SessionID:         session.ID,
-		CurrentStep:       1,
-		ShowBreakdownStep: wizardType == "feature" && !session.SkipBreakdown,
+		Type:               wizardType,
+		SessionID:          "",
+		CurrentStep:        1,
+		ShowBreakdownStep:  false,
+		NeedsTypeSelection: needsTypeSelection,
+	}
+
+	if session != nil {
+		data.SessionID = session.ID
+		data.Type = string(session.Type)
+		data.ShowBreakdownStep = session.Type == WizardTypeFeature && !session.SkipBreakdown
 	}
 
 	s.renderFragment(w, "wizard_modal.html", data)
@@ -1681,4 +1747,36 @@ func (s *Server) handleWizardCancel(w http.ResponseWriter, r *http.Request) {
 		s.wizardStore.Delete(sessionID)
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+// handleWizardSelectType handles type selection and creates a session
+func (s *Server) handleWizardSelectType(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	wizardType := r.FormValue("wizard_type")
+	if wizardType != "feature" && wizardType != "bug" {
+		http.Error(w, "invalid wizard type: must be 'feature' or 'bug'", http.StatusBadRequest)
+		return
+	}
+
+	// Create new session with selected type
+	session, err := s.wizardStore.Create(wizardType)
+	if err != nil {
+		http.Error(w, "failed to create session", http.StatusInternalServerError)
+		return
+	}
+
+	// Check for page mode
+	isPage := r.FormValue("page") == "1" || r.URL.Query().Get("page") == "1"
+
+	// Redirect to idea input step
+	redirectURL := "/wizard/new?session_id=" + session.ID
+	if isPage {
+		redirectURL += "&page=1"
+	}
+
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }
