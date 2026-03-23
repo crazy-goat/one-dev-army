@@ -3,7 +3,6 @@ package plan
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"regexp"
 	"strconv"
@@ -28,9 +27,9 @@ func NewAttachmentManager(gh *github.Client, worktree *git.Worktree) *Attachment
 	}
 }
 
-// CreateAndAttach creates a plan.md file, commits it, pushes to the branch,
-// and adds a comment to the GitHub issue with the plan URL.
-// Returns the GitHub URL of the plan file.
+// CreateAndAttach creates a plan and adds it as a comment to the GitHub issue.
+// No file is created - the plan is only added as a comment.
+// Returns empty string since no file URL is generated.
 func (am *AttachmentManager) CreateAndAttach(
 	ctx context.Context,
 	issueNum int,
@@ -38,7 +37,7 @@ func (am *AttachmentManager) CreateAndAttach(
 	analysis string,
 	planContent string,
 ) (string, error) {
-	// Create initial plan with analysis
+	// Create plan with analysis
 	plan := &Plan{
 		IssueNumber: issueNum,
 		Analysis:    analysis,
@@ -51,35 +50,13 @@ func (am *AttachmentManager) CreateAndAttach(
 		plan.ImplementationSteps = parseSteps(planContent)
 	}
 
-	// Save plan to file
-	planPath := GetPlanFilePath(am.worktree.Path)
-	if err := plan.SaveToFile(planPath); err != nil {
-		return "", fmt.Errorf("saving plan to file: %w", err)
-	}
-
-	// Commit the plan file
-	commitMsg := fmt.Sprintf("docs: add plan.md for issue #%d", issueNum)
-	if err := am.commitFile(planPath, commitMsg); err != nil {
-		return "", fmt.Errorf("committing plan file: %w", err)
-	}
-
-	// Push branch
-	if err := am.pushBranch(branch); err != nil {
-		return "", fmt.Errorf("pushing branch: %w", err)
-	}
-
-	// Generate GitHub URL
-	planURL := fmt.Sprintf("https://github.com/%s/blob/%s/plan.md", am.gh.Repo, branch)
-	plan.GitHubURL = planURL
-
-	// Add comment to issue with full technical plan
-	comment := formatTechnicalPlanComment(plan, planURL)
+	// Add comment to issue with full technical plan (no file attachment)
+	comment := formatTechnicalPlanComment(plan)
 	if err := am.gh.AddComment(issueNum, comment); err != nil {
-		log.Printf("[AttachmentManager] Warning: failed to add plan comment to issue #%d: %v", issueNum, err)
-		// Don't fail if comment addition fails
+		return "", fmt.Errorf("adding plan comment to issue #%d: %w", issueNum, err)
 	}
 
-	return planURL, nil
+	return "", nil
 }
 
 // GetFromIssue retrieves the plan from a GitHub issue by checking for plan.md
@@ -326,7 +303,7 @@ func (am *AttachmentManager) FileExists() bool {
 }
 
 // formatTechnicalPlanComment formats the plan as a technical planning comment
-func formatTechnicalPlanComment(p *Plan, planURL string) string {
+func formatTechnicalPlanComment(p *Plan) string {
 	var sb strings.Builder
 
 	sb.WriteString("## 📋 Technical Planning\n\n")
@@ -354,9 +331,6 @@ func formatTechnicalPlanComment(p *Plan, planURL string) string {
 			}
 		}
 	}
-
-	sb.WriteString("---\n\n")
-	sb.WriteString(fmt.Sprintf("📎 **Full Plan:** [plan.md](%s)\n", planURL))
 
 	return sb.String()
 }

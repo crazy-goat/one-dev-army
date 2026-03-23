@@ -1,189 +1,185 @@
 package dashboard
 
 import (
-	"context"
 	"log"
 	"sync"
 	"time"
 
-	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 )
 
-// SyncInterval is the default interval between automatic syncs
-const SyncInterval = 30 * time.Second
+// GitHubClient defines the interface for GitHub operations needed by SyncService
+type GitHubClient interface {
+	ListIssuesForMilestone(milestone string) ([]github.Issue, error)
+}
 
-// SyncService handles background synchronization of GitHub issues with the local cache
+// Store defines the interface for database operations needed by SyncService
+type Store interface {
+	SaveIssueCache(issue github.Issue, milestone string) error
+}
+
+// SyncService handles periodic synchronization of GitHub issues to the local cache.
+// It broadcasts updates via WebSocket and can be started/stopped gracefully.
 type SyncService struct {
-	gh              *github.Client
-	store           *db.Store
+	gh              GitHubClient
+	store           Store
 	hub             *Hub
-	activeMilestone string
-	interval        time.Duration
-	mu              sync.RWMutex
 	ticker          *time.Ticker
 	stopCh          chan struct{}
 	wg              sync.WaitGroup
-	ctx             context.Context
-	cancel          context.CancelFunc
+	mu              sync.RWMutex
+	activeMilestone string
 	running         bool
 }
 
-// NewSyncService creates a new SyncService instance
-func NewSyncService(gh *github.Client, store *db.Store, hub *Hub) *SyncService {
-	ctx, cancel := context.WithCancel(context.Background())
+// NewSyncService creates a new SyncService instance.
+// The hub parameter is optional and can be nil if WebSocket broadcasting is not needed.
+func NewSyncService(gh GitHubClient, store Store, hub *Hub) *SyncService {
 	return &SyncService{
-		gh:       gh,
-		store:    store,
-		hub:      hub,
-		interval: SyncInterval,
-		stopCh:   make(chan struct{}),
-		ctx:      ctx,
-		cancel:   cancel,
+		gh:     gh,
+		store:  store,
+		hub:    hub,
+		stopCh: make(chan struct{}),
 	}
 }
 
-// Start begins the background sync loop
-func (s *SyncService) Start() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.running {
-		log.Printf("[SyncService] Already running, ignoring Start() call")
-		return
-	}
-
-	s.ctx, s.cancel = context.WithCancel(context.Background())
-	s.ticker = time.NewTicker(s.interval)
-	s.running = true
-
-	s.wg.Add(1)
-	go s.run()
-
-	log.Printf("[SyncService] Started with interval %v", s.interval)
-}
-
-// Stop gracefully shuts down the sync service
-func (s *SyncService) Stop() {
-	s.mu.Lock()
-	if !s.running {
-		s.mu.Unlock()
-		return
-	}
-
-	s.running = false
-	if s.cancel != nil {
-		s.cancel()
-	}
-	if s.ticker != nil {
-		s.ticker.Stop()
-	}
-	s.mu.Unlock()
-
-	// Wait for the goroutine to finish
-	s.wg.Wait()
-
-	log.Printf("[SyncService] Stopped")
-}
-
-// SyncNow triggers an immediate sync operation
-func (s *SyncService) SyncNow() {
-	s.mu.RLock()
-	if !s.running {
-		s.mu.RUnlock()
-		log.Printf("[SyncService] Cannot sync: service not running")
-		return
-	}
-	s.mu.RUnlock()
-
-	// Perform sync outside of lock
-	s.performSync()
-}
-
-// SetActiveMilestone sets the active milestone for synchronization with thread-safe access
+// SetActiveMilestone sets the milestone to sync issues from.
 func (s *SyncService) SetActiveMilestone(milestone string) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.activeMilestone = milestone
-	s.mu.Unlock()
-
-	log.Printf("[SyncService] Active milestone set to: %s", milestone)
 }
 
-// GetActiveMilestone returns the currently active milestone with thread-safe access
+// GetActiveMilestone returns the currently set active milestone.
 func (s *SyncService) GetActiveMilestone() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.activeMilestone
 }
 
-// IsRunning returns whether the sync service is currently running
+// Start begins the periodic sync with a 30-second interval.
+// It performs an immediate sync on startup.
+func (s *SyncService) Start() {
+	s.mu.Lock()
+	if s.running {
+		s.mu.Unlock()
+		log.Printf("[SyncService] Already running, ignoring Start() call")
+		return
+	}
+	s.running = true
+	s.ticker = time.NewTicker(30 * time.Second)
+	s.mu.Unlock()
+
+	log.Printf("[SyncService] Starting with 30s interval")
+
+	// Perform initial sync immediately
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.syncNow()
+	}()
+
+	// Start the ticker goroutine
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		for {
+			select {
+			case <-s.ticker.C:
+				s.syncNow()
+			case <-s.stopCh:
+				return
+			}
+		}
+	}()
+}
+
+// Stop gracefully shuts down the SyncService.
+// It waits for any ongoing sync to complete.
+func (s *SyncService) Stop() {
+	s.mu.Lock()
+	if !s.running {
+		s.mu.Unlock()
+		return
+	}
+	s.running = false
+	s.ticker.Stop()
+	close(s.stopCh)
+	s.mu.Unlock()
+
+	log.Printf("[SyncService] Stopping...")
+	s.wg.Wait()
+	log.Printf("[SyncService] Stopped")
+}
+
+// IsRunning returns true if the SyncService is currently running.
 func (s *SyncService) IsRunning() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.running
 }
 
-// run is the main event loop for the sync service
-func (s *SyncService) run() {
-	defer s.wg.Done()
+// syncNow performs a single synchronization of issues from GitHub to the cache.
+// This method is thread-safe and can be called manually.
+func (s *SyncService) syncNow() {
+	s.mu.RLock()
+	milestone := s.activeMilestone
+	s.mu.RUnlock()
 
-	// Perform initial sync
-	s.performSync()
-
-	for {
-		select {
-		case <-s.ctx.Done():
-			return
-		case <-s.ticker.C:
-			s.performSync()
-		}
-	}
-}
-
-// performSync executes the actual synchronization operation
-func (s *SyncService) performSync() {
-	milestone := s.GetActiveMilestone()
 	if milestone == "" {
 		log.Printf("[SyncService] No active milestone set, skipping sync")
 		return
 	}
 
 	if s.gh == nil {
-		log.Printf("[SyncService] GitHub client not configured, skipping sync")
+		log.Printf("[SyncService] No GitHub client available, skipping sync")
 		return
 	}
 
 	if s.store == nil {
-		log.Printf("[SyncService] Database store not configured, skipping sync")
+		log.Printf("[SyncService] No store available, skipping sync")
 		return
 	}
 
-	log.Printf("[SyncService] Starting sync for milestone: %s", milestone)
+	log.Printf("[SyncService] Syncing issues for milestone: %s", milestone)
 
-	// Fetch issues from GitHub API for the active milestone
+	// Fetch issues from GitHub
 	issues, err := s.gh.ListIssuesForMilestone(milestone)
 	if err != nil {
-		log.Printf("[SyncService] Error fetching issues for milestone %s: %v", milestone, err)
+		log.Printf("[SyncService] Error fetching issues: %v", err)
 		return
 	}
 
-	log.Printf("[SyncService] Fetched %d issues from GitHub for milestone %s", len(issues), milestone)
+	log.Printf("[SyncService] Fetched %d issues from GitHub", len(issues))
 
-	// Save each issue to the SQLite cache
-	savedCount := 0
+	// Cache each issue
+	cachedCount := 0
 	for _, issue := range issues {
 		if err := s.store.SaveIssueCache(issue, milestone); err != nil {
-			log.Printf("[SyncService] Error saving issue #%d to cache: %v", issue.Number, err)
-			// Continue with other issues, don't fail the entire sync
+			log.Printf("[SyncService] Error caching issue #%d: %v", issue.Number, err)
 			continue
 		}
-		savedCount++
+		cachedCount++
+
+		// Broadcast update via WebSocket if hub is available
+		if s.hub != nil {
+			s.hub.BroadcastIssueUpdate(issue)
+		}
 	}
 
-	log.Printf("[SyncService] Successfully synced %d/%d issues to cache for milestone %s", savedCount, len(issues), milestone)
+	log.Printf("[SyncService] Cached %d/%d issues", cachedCount, len(issues))
 
-	// Broadcast success via WebSocket
+	// Broadcast sync completion if hub is available
 	if s.hub != nil {
-		s.hub.BroadcastSyncComplete(savedCount)
+		s.hub.BroadcastSyncComplete(cachedCount)
 	}
+}
+
+// SyncNow triggers an immediate sync (public method for manual sync).
+func (s *SyncService) SyncNow() {
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.syncNow()
+	}()
 }

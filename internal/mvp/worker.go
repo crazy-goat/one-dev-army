@@ -316,17 +316,11 @@ func (w *Worker) technicalPlanning(ctx context.Context, task *Task) (analysis, i
 	}
 	planMgr := plan.NewAttachmentManager(w.gh, wt)
 
-	planURL, err := planMgr.CreateFullPlan(task.Issue.Number, task.Branch, analysis, implPlan)
+	_, err = planMgr.CreateFullPlan(task.Issue.Number, task.Branch, analysis, implPlan)
 	if err != nil {
-		log.Printf("[Worker %d] Warning: failed to create plan.md: %v", w.id, err)
+		log.Printf("[Worker %d] Warning: failed to add technical planning comment: %v", w.id, err)
 	} else {
-		log.Printf("[Worker %d] Created plan.md: %s", w.id, planURL)
-		// Store URL in database
-		if w.store != nil {
-			if err := w.store.UpdateStepPlanURL(task.Issue.Number, "technical-planning", planURL); err != nil {
-				log.Printf("[Worker %d] Warning: failed to store plan URL: %v", w.id, err)
-			}
-		}
+		log.Printf("[Worker %d] Added technical planning comment to issue #%d", w.id, task.Issue.Number)
 	}
 
 	return analysis, implPlan, nil

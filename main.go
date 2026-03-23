@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -192,14 +193,46 @@ func runServe() error {
 	// Detect and set the active sprint (oldest open milestone)
 	activeMilestone, err := gh.GetOldestOpenMilestone()
 	if err != nil {
-		return fmt.Errorf("detecting active sprint: %w", err)
-	}
-	if activeMilestone != nil {
+		log.Printf("[Startup] Warning: detecting active sprint: %v", err)
+	} else if activeMilestone != nil {
 		gh.SetActiveMilestone(activeMilestone)
-		fmt.Printf("  ✓ active sprint: %s (due: %s)\n", activeMilestone.Title, activeMilestone.DueOn.Format("2006-01-02"))
+		log.Printf("[Startup] Active sprint: %s (due: %s)", activeMilestone.Title, activeMilestone.DueOn.Format("2006-01-02"))
 	} else {
-		fmt.Println("  ! no active sprint found")
+		log.Printf("[Startup] Warning: no active sprint found")
 	}
+
+	// Step 4 & 5: Fetch issues from GitHub and populate cache
+	if activeMilestone != nil {
+		log.Printf("[Startup] Fetching issues from GitHub for milestone: %s", activeMilestone.Title)
+		issues, err := gh.ListIssuesForMilestone(activeMilestone.Title)
+		if err != nil {
+			log.Printf("[Startup] Warning: failed to fetch issues: %v", err)
+		} else {
+			log.Printf("[Startup] Fetched %d issues from GitHub", len(issues))
+			cachedCount := 0
+			for _, issue := range issues {
+				if err := store.SaveIssueCache(issue, activeMilestone.Title); err != nil {
+					log.Printf("[Startup] Warning: failed to cache issue #%d: %v", issue.Number, err)
+					continue
+				}
+				cachedCount++
+			}
+			log.Printf("[Startup] Cached %d/%d issues", cachedCount, len(issues))
+		}
+	}
+
+	// Step 6: Create WebSocket hub
+	hub := dashboard.NewHub()
+	go hub.Run()
+	log.Printf("[Startup] WebSocket hub started")
+
+	// Step 7 & 8: Create and start SyncService
+	syncService := dashboard.NewSyncService(gh, store, hub)
+	if activeMilestone != nil {
+		syncService.SetActiveMilestone(activeMilestone.Title)
+	}
+	syncService.Start()
+	log.Printf("[Startup] Sync service started (30s interval)")
 
 	s := setup.New(dir, oc, cfg)
 	if err := s.CheckAndGenerate(); err != nil {
@@ -228,7 +261,7 @@ func runServe() error {
 		}
 	}()
 
-	srv, err := dashboard.NewServer(cfg.Dashboard.Port, store, pool.Workers, gh, orchestrator, oc, cfg.Planning.LLM)
+	srv, err := dashboard.NewServer(cfg.Dashboard.Port, store, pool.Workers, gh, orchestrator, oc, cfg.Planning.LLM, hub, syncService)
 	if err != nil {
 		return fmt.Errorf("creating dashboard server: %w", err)
 	}
