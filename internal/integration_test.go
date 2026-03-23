@@ -589,8 +589,6 @@ func TestDashboardRendering(t *testing.T) {
 		wantBody   string
 	}{
 		{"/", http.StatusOK, "Sprint Board"},
-		{"/backlog", http.StatusOK, "Backlog"},
-		{"/costs", http.StatusOK, "Costs"},
 	}
 
 	for _, tt := range tests {

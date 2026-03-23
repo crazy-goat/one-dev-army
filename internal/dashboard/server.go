@@ -96,7 +96,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 		},
 	}
 
-	pages := []string{"board.html", "backlog.html", "costs.html", "task.html"}
+	pages := []string{"board.html", "task.html"}
 	for _, page := range pages {
 		t, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/"+page)
 		if err != nil {
@@ -132,8 +132,6 @@ func parseTemplates() (map[string]*template.Template, error) {
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /{$}", s.handleBoard)
-	s.mux.HandleFunc("GET /backlog", s.handleBacklog)
-	s.mux.HandleFunc("GET /costs", s.handleCosts)
 	s.mux.HandleFunc("GET /api/current-task", s.handleCurrentTask)
 	s.mux.HandleFunc("GET /api/sprint/status", s.handleSprintStatus)
 	s.mux.HandleFunc("POST /api/sprint/start", s.handleSprintStart)
