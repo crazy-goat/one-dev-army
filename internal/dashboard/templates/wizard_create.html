@@ -1,4 +1,5 @@
 {{define "content"}}
+{{template "wizard-steps" .}}
 <div class="wizard-step">
   {{if .IsSingleIssue}}
   <h2>✅ Issue Created Successfully</h2>
@@ -68,6 +69,7 @@
     {{end}}
   </div>
 </div>
+{{end}}
 
 <style>
 .wizard-step { max-width: 800px; margin: 0 auto; }
@@ -156,4 +158,3 @@
 
 .form-actions { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1.5rem; }
 </style>
-{{end}}

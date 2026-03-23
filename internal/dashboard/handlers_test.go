@@ -6,10 +6,129 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
+
+// parseTemplatesFromDisk parses templates from disk for testing
+// This allows tests to pick up template changes without rebuilding
+func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, error) {
+	tmpls := make(map[string]*template.Template)
+
+	funcMap := template.FuncMap{
+		"duration": func(start, end *time.Time) string {
+			if start == nil || end == nil {
+				return ""
+			}
+			d := end.Sub(*start).Round(time.Second)
+			if d < time.Minute {
+				return fmt.Sprintf("%ds", int(d.Seconds()))
+			}
+			return fmt.Sprintf("%dm%ds", int(d.Minutes()), int(d.Seconds())%60)
+		},
+		"truncate": func(s string, n int) string {
+			if len(s) <= n {
+				return s
+			}
+			return s[:n] + "\n... (truncated)"
+		},
+	}
+
+	pages := []string{"board.html", "backlog.html", "costs.html", "task.html"}
+	for _, page := range pages {
+		t, err := template.New("").Funcs(funcMap).ParseFiles(
+			filepath.Join(templateDir, "layout.html"),
+			filepath.Join(templateDir, page),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", page, err)
+		}
+		tmpls[page] = t
+	}
+
+	wizardPageTmpl, err := template.New("").Funcs(funcMap).ParseFiles(
+		filepath.Join(templateDir, "layout.html"),
+		filepath.Join(templateDir, "wizard_steps.html"),
+		filepath.Join(templateDir, "wizard_new.html"),
+		filepath.Join(templateDir, "wizard_page.html"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("parsing wizard_page.html: %w", err)
+	}
+	tmpls["wizard_page.html"] = wizardPageTmpl
+
+	wizardModalTmpl, err := template.New("").Funcs(funcMap).ParseFiles(
+		filepath.Join(templateDir, "layout.html"),
+		filepath.Join(templateDir, "wizard_steps.html"),
+		filepath.Join(templateDir, "wizard_new.html"),
+		filepath.Join(templateDir, "wizard_modal.html"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("parsing wizard_modal.html: %w", err)
+	}
+	tmpls["wizard_modal.html"] = wizardModalTmpl
+
+	// Parse wizard partial templates (no layout)
+	wizardPartials := []string{"wizard_new.html", "wizard_refine.html", "wizard_breakdown.html", "wizard_create.html", "wizard_error.html", "wizard_logs.html"}
+	for _, page := range wizardPartials {
+		t, err := template.ParseFiles(
+			filepath.Join(templateDir, "wizard_steps.html"),
+			filepath.Join(templateDir, page),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", page, err)
+		}
+		tmpls[page] = t
+	}
+
+	t, err := template.ParseFiles(filepath.Join(templateDir, "workers.html"))
+	if err != nil {
+		return nil, fmt.Errorf("parsing workers.html: %w", err)
+	}
+	tmpls["workers.html"] = t
+
+	return tmpls, nil
+}
+
+// createTestServerWithTemplates creates a server with all templates loaded for integration testing
+func createTestServerWithTemplates(t *testing.T) *Server {
+	t.Helper()
+
+	// Try to parse from disk first (for development), fall back to embedded FS
+	var tmpls map[string]*template.Template
+	var err error
+
+	// Check multiple possible locations for templates
+	templateDirs := []string{"templates", "internal/dashboard/templates"}
+	var foundDir string
+	for _, dir := range templateDirs {
+		if _, statErr := os.Stat(dir); statErr == nil {
+			foundDir = dir
+			break
+		}
+	}
+
+	if foundDir != "" {
+		tmpls, err = parseTemplatesFromDisk(foundDir)
+	} else {
+		tmpls, err = parseTemplates()
+	}
+
+	if err != nil {
+		t.Fatalf("failed to parse templates: %v", err)
+	}
+
+	srv := &Server{
+		tmpls:       tmpls,
+		wizardStore: NewWizardSessionStore(),
+	}
+
+	return srv
+}
 
 // TestHandleBoardData tests the board data API endpoint
 func TestHandleBoardData(t *testing.T) {
@@ -795,23 +914,6 @@ func TestConcurrentHandlerAccess(t *testing.T) {
 	if srv.wizardStore.Count() != 50 {
 		t.Errorf("expected 50 sessions, got %d", srv.wizardStore.Count())
 	}
-}
-
-// createTestServerWithTemplates creates a server with all templates loaded for integration testing
-func createTestServerWithTemplates(t *testing.T) *Server {
-	t.Helper()
-
-	tmpls, err := parseTemplates()
-	if err != nil {
-		t.Fatalf("failed to parse templates: %v", err)
-	}
-
-	srv := &Server{
-		tmpls:       tmpls,
-		wizardStore: NewWizardSessionStore(),
-	}
-
-	return srv
 }
 
 // TestHeaderButtons_FromBoard verifies header buttons are present on the board page
@@ -1613,6 +1715,9 @@ func TestWizardFlow_ValidationErrors(t *testing.T) {
 			}
 
 			body := rec.Body.String()
+
+			// Debug: print the actual response
+			t.Logf("Response body:\n%s", body)
 			if !strings.Contains(strings.ToLower(body), strings.ToLower(tt.wantError)) {
 				t.Errorf("expected error containing %q, got: %s", tt.wantError, body)
 			}
@@ -2354,5 +2459,167 @@ func TestBoardLayout_NoConsoleErrors(t *testing.T) {
 	// Verify HTMX library is included
 	if !strings.Contains(body, "htmx.org") {
 		t.Error("board page missing HTMX library")
+	}
+}
+
+// TestWizardStepIndicator_OOBAttribute verifies the step indicator has hx-swap-oob attribute
+func TestWizardStepIndicator_OOBAttribute(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Create a feature wizard session
+	req := httptest.NewRequest(http.MethodGet, "/wizard/new?type=feature", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardNew(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify the step indicator has hx-swap-oob attribute
+	if !strings.Contains(body, `hx-swap-oob="true"`) {
+		t.Error("step indicator missing hx-swap-oob attribute for HTMX OOB swaps")
+	}
+
+	// Verify the step indicator has the correct ID
+	if !strings.Contains(body, `id="wizard-step-indicator"`) {
+		t.Error("step indicator missing correct ID")
+	}
+}
+
+// TestWizardStepIndicator_Step1Active verifies step 1 is active on the new step
+func TestWizardStepIndicator_Step1Active(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/wizard/new?type=feature", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardNew(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Step 1 should be active (check for class="step active" with possible trailing space)
+	if !strings.Contains(body, `class="step active`) {
+		t.Error("step 1 should have 'active' class on new step")
+	}
+
+	// Should have exactly one active step
+	activeCount := strings.Count(body, `class="step active`)
+	if activeCount != 1 {
+		t.Errorf("expected exactly 1 active step, got %d", activeCount)
+	}
+}
+
+// TestWizardStepIndicator_ShowBreakdownStep_FeatureType verifies breakdown step is shown for feature type
+func TestWizardStepIndicator_ShowBreakdownStep_FeatureType(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/wizard/new?type=feature", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardNew(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// For feature type, should show 4 steps (Idea, Refine, Breakdown, Create)
+	// Count the step-label spans
+	stepLabels := []string{"Idea", "Refine", "Breakdown", "Create"}
+	for _, label := range stepLabels {
+		if !strings.Contains(body, `<span class="step-label">`+label+`</span>`) {
+			t.Errorf("step indicator missing '%s' label for feature type", label)
+		}
+	}
+}
+
+// TestWizardStepIndicator_ShowBreakdownStep_BugType verifies breakdown step is hidden for bug type
+func TestWizardStepIndicator_ShowBreakdownStep_BugType(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/wizard/new?type=bug", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardNew(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// For bug type, should NOT show Breakdown step
+	if strings.Contains(body, `<span class="step-label">Breakdown</span>`) {
+		t.Error("step indicator should NOT show 'Breakdown' step for bug type")
+	}
+
+	// Should only have 3 steps (Idea, Refine, Create)
+	stepLabels := []string{"Idea", "Refine", "Create"}
+	for _, label := range stepLabels {
+		if !strings.Contains(body, `<span class="step-label">`+label+`</span>`) {
+			t.Errorf("step indicator missing '%s' label for bug type", label)
+		}
+	}
+}
+
+// TestWizardStepIndicator_RespectsSkipBreakdown verifies ShowBreakdownStep respects session.SkipBreakdown
+func TestWizardStepIndicator_RespectsSkipBreakdown(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Create a feature session with SkipBreakdown set to true
+	session, _ := srv.wizardStore.Create("feature")
+	session.SetSkipBreakdown(true)
+
+	// Request the new step with existing session
+	req := httptest.NewRequest(http.MethodGet, "/wizard/new?type=feature&session_id="+session.ID, nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardNew(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Should NOT show Breakdown step when SkipBreakdown is true
+	if strings.Contains(body, `<span class="step-label">Breakdown</span>`) {
+		t.Error("step indicator should NOT show 'Breakdown' step when SkipBreakdown is true")
+	}
+}
+
+// TestWizardStepIndicator_NoDuplicateInContent verifies step indicator is not duplicated inside wizard content
+func TestWizardStepIndicator_NoDuplicateInContent(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/wizard/new?type=feature", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardNew(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Count occurrences of the step-indicator div
+	indicatorCount := strings.Count(body, `id="wizard-step-indicator"`)
+	if indicatorCount > 1 {
+		t.Errorf("step indicator appears %d times, should appear only once (no duplicates in content)", indicatorCount)
 	}
 }

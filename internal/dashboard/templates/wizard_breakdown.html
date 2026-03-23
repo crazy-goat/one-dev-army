@@ -1,4 +1,5 @@
 {{define "content"}}
+{{template "wizard-steps" .}}
 <div class="wizard-step">
   <h2>Task Breakdown</h2>
   
@@ -52,71 +53,4 @@
   
   <div id="wizard-logs" hx-get="/wizard/logs/{{.SessionID}}" hx-trigger="every 1s" hx-swap="innerHTML" hx-headers='{"X-Expected-Step": "breakdown"}' style="margin-top: 1rem; max-height: 200px; overflow-y: auto;"></div>
 </div>
-
-<style>
-.wizard-step { max-width: 800px; margin: 0 auto; }
-.subtitle { color: var(--muted); margin-bottom: 1rem; }
-.task-list { display: flex; flex-direction: column; gap: 0.75rem; margin: 1rem 0; }
-.task-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 1rem;
-}
-.task-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-}
-.task-title { font-weight: 600; }
-.task-meta { display: flex; gap: 0.5rem; }
-.badge {
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-}
-.priority-critical { background: var(--red); color: #fff; }
-.priority-high { background: var(--orange); color: #000; }
-.priority-medium { background: var(--accent); color: #fff; }
-.priority-low { background: var(--muted); color: #fff; }
-.complexity-XL { background: var(--purple); color: #fff; }
-.complexity-L { background: var(--orange); color: #000; }
-.complexity-M { background: var(--accent); color: #fff; }
-.complexity-S { background: var(--green); color: #fff; }
-.task-description {
-  color: var(--muted);
-  font-size: 0.9rem;
-  margin: 0;
-}
-.sprint-option {
-  margin: 1.25rem 0;
-  padding: 0.75rem 1rem;
-  background: rgba(14, 138, 22, 0.08);
-  border: 1px solid rgba(14, 138, 22, 0.25);
-  border-radius: 6px;
-}
-.sprint-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  user-select: none;
-}
-.sprint-checkbox input[type="checkbox"] {
-  width: 1rem;
-  height: 1rem;
-  accent-color: var(--green, #0E8A16);
-  cursor: pointer;
-}
-.sprint-checkbox-label {
-  font-size: 0.9rem;
-  color: var(--text);
-}
-.form-actions { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1.5rem; }
-.nav-buttons { display: flex; gap: 0.5rem; }
-.htmx-request .spinner { display: inline !important; }
-.htmx-request .label { display: none; }
-</style>
 {{end}}
