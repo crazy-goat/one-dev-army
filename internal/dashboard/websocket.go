@@ -82,10 +82,11 @@ type Message struct {
 
 // IssueUpdatePayload represents the payload for issue_update messages
 type IssueUpdatePayload struct {
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	State  string `json:"state"`
-	Column string `json:"column"`
+	Number   int    `json:"number"`
+	Title    string `json:"title"`
+	State    string `json:"state"`
+	Column   string `json:"column"`
+	IsMerged bool   `json:"is_merged"`
 }
 
 // SyncCompletePayload represents the payload for sync_complete messages
@@ -229,10 +230,11 @@ func (h *Hub) Broadcast(message []byte) {
 func (h *Hub) BroadcastIssueUpdate(issue github.Issue) {
 	column := inferColumnFromIssue(issue)
 	payload := IssueUpdatePayload{
-		Number: issue.Number,
-		Title:  issue.Title,
-		State:  issue.State,
-		Column: column,
+		Number:   issue.Number,
+		Title:    issue.Title,
+		State:    issue.State,
+		Column:   column,
+		IsMerged: issue.PRMerged,
 	}
 
 	payloadBytes, err := json.Marshal(payload)

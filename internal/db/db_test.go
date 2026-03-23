@@ -4,6 +4,7 @@ import (
 	"math"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
@@ -418,44 +419,73 @@ func TestClearIssueCache(t *testing.T) {
 	}
 }
 
-func TestIssueCache_JSONLabels(t *testing.T) {
+func TestSaveAndGetIssueCache_WithMergeStatus(t *testing.T) {
 	store := openTestStore(t)
 
+	mergedAt := time.Now().UTC().Truncate(time.Second)
 	issue := github.Issue{
-		Number: 200,
-		Title:  "Issue with labels",
-		State:  "open",
-		Labels: []struct {
-			Name string `json:"name"`
-		}{
-			{Name: "bug"},
-			{Name: "critical"},
-			{Name: "help wanted"},
-		},
+		Number:    178,
+		Title:     "Issue with merged PR",
+		Body:      "This issue was closed via PR merge",
+		State:     "closed",
+		PRMerged:  true,
+		MergedAt:  &mergedAt,
+		Labels:    nil,
+		Assignees: nil,
 	}
 
-	if err := store.SaveIssueCache(issue, ""); err != nil {
-		t.Fatalf("saving issue cache: %v", err)
+	if err := store.SaveIssueCache(issue, "v1.0"); err != nil {
+		t.Fatalf("saving issue cache with merge status: %v", err)
 	}
 
-	got, err := store.GetIssueCache(200)
+	got, err := store.GetIssueCache(178)
 	if err != nil {
 		t.Fatalf("getting issue cache: %v", err)
 	}
 
-	if len(got.Labels) != 3 {
-		t.Errorf("labels count = %d, want 3", len(got.Labels))
+	if got.Number != 178 {
+		t.Errorf("number = %d, want 178", got.Number)
+	}
+	if got.State != "closed" {
+		t.Errorf("state = %q, want %q", got.State, "closed")
+	}
+	if !got.PRMerged {
+		t.Errorf("pr_merged = %v, want true", got.PRMerged)
+	}
+	if got.MergedAt == nil {
+		t.Error("merged_at should not be nil")
+	} else if !got.MergedAt.Equal(mergedAt) {
+		t.Errorf("merged_at = %v, want %v", got.MergedAt, mergedAt)
+	}
+}
+
+func TestSaveAndGetIssueCache_NotMerged(t *testing.T) {
+	store := openTestStore(t)
+
+	issue := github.Issue{
+		Number:    179,
+		Title:     "Issue closed without merge",
+		Body:      "This issue was manually closed",
+		State:     "closed",
+		PRMerged:  false,
+		MergedAt:  nil,
+		Labels:    nil,
+		Assignees: nil,
 	}
 
-	labelNames := make([]string, len(got.Labels))
-	for i, l := range got.Labels {
-		labelNames[i] = l.Name
+	if err := store.SaveIssueCache(issue, "v1.0"); err != nil {
+		t.Fatalf("saving issue cache without merge status: %v", err)
 	}
 
-	expected := []string{"bug", "critical", "help wanted"}
-	for i, exp := range expected {
-		if labelNames[i] != exp {
-			t.Errorf("label[%d] = %q, want %q", i, labelNames[i], exp)
-		}
+	got, err := store.GetIssueCache(179)
+	if err != nil {
+		t.Fatalf("getting issue cache: %v", err)
+	}
+
+	if got.PRMerged {
+		t.Errorf("pr_merged = %v, want false", got.PRMerged)
+	}
+	if got.MergedAt != nil {
+		t.Errorf("merged_at should be nil, got %v", got.MergedAt)
 	}
 }

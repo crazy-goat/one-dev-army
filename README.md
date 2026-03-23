@@ -56,6 +56,7 @@ ODA stores its config in `.oda/config.yaml`:
 ```yaml
 github:
   repo: "owner/repo"
+  use_projects: false  # Set to true to enable GitHub Projects integration
 dashboard:
   port: 8080
 workers:
@@ -86,6 +87,16 @@ pipeline:
 sprint:
   tasks_per_sprint: 10
 ```
+
+### GitHub Projects Integration
+
+By default, ODA uses a label-based workflow and does not require GitHub Projects. To enable GitHub Projects integration:
+
+1. Set `use_projects: true` in your config
+2. Run `gh auth refresh -s project` to add project scope
+3. Restart ODA
+
+The label-based system (default) is recommended for new projects.
 
 ## Architecture
 

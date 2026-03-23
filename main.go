@@ -201,6 +201,15 @@ func runServe() error {
 		fmt.Println("  ! no active sprint found")
 	}
 
+	// Conditionally setup GitHub Projects if enabled
+	if cfg.GitHub.UseProjects {
+		fmt.Println("  → GitHub Projects enabled, setting up project board...")
+		if _, err := gh.EnsureProject("ODA"); err != nil {
+			return fmt.Errorf("ensuring project: %w", err)
+		}
+		fmt.Println("  ✓ project board ready")
+	}
+
 	// Step 4: Fetch all issues from GitHub for active milestone and populate cache
 	if activeMilestone != nil {
 		fmt.Printf("Fetching issues from GitHub for milestone: %s\n", activeMilestone.Title)

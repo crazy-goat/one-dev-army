@@ -10,9 +10,12 @@ import (
 
 // mockGitHubClient is a test double for GitHubClient interface
 type mockGitHubClient struct {
-	issues    []github.Issue
-	listErr   error
-	milestone string
+	issues      []github.Issue
+	listErr     error
+	milestone   string
+	prStatus    map[int]bool
+	prMergedAt  map[int]*time.Time
+	prStatusErr error
 }
 
 func (m *mockGitHubClient) ListIssuesForMilestone(milestone string) ([]github.Issue, error) {
@@ -21,6 +24,15 @@ func (m *mockGitHubClient) ListIssuesForMilestone(milestone string) ([]github.Is
 		return nil, m.listErr
 	}
 	return m.issues, nil
+}
+
+func (m *mockGitHubClient) GetIssuePRStatus(issueNumber int) (bool, *time.Time, error) {
+	if m.prStatusErr != nil {
+		return false, nil, m.prStatusErr
+	}
+	isMerged := m.prStatus[issueNumber]
+	mergedAt := m.prMergedAt[issueNumber]
+	return isMerged, mergedAt, nil
 }
 
 // mockStore is a test double for Store interface
@@ -301,26 +313,62 @@ func TestSyncService_ThreadSafety(t *testing.T) {
 	}
 }
 
-func TestSyncService_WithHub(t *testing.T) {
+func TestSyncService_syncNow_FetchesPRStatus(t *testing.T) {
+	mergedAt := time.Now().UTC().Truncate(time.Second)
 	gh := &mockGitHubClient{
 		issues: []github.Issue{
-			{Number: 1, Title: "Issue 1", State: "open"},
+			{Number: 1, Title: "Open Issue", State: "open"},
+			{Number: 2, Title: "Merged Issue", State: "CLOSED"},
+			{Number: 3, Title: "Closed Issue", State: "CLOSED"},
+		},
+		prStatus: map[int]bool{
+			2: true,
+			3: false,
+		},
+		prMergedAt: map[int]*time.Time{
+			2: &mergedAt,
 		},
 	}
 	store := &mockStore{}
-	hub := NewHub()
-
-	// Start hub in background
-	go hub.Run()
-	defer hub.Stop()
-
-	service := NewSyncService(gh, store, hub)
+	service := NewSyncService(gh, store, nil)
 	service.SetActiveMilestone("Sprint 1")
 
 	service.syncNow()
 
-	// Verify issues were cached
-	if len(store.cachedIssues) != 1 {
-		t.Errorf("Expected 1 cached issue, got %d", len(store.cachedIssues))
+	// Verify all 3 issues were cached
+	if len(store.cachedIssues) != 3 {
+		t.Errorf("Expected 3 cached issues, got %d", len(store.cachedIssues))
+	}
+
+	// Find the merged issue
+	var mergedIssue *github.Issue
+	var closedIssue *github.Issue
+	for i := range store.cachedIssues {
+		if store.cachedIssues[i].Number == 2 {
+			mergedIssue = &store.cachedIssues[i]
+		}
+		if store.cachedIssues[i].Number == 3 {
+			closedIssue = &store.cachedIssues[i]
+		}
+	}
+
+	if mergedIssue == nil {
+		t.Fatal("Merged issue not found in cached issues")
+	}
+	if !mergedIssue.PRMerged {
+		t.Errorf("Expected issue #2 to have PRMerged=true, got false")
+	}
+	if mergedIssue.MergedAt == nil {
+		t.Error("Expected issue #2 to have MergedAt set")
+	}
+
+	if closedIssue == nil {
+		t.Fatal("Closed issue not found in cached issues")
+	}
+	if closedIssue.PRMerged {
+		t.Errorf("Expected issue #3 to have PRMerged=false, got true")
+	}
+	if closedIssue.MergedAt != nil {
+		t.Error("Expected issue #3 to have MergedAt=nil")
 	}
 }

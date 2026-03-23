@@ -21,6 +21,9 @@ type Issue struct {
 	Labels []struct {
 		Name string `json:"name"`
 	} `json:"labels"`
+	// PR merge status fields for distinguishing merged vs manually closed issues
+	PRMerged bool       `json:"pr_merged,omitempty"`
+	MergedAt *time.Time `json:"merged_at,omitempty"`
 }
 
 // GetAssignee returns the first assignee's login or empty string if unassigned
@@ -286,6 +289,41 @@ func (c *Client) ListIssuesForMilestone(milestone string) ([]Issue, error) {
 
 	log.Printf("[GitHub] Parsed %d issues for milestone '%s'", len(issues), milestone)
 	return issues, nil
+}
+
+// GetIssuePRStatus checks if an issue was closed via a merged PR
+// Returns true if the issue has a merged PR associated with it
+func (c *Client) GetIssuePRStatus(issueNumber int) (bool, *time.Time, error) {
+	// Use GitHub API to check for linked PRs and their merge status
+	// Query for PRs that reference this issue in their body or title
+	out, err := c.gh("pr", "list", "--state", "all", "--json", "number,title,state,mergedAt,body",
+		"--search", fmt.Sprintf("%s/%d", c.Repo, issueNumber))
+	if err != nil {
+		// No PRs found is not an error
+		return false, nil, nil
+	}
+
+	type PRInfo struct {
+		Number   int        `json:"number"`
+		Title    string     `json:"title"`
+		State    string     `json:"state"`
+		MergedAt *time.Time `json:"mergedAt"`
+		Body     string     `json:"body"`
+	}
+
+	var prs []PRInfo
+	if err := json.Unmarshal(out, &prs); err != nil {
+		return false, nil, fmt.Errorf("parsing PR list for issue #%d: %w", issueNumber, err)
+	}
+
+	// Check if any PR is merged
+	for _, pr := range prs {
+		if pr.State == "MERGED" {
+			return true, pr.MergedAt, nil
+		}
+	}
+
+	return false, nil, nil
 }
 
 func parseJSON(data []byte, v interface{}) error {

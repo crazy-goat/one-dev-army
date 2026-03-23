@@ -95,7 +95,8 @@ type configFile struct {
 }
 
 type ghSection struct {
-	Repo string `yaml:"repo"`
+	Repo        string `yaml:"repo"`
+	UseProjects bool   `yaml:"use_projects,omitempty"`
 }
 
 type dashSection struct {
@@ -131,7 +132,7 @@ type sprintSection struct {
 
 func defaultConfig(repo string) configFile {
 	return configFile{
-		GitHub:    ghSection{Repo: repo},
+		GitHub:    ghSection{Repo: repo, UseProjects: false},
 		Dashboard: dashSection{Port: 8080},
 		Workers:   workersSection{Count: 3},
 		OpenCode:  ocSection{URL: "http://localhost:4096"},
