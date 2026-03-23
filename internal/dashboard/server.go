@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -34,6 +35,7 @@ type Server struct {
 	syncService      *SyncService
 	rateLimitService *RateLimitService
 	rootDir          string
+	modelsCache      []opencode.ProviderModel
 }
 
 func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string) (*Server, error) {
@@ -73,6 +75,14 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 	s.rateLimitService.Start()
 
 	s.routes()
+
+	// Load available models from opencode API
+	if err := s.LoadModels(); err != nil {
+		// Log error but don't fail server startup - models will be empty
+		// and validation will be skipped
+		fmt.Printf("[Dashboard] Warning: Failed to load models: %v\n", err)
+	}
+
 	return s, nil
 }
 
@@ -95,6 +105,13 @@ func parseTemplates() (map[string]*template.Template, error) {
 				return s
 			}
 			return s[:n] + "\n... (truncated)"
+		},
+		"json": func(v interface{}) template.JS {
+			b, err := json.Marshal(v)
+			if err != nil {
+				return template.JS("null")
+			}
+			return template.JS(b)
 		},
 	}
 
@@ -208,13 +225,43 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpSrv.Shutdown(ctx)
 }
 
-func (s *Server) Handler() http.Handler {
-	return s.mux
+func (s *Server) LoadModels() error {
+	if s.oc == nil {
+		return nil // Skip if no opencode client
+	}
+
+	providers, err := s.oc.ListProviders()
+	if err != nil {
+		return fmt.Errorf("loading models: %w", err)
+	}
+
+	var models []opencode.ProviderModel
+	connectedSet := make(map[string]bool)
+	for _, id := range providers.Connected {
+		connectedSet[id] = true
+	}
+
+	for _, p := range providers.All {
+		if !connectedSet[p.ID] {
+			continue
+		}
+		for _, model := range p.Models {
+			models = append(models, model)
+		}
+	}
+
+	s.modelsCache = models
+	return nil
 }
 
 // Hub returns the WebSocket hub for broadcasting messages
 func (s *Server) Hub() *Hub {
 	return s.hub
+}
+
+// Handler returns the HTTP handler for the server
+func (s *Server) Handler() http.Handler {
+	return s.mux
 }
 
 // handleWebSocket handles WebSocket upgrade requests

@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
 // parseTemplatesFromDisk parses templates from disk for testing
@@ -38,6 +40,13 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 				return s
 			}
 			return s[:n] + "\n... (truncated)"
+		},
+		"json": func(v interface{}) template.JS {
+			b, err := json.Marshal(v)
+			if err != nil {
+				return template.JS("null")
+			}
+			return template.JS(b)
 		},
 	}
 
@@ -3987,5 +3996,270 @@ func TestHandleSettingsTemplateData(t *testing.T) {
 	body := rec.Body.String()
 	if !strings.Contains(body, "stage1, stage2, stage3") && !strings.Contains(body, "stage1,stage2,stage3") {
 		t.Error("response should contain comma-separated force strong stages")
+	}
+}
+
+// TestHandleSettings_WithModels verifies that available models are passed to template
+func TestHandleSettings_WithModels(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	odaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(odaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a minimal config file
+	configContent := `llm:
+  development:
+    strong:
+      provider: test-provider
+      model: test-model
+    weak:
+      provider: test-provider
+      model: test-model-weak
+`
+	configPath := filepath.Join(odaDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates and mock models cache
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	srv.modelsCache = []opencode.ProviderModel{
+		{ID: "gpt-4", ProviderID: "openai", Name: "GPT-4"},
+		{ID: "claude-3", ProviderID: "anthropic", Name: "Claude 3"},
+	}
+	defer srv.wizardStore.Stop()
+
+	// Test GET /settings
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleSettings(rec, req)
+
+	// Should return 200 OK
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify response contains model dropdown JavaScript
+	body := rec.Body.String()
+	if !strings.Contains(body, "model-dropdown") {
+		t.Error("response should contain model dropdown CSS class")
+	}
+	if !strings.Contains(body, "availableModels") {
+		t.Error("response should contain availableModels JavaScript variable")
+	}
+}
+
+// TestHandleSaveSettings_InvalidModel verifies validation rejects invalid models
+func TestHandleSaveSettings_InvalidModel(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	odaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(odaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a minimal config file
+	configPath := filepath.Join(odaDir, "config.yaml")
+	configContent := `llm:
+  development:
+    strong:
+      provider: test-provider
+      model: test-model
+    weak:
+      provider: test-provider
+      model: test-model-weak
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates and mock models cache
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	srv.modelsCache = []opencode.ProviderModel{
+		{ID: "gpt-4", ProviderID: "openai", Name: "GPT-4"},
+		{ID: "claude-3", ProviderID: "anthropic", Name: "Claude 3"},
+	}
+	defer srv.wizardStore.Stop()
+
+	// Test POST /settings with invalid model
+	form := url.Values{}
+	form.Set("development_strong_provider", "openai")
+	form.Set("development_strong_model", "invalid-model") // Not in cache
+	form.Set("development_weak_provider", "openai")
+	form.Set("development_weak_model", "gpt-4") // Valid model
+	form.Set("planning_strong_provider", "openai")
+	form.Set("planning_strong_model", "gpt-4")
+	form.Set("planning_weak_provider", "openai")
+	form.Set("planning_weak_model", "gpt-4")
+	form.Set("orchestration_strong_provider", "openai")
+	form.Set("orchestration_strong_model", "gpt-4")
+	form.Set("orchestration_weak_provider", "openai")
+	form.Set("orchestration_weak_model", "gpt-4")
+	form.Set("setup_strong_provider", "openai")
+	form.Set("setup_strong_model", "gpt-4")
+	form.Set("setup_weak_provider", "openai")
+	form.Set("setup_weak_model", "gpt-4")
+	form.Set("routing_code_size_threshold", "150")
+	form.Set("routing_high_complexity_threshold", "600")
+	form.Set("routing_file_count_threshold", "10")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	// Should return 200 OK but with error message
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify error message for invalid model
+	body := rec.Body.String()
+	if !strings.Contains(body, "Invalid model") {
+		t.Error("response should contain validation error for invalid model")
+	}
+}
+
+// TestHandleSaveSettings_ValidModel verifies validation accepts valid models
+func TestHandleSaveSettings_ValidModel(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	odaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(odaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a minimal config file
+	configPath := filepath.Join(odaDir, "config.yaml")
+	configContent := `llm:
+  development:
+    strong:
+      provider: test-provider
+      model: test-model
+    weak:
+      provider: test-provider
+      model: test-model-weak
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates and mock models cache
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	srv.modelsCache = []opencode.ProviderModel{
+		{ID: "gpt-4", ProviderID: "openai", Name: "GPT-4"},
+		{ID: "claude-3", ProviderID: "anthropic", Name: "Claude 3"},
+	}
+	defer srv.wizardStore.Stop()
+
+	// Test POST /settings with valid models
+	form := url.Values{}
+	form.Set("development_strong_provider", "openai")
+	form.Set("development_strong_model", "gpt-4") // Valid model
+	form.Set("development_weak_provider", "anthropic")
+	form.Set("development_weak_model", "claude-3") // Valid model
+	form.Set("planning_strong_provider", "openai")
+	form.Set("planning_strong_model", "gpt-4")
+	form.Set("planning_weak_provider", "openai")
+	form.Set("planning_weak_model", "gpt-4")
+	form.Set("orchestration_strong_provider", "openai")
+	form.Set("orchestration_strong_model", "gpt-4")
+	form.Set("orchestration_weak_provider", "openai")
+	form.Set("orchestration_weak_model", "gpt-4")
+	form.Set("setup_strong_provider", "openai")
+	form.Set("setup_strong_model", "gpt-4")
+	form.Set("setup_weak_provider", "openai")
+	form.Set("setup_weak_model", "gpt-4")
+	form.Set("routing_code_size_threshold", "150")
+	form.Set("routing_high_complexity_threshold", "600")
+	form.Set("routing_file_count_threshold", "10")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	// Should return 200 OK with success message
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify success message
+	body := rec.Body.String()
+	if !strings.Contains(body, "Settings saved successfully") {
+		t.Error("response should contain success message")
+	}
+
+	// Verify no error about invalid models
+	if strings.Contains(body, "Invalid model") {
+		t.Error("response should not contain invalid model error for valid models")
+	}
+}
+
+// TestValidateModelSelection_EmptyCache tests that validation passes when cache is empty
+func TestValidateModelSelection_EmptyCache(t *testing.T) {
+	srv := &Server{
+		modelsCache: []opencode.ProviderModel{}, // Empty cache
+	}
+
+	// Should return true (skip validation) when cache is empty
+	if !srv.validateModelSelection("any-provider", "any-model") {
+		t.Error("validateModelSelection should return true when cache is empty")
+	}
+}
+
+// TestValidateModelSelection_ValidModel tests validation with valid models
+func TestValidateModelSelection_ValidModel(t *testing.T) {
+	srv := &Server{
+		modelsCache: []opencode.ProviderModel{
+			{ID: "gpt-4", ProviderID: "openai", Name: "GPT-4"},
+			{ID: "claude-3", ProviderID: "anthropic", Name: "Claude 3"},
+		},
+	}
+
+	// Should return true for valid model
+	if !srv.validateModelSelection("openai", "gpt-4") {
+		t.Error("validateModelSelection should return true for valid model")
+	}
+
+	if !srv.validateModelSelection("anthropic", "claude-3") {
+		t.Error("validateModelSelection should return true for valid model")
+	}
+}
+
+// TestValidateModelSelection_InvalidModel tests validation with invalid models
+func TestValidateModelSelection_InvalidModel(t *testing.T) {
+	srv := &Server{
+		modelsCache: []opencode.ProviderModel{
+			{ID: "gpt-4", ProviderID: "openai", Name: "GPT-4"},
+			{ID: "claude-3", ProviderID: "anthropic", Name: "Claude 3"},
+		},
+	}
+
+	// Should return false for invalid model
+	if srv.validateModelSelection("openai", "invalid-model") {
+		t.Error("validateModelSelection should return false for invalid model")
+	}
+
+	if srv.validateModelSelection("invalid-provider", "gpt-4") {
+		t.Error("validateModelSelection should return false for invalid provider")
+	}
+
+	if srv.validateModelSelection("anthropic", "gpt-4") {
+		t.Error("validateModelSelection should return false when provider/model mismatch")
 	}
 }

@@ -1822,6 +1822,7 @@ type settingsData struct {
 	ForceStrongStages string
 	Success           bool
 	Errors            []string
+	AvailableModels   []opencode.ProviderModel
 }
 
 // handleSettings renders the LLM configuration settings page
@@ -1842,6 +1843,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		Active:            "settings",
 		Config:            cfg.LLM,
 		ForceStrongStages: forceStrongStages,
+		AvailableModels:   s.modelsCache,
 	}
 
 	s.render(w, "llm-config.html", data)
@@ -1933,6 +1935,18 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		if cat.weak.Model == "" {
 			errors = append(errors, fmt.Sprintf("%s Weak: Model is required", cat.name))
 		}
+
+		// Validate model selections against available models
+		if cat.strong.Provider != "" && cat.strong.Model != "" {
+			if !s.validateModelSelection(cat.strong.Provider, cat.strong.Model) {
+				errors = append(errors, fmt.Sprintf("%s Strong: Invalid model '%s/%s'", cat.name, cat.strong.Provider, cat.strong.Model))
+			}
+		}
+		if cat.weak.Provider != "" && cat.weak.Model != "" {
+			if !s.validateModelSelection(cat.weak.Provider, cat.weak.Model) {
+				errors = append(errors, fmt.Sprintf("%s Weak: Invalid model '%s/%s'", cat.name, cat.weak.Provider, cat.weak.Model))
+			}
+		}
 	}
 
 	// Parse routing thresholds
@@ -1994,6 +2008,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		Active:            "settings",
 		Config:            cfg.LLM,
 		ForceStrongStages: forceStrongStages,
+		AvailableModels:   s.modelsCache,
 		Success:           true,
 	}
 
@@ -2017,8 +2032,23 @@ func (s *Server) renderSettingsWithErrors(w http.ResponseWriter, r *http.Request
 		Active:            "settings",
 		Config:            cfg.LLM,
 		ForceStrongStages: forceStrongStages,
+		AvailableModels:   s.modelsCache,
 		Errors:            errors,
 	}
 
 	s.render(w, "llm-config.html", data)
+}
+
+// validateModelSelection checks if a provider/model combination is valid
+func (s *Server) validateModelSelection(provider, model string) bool {
+	if len(s.modelsCache) == 0 {
+		return true // Skip validation if cache is empty (API unavailable)
+	}
+
+	for _, m := range s.modelsCache {
+		if m.ProviderID == provider && m.ID == model {
+			return true
+		}
+	}
+	return false
 }
