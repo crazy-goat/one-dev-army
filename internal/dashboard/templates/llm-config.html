@@ -29,7 +29,10 @@
         </div>
         <div class="form-group">
           <label for="development_strong_model">Model</label>
-          <input type="text" id="development_strong_model" name="development_strong_model" value="{{.Config.Development.Strong.Model}}" required>
+          <div class="model-dropdown" data-field="development_strong_model">
+            <input type="text" id="development_strong_model" name="development_strong_model" value="{{.Config.Development.Strong.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="Type to search models...">
+            <div class="model-dropdown-list" id="dropdown-development_strong_model"></div>
+          </div>
         </div>
         <div class="form-group">
           <label for="development_strong_api_key">API Key (optional)</label>
@@ -48,7 +51,10 @@
         </div>
         <div class="form-group">
           <label for="development_weak_model">Model</label>
-          <input type="text" id="development_weak_model" name="development_weak_model" value="{{.Config.Development.Weak.Model}}" required>
+          <div class="model-dropdown" data-field="development_weak_model">
+            <input type="text" id="development_weak_model" name="development_weak_model" value="{{.Config.Development.Weak.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="Type to search models...">
+            <div class="model-dropdown-list" id="dropdown-development_weak_model"></div>
+          </div>
         </div>
         <div class="form-group">
           <label for="development_weak_api_key">API Key (optional)</label>
@@ -72,7 +78,10 @@
         </div>
         <div class="form-group">
           <label for="planning_strong_model">Model</label>
-          <input type="text" id="planning_strong_model" name="planning_strong_model" value="{{.Config.Planning.Strong.Model}}" required>
+          <div class="model-dropdown" data-field="planning_strong_model">
+            <input type="text" id="planning_strong_model" name="planning_strong_model" value="{{.Config.Planning.Strong.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="Type to search models...">
+            <div class="model-dropdown-list" id="dropdown-planning_strong_model"></div>
+          </div>
         </div>
         <div class="form-group">
           <label for="planning_strong_api_key">API Key (optional)</label>
@@ -91,7 +100,10 @@
         </div>
         <div class="form-group">
           <label for="planning_weak_model">Model</label>
-          <input type="text" id="planning_weak_model" name="planning_weak_model" value="{{.Config.Planning.Weak.Model}}" required>
+          <div class="model-dropdown" data-field="planning_weak_model">
+            <input type="text" id="planning_weak_model" name="planning_weak_model" value="{{.Config.Planning.Weak.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="Type to search models...">
+            <div class="model-dropdown-list" id="dropdown-planning_weak_model"></div>
+          </div>
         </div>
         <div class="form-group">
           <label for="planning_weak_api_key">API Key (optional)</label>
@@ -115,7 +127,10 @@
         </div>
         <div class="form-group">
           <label for="orchestration_strong_model">Model</label>
-          <input type="text" id="orchestration_strong_model" name="orchestration_strong_model" value="{{.Config.Orchestration.Strong.Model}}" required>
+          <div class="model-dropdown" data-field="orchestration_strong_model">
+            <input type="text" id="orchestration_strong_model" name="orchestration_strong_model" value="{{.Config.Orchestration.Strong.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="Type to search models...">
+            <div class="model-dropdown-list" id="dropdown-orchestration_strong_model"></div>
+          </div>
         </div>
         <div class="form-group">
           <label for="orchestration_strong_api_key">API Key (optional)</label>
@@ -134,7 +149,10 @@
         </div>
         <div class="form-group">
           <label for="orchestration_weak_model">Model</label>
-          <input type="text" id="orchestration_weak_model" name="orchestration_weak_model" value="{{.Config.Orchestration.Weak.Model}}" required>
+          <div class="model-dropdown" data-field="orchestration_weak_model">
+            <input type="text" id="orchestration_weak_model" name="orchestration_weak_model" value="{{.Config.Orchestration.Weak.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="Type to search models...">
+            <div class="model-dropdown-list" id="dropdown-orchestration_weak_model"></div>
+          </div>
         </div>
         <div class="form-group">
           <label for="orchestration_weak_api_key">API Key (optional)</label>
@@ -158,7 +176,10 @@
         </div>
         <div class="form-group">
           <label for="setup_strong_model">Model</label>
-          <input type="text" id="setup_strong_model" name="setup_strong_model" value="{{.Config.Setup.Strong.Model}}" required>
+          <div class="model-dropdown" data-field="setup_strong_model">
+            <input type="text" id="setup_strong_model" name="setup_strong_model" value="{{.Config.Setup.Strong.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="Type to search models...">
+            <div class="model-dropdown-list" id="dropdown-setup_strong_model"></div>
+          </div>
         </div>
         <div class="form-group">
           <label for="setup_strong_api_key">API Key (optional)</label>
@@ -177,7 +198,10 @@
         </div>
         <div class="form-group">
           <label for="setup_weak_model">Model</label>
-          <input type="text" id="setup_weak_model" name="setup_weak_model" value="{{.Config.Setup.Weak.Model}}" required>
+          <div class="model-dropdown" data-field="setup_weak_model">
+            <input type="text" id="setup_weak_model" name="setup_weak_model" value="{{.Config.Setup.Weak.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="Type to search models...">
+            <div class="model-dropdown-list" id="dropdown-setup_weak_model"></div>
+          </div>
         </div>
         <div class="form-group">
           <label for="setup_weak_api_key">API Key (optional)</label>
@@ -335,5 +359,268 @@
 .alert li:last-child {
   margin-bottom: 0;
 }
+
+/* Model Dropdown Styles */
+.model-dropdown {
+  position: relative;
+  width: 100%;
+}
+
+.model-dropdown-input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.model-dropdown-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.model-dropdown-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 250px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  z-index: 1000;
+  display: none;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.model-dropdown-list.visible {
+  display: block;
+}
+
+.model-dropdown-item {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.model-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.model-dropdown-item:hover,
+.model-dropdown-item.selected {
+  background: var(--accent);
+  color: white;
+}
+
+.model-dropdown-item .model-name {
+  font-weight: 500;
+}
+
+.model-dropdown-item .model-provider {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.model-dropdown-group {
+  padding: 0.25rem 0.75rem;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.model-dropdown-no-results {
+  padding: 0.75rem;
+  color: var(--muted);
+  font-style: italic;
+  text-align: center;
+}
 </style>
+
+<script>
+// Model data from server
+const availableModels = {{if .AvailableModels}}[
+  {{range .AvailableModels}}
+  { id: {{.ID | json}}, providerID: {{.ProviderID | json}}, name: {{.Name | json}} },
+  {{end}}
+]{{else}}[]{{end}};
+
+// Initialize dropdowns when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+  initializeModelDropdowns();
+});
+
+// Also initialize when HTMX swaps content
+document.addEventListener('htmx:afterSwap', function() {
+  initializeModelDropdowns();
+});
+
+function initializeModelDropdowns() {
+  const dropdowns = document.querySelectorAll('.model-dropdown');
+  
+  dropdowns.forEach(function(dropdown) {
+    const input = dropdown.querySelector('.model-dropdown-input');
+    const list = dropdown.querySelector('.model-dropdown-list');
+    const fieldName = dropdown.getAttribute('data-field');
+    
+    if (!input || !list) return;
+    
+    // Remove existing event listeners by cloning
+    const newInput = input.cloneNode(true);
+    input.parentNode.replaceChild(newInput, input);
+    
+    let selectedIndex = -1;
+    let filteredModels = [];
+    
+    // Focus event - show all models
+    newInput.addEventListener('focus', function() {
+      filteredModels = filterModels('');
+      renderDropdown(filteredModels, list, '');
+      list.classList.add('visible');
+      selectedIndex = -1;
+    });
+    
+    // Input event - filter models
+    newInput.addEventListener('input', function() {
+      const query = this.value.toLowerCase();
+      filteredModels = filterModels(query);
+      renderDropdown(filteredModels, list, query);
+      list.classList.add('visible');
+      selectedIndex = -1;
+    });
+    
+    // Keyboard navigation
+    newInput.addEventListener('keydown', function(e) {
+      if (!list.classList.contains('visible')) return;
+      
+      switch(e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          selectedIndex = Math.min(selectedIndex + 1, filteredModels.length - 1);
+          updateSelection(list, selectedIndex);
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          selectedIndex = Math.max(selectedIndex - 1, -1);
+          updateSelection(list, selectedIndex);
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (selectedIndex >= 0 && filteredModels[selectedIndex]) {
+            selectModel(filteredModels[selectedIndex], newInput, list);
+          }
+          break;
+        case 'Escape':
+          list.classList.remove('visible');
+          selectedIndex = -1;
+          break;
+      }
+    });
+    
+    // Click outside to close
+    document.addEventListener('click', function(e) {
+      if (!dropdown.contains(e.target)) {
+        list.classList.remove('visible');
+      }
+    });
+  });
+}
+
+function filterModels(query) {
+  if (!availableModels || availableModels.length === 0) {
+    return [];
+  }
+  
+  if (!query) {
+    return availableModels;
+  }
+  
+  return availableModels.filter(function(model) {
+    return model.name.toLowerCase().includes(query) ||
+           model.id.toLowerCase().includes(query) ||
+           model.providerID.toLowerCase().includes(query);
+  });
+}
+
+function renderDropdown(models, list, query) {
+  list.innerHTML = '';
+  
+  if (models.length === 0) {
+    list.innerHTML = '<div class="model-dropdown-no-results">No models found</div>';
+    return;
+  }
+  
+  // Group models by provider
+  const grouped = {};
+  models.forEach(function(model) {
+    if (!grouped[model.providerID]) {
+      grouped[model.providerID] = [];
+    }
+    grouped[model.providerID].push(model);
+  });
+  
+  // Render grouped models
+  Object.keys(grouped).sort().forEach(function(provider) {
+    const groupHeader = document.createElement('div');
+    groupHeader.className = 'model-dropdown-group';
+    groupHeader.textContent = provider;
+    list.appendChild(groupHeader);
+    
+    grouped[provider].forEach(function(model) {
+      const item = document.createElement('div');
+      item.className = 'model-dropdown-item';
+      item.setAttribute('data-model-id', model.id);
+      item.setAttribute('data-provider-id', model.providerID);
+      item.innerHTML = '<div class="model-name">' + escapeHtml(model.name) + '</div>' +
+                      '<div class="model-provider">' + escapeHtml(model.id) + '</div>';
+      
+      item.addEventListener('click', function() {
+        selectModel(model, list.previousElementSibling, list);
+      });
+      
+      list.appendChild(item);
+    });
+  });
+}
+
+function updateSelection(list, selectedIndex) {
+  const items = list.querySelectorAll('.model-dropdown-item');
+  items.forEach(function(item, index) {
+    if (index === selectedIndex) {
+      item.classList.add('selected');
+      item.scrollIntoView({ block: 'nearest' });
+    } else {
+      item.classList.remove('selected');
+    }
+  });
+}
+
+function selectModel(model, input, list) {
+  input.value = model.id;
+  list.classList.remove('visible');
+  
+  // Update the provider field if it exists
+  const fieldName = input.getAttribute('name');
+  if (fieldName) {
+    const providerFieldName = fieldName.replace('_model', '_provider');
+    const providerInput = document.querySelector('input[name="' + providerFieldName + '"]');
+    if (providerInput) {
+      providerInput.value = model.providerID;
+    }
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+</script>
 {{end}}

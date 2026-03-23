@@ -3,8 +3,10 @@ package dashboard
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"time"
 
@@ -34,6 +36,7 @@ type Server struct {
 	syncService      *SyncService
 	rateLimitService *RateLimitService
 	rootDir          string
+	modelsCache      []opencode.ProviderModel
 }
 
 func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string) (*Server, error) {
@@ -73,7 +76,44 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 	s.rateLimitService.Start()
 
 	s.routes()
+
+	// Load available models from opencode API
+	if err := s.LoadModels(); err != nil {
+		log.Printf("[Dashboard] Warning: failed to load models: %v", err)
+	}
+
 	return s, nil
+}
+
+// LoadModels fetches and caches available models from the opencode API
+func (s *Server) LoadModels() error {
+	if s.oc == nil {
+		return fmt.Errorf("opencode client not configured")
+	}
+
+	providers, err := s.oc.ListProviders()
+	if err != nil {
+		return fmt.Errorf("loading providers: %w", err)
+	}
+
+	var models []opencode.ProviderModel
+	connectedSet := make(map[string]bool)
+	for _, id := range providers.Connected {
+		connectedSet[id] = true
+	}
+
+	for _, p := range providers.All {
+		if !connectedSet[p.ID] {
+			continue
+		}
+		for _, model := range p.Models {
+			models = append(models, model)
+		}
+	}
+
+	s.modelsCache = models
+	log.Printf("[Dashboard] Loaded %d models from %d connected providers", len(models), len(providers.Connected))
+	return nil
 }
 
 func parseTemplates() (map[string]*template.Template, error) {
@@ -95,6 +135,13 @@ func parseTemplates() (map[string]*template.Template, error) {
 				return s
 			}
 			return s[:n] + "\n... (truncated)"
+		},
+		"json": func(v interface{}) string {
+			b, err := json.Marshal(v)
+			if err != nil {
+				return ""
+			}
+			return string(b)
 		},
 	}
 
