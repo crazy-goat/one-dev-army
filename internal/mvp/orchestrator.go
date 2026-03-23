@@ -380,17 +380,22 @@ func (o *Orchestrator) recordStep(issueNumber int, stepName, response string) {
 }
 
 func (o *Orchestrator) BroadcastStageUpdate(issueNumber int, stage string) {
-	// Set the stage label on GitHub
-	updatedIssue, err := o.gh.SetStageLabel(issueNumber, stage)
-	if err != nil {
-		log.Printf("[Orchestrator] Error setting stage label %s for #%d: %v", stage, issueNumber, err)
-		return
-	}
+	// Run GitHub API call asynchronously to avoid blocking worker
+	go func() {
+		log.Printf("[Orchestrator] Updating stage label %s for #%d (async)", stage, issueNumber)
+		// Set the stage label on GitHub
+		updatedIssue, err := o.gh.SetStageLabel(issueNumber, stage)
+		if err != nil {
+			log.Printf("[Orchestrator] Error setting stage label %s for #%d: %v", stage, issueNumber, err)
+			return
+		}
 
-	// Broadcast the update via hub if available
-	if o.hub != nil {
-		o.hub.BroadcastIssueUpdate(updatedIssue)
-	}
+		// Broadcast the update via hub if available
+		if o.hub != nil {
+			log.Printf("[Orchestrator] Broadcasting stage update %s for #%d to WebSocket clients", stage, issueNumber)
+			o.hub.BroadcastIssueUpdate(updatedIssue)
+		}
+	}()
 }
 
 func (o *Orchestrator) BroadcastWorkerStatus(workerID, status string, taskID int, taskTitle, stage string, elapsedSeconds int) {

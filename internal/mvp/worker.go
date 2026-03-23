@@ -136,8 +136,10 @@ func (w *Worker) setStageLabel(stage string) {
 	if w.orchestrator == nil || w.orchestrator.currentTask == nil {
 		return
 	}
-	w.orchestrator.BroadcastStageUpdate(w.orchestrator.currentTask.Issue.Number, stage)
+	// Broadcast worker status immediately to WebSocket (synchronous)
 	w.broadcastWorkerStatus(stage)
+	// Update GitHub and SQLite asynchronously to avoid blocking
+	w.orchestrator.BroadcastStageUpdate(w.orchestrator.currentTask.Issue.Number, stage)
 }
 
 func (w *Worker) broadcastWorkerStatus(stage string) {
