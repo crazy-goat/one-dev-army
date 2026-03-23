@@ -349,11 +349,6 @@ func collectConfigModels(cfg *config.Config) []opencode.ModelRef {
 		models = append(models, opencode.ParseModelRef(llm))
 	}
 
-	// Add models from pipeline stages
-	for _, stage := range cfg.Pipeline.Stages {
-		add(stage.LLM)
-	}
-
 	// Add legacy config models for backward compatibility
 	add(cfg.Planning.LLM)
 	add(cfg.EpicAnalysis.LLM)

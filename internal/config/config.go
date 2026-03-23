@@ -44,16 +44,8 @@ type Tools struct {
 	E2ECmd  string `yaml:"e2e_cmd"`
 }
 
-type Stage struct {
-	Name           string `yaml:"name"`
-	LLM            string `yaml:"llm,omitempty"`
-	Lint           bool   `yaml:"lint,omitempty"`
-	ManualApproval bool   `yaml:"manual_approval,omitempty"`
-}
-
 type Pipeline struct {
-	Stages     []Stage `yaml:"stages"`
-	MaxRetries int     `yaml:"max_retries"`
+	MaxRetries int `yaml:"max_retries"`
 }
 
 type Planning struct {

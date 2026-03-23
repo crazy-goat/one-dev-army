@@ -82,42 +82,42 @@ func DefaultLLMConfig() LLMConfig {
 	return LLMConfig{
 		Development: CategoryModels{
 			Strong: ModelConfig{
-				Provider: "openai",
-				Model:    "nexos-ai/Kimi K2.5",
+				Provider: "nexos-ai",
+				Model:    "Kimi K2.5",
 			},
 			Weak: ModelConfig{
-				Provider: "openai",
-				Model:    "nexos-ai/Kimi K2.5",
+				Provider: "nexos-ai",
+				Model:    "Kimi K2.5",
 			},
 		},
 		Planning: CategoryModels{
 			Strong: ModelConfig{
-				Provider: "openai",
-				Model:    "nexos-ai/Kimi K2.5",
+				Provider: "nexos-ai",
+				Model:    "Kimi K2.5",
 			},
 			Weak: ModelConfig{
-				Provider: "openai",
-				Model:    "nexos-ai/Kimi K2.5",
+				Provider: "nexos-ai",
+				Model:    "Kimi K2.5",
 			},
 		},
 		Orchestration: CategoryModels{
 			Strong: ModelConfig{
-				Provider: "openai",
-				Model:    "nexos-ai/Kimi K2.5",
+				Provider: "nexos-ai",
+				Model:    "Kimi K2.5",
 			},
 			Weak: ModelConfig{
-				Provider: "openai",
-				Model:    "nexos-ai/Kimi K2.5",
+				Provider: "nexos-ai",
+				Model:    "Kimi K2.5",
 			},
 		},
 		Setup: CategoryModels{
 			Strong: ModelConfig{
-				Provider: "openai",
-				Model:    "nexos-ai/Kimi K2.5",
+				Provider: "nexos-ai",
+				Model:    "Kimi K2.5",
 			},
 			Weak: ModelConfig{
-				Provider: "openai",
-				Model:    "nexos-ai/Kimi K2.5",
+				Provider: "nexos-ai",
+				Model:    "Kimi K2.5",
 			},
 		},
 		DefaultComplexity: ComplexityMedium,
@@ -127,7 +127,7 @@ func DefaultLLMConfig() LLMConfig {
 				HighComplexityThreshold: 500,
 				FileCountThreshold:      5,
 			},
-			ForceStrongForStages: []string{"plan-review", "code-review"},
+			ForceStrongForStages: []string{"plan-review", "code-review", "merge"},
 		},
 	}
 }

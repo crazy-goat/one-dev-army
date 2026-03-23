@@ -21,21 +21,6 @@ tools:
   test_cmd: "make test"
   e2e_cmd: "make e2e"
 pipeline:
-  stages:
-    - name: analysis
-      llm: claude-sonnet-4
-    - name: planning
-      llm: claude-opus-4
-    - name: plan-review
-      llm: claude-opus-4
-    - name: coding
-      llm: claude-sonnet-4
-    - name: testing
-      llm: claude-sonnet-4
-    - name: code-review
-      llm: claude-opus-4
-    - name: merge
-      manual_approval: true
   max_retries: 5
 planning:
   llm: claude-opus-4
@@ -96,50 +81,6 @@ func TestLoad_ToolsFields(t *testing.T) {
 	}
 	if cfg.Tools.E2ECmd != "make e2e" {
 		t.Errorf("tools.e2e_cmd = %q, want %q", cfg.Tools.E2ECmd, "make e2e")
-	}
-}
-
-func TestLoad_PipelineStages(t *testing.T) {
-	dir := setupConfigDir(t, validConfig)
-
-	cfg, err := config.Load(dir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(cfg.Pipeline.Stages) != 7 {
-		t.Fatalf("pipeline.stages length = %d, want 7", len(cfg.Pipeline.Stages))
-	}
-
-	expectedStages := []struct {
-		name           string
-		llm            string
-		manualApproval bool
-	}{
-		{"analysis", "claude-sonnet-4", false},
-		{"planning", "claude-opus-4", false},
-		{"plan-review", "claude-opus-4", false},
-		{"coding", "claude-sonnet-4", false},
-		{"testing", "claude-sonnet-4", false},
-		{"code-review", "claude-opus-4", false},
-		{"merge", "", true},
-	}
-
-	for i, exp := range expectedStages {
-		stage := cfg.Pipeline.Stages[i]
-		if stage.Name != exp.name {
-			t.Errorf("stage[%d].name = %q, want %q", i, stage.Name, exp.name)
-		}
-		if stage.LLM != exp.llm {
-			t.Errorf("stage[%d].llm = %q, want %q", i, stage.LLM, exp.llm)
-		}
-		if stage.ManualApproval != exp.manualApproval {
-			t.Errorf("stage[%d].manual_approval = %v, want %v", i, stage.ManualApproval, exp.manualApproval)
-		}
-	}
-
-	if cfg.Pipeline.MaxRetries != 5 {
-		t.Errorf("pipeline.max_retries = %d, want 5", cfg.Pipeline.MaxRetries)
 	}
 }
 

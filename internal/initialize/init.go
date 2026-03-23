@@ -111,15 +111,8 @@ type ocSection struct {
 	URL string `yaml:"url"`
 }
 
-type stageEntry struct {
-	Name           string `yaml:"name"`
-	LLM            string `yaml:"llm,omitempty"`
-	ManualApproval bool   `yaml:"manual_approval,omitempty"`
-}
-
 type pipelineSection struct {
-	Stages     []stageEntry `yaml:"stages"`
-	MaxRetries int          `yaml:"max_retries"`
+	MaxRetries int `yaml:"max_retries"`
 }
 
 type llmSection struct {
@@ -137,15 +130,6 @@ func defaultConfig(repo string) configFile {
 		Workers:   workersSection{Count: 3},
 		OpenCode:  ocSection{URL: "http://localhost:4096"},
 		Pipeline: pipelineSection{
-			Stages: []stageEntry{
-				{Name: "analysis", LLM: "claude-sonnet-4"},
-				{Name: "planning", LLM: "claude-opus-4"},
-				{Name: "plan-review", LLM: "claude-opus-4"},
-				{Name: "coding", LLM: "claude-sonnet-4"},
-				{Name: "testing", LLM: "claude-sonnet-4"},
-				{Name: "code-review", LLM: "claude-opus-4"},
-				{Name: "merge", ManualApproval: true},
-			},
 			MaxRetries: 5,
 		},
 		Planning:     llmSection{LLM: "claude-opus-4"},
