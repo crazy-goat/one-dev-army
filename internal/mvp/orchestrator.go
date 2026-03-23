@@ -158,46 +158,41 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			continue
 		}
 
-		var openCount, skippedCount int
+		var openCount int
 		var inProgressIssue *github.Issue
 		var candidates []github.Issue
-		var awaitingApproval []github.Issue
+		var blocking []github.Issue // issues that block new work (not done yet)
 		for i := range issues {
 			if !strings.EqualFold(issues[i].State, "open") {
 				continue
 			}
 			openCount++
-			if hasLabel(issues[i], "failed") {
-				skippedCount++
-				log.Printf("[Orchestrator]   skip #%d %q (failed)", issues[i].Number, issues[i].Title)
-				continue
-			}
 			if hasLabel(issues[i], "in-progress") {
 				if inProgressIssue == nil {
 					inProgressIssue = &issues[i]
 				}
 				continue
 			}
-			if hasLabel(issues[i], "awaiting-approval") {
-				awaitingApproval = append(awaitingApproval, issues[i])
-				log.Printf("[Orchestrator]   skip #%d %q (awaiting-approval)", issues[i].Number, issues[i].Title)
+			if hasLabel(issues[i], "awaiting-approval") || hasLabel(issues[i], "failed") || hasLabel(issues[i], "stage:needs-user") {
+				blocking = append(blocking, issues[i])
+				log.Printf("[Orchestrator]   blocking #%d %q (%s)", issues[i].Number, issues[i].Title, labelNames(issues[i]))
 				continue
 			}
 			candidates = append(candidates, issues[i])
 		}
-		log.Printf("[Orchestrator] Found %d issues (%d open, %d failed-skipped, %d awaiting-approval, %d candidates)", len(issues), openCount, skippedCount, len(awaitingApproval), len(candidates))
+		log.Printf("[Orchestrator] Found %d issues (%d open, %d blocking, %d candidates)", len(issues), openCount, len(blocking), len(candidates))
 
 		var nextIssue *github.Issue
 		if inProgressIssue != nil {
 			nextIssue = inProgressIssue
 			log.Printf("[Orchestrator] Resuming in-progress #%d: %s", nextIssue.Number, nextIssue.Title)
-		} else if len(awaitingApproval) > 0 {
-			// Single-branch mode: don't start new work while PRs await approval.
-			// New branches would be based on master which lacks unmerged PR changes,
-			// causing conflicts when those PRs get merged.
-			log.Printf("[Orchestrator] ⏳ Waiting — %d issue(s) awaiting approval, not starting new work", len(awaitingApproval))
+		} else if len(blocking) > 0 {
+			// Single-branch mode: don't start new work while any issue is unresolved.
+			// Unmerged PRs, failed tasks, or blocked tasks leave branches that would
+			// conflict with new work based on master.
+			log.Printf("[Orchestrator] ⏳ Waiting — %d issue(s) need attention before starting new work", len(blocking))
 		} else if len(candidates) > 0 {
-			picked, err := o.pickNextTicket(ctx, candidates, awaitingApproval)
+			picked, err := o.pickNextTicket(ctx, candidates, nil)
 			if err != nil {
 				log.Printf("[Orchestrator] Error picking next ticket: %v — falling back to first candidate", err)
 				picked = &candidates[0]
@@ -390,4 +385,12 @@ func hasLabel(issue github.Issue, name string) bool {
 		}
 	}
 	return false
+}
+
+func labelNames(issue github.Issue) string {
+	var names []string
+	for _, l := range issue.Labels {
+		names = append(names, l.Name)
+	}
+	return strings.Join(names, ", ")
 }
