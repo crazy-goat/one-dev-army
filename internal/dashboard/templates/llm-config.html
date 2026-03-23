@@ -1,0 +1,359 @@
+{{define "content"}}
+<div class="settings-container">
+  <h1>LLM Configuration</h1>
+  
+  <form id="llm-config-form" hx-post="/settings" hx-target="#settings-result" hx-swap="innerHTML">
+    
+    <!-- Development Category -->
+    <div class="category-section">
+      <h2>Development</h2>
+      <div class="model-pair">
+        <div class="model-config">
+          <h3>Strong Model</h3>
+          <div class="form-group">
+            <label for="development_strong_provider">Provider</label>
+            <input type="text" id="development_strong_provider" name="development_strong_provider" value="{{.Config.Development.Strong.Provider}}" required>
+          </div>
+          <div class="form-group">
+            <label for="development_strong_model">Model</label>
+            <input type="text" id="development_strong_model" name="development_strong_model" value="{{.Config.Development.Strong.Model}}" required>
+          </div>
+          <div class="form-group">
+            <label for="development_strong_api_key">API Key (optional)</label>
+            <input type="password" id="development_strong_api_key" name="development_strong_api_key" value="{{.Config.Development.Strong.APIKey}}" placeholder="Uses env var if empty">
+          </div>
+          <div class="form-group">
+            <label for="development_strong_base_url">Base URL (optional)</label>
+            <input type="url" id="development_strong_base_url" name="development_strong_base_url" value="{{.Config.Development.Strong.BaseURL}}" placeholder="https://api.example.com">
+          </div>
+        </div>
+        
+        <div class="model-config">
+          <h3>Weak Model</h3>
+          <div class="form-group">
+            <label for="development_weak_provider">Provider</label>
+            <input type="text" id="development_weak_provider" name="development_weak_provider" value="{{.Config.Development.Weak.Provider}}" required>
+          </div>
+          <div class="form-group">
+            <label for="development_weak_model">Model</label>
+            <input type="text" id="development_weak_model" name="development_weak_model" value="{{.Config.Development.Weak.Model}}" required>
+          </div>
+          <div class="form-group">
+            <label for="development_weak_api_key">API Key (optional)</label>
+            <input type="password" id="development_weak_api_key" name="development_weak_api_key" value="{{.Config.Development.Weak.APIKey}}" placeholder="Uses env var if empty">
+          </div>
+          <div class="form-group">
+            <label for="development_weak_base_url">Base URL (optional)</label>
+            <input type="url" id="development_weak_base_url" name="development_weak_base_url" value="{{.Config.Development.Weak.BaseURL}}" placeholder="https://api.example.com">
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Planning Category -->
+    <div class="category-section">
+      <h2>Planning</h2>
+      <div class="model-pair">
+        <div class="model-config">
+          <h3>Strong Model</h3>
+          <div class="form-group">
+            <label for="planning_strong_provider">Provider</label>
+            <input type="text" id="planning_strong_provider" name="planning_strong_provider" value="{{.Config.Planning.Strong.Provider}}" required>
+          </div>
+          <div class="form-group">
+            <label for="planning_strong_model">Model</label>
+            <input type="text" id="planning_strong_model" name="planning_strong_model" value="{{.Config.Planning.Strong.Model}}" required>
+          </div>
+          <div class="form-group">
+            <label for="planning_strong_api_key">API Key (optional)</label>
+            <input type="password" id="planning_strong_api_key" name="planning_strong_api_key" value="{{.Config.Planning.Strong.APIKey}}" placeholder="Uses env var if empty">
+          </div>
+          <div class="form-group">
+            <label for="planning_strong_base_url">Base URL (optional)</label>
+            <input type="url" id="planning_strong_base_url" name="planning_strong_base_url" value="{{.Config.Planning.Strong.BaseURL}}" placeholder="https://api.example.com">
+          </div>
+        </div>
+        
+        <div class="model-config">
+          <h3>Weak Model</h3>
+          <div class="form-group">
+            <label for="planning_weak_provider">Provider</label>
+            <input type="text" id="planning_weak_provider" name="planning_weak_provider" value="{{.Config.Planning.Weak.Provider}}" required>
+          </div>
+          <div class="form-group">
+            <label for="planning_weak_model">Model</label>
+            <input type="text" id="planning_weak_model" name="planning_weak_model" value="{{.Config.Planning.Weak.Model}}" required>
+          </div>
+          <div class="form-group">
+            <label for="planning_weak_api_key">API Key (optional)</label>
+            <input type="password" id="planning_weak_api_key" name="planning_weak_api_key" value="{{.Config.Planning.Weak.APIKey}}" placeholder="Uses env var if empty">
+          </div>
+          <div class="form-group">
+            <label for="planning_weak_base_url">Base URL (optional)</label>
+            <input type="url" id="planning_weak_base_url" name="planning_weak_base_url" value="{{.Config.Planning.Weak.BaseURL}}" placeholder="https://api.example.com">
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Orchestration Category -->
+    <div class="category-section">
+      <h2>Orchestration</h2>
+      <div class="model-pair">
+        <div class="model-config">
+          <h3>Strong Model</h3>
+          <div class="form-group">
+            <label for="orchestration_strong_provider">Provider</label>
+            <input type="text" id="orchestration_strong_provider" name="orchestration_strong_provider" value="{{.Config.Orchestration.Strong.Provider}}" required>
+          </div>
+          <div class="form-group">
+            <label for="orchestration_strong_model">Model</label>
+            <input type="text" id="orchestration_strong_model" name="orchestration_strong_model" value="{{.Config.Orchestration.Strong.Model}}" required>
+          </div>
+          <div class="form-group">
+            <label for="orchestration_strong_api_key">API Key (optional)</label>
+            <input type="password" id="orchestration_strong_api_key" name="orchestration_strong_api_key" value="{{.Config.Orchestration.Strong.APIKey}}" placeholder="Uses env var if empty">
+          </div>
+          <div class="form-group">
+            <label for="orchestration_strong_base_url">Base URL (optional)</label>
+            <input type="url" id="orchestration_strong_base_url" name="orchestration_strong_base_url" value="{{.Config.Orchestration.Strong.BaseURL}}" placeholder="https://api.example.com">
+          </div>
+        </div>
+        
+        <div class="model-config">
+          <h3>Weak Model</h3>
+          <div class="form-group">
+            <label for="orchestration_weak_provider">Provider</label>
+            <input type="text" id="orchestration_weak_provider" name="orchestration_weak_provider" value="{{.Config.Orchestration.Weak.Provider}}" required>
+          </div>
+          <div class="form-group">
+            <label for="orchestration_weak_model">Model</label>
+            <input type="text" id="orchestration_weak_model" name="orchestration_weak_model" value="{{.Config.Orchestration.Weak.Model}}" required>
+          </div>
+          <div class="form-group">
+            <label for="orchestration_weak_api_key">API Key (optional)</label>
+            <input type="password" id="orchestration_weak_api_key" name="orchestration_weak_api_key" value="{{.Config.Orchestration.Weak.APIKey}}" placeholder="Uses env var if empty">
+          </div>
+          <div class="form-group">
+            <label for="orchestration_weak_base_url">Base URL (optional)</label>
+            <input type="url" id="orchestration_weak_base_url" name="orchestration_weak_base_url" value="{{.Config.Orchestration.Weak.BaseURL}}" placeholder="https://api.example.com">
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Setup Category -->
+    <div class="category-section">
+      <h2>Setup</h2>
+      <div class="model-pair">
+        <div class="model-config">
+          <h3>Strong Model</h3>
+          <div class="form-group">
+            <label for="setup_strong_provider">Provider</label>
+            <input type="text" id="setup_strong_provider" name="setup_strong_provider" value="{{.Config.Setup.Strong.Provider}}" required>
+          </div>
+          <div class="form-group">
+            <label for="setup_strong_model">Model</label>
+            <input type="text" id="setup_strong_model" name="setup_strong_model" value="{{.Config.Setup.Strong.Model}}" required>
+          </div>
+          <div class="form-group">
+            <label for="setup_strong_api_key">API Key (optional)</label>
+            <input type="password" id="setup_strong_api_key" name="setup_strong_api_key" value="{{.Config.Setup.Strong.APIKey}}" placeholder="Uses env var if empty">
+          </div>
+          <div class="form-group">
+            <label for="setup_strong_base_url">Base URL (optional)</label>
+            <input type="url" id="setup_strong_base_url" name="setup_strong_base_url" value="{{.Config.Setup.Strong.BaseURL}}" placeholder="https://api.example.com">
+          </div>
+        </div>
+        
+        <div class="model-config">
+          <h3>Weak Model</h3>
+          <div class="form-group">
+            <label for="setup_weak_provider">Provider</label>
+            <input type="text" id="setup_weak_provider" name="setup_weak_provider" value="{{.Config.Setup.Weak.Provider}}" required>
+          </div>
+          <div class="form-group">
+            <label for="setup_weak_model">Model</label>
+            <input type="text" id="setup_weak_model" name="setup_weak_model" value="{{.Config.Setup.Weak.Model}}" required>
+          </div>
+          <div class="form-group">
+            <label for="setup_weak_api_key">API Key (optional)</label>
+            <input type="password" id="setup_weak_api_key" name="setup_weak_api_key" value="{{.Config.Setup.Weak.APIKey}}" placeholder="Uses env var if empty">
+          </div>
+          <div class="form-group">
+            <label for="setup_weak_base_url">Base URL (optional)</label>
+            <input type="url" id="setup_weak_base_url" name="setup_weak_base_url" value="{{.Config.Setup.Weak.BaseURL}}" placeholder="https://api.example.com">
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Routing Rules -->
+    <div class="category-section">
+      <h2>Routing Rules</h2>
+      <div class="routing-config">
+        <h3>Complexity Thresholds</h3>
+        <div class="form-group">
+          <label for="routing_code_size_threshold">Code Size Threshold (lines)</label>
+          <input type="number" id="routing_code_size_threshold" name="routing_code_size_threshold" value="{{.Config.RoutingRules.ComplexityThresholds.CodeSizeThreshold}}" min="1" required>
+          <small>Number of lines that triggers medium complexity</small>
+        </div>
+        <div class="form-group">
+          <label for="routing_high_complexity_threshold">High Complexity Threshold (lines)</label>
+          <input type="number" id="routing_high_complexity_threshold" name="routing_high_complexity_threshold" value="{{.Config.RoutingRules.ComplexityThresholds.HighComplexityThreshold}}" min="1" required>
+          <small>Number of lines that triggers high complexity</small>
+        </div>
+        <div class="form-group">
+          <label for="routing_file_count_threshold">File Count Threshold</label>
+          <input type="number" id="routing_file_count_threshold" name="routing_file_count_threshold" value="{{.Config.RoutingRules.ComplexityThresholds.FileCountThreshold}}" min="1" required>
+          <small>Number of files that triggers higher complexity</small>
+        </div>
+        
+        <h3>Force Strong Model For Stages</h3>
+        <div class="form-group">
+          <label for="routing_force_strong_stages">Stages (comma-separated)</label>
+          <input type="text" id="routing_force_strong_stages" name="routing_force_strong_stages" value="{{join .Config.RoutingRules.ForceStrongForStages ", "}}" placeholder="plan-review, code-review, merge">
+          <small>Pipeline stages that always use strong models</small>
+        </div>
+      </div>
+    </div>
+    
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Save Configuration</button>
+      <a href="/" class="btn">Cancel</a>
+    </div>
+    
+    <div id="settings-result"></div>
+  </form>
+</div>
+
+<style>
+.settings-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.category-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.category-section h2 {
+  color: var(--text);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.model-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+.model-config {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.model-config h3 {
+  color: var(--accent);
+  font-size: 0.95rem;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.form-group small {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.routing-config {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.routing-config h3 {
+  color: var(--accent);
+  font-size: 0.95rem;
+  margin: 1.5rem 0 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.routing-config h3:first-child {
+  margin-top: 0;
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+#settings-result {
+  margin-top: 1rem;
+}
+
+.success-message {
+  background: rgba(63, 185, 80, 0.1);
+  border: 1px solid var(--green);
+  color: var(--green);
+  padding: 1rem;
+  border-radius: 6px;
+}
+
+.error-message {
+  background: rgba(248, 81, 73, 0.1);
+  border: 1px solid var(--red);
+  color: var(--red);
+  padding: 1rem;
+  border-radius: 6px;
+}
+
+@media (max-width: 768px) {
+  .model-pair {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+</style>
+{{end}}

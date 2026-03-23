@@ -38,6 +38,9 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 			}
 			return s[:n] + "\n... (truncated)"
 		},
+		"join": func(arr []string, sep string) string {
+			return strings.Join(arr, sep)
+		},
 	}
 
 	pages := []string{"board.html", "task.html"}
@@ -86,6 +89,16 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 		}
 		tmpls[page] = t
 	}
+
+	// Parse settings template
+	settingsTmpl, err := template.New("").Funcs(funcMap).ParseFiles(
+		filepath.Join(templateDir, "layout.html"),
+		filepath.Join(templateDir, "llm-config.html"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("parsing llm-config.html: %w", err)
+	}
+	tmpls["llm-config.html"] = settingsTmpl
 
 	return tmpls, nil
 }
@@ -3479,5 +3492,523 @@ func TestHandleWizardCreateSingle_SyncFailureDoesNotBlockCreation(t *testing.T) 
 	_, ok := srv.wizardStore.Get(session.ID)
 	if ok {
 		t.Error("session should be deleted after single issue creation (creation should succeed even if sync fails)")
+	}
+}
+
+// TestHandleSettings tests the GET /settings handler
+func TestHandleSettings(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a minimal config file
+	configDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+
+	configContent := `llm:
+  development:
+    strong:
+      provider: test-provider
+      model: test-model
+    weak:
+      provider: test-provider-weak
+      model: test-model-weak
+  planning:
+    strong:
+      provider: planning-provider
+      model: planning-model
+    weak:
+      provider: planning-provider-weak
+      model: planning-model-weak
+  orchestration:
+    strong:
+      provider: orch-provider
+      model: orch-model
+    weak:
+      provider: orch-provider-weak
+      model: orch-model-weak
+  setup:
+    strong:
+      provider: setup-provider
+      model: setup-model
+    weak:
+      provider: setup-provider-weak
+      model: setup-model-weak
+  routing_rules:
+    complexity_thresholds:
+      code_size_threshold: 150
+      high_complexity_threshold: 600
+      file_count_threshold: 10
+    force_strong_for_stages:
+      - plan-review
+      - code-review
+`
+	configPath := filepath.Join(configDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify the page contains expected content
+	if !strings.Contains(body, "LLM Configuration") {
+		t.Error("settings page missing title")
+	}
+
+	// Verify form fields are populated with config values
+	if !strings.Contains(body, "test-provider") {
+		t.Error("settings page missing development strong provider")
+	}
+	if !strings.Contains(body, "test-model") {
+		t.Error("settings page missing development strong model")
+	}
+	if !strings.Contains(body, "planning-provider") {
+		t.Error("settings page missing planning strong provider")
+	}
+	if !strings.Contains(body, "150") {
+		t.Error("settings page missing code size threshold")
+	}
+}
+
+// TestHandleSettings_NoConfig tests the settings handler when no config exists
+func TestHandleSettings_NoConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleSettings(rec, req)
+
+	// Should still return 200 with default config
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "LLM Configuration") {
+		t.Error("settings page missing title")
+	}
+}
+
+// TestHandleSaveSettings tests the POST /settings handler
+func TestHandleSaveSettings(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a minimal config file
+	configDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+
+	configContent := `llm:
+  development:
+    strong:
+      provider: old-provider
+      model: old-model
+`
+	configPath := filepath.Join(configDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Prepare form data
+	formData := url.Values{}
+	formData.Set("development_strong_provider", "new-provider")
+	formData.Set("development_strong_model", "new-model")
+	formData.Set("development_strong_api_key", "new-api-key")
+	formData.Set("development_strong_base_url", "https://new-api.example.com")
+	formData.Set("development_weak_provider", "weak-provider")
+	formData.Set("development_weak_model", "weak-model")
+	formData.Set("planning_strong_provider", "planning-provider")
+	formData.Set("planning_strong_model", "planning-model")
+	formData.Set("orchestration_strong_provider", "orch-provider")
+	formData.Set("orchestration_strong_model", "orch-model")
+	formData.Set("setup_strong_provider", "setup-provider")
+	formData.Set("setup_strong_model", "setup-model")
+	formData.Set("routing_code_size_threshold", "200")
+	formData.Set("routing_high_complexity_threshold", "700")
+	formData.Set("routing_file_count_threshold", "15")
+	formData.Set("routing_force_strong_stages", "plan-review, code-review, merge")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "saved successfully") {
+		t.Errorf("expected success message, got: %s", body)
+	}
+
+	// Verify config was saved
+	savedConfig, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("reading saved config: %v", err)
+	}
+
+	savedContent := string(savedConfig)
+	if !strings.Contains(savedContent, "new-provider") {
+		t.Error("saved config missing new provider")
+	}
+	if !strings.Contains(savedContent, "new-model") {
+		t.Error("saved config missing new model")
+	}
+	if !strings.Contains(savedContent, "200") {
+		t.Error("saved config missing updated threshold")
+	}
+}
+
+// TestHandleSaveSettingsValidation tests form validation
+func TestHandleSaveSettingsValidation(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a minimal config file
+	configDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+
+	configContent := `llm:
+  development:
+    strong:
+      provider: test-provider
+      model: test-model
+    weak:
+      provider: test-provider
+      model: test-model
+  planning:
+    strong:
+      provider: test-provider
+      model: test-model
+    weak:
+      provider: test-provider
+      model: test-model
+  orchestration:
+    strong:
+      provider: test-provider
+      model: test-model
+    weak:
+      provider: test-provider
+      model: test-model
+  setup:
+    strong:
+      provider: test-provider
+      model: test-model
+    weak:
+      provider: test-provider
+      model: test-model
+`
+	configPath := filepath.Join(configDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	tests := []struct {
+		name      string
+		formData  url.Values
+		wantError string
+	}{
+		{
+			name: "negative code size threshold",
+			formData: url.Values{
+				"development_strong_provider":   {"test"},
+				"development_strong_model":      {"test"},
+				"development_weak_provider":     {"test"},
+				"development_weak_model":        {"test"},
+				"planning_strong_provider":      {"test"},
+				"planning_strong_model":         {"test"},
+				"planning_weak_provider":        {"test"},
+				"planning_weak_model":           {"test"},
+				"orchestration_strong_provider": {"test"},
+				"orchestration_strong_model":    {"test"},
+				"orchestration_weak_provider":   {"test"},
+				"orchestration_weak_model":      {"test"},
+				"setup_strong_provider":         {"test"},
+				"setup_strong_model":            {"test"},
+				"setup_weak_provider":           {"test"},
+				"setup_weak_model":              {"test"},
+				"routing_code_size_threshold":   {"-1"},
+			},
+			wantError: "positive integer",
+		},
+		{
+			name: "zero file count threshold",
+			formData: url.Values{
+				"development_strong_provider":   {"test"},
+				"development_strong_model":      {"test"},
+				"development_weak_provider":     {"test"},
+				"development_weak_model":        {"test"},
+				"planning_strong_provider":      {"test"},
+				"planning_strong_model":         {"test"},
+				"planning_weak_provider":        {"test"},
+				"planning_weak_model":           {"test"},
+				"orchestration_strong_provider": {"test"},
+				"orchestration_strong_model":    {"test"},
+				"orchestration_weak_provider":   {"test"},
+				"orchestration_weak_model":      {"test"},
+				"setup_strong_provider":         {"test"},
+				"setup_strong_model":            {"test"},
+				"setup_weak_provider":           {"test"},
+				"setup_weak_model":              {"test"},
+				"routing_file_count_threshold":  {"0"},
+			},
+			wantError: "positive integer",
+		},
+		{
+			name: "invalid threshold value",
+			formData: url.Values{
+				"development_strong_provider":       {"test"},
+				"development_strong_model":          {"test"},
+				"development_weak_provider":         {"test"},
+				"development_weak_model":            {"test"},
+				"planning_strong_provider":          {"test"},
+				"planning_strong_model":             {"test"},
+				"planning_weak_provider":            {"test"},
+				"planning_weak_model":               {"test"},
+				"orchestration_strong_provider":     {"test"},
+				"orchestration_strong_model":        {"test"},
+				"orchestration_weak_provider":       {"test"},
+				"orchestration_weak_model":          {"test"},
+				"setup_strong_provider":             {"test"},
+				"setup_strong_model":                {"test"},
+				"setup_weak_provider":               {"test"},
+				"setup_weak_model":                  {"test"},
+				"routing_high_complexity_threshold": {"abc"},
+			},
+			wantError: "positive integer",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(tt.formData.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rec := httptest.NewRecorder()
+
+			srv.handleSaveSettings(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("expected status 400, got %d", rec.Code)
+			}
+
+			body := rec.Body.String()
+			if !strings.Contains(strings.ToLower(body), strings.ToLower(tt.wantError)) {
+				t.Errorf("expected error containing %q, got: %s", tt.wantError, body)
+			}
+		})
+	}
+}
+
+// TestSettingsPersistence verifies that saved config reloads correctly
+func TestSettingsPersistence(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a minimal config file
+	configDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+
+	configContent := `llm:
+  development:
+    strong:
+      provider: original-provider
+      model: original-model
+`
+	configPath := filepath.Join(configDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Save new settings
+	formData := url.Values{}
+	formData.Set("development_strong_provider", "persisted-provider")
+	formData.Set("development_strong_model", "persisted-model")
+	formData.Set("development_weak_provider", "weak-provider")
+	formData.Set("development_weak_model", "weak-model")
+	formData.Set("planning_strong_provider", "planning-provider")
+	formData.Set("planning_strong_model", "planning-model")
+	formData.Set("planning_weak_provider", "planning-weak")
+	formData.Set("planning_weak_model", "planning-weak-model")
+	formData.Set("orchestration_strong_provider", "orch-provider")
+	formData.Set("orchestration_strong_model", "orch-model")
+	formData.Set("orchestration_weak_provider", "orch-weak")
+	formData.Set("orchestration_weak_model", "orch-weak-model")
+	formData.Set("setup_strong_provider", "setup-provider")
+	formData.Set("setup_strong_model", "setup-model")
+	formData.Set("setup_weak_provider", "setup-weak")
+	formData.Set("setup_weak_model", "setup-weak-model")
+	formData.Set("routing_code_size_threshold", "250")
+	formData.Set("routing_high_complexity_threshold", "800")
+	formData.Set("routing_file_count_threshold", "20")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	srv.handleSaveSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save failed: expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Now load the settings page again to verify persistence
+	req = httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec = httptest.NewRecorder()
+	srv.handleSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reload failed: expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify persisted values are displayed
+	if !strings.Contains(body, "persisted-provider") {
+		t.Error("reloaded settings missing persisted provider")
+	}
+	if !strings.Contains(body, "persisted-model") {
+		t.Error("reloaded settings missing persisted model")
+	}
+	if !strings.Contains(body, "250") {
+		t.Error("reloaded settings missing persisted threshold")
+	}
+}
+
+// TestSettingsNavigationLink tests that the settings link appears in the navigation
+func TestSettingsNavigationLink(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleBoard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify settings link is present
+	if !strings.Contains(body, `href="/settings"`) {
+		t.Error("navigation missing settings link")
+	}
+	if !strings.Contains(body, "Settings") {
+		t.Error("navigation missing Settings text")
+	}
+}
+
+// TestHandleSaveSettings_MissingRequiredFields tests validation of required fields
+func TestHandleSaveSettings_MissingRequiredFields(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a minimal config file
+	configDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+
+	configContent := `llm:
+  development:
+    strong:
+      provider: test
+      model: test
+    weak:
+      provider: test
+      model: test
+  planning:
+    strong:
+      provider: test
+      model: test
+    weak:
+      provider: test
+      model: test
+  orchestration:
+    strong:
+      provider: test
+      model: test
+    weak:
+      provider: test
+      model: test
+  setup:
+    strong:
+      provider: test
+      model: test
+    weak:
+      provider: test
+      model: test
+`
+	configPath := filepath.Join(configDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Test with empty provider (should use existing value from config)
+	formData := url.Values{}
+	formData.Set("development_strong_provider", "") // Empty - should use existing
+	formData.Set("development_strong_model", "new-model")
+	formData.Set("development_weak_provider", "weak")
+	formData.Set("development_weak_model", "weak-model")
+	formData.Set("planning_strong_provider", "planning")
+	formData.Set("planning_strong_model", "planning-model")
+	formData.Set("planning_weak_provider", "planning-weak")
+	formData.Set("planning_weak_model", "planning-weak-model")
+	formData.Set("orchestration_strong_provider", "orch")
+	formData.Set("orchestration_strong_model", "orch-model")
+	formData.Set("orchestration_weak_provider", "orch-weak")
+	formData.Set("orchestration_weak_model", "orch-weak-model")
+	formData.Set("setup_strong_provider", "setup")
+	formData.Set("setup_strong_model", "setup-model")
+	formData.Set("setup_weak_provider", "setup-weak")
+	formData.Set("setup_weak_model", "setup-weak-model")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	// Should succeed because empty values fall back to existing config
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200 (empty values use existing), got %d: %s", rec.Code, rec.Body.String())
 	}
 }

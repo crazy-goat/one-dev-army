@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
@@ -1770,4 +1771,191 @@ func (s *Server) handleRateLimitRefresh(w http.ResponseWriter, r *http.Request) 
 	}
 	// Return the updated status
 	s.handleRateLimit(w, r)
+}
+
+// handleSettings renders the LLM configuration settings page
+func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
+	// Load current config
+	cfg, err := config.Load(s.rootDir)
+	if err != nil {
+		log.Printf("[Dashboard] Error loading config: %v", err)
+		// Use default config if load fails
+		cfg = &config.Config{LLM: config.DefaultLLMConfig()}
+	}
+
+	data := struct {
+		Active string
+		Config config.LLMConfig
+	}{
+		Active: "settings",
+		Config: cfg.LLM,
+	}
+
+	s.render(w, "llm-config.html", data)
+}
+
+// handleSaveSettings processes the settings form submission
+func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	// Load existing config
+	cfg, err := config.Load(s.rootDir)
+	if err != nil {
+		log.Printf("[Dashboard] Error loading config: %v", err)
+		cfg = &config.Config{LLM: config.DefaultLLMConfig()}
+	}
+
+	// Parse and validate form data
+	validationErrors := s.parseAndValidateSettings(r, cfg)
+	if len(validationErrors) > 0 {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusBadRequest)
+		var html strings.Builder
+		html.WriteString(`<div class="error-message"><strong>Validation Errors:</strong><ul>`)
+		for _, err := range validationErrors {
+			html.WriteString(fmt.Sprintf("<li>%s</li>", err))
+		}
+		html.WriteString("</ul></div>")
+		w.Write([]byte(html.String()))
+		return
+	}
+
+	// Save config
+	if err := config.SaveConfig(s.rootDir, cfg); err != nil {
+		log.Printf("[Dashboard] Error saving config: %v", err)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(fmt.Sprintf(`<div class="error-message">Failed to save configuration: %s</div>`, err.Error())))
+		return
+	}
+
+	// Return success message
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(`<div class="success-message">Configuration saved successfully. Changes will take effect immediately.</div>`))
+}
+
+// parseAndValidateSettings parses form data and validates it
+func (s *Server) parseAndValidateSettings(r *http.Request, cfg *config.Config) []string {
+	var errors []string
+
+	// Helper function to get form value with default
+	getValue := func(key, defaultValue string) string {
+		if val := r.FormValue(key); val != "" {
+			return val
+		}
+		return defaultValue
+	}
+
+	// Parse Development models
+	cfg.LLM.Development.Strong.Provider = getValue("development_strong_provider", cfg.LLM.Development.Strong.Provider)
+	cfg.LLM.Development.Strong.Model = getValue("development_strong_model", cfg.LLM.Development.Strong.Model)
+	cfg.LLM.Development.Strong.APIKey = getValue("development_strong_api_key", cfg.LLM.Development.Strong.APIKey)
+	cfg.LLM.Development.Strong.BaseURL = getValue("development_strong_base_url", cfg.LLM.Development.Strong.BaseURL)
+
+	cfg.LLM.Development.Weak.Provider = getValue("development_weak_provider", cfg.LLM.Development.Weak.Provider)
+	cfg.LLM.Development.Weak.Model = getValue("development_weak_model", cfg.LLM.Development.Weak.Model)
+	cfg.LLM.Development.Weak.APIKey = getValue("development_weak_api_key", cfg.LLM.Development.Weak.APIKey)
+	cfg.LLM.Development.Weak.BaseURL = getValue("development_weak_base_url", cfg.LLM.Development.Weak.BaseURL)
+
+	// Parse Planning models
+	cfg.LLM.Planning.Strong.Provider = getValue("planning_strong_provider", cfg.LLM.Planning.Strong.Provider)
+	cfg.LLM.Planning.Strong.Model = getValue("planning_strong_model", cfg.LLM.Planning.Strong.Model)
+	cfg.LLM.Planning.Strong.APIKey = getValue("planning_strong_api_key", cfg.LLM.Planning.Strong.APIKey)
+	cfg.LLM.Planning.Strong.BaseURL = getValue("planning_strong_base_url", cfg.LLM.Planning.Strong.BaseURL)
+
+	cfg.LLM.Planning.Weak.Provider = getValue("planning_weak_provider", cfg.LLM.Planning.Weak.Provider)
+	cfg.LLM.Planning.Weak.Model = getValue("planning_weak_model", cfg.LLM.Planning.Weak.Model)
+	cfg.LLM.Planning.Weak.APIKey = getValue("planning_weak_api_key", cfg.LLM.Planning.Weak.APIKey)
+	cfg.LLM.Planning.Weak.BaseURL = getValue("planning_weak_base_url", cfg.LLM.Planning.Weak.BaseURL)
+
+	// Parse Orchestration models
+	cfg.LLM.Orchestration.Strong.Provider = getValue("orchestration_strong_provider", cfg.LLM.Orchestration.Strong.Provider)
+	cfg.LLM.Orchestration.Strong.Model = getValue("orchestration_strong_model", cfg.LLM.Orchestration.Strong.Model)
+	cfg.LLM.Orchestration.Strong.APIKey = getValue("orchestration_strong_api_key", cfg.LLM.Orchestration.Strong.APIKey)
+	cfg.LLM.Orchestration.Strong.BaseURL = getValue("orchestration_strong_base_url", cfg.LLM.Orchestration.Strong.BaseURL)
+
+	cfg.LLM.Orchestration.Weak.Provider = getValue("orchestration_weak_provider", cfg.LLM.Orchestration.Weak.Provider)
+	cfg.LLM.Orchestration.Weak.Model = getValue("orchestration_weak_model", cfg.LLM.Orchestration.Weak.Model)
+	cfg.LLM.Orchestration.Weak.APIKey = getValue("orchestration_weak_api_key", cfg.LLM.Orchestration.Weak.APIKey)
+	cfg.LLM.Orchestration.Weak.BaseURL = getValue("orchestration_weak_base_url", cfg.LLM.Orchestration.Weak.BaseURL)
+
+	// Parse Setup models
+	cfg.LLM.Setup.Strong.Provider = getValue("setup_strong_provider", cfg.LLM.Setup.Strong.Provider)
+	cfg.LLM.Setup.Strong.Model = getValue("setup_strong_model", cfg.LLM.Setup.Strong.Model)
+	cfg.LLM.Setup.Strong.APIKey = getValue("setup_strong_api_key", cfg.LLM.Setup.Strong.APIKey)
+	cfg.LLM.Setup.Strong.BaseURL = getValue("setup_strong_base_url", cfg.LLM.Setup.Strong.BaseURL)
+
+	cfg.LLM.Setup.Weak.Provider = getValue("setup_weak_provider", cfg.LLM.Setup.Weak.Provider)
+	cfg.LLM.Setup.Weak.Model = getValue("setup_weak_model", cfg.LLM.Setup.Weak.Model)
+	cfg.LLM.Setup.Weak.APIKey = getValue("setup_weak_api_key", cfg.LLM.Setup.Weak.APIKey)
+	cfg.LLM.Setup.Weak.BaseURL = getValue("setup_weak_base_url", cfg.LLM.Setup.Weak.BaseURL)
+
+	// Validate required fields
+	categories := []struct {
+		name   string
+		strong config.ModelConfig
+		weak   config.ModelConfig
+	}{
+		{"Development", cfg.LLM.Development.Strong, cfg.LLM.Development.Weak},
+		{"Planning", cfg.LLM.Planning.Strong, cfg.LLM.Planning.Weak},
+		{"Orchestration", cfg.LLM.Orchestration.Strong, cfg.LLM.Orchestration.Weak},
+		{"Setup", cfg.LLM.Setup.Strong, cfg.LLM.Setup.Weak},
+	}
+
+	for _, cat := range categories {
+		if cat.strong.Provider == "" {
+			errors = append(errors, fmt.Sprintf("%s Strong Provider is required", cat.name))
+		}
+		if cat.strong.Model == "" {
+			errors = append(errors, fmt.Sprintf("%s Strong Model is required", cat.name))
+		}
+		if cat.weak.Provider == "" {
+			errors = append(errors, fmt.Sprintf("%s Weak Provider is required", cat.name))
+		}
+		if cat.weak.Model == "" {
+			errors = append(errors, fmt.Sprintf("%s Weak Model is required", cat.name))
+		}
+	}
+
+	// Parse routing thresholds
+	if val := r.FormValue("routing_code_size_threshold"); val != "" {
+		if threshold, err := strconv.Atoi(val); err != nil || threshold < 1 {
+			errors = append(errors, "Code Size Threshold must be a positive integer")
+		} else {
+			cfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold = threshold
+		}
+	}
+
+	if val := r.FormValue("routing_high_complexity_threshold"); val != "" {
+		if threshold, err := strconv.Atoi(val); err != nil || threshold < 1 {
+			errors = append(errors, "High Complexity Threshold must be a positive integer")
+		} else {
+			cfg.LLM.RoutingRules.ComplexityThresholds.HighComplexityThreshold = threshold
+		}
+	}
+
+	if val := r.FormValue("routing_file_count_threshold"); val != "" {
+		if threshold, err := strconv.Atoi(val); err != nil || threshold < 1 {
+			errors = append(errors, "File Count Threshold must be a positive integer")
+		} else {
+			cfg.LLM.RoutingRules.ComplexityThresholds.FileCountThreshold = threshold
+		}
+	}
+
+	// Parse force strong stages
+	if val := r.FormValue("routing_force_strong_stages"); val != "" {
+		stages := strings.Split(val, ",")
+		cfg.LLM.RoutingRules.ForceStrongForStages = make([]string, 0, len(stages))
+		for _, stage := range stages {
+			stage = strings.TrimSpace(stage)
+			if stage != "" {
+				cfg.LLM.RoutingRules.ForceStrongForStages = append(cfg.LLM.RoutingRules.ForceStrongForStages, stage)
+			}
+		}
+	}
+
+	return errors
 }
