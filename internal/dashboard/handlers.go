@@ -25,6 +25,7 @@ type taskCard struct {
 	Assignee string
 	Labels   []string
 	PRURL    string
+	IsMerged bool
 }
 
 type boardData struct {
@@ -41,6 +42,7 @@ type boardData struct {
 	Approve      []taskCard
 	Done         []taskCard
 	Failed       []taskCard
+	DoneFilter   string // Filter for Done column: "all", "merged", "closed"
 }
 
 type backlogData struct {
@@ -88,19 +90,27 @@ func placeholderBoard() boardData {
 }
 
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
-	data := s.buildBoardData()
+	data := s.buildBoardData(r)
 	s.render(w, "board.html", data)
 }
 
 func (s *Server) handleBoardData(w http.ResponseWriter, r *http.Request) {
-	data := s.buildBoardData()
+	data := s.buildBoardData(r)
 	s.renderFragment(w, "board.html", data)
 }
 
-func (s *Server) buildBoardData() boardData {
+func (s *Server) buildBoardData(r *http.Request) boardData {
 	data := boardData{
 		Active: "board",
 		Paused: true,
+	}
+
+	// Get filter from query parameter
+	if r != nil {
+		data.DoneFilter = r.URL.Query().Get("done_filter")
+	}
+	if data.DoneFilter == "" {
+		data.DoneFilter = "all"
 	}
 
 	if s.orchestrator != nil {
@@ -138,6 +148,19 @@ func (s *Server) buildBoardData() boardData {
 	for _, issue := range issues {
 		col := inferColumnFromIssue(issue)
 		s.addCardToColumn(&data, col, issue)
+	}
+
+	// Apply Done column filter
+	if data.DoneFilter != "all" && len(data.Done) > 0 {
+		var filteredDone []taskCard
+		for _, card := range data.Done {
+			if data.DoneFilter == "merged" && card.IsMerged {
+				filteredDone = append(filteredDone, card)
+			} else if data.DoneFilter == "closed" && !card.IsMerged {
+				filteredDone = append(filteredDone, card)
+			}
+		}
+		data.Done = filteredDone
 	}
 
 	return data
@@ -199,6 +222,7 @@ func (s *Server) addCardToColumn(data *boardData, col string, issue github.Issue
 		Status:   col,
 		Assignee: issue.GetAssignee(),
 		Labels:   issue.GetLabelNames(),
+		IsMerged: issue.PRMerged,
 	}
 
 	switch col {

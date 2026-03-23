@@ -48,6 +48,8 @@ var migrations = []string{
 	`CREATE INDEX IF NOT EXISTS idx_issue_cache_state ON issue_cache(state)`,
 	`CREATE INDEX IF NOT EXISTS idx_issue_cache_cached_at ON issue_cache(cached_at)`,
 	`CREATE INDEX IF NOT EXISTS idx_issue_cache_milestone ON issue_cache(milestone)`,
+	`ALTER TABLE issue_cache ADD COLUMN pr_merged INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE issue_cache ADD COLUMN merged_at DATETIME`,
 }
 
 // columnExists checks if a column exists in a table
@@ -68,6 +70,18 @@ func migrate(db *sql.DB) error {
 		// Special handling for the plan_attachment_url migration
 		if strings.Contains(m, "plan_attachment_url") {
 			if columnExists(db, "task_steps", "plan_attachment_url") {
+				continue // Skip if column already exists
+			}
+		}
+		// Special handling for the pr_merged migration
+		if strings.Contains(m, "pr_merged") {
+			if columnExists(db, "issue_cache", "pr_merged") {
+				continue // Skip if column already exists
+			}
+		}
+		// Special handling for the merged_at migration
+		if strings.Contains(m, "merged_at") {
+			if columnExists(db, "issue_cache", "merged_at") {
 				continue // Skip if column already exists
 			}
 		}

@@ -12,6 +12,7 @@ import (
 // GitHubClient defines the interface for GitHub operations needed by SyncService
 type GitHubClient interface {
 	ListIssuesForMilestone(milestone string) ([]github.Issue, error)
+	GetIssuePRStatus(issueNumber int) (bool, *time.Time, error)
 }
 
 // Store defines the interface for database operations needed by SyncService
@@ -154,6 +155,18 @@ func (s *SyncService) syncNow() {
 	// Cache each issue
 	cachedCount := 0
 	for _, issue := range issues {
+		// For closed issues, fetch PR merge status
+		if issue.State == "CLOSED" {
+			isMerged, mergedAt, err := s.gh.GetIssuePRStatus(issue.Number)
+			if err != nil {
+				log.Printf("[SyncService] Error fetching PR status for issue #%d: %v", issue.Number, err)
+			} else {
+				issue.PRMerged = isMerged
+				issue.MergedAt = mergedAt
+				log.Printf("[SyncService] Issue #%d PR status: merged=%v", issue.Number, isMerged)
+			}
+		}
+
 		if err := s.store.SaveIssueCache(issue, milestone); err != nil {
 			log.Printf("[SyncService] Error caching issue #%d: %v", issue.Number, err)
 			continue

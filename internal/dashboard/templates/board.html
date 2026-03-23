@@ -32,6 +32,10 @@
 .card .card-pr{margin-top:.3rem}
 .card .card-pr a{color:#9b59b6;font-size:.8rem;font-weight:600;text-decoration:none}
 .card .card-pr a:hover{text-decoration:underline}
+.badge-merged { background: #6f42c1; color: white; font-size: .65rem; padding: .1rem .4rem; border-radius: 4px; display: inline-flex; align-items: center; gap: .25rem; }
+.badge-closed { background: #6c757d; color: white; font-size: .65rem; padding: .1rem .4rem; border-radius: 4px; display: inline-flex; align-items: center; gap: .25rem; }
+.done-filter { display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem; }
+.done-filter select { padding: .2rem .5rem; font-size: .75rem; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); }
 .workers-panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem}
 .workers-panel h2{margin-bottom:.75rem}
 .empty-state{color:var(--muted);font-size:.85rem;text-align:center;padding:2rem 1rem;font-style:italic}
@@ -163,10 +167,25 @@
 
   <div class="column">
     <div class="column-title">Done <span class="count">{{len .Done}}</span></div>
+    <div class="done-filter">
+      <label for="done-filter" style="font-size: .75rem; color: var(--muted);">Show:</label>
+      <select id="done-filter" name="done_filter" hx-get="/api/board-data" hx-target="#board-container" hx-trigger="change">
+        <option value="all" {{if eq .DoneFilter "all"}}selected{{end}}>All Done</option>
+        <option value="merged" {{if eq .DoneFilter "merged"}}selected{{end}}>Merged Only</option>
+        <option value="closed" {{if eq .DoneFilter "closed"}}selected{{end}}>Closed Only</option>
+      </select>
+    </div>
     {{range .Done}}
     <div class="card">
       <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
+      <div class="card-meta">
+        {{if .IsMerged}}
+        <span class="badge-merged">✓ Merged</span>
+        {{else}}
+        <span class="badge-closed">✕ Closed</span>
+        {{end}}
+      </div>
       {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
     </div>

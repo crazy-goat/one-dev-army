@@ -116,6 +116,8 @@ type IssueCache struct {
 	Milestone   string
 	UpdatedAt   *time.Time
 	CachedAt    time.Time
+	PRMerged    bool
+	MergedAt    *time.Time
 }
 
 func (s *Store) InsertStep(issueNumber int, stepName, prompt, sessionID string) (int64, error) {
@@ -274,9 +276,10 @@ func (s *Store) SaveIssueCache(issue github.Issue, milestone string) error {
 	}
 
 	_, err = s.db.Exec(
-		`INSERT OR REPLACE INTO issue_cache (issue_number, title, body, state, labels, assignee, milestone, updated_at, cached_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT OR REPLACE INTO issue_cache (issue_number, title, body, state, labels, assignee, milestone, updated_at, cached_at, pr_merged, merged_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		issue.Number, issue.Title, issue.Body, issue.State, string(labelsJSON), issue.GetAssignee(), milestone, time.Now(), time.Now(),
+		issue.PRMerged, issue.MergedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("saving issue cache: %w", err)
@@ -288,17 +291,20 @@ func (s *Store) SaveIssueCache(issue github.Issue, milestone string) error {
 func (s *Store) GetIssueCache(issueNumber int) (github.Issue, error) {
 	var cache IssueCache
 	var labelsJSON string
+	var prMergedInt int
 	err := s.db.QueryRow(
-		`SELECT issue_number, title, body, state, labels, assignee, milestone, updated_at, cached_at
+		`SELECT issue_number, title, body, state, labels, assignee, milestone, updated_at, cached_at, pr_merged, merged_at
 		 FROM issue_cache WHERE issue_number = ?`,
 		issueNumber,
-	).Scan(&cache.IssueNumber, &cache.Title, &cache.Body, &cache.State, &labelsJSON, &cache.Assignee, &cache.Milestone, &cache.UpdatedAt, &cache.CachedAt)
+	).Scan(&cache.IssueNumber, &cache.Title, &cache.Body, &cache.State, &labelsJSON, &cache.Assignee, &cache.Milestone, &cache.UpdatedAt, &cache.CachedAt, &prMergedInt, &cache.MergedAt)
 	if err == sql.ErrNoRows {
 		return github.Issue{}, fmt.Errorf("issue not found in cache: %d", issueNumber)
 	}
 	if err != nil {
 		return github.Issue{}, fmt.Errorf("getting issue cache: %w", err)
 	}
+
+	cache.PRMerged = prMergedInt != 0
 
 	var labelNames []string
 	if labelsJSON != "" {
@@ -330,13 +336,15 @@ func (s *Store) GetIssueCache(issueNumber int) (github.Issue, error) {
 		State:     cache.State,
 		Labels:    labels,
 		Assignees: assignees,
+		PRMerged:  cache.PRMerged,
+		MergedAt:  cache.MergedAt,
 	}, nil
 }
 
 // GetIssuesCacheByMilestone retrieves all cached issues for a specific milestone
 func (s *Store) GetIssuesCacheByMilestone(milestone string) ([]github.Issue, error) {
 	rows, err := s.db.Query(
-		`SELECT issue_number, title, body, state, labels, assignee, milestone, updated_at, cached_at
+		`SELECT issue_number, title, body, state, labels, assignee, milestone, updated_at, cached_at, pr_merged, merged_at
 		 FROM issue_cache WHERE milestone = ? ORDER BY issue_number`,
 		milestone,
 	)
@@ -351,7 +359,7 @@ func (s *Store) GetIssuesCacheByMilestone(milestone string) ([]github.Issue, err
 // GetAllCachedIssues retrieves all cached issues
 func (s *Store) GetAllCachedIssues() ([]github.Issue, error) {
 	rows, err := s.db.Query(
-		`SELECT issue_number, title, body, state, labels, assignee, milestone, updated_at, cached_at
+		`SELECT issue_number, title, body, state, labels, assignee, milestone, updated_at, cached_at, pr_merged, merged_at
 		 FROM issue_cache ORDER BY issue_number`,
 	)
 	if err != nil {
@@ -377,9 +385,12 @@ func (s *Store) scanIssues(rows *sql.Rows) ([]github.Issue, error) {
 	for rows.Next() {
 		var cache IssueCache
 		var labelsJSON string
-		if err := rows.Scan(&cache.IssueNumber, &cache.Title, &cache.Body, &cache.State, &labelsJSON, &cache.Assignee, &cache.Milestone, &cache.UpdatedAt, &cache.CachedAt); err != nil {
+		var prMergedInt int
+		if err := rows.Scan(&cache.IssueNumber, &cache.Title, &cache.Body, &cache.State, &labelsJSON, &cache.Assignee, &cache.Milestone, &cache.UpdatedAt, &cache.CachedAt, &prMergedInt, &cache.MergedAt); err != nil {
 			return nil, fmt.Errorf("scanning issue cache: %w", err)
 		}
+
+		cache.PRMerged = prMergedInt != 0
 
 		var labelNames []string
 		if labelsJSON != "" {
@@ -411,6 +422,8 @@ func (s *Store) scanIssues(rows *sql.Rows) ([]github.Issue, error) {
 			State:     cache.State,
 			Labels:    labels,
 			Assignees: assignees,
+			PRMerged:  cache.PRMerged,
+			MergedAt:  cache.MergedAt,
 		})
 	}
 	if err := rows.Err(); err != nil {

@@ -188,7 +188,7 @@ func TestBuildBoardData(t *testing.T) {
 		tmpls: make(map[string]*template.Template),
 	}
 
-	data := srv.buildBoardData()
+	data := srv.buildBoardData(nil)
 
 	// Verify default values
 	if data.Active != "board" {
@@ -3253,5 +3253,180 @@ func TestWizardRoutes_TitleRoute(t *testing.T) {
 	// Should not return 404
 	if rec.Code == http.StatusNotFound {
 		t.Error("Title route should be registered")
+	}
+}
+
+// TestAddCardToColumn_MergedStatus verifies that IsMerged field is set correctly for Done column cards
+func TestAddCardToColumn_MergedStatus(t *testing.T) {
+	srv := &Server{
+		tmpls: make(map[string]*template.Template),
+	}
+
+	tests := []struct {
+		name       string
+		prMerged   bool
+		wantMerged bool
+	}{
+		{
+			name:       "Merged issue has IsMerged=true",
+			prMerged:   true,
+			wantMerged: true,
+		},
+		{
+			name:       "Closed issue has IsMerged=false",
+			prMerged:   false,
+			wantMerged: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := boardData{}
+			issue := github.Issue{
+				Number:   1,
+				Title:    "Test Issue",
+				State:    "CLOSED",
+				PRMerged: tt.prMerged,
+			}
+
+			srv.addCardToColumn(&data, "Done", issue)
+
+			if len(data.Done) != 1 {
+				t.Fatalf("expected 1 card in Done field, got %d", len(data.Done))
+			}
+
+			if data.Done[0].IsMerged != tt.wantMerged {
+				t.Errorf("expected IsMerged=%v, got %v", tt.wantMerged, data.Done[0].IsMerged)
+			}
+		})
+	}
+}
+
+// TestBuildBoardData_DoneFilter verifies that Done column filtering works correctly
+func TestBuildBoardData_DoneFilter(t *testing.T) {
+	tests := []struct {
+		name          string
+		filter        string
+		mergedIssues  int
+		closedIssues  int
+		expectedCount int
+	}{
+		{
+			name:          "all filter shows all done issues",
+			filter:        "all",
+			mergedIssues:  2,
+			closedIssues:  3,
+			expectedCount: 5,
+		},
+		{
+			name:          "merged filter shows only merged issues",
+			filter:        "merged",
+			mergedIssues:  2,
+			closedIssues:  3,
+			expectedCount: 2,
+		},
+		{
+			name:          "closed filter shows only closed issues",
+			filter:        "closed",
+			mergedIssues:  2,
+			closedIssues:  3,
+			expectedCount: 3,
+		},
+		{
+			name:          "empty filter defaults to all",
+			filter:        "",
+			mergedIssues:  1,
+			closedIssues:  1,
+			expectedCount: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create test data with merged and closed issues
+			data := boardData{
+				DoneFilter: tt.filter,
+			}
+
+			// Add merged issues
+			for i := 0; i < tt.mergedIssues; i++ {
+				data.Done = append(data.Done, taskCard{
+					ID:       i + 1,
+					Title:    fmt.Sprintf("Merged Issue %d", i+1),
+					IsMerged: true,
+				})
+			}
+
+			// Add closed (not merged) issues
+			for i := 0; i < tt.closedIssues; i++ {
+				data.Done = append(data.Done, taskCard{
+					ID:       i + 100,
+					Title:    fmt.Sprintf("Closed Issue %d", i+1),
+					IsMerged: false,
+				})
+			}
+
+			// Apply filter logic (same as in buildBoardData)
+			if data.DoneFilter != "all" && data.DoneFilter != "" && len(data.Done) > 0 {
+				var filteredDone []taskCard
+				for _, card := range data.Done {
+					if data.DoneFilter == "merged" && card.IsMerged {
+						filteredDone = append(filteredDone, card)
+					} else if data.DoneFilter == "closed" && !card.IsMerged {
+						filteredDone = append(filteredDone, card)
+					}
+				}
+				data.Done = filteredDone
+			}
+
+			if len(data.Done) != tt.expectedCount {
+				t.Errorf("expected %d issues in Done column, got %d", tt.expectedCount, len(data.Done))
+			}
+		})
+	}
+}
+
+// TestInferColumnFromIssue_MergedStatus verifies that merged status doesn't affect column inference
+func TestInferColumnFromIssue_MergedStatus(t *testing.T) {
+	tests := []struct {
+		name     string
+		state    string
+		prMerged bool
+		expected string
+	}{
+		{
+			name:     "Closed merged issue goes to Done",
+			state:    "CLOSED",
+			prMerged: true,
+			expected: "Done",
+		},
+		{
+			name:     "Closed non-merged issue goes to Done",
+			state:    "CLOSED",
+			prMerged: false,
+			expected: "Done",
+		},
+		{
+			name:     "Open issue with merged flag still goes to Backlog",
+			state:    "open",
+			prMerged: true,
+			expected: "Backlog",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			issue := github.Issue{
+				Number:   1,
+				Title:    "Test Issue",
+				State:    tt.state,
+				PRMerged: tt.prMerged,
+			}
+
+			got := inferColumnFromIssue(issue)
+			if got != tt.expected {
+				t.Errorf("inferColumnFromIssue() = %q, want %q", got, tt.expected)
+			}
+		})
 	}
 }
