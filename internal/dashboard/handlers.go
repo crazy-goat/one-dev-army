@@ -15,7 +15,6 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"github.com/crazy-goat/one-dev-army/internal/worker"
-	"github.com/google/uuid"
 )
 
 type taskCard struct {
@@ -842,6 +841,7 @@ func (s *Server) handleWizardSelectType(w http.ResponseWriter, r *http.Request) 
 
 	s.renderFragment(w, "wizard_new.html", data)
 }
+
 func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 	// Get wizard type from query param
 	wizardType := r.URL.Query().Get("type")
@@ -865,14 +865,12 @@ func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 		// Create new session if not found
 		if session == nil {
 			// Create a temporary session without type - type will be set later
-			now := time.Now()
-			session = &WizardSession{
-				ID:          uuid.New().String(),
-				CurrentStep: WizardStepNew,
-				CreatedAt:   now,
-				UpdatedAt:   now,
+			newSession, err := s.wizardStore.CreateUntyped()
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
 			}
-			s.wizardStore.sessions[session.ID] = session
+			session = newSession
 		}
 
 		data := struct {
@@ -1676,14 +1674,11 @@ func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
 	// If no type is provided, show the type selector page
 	if wizardType == "" {
 		// Create a temporary session without type
-		now := time.Now()
-		session := &WizardSession{
-			ID:          uuid.New().String(),
-			CurrentStep: WizardStepNew,
-			CreatedAt:   now,
-			UpdatedAt:   now,
+		session, err := s.wizardStore.CreateUntyped()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
 		}
-		s.wizardStore.sessions[session.ID] = session
 
 		data := struct {
 			Active            string
@@ -1745,14 +1740,11 @@ func (s *Server) handleWizardModal(w http.ResponseWriter, r *http.Request) {
 	// If no type is provided, show the type selector
 	if wizardType == "" {
 		// Create a temporary session without type
-		now := time.Now()
-		session := &WizardSession{
-			ID:          uuid.New().String(),
-			CurrentStep: WizardStepNew,
-			CreatedAt:   now,
-			UpdatedAt:   now,
+		session, err := s.wizardStore.CreateUntyped()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
 		}
-		s.wizardStore.sessions[session.ID] = session
 
 		data := struct {
 			Type              string

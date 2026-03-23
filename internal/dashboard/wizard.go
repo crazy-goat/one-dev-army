@@ -259,6 +259,28 @@ func (ws *WizardSessionStore) Create(wizardType string) (*WizardSession, error) 
 	return session, nil
 }
 
+// CreateUntyped creates a new wizard session without a type and returns it
+func (ws *WizardSessionStore) CreateUntyped() (*WizardSession, error) {
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+
+	// Check session limit to prevent memory exhaustion
+	if len(ws.sessions) >= MaxSessions {
+		return nil, fmt.Errorf("maximum number of sessions (%d) reached, please try again later", MaxSessions)
+	}
+
+	now := time.Now()
+	session := &WizardSession{
+		ID:          uuid.New().String(),
+		CurrentStep: WizardStepNew,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	ws.sessions[session.ID] = session
+	return session, nil
+}
+
 // Get retrieves a session by ID
 func (ws *WizardSessionStore) Get(id string) (*WizardSession, bool) {
 	ws.mu.RLock()
