@@ -132,6 +132,7 @@ func TestLabelStructure(t *testing.T) {
 		{"epic exists", "epic", "5319E7", true},
 		{"sprint still exists", "sprint", "0E8A16", true},
 		{"insight still exists", "insight", "D93F0B", true},
+		{"merge-failed exists", "merge-failed", "D93F0B", true},
 		{"non-existent label", "nonexistent", "FFFFFF", false},
 	}
 
@@ -243,9 +244,10 @@ func TestRequiredLabelsCount(t *testing.T) {
 	// Original: 16 labels
 	// Added: 4 labels (priority:high, priority:medium, priority:low, epic)
 	// Added: 1 label (wizard)
-	// Expected total: 21 labels
+	// Added: 1 label (merge-failed)
+	// Expected total: 22 labels
 
-	expectedCount := 21
+	expectedCount := 22
 	if len(RequiredLabels) != expectedCount {
 		t.Errorf("Expected %d labels, got %d", expectedCount, len(RequiredLabels))
 	}
@@ -282,6 +284,23 @@ func TestEpicLabel(t *testing.T) {
 	}
 	if !found {
 		t.Error("epic label not found in RequiredLabels")
+	}
+}
+
+func TestMergeFailedLabel(t *testing.T) {
+	// Verify merge-failed label exists with correct color
+	found := false
+	for _, l := range RequiredLabels {
+		if l.Name == "merge-failed" {
+			found = true
+			if l.Color != "D93F0B" {
+				t.Errorf("merge-failed label has wrong color: got %s, want D93F0B", l.Color)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("merge-failed label not found in RequiredLabels")
 	}
 }
 
