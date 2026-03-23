@@ -1578,11 +1578,24 @@ func (s *Server) handleWizardSelectType(w http.ResponseWriter, r *http.Request) 
 	// Check for page mode
 	isPage := r.FormValue("page") == "1" || r.URL.Query().Get("page") == "1"
 
-	// Redirect to idea input step
-	redirectURL := "/wizard/new?session_id=" + session.ID
-	if isPage {
-		redirectURL += "&page=1"
+	// Build template data for idea step
+	data := struct {
+		Type               string
+		SessionID          string
+		IsPage             bool
+		CurrentStep        int
+		ShowBreakdownStep  bool
+		NeedsTypeSelection bool
+		Language           string
+	}{
+		Type:               wizardType,
+		SessionID:          session.ID,
+		IsPage:             isPage,
+		CurrentStep:        1, // Now on Idea step (step 1 in 4-step flow)
+		ShowBreakdownStep:  session.Type == WizardTypeFeature && !session.SkipBreakdown,
+		NeedsTypeSelection: false,
+		Language:           session.Language,
 	}
 
-	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+	s.renderFragment(w, "wizard_new.html", data)
 }

@@ -1071,8 +1071,8 @@ func TestWizardFlow_FromBacklog(t *testing.T) {
 	rec = httptest.NewRecorder()
 	srv.handleWizardSelectType(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("Step 3 failed: expected redirect (303), got %d", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Step 3 failed: expected status 200, got %d", rec.Code)
 	}
 
 	// Now session should be created
@@ -1080,11 +1080,20 @@ func TestWizardFlow_FromBacklog(t *testing.T) {
 		t.Fatalf("Step 3 failed: expected 1 session after type selection, got %d", srv.wizardStore.Count())
 	}
 
-	// Get the session ID from the redirect URL
-	redirectURL := rec.Header().Get("Location")
+	// Verify response contains idea form elements
+	body = rec.Body.String()
+	if !strings.Contains(body, `<textarea id="idea"`) {
+		t.Fatal("Step 3 failed: response missing idea textarea")
+	}
+	if !strings.Contains(body, `name="idea"`) {
+		t.Fatal("Step 3 failed: response missing idea input field")
+	}
+
+	// Get the session ID from the store (we know there's exactly 1 session)
 	var sessionID string
-	if strings.Contains(redirectURL, "session_id=") {
-		sessionID = strings.Split(strings.Split(redirectURL, "session_id=")[1], "&")[0]
+	for id := range srv.wizardStore.sessions {
+		sessionID = id
+		break
 	}
 
 	// Step 4: Submit idea for refinement
@@ -1158,8 +1167,8 @@ func TestWizardFlow_FromCosts(t *testing.T) {
 	rec = httptest.NewRecorder()
 	srv.handleWizardSelectType(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("Step 3 failed: expected redirect (303), got %d", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Step 3 failed: expected status 200, got %d", rec.Code)
 	}
 
 	// Now session should be created
@@ -1167,11 +1176,20 @@ func TestWizardFlow_FromCosts(t *testing.T) {
 		t.Fatalf("Step 3 failed: expected 1 session after type selection, got %d", srv.wizardStore.Count())
 	}
 
-	// Get the session ID from the redirect URL
-	redirectURL := rec.Header().Get("Location")
+	// Verify response contains idea form elements for bug
+	body = rec.Body.String()
+	if !strings.Contains(body, `<textarea id="idea"`) {
+		t.Fatal("Step 3 failed: response missing idea textarea")
+	}
+	if !strings.Contains(body, `name="idea"`) {
+		t.Fatal("Step 3 failed: response missing idea input field")
+	}
+
+	// Get the session ID from the store
 	var sessionID string
-	if strings.Contains(redirectURL, "session_id=") {
-		sessionID = strings.Split(strings.Split(redirectURL, "session_id=")[1], "&")[0]
+	for id := range srv.wizardStore.sessions {
+		sessionID = id
+		break
 	}
 
 	// Verify it's a bug type
