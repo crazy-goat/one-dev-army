@@ -828,13 +828,17 @@ func (s *Server) handleWizardNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		Type      string
-		SessionID string
-		IsPage    bool
+		Type              string
+		SessionID         string
+		IsPage            bool
+		CurrentStep       int
+		ShowBreakdownStep bool
 	}{
-		Type:      wizardType,
-		SessionID: session.ID,
-		IsPage:    isPage,
+		Type:              wizardType,
+		SessionID:         session.ID,
+		IsPage:            isPage,
+		CurrentStep:       1,
+		ShowBreakdownStep: wizardType == "feature",
 	}
 
 	s.renderFragment(w, "wizard_new.html", data)
@@ -912,12 +916,16 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 			RefinedDescription string
 			IsPage             bool
 			SkipBreakdown      bool
+			CurrentStep        int
+			ShowBreakdownStep  bool
 		}{
 			SessionID:          session.ID,
 			Type:               string(session.Type),
 			RefinedDescription: mockRefined,
 			IsPage:             isPage,
 			SkipBreakdown:      session.SkipBreakdown,
+			CurrentStep:        2,
+			ShowBreakdownStep:  session.Type == WizardTypeFeature && !session.SkipBreakdown,
 		}
 
 		s.renderFragment(w, "wizard_refine.html", data)
@@ -988,12 +996,16 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		RefinedDescription string
 		IsPage             bool
 		SkipBreakdown      bool
+		CurrentStep        int
+		ShowBreakdownStep  bool
 	}{
 		SessionID:          session.ID,
 		Type:               string(session.Type),
 		RefinedDescription: refinedDesc,
 		IsPage:             isPage,
 		SkipBreakdown:      session.SkipBreakdown,
+		CurrentStep:        2,
+		ShowBreakdownStep:  session.Type == WizardTypeFeature && !session.SkipBreakdown,
 	}
 
 	s.renderFragment(w, "wizard_refine.html", data)
@@ -1067,15 +1079,19 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 		session.AddLog("assistant", "Generated 2 tasks")
 
 		data := struct {
-			SessionID  string
-			Tasks      []WizardTask
-			IsPage     bool
-			SprintName string
+			SessionID         string
+			Tasks             []WizardTask
+			IsPage            bool
+			SprintName        string
+			CurrentStep       int
+			ShowBreakdownStep bool
 		}{
-			SessionID:  session.ID,
-			Tasks:      mockTasks,
-			IsPage:     isPage,
-			SprintName: s.activeSprintName(),
+			SessionID:         session.ID,
+			Tasks:             mockTasks,
+			IsPage:            isPage,
+			SprintName:        s.activeSprintName(),
+			CurrentStep:       3,
+			ShowBreakdownStep: true,
 		}
 
 		s.renderFragment(w, "wizard_breakdown.html", data)
@@ -1123,15 +1139,19 @@ func (s *Server) handleWizardBreakdown(w http.ResponseWriter, r *http.Request) {
 	session.AddLog("assistant", fmt.Sprintf("Generated %d tasks", len(tasks)))
 
 	data := struct {
-		SessionID  string
-		Tasks      []WizardTask
-		IsPage     bool
-		SprintName string
+		SessionID         string
+		Tasks             []WizardTask
+		IsPage            bool
+		SprintName        string
+		CurrentStep       int
+		ShowBreakdownStep bool
 	}{
-		SessionID:  session.ID,
-		Tasks:      tasks,
-		IsPage:     isPage,
-		SprintName: s.activeSprintName(),
+		SessionID:         session.ID,
+		Tasks:             tasks,
+		IsPage:            isPage,
+		SprintName:        s.activeSprintName(),
+		CurrentStep:       3,
+		ShowBreakdownStep: true,
 	}
 
 	s.renderFragment(w, "wizard_breakdown.html", data)
@@ -1231,17 +1251,21 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 		session.AddLog("system", "Mock: Created epic #100 with 2 sub-tasks")
 
 		data := struct {
-			Epic          CreatedIssue
-			SubTasks      []CreatedIssue
-			HasErrors     bool
-			IsPage        bool
-			IsSingleIssue bool
+			Epic              CreatedIssue
+			SubTasks          []CreatedIssue
+			HasErrors         bool
+			IsPage            bool
+			IsSingleIssue     bool
+			CurrentStep       int
+			ShowBreakdownStep bool
 		}{
-			Epic:          mockEpic,
-			SubTasks:      mockSubTasks,
-			HasErrors:     false,
-			IsPage:        isPage,
-			IsSingleIssue: false,
+			Epic:              mockEpic,
+			SubTasks:          mockSubTasks,
+			HasErrors:         false,
+			IsPage:            isPage,
+			IsSingleIssue:     false,
+			CurrentStep:       4,
+			ShowBreakdownStep: !session.SkipBreakdown,
 		}
 
 		s.wizardStore.Delete(sessionID)
@@ -1405,17 +1429,21 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		Epic          CreatedIssue
-		SubTasks      []CreatedIssue
-		HasErrors     bool
-		IsPage        bool
-		IsSingleIssue bool
+		Epic              CreatedIssue
+		SubTasks          []CreatedIssue
+		HasErrors         bool
+		IsPage            bool
+		IsSingleIssue     bool
+		CurrentStep       int
+		ShowBreakdownStep bool
 	}{
-		Epic:          epicIssue,
-		SubTasks:      subTasks,
-		HasErrors:     hasErrors,
-		IsPage:        isPage,
-		IsSingleIssue: false,
+		Epic:              epicIssue,
+		SubTasks:          subTasks,
+		HasErrors:         hasErrors,
+		IsPage:            isPage,
+		IsSingleIssue:     false,
+		CurrentStep:       4,
+		ShowBreakdownStep: !session.SkipBreakdown,
 	}
 
 	// Clean up session after creation to free memory
@@ -1450,17 +1478,21 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 		session.AddLog("system", "Mock: Created single issue #100")
 
 		data := struct {
-			Epic          CreatedIssue
-			SubTasks      []CreatedIssue
-			HasErrors     bool
-			IsPage        bool
-			IsSingleIssue bool
+			Epic              CreatedIssue
+			SubTasks          []CreatedIssue
+			HasErrors         bool
+			IsPage            bool
+			IsSingleIssue     bool
+			CurrentStep       int
+			ShowBreakdownStep bool
 		}{
-			Epic:          mockIssue,
-			SubTasks:      []CreatedIssue{},
-			HasErrors:     false,
-			IsPage:        isPage,
-			IsSingleIssue: true,
+			Epic:              mockIssue,
+			SubTasks:          []CreatedIssue{},
+			HasErrors:         false,
+			IsPage:            isPage,
+			IsSingleIssue:     true,
+			CurrentStep:       4,
+			ShowBreakdownStep: false,
 		}
 
 		s.wizardStore.Delete(session.ID)
@@ -1517,17 +1549,21 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 	}
 
 	data := struct {
-		Epic          CreatedIssue
-		SubTasks      []CreatedIssue
-		HasErrors     bool
-		IsPage        bool
-		IsSingleIssue bool
+		Epic              CreatedIssue
+		SubTasks          []CreatedIssue
+		HasErrors         bool
+		IsPage            bool
+		IsSingleIssue     bool
+		CurrentStep       int
+		ShowBreakdownStep bool
 	}{
-		Epic:          issue,
-		SubTasks:      []CreatedIssue{},
-		HasErrors:     false,
-		IsPage:        isPage,
-		IsSingleIssue: true,
+		Epic:              issue,
+		SubTasks:          []CreatedIssue{},
+		HasErrors:         false,
+		IsPage:            isPage,
+		IsSingleIssue:     true,
+		CurrentStep:       4,
+		ShowBreakdownStep: false,
 	}
 
 	// Clean up session after creation to free memory

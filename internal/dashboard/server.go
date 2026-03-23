@@ -95,13 +95,13 @@ func parseTemplates() (map[string]*template.Template, error) {
 		tmpls[page] = t
 	}
 
-	wizardPageTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/wizard_new.html", "templates/wizard_page.html")
+	wizardPageTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/wizard_steps.html", "templates/wizard_new.html", "templates/wizard_page.html")
 	if err != nil {
 		return nil, fmt.Errorf("parsing wizard_page.html: %w", err)
 	}
 	tmpls["wizard_page.html"] = wizardPageTmpl
 
-	wizardModalTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/wizard_new.html", "templates/wizard_modal.html")
+	wizardModalTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/wizard_steps.html", "templates/wizard_new.html", "templates/wizard_modal.html")
 	if err != nil {
 		return nil, fmt.Errorf("parsing wizard_modal.html: %w", err)
 	}
@@ -110,7 +110,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 	// Parse wizard partial templates (no layout)
 	wizardPartials := []string{"wizard_new.html", "wizard_refine.html", "wizard_breakdown.html", "wizard_create.html", "wizard_error.html", "wizard_logs.html"}
 	for _, page := range wizardPartials {
-		t, err := template.ParseFS(templateFS, "templates/"+page)
+		t, err := template.ParseFS(templateFS, "templates/wizard_steps.html", "templates/"+page)
 		if err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", page, err)
 		}
