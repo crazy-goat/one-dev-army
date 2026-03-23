@@ -31,6 +31,7 @@ type Server struct {
 	wizardStore   *WizardSessionStore
 	oc            *opencode.Client
 	wizardLLM     string
+	hub           *Hub
 }
 
 func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, projectNumber int, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string) (*Server, error) {
@@ -40,6 +41,11 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 	}
 
 	mux := http.NewServeMux()
+
+	// Create and start the WebSocket hub
+	hub := NewHub()
+	go hub.Run()
+
 	s := &Server{
 		port:          port,
 		tmpls:         tmpls,
@@ -56,6 +62,7 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 		wizardStore: NewWizardSessionStore(),
 		oc:          oc,
 		wizardLLM:   wizardLLM,
+		hub:         hub,
 	}
 	if s.wizardLLM == "" {
 		s.wizardLLM = DefaultLLMModel
@@ -148,6 +155,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /approve-merge/{id}", s.handleApproveMerge)
 	s.mux.HandleFunc("POST /decline/{id}", s.handleDecline)
 
+	// WebSocket endpoint
+	s.mux.HandleFunc("GET /ws", s.handleWebSocket)
+
 	// Wizard routes
 	s.mux.HandleFunc("GET /wizard", s.handleWizardPage)
 	s.mux.HandleFunc("GET /wizard/new", s.handleWizardNew)
@@ -166,9 +176,23 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	// Stop the WebSocket hub
+	if s.hub != nil {
+		s.hub.Stop()
+	}
 	return s.httpSrv.Shutdown(ctx)
 }
 
 func (s *Server) Handler() http.Handler {
 	return s.mux
+}
+
+// Hub returns the WebSocket hub for broadcasting messages
+func (s *Server) Hub() *Hub {
+	return s.hub
+}
+
+// handleWebSocket handles WebSocket upgrade requests
+func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	ServeWs(s.hub, w, r)
 }
