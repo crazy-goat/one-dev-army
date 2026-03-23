@@ -191,6 +191,11 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		if inProgressIssue != nil {
 			nextIssue = inProgressIssue
 			log.Printf("[Orchestrator] Resuming in-progress #%d: %s", nextIssue.Number, nextIssue.Title)
+		} else if len(awaitingApproval) > 0 {
+			// Single-branch mode: don't start new work while PRs await approval.
+			// New branches would be based on master which lacks unmerged PR changes,
+			// causing conflicts when those PRs get merged.
+			log.Printf("[Orchestrator] ⏳ Waiting — %d issue(s) awaiting approval, not starting new work", len(awaitingApproval))
 		} else if len(candidates) > 0 {
 			picked, err := o.pickNextTicket(ctx, candidates, awaitingApproval)
 			if err != nil {
