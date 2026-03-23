@@ -24,15 +24,6 @@
     <input type="hidden" name="session_id" value="{{.SessionID}}">
     {{if .IsPage}}<input type="hidden" name="page" value="1">{{end}}
     
-    {{if .SprintName}}
-    <div class="sprint-option">
-      <label class="sprint-checkbox">
-        <input type="checkbox" name="add_to_sprint" value="1" checked>
-        <span class="sprint-checkbox-label">Add to current sprint <strong>{{.SprintName}}</strong></span>
-      </label>
-    </div>
-    {{end}}
-    
     <div class="form-actions">
       {{if .IsPage}}
       <a href="/" class="btn">Cancel</a>

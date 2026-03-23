@@ -905,6 +905,10 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		session.SetSkipBreakdown(true)
 	}
 
+	// Parse add_to_sprint checkbox
+	addToSprint := r.FormValue("add_to_sprint") == "1"
+	session.SetAddToSprint(addToSprint)
+
 	session.SetStep(WizardStepRefine)
 	session.AddLog("user", inputText)
 
@@ -920,6 +924,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 			RefinedDescription string
 			IsPage             bool
 			SkipBreakdown      bool
+			SprintName         string
 			CurrentStep        int
 			ShowBreakdownStep  bool
 			NeedsTypeSelection bool
@@ -929,6 +934,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 			RefinedDescription: mockRefined,
 			IsPage:             isPage,
 			SkipBreakdown:      session.SkipBreakdown,
+			SprintName:         s.activeSprintName(),
 			CurrentStep:        2,
 			ShowBreakdownStep:  session.Type == WizardTypeFeature && !session.SkipBreakdown,
 			NeedsTypeSelection: false,
@@ -1002,6 +1008,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		RefinedDescription string
 		IsPage             bool
 		SkipBreakdown      bool
+		SprintName         string
 		CurrentStep        int
 		ShowBreakdownStep  bool
 		NeedsTypeSelection bool
@@ -1011,6 +1018,7 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		RefinedDescription: refinedDesc,
 		IsPage:             isPage,
 		SkipBreakdown:      session.SkipBreakdown,
+		SprintName:         s.activeSprintName(),
 		CurrentStep:        2,
 		ShowBreakdownStep:  session.Type == WizardTypeFeature && !session.SkipBreakdown,
 		NeedsTypeSelection: false,

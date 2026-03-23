@@ -536,3 +536,20 @@ func TestSessionConstants(t *testing.T) {
 		t.Errorf("expected SessionMaxAge to be 30 minutes, got %v", SessionMaxAge)
 	}
 }
+
+func TestWizardSession_SetAddToSprint(t *testing.T) {
+	session := &WizardSession{
+		ID:   "test-id",
+		Type: "feature",
+	}
+
+	session.SetAddToSprint(true)
+	if !session.AddToSprint {
+		t.Errorf("expected AddToSprint to be true, got %v", session.AddToSprint)
+	}
+
+	session.SetAddToSprint(false)
+	if session.AddToSprint {
+		t.Errorf("expected AddToSprint to be false, got %v", session.AddToSprint)
+	}
+}
