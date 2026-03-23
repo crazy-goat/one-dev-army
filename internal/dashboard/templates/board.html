@@ -63,6 +63,11 @@
       <span id="sync-spinner" style="display:none;">⟳</span>
       <span id="sync-text">Sync</span>
     </button>
+    {{if .CanCloseSprint}}
+    <form method="post" action="/api/sprint/close" style="display:inline">
+      <button type="submit" class="btn btn-success">Close Sprint</button>
+    </form>
+    {{end}}
     <form method="post" action="/plan-sprint" style="display:inline">
       <button type="submit" class="btn btn-primary">Plan Sprint</button>
     </form>
