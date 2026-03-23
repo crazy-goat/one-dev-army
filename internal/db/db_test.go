@@ -3,6 +3,8 @@ package db_test
 import (
 	"math"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -691,5 +693,211 @@ func TestSaveIssueCache_NoTimestamps_UpdatesAnyway(t *testing.T) {
 	}
 	if got.Title != "Second Title" {
 		t.Errorf("title = %q, want %q", got.Title, "Second Title")
+	}
+}
+
+func TestConcurrentWrites_NoBusyErrors(t *testing.T) {
+	store := openTestStore(t)
+
+	var wg sync.WaitGroup
+	errors := make(chan error, 100)
+
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			// Concurrent writes to same issue
+			metric := db.StageMetric{
+				TaskID:    n,
+				SprintID:  1,
+				Stage:     "test",
+				LLM:       "test-llm",
+				TokensIn:  100,
+				TokensOut: 50,
+				CostUSD:   0.01,
+				DurationS: 10,
+				Retries:   0,
+			}
+			err := store.SaveStageMetric(metric)
+			if err != nil {
+				errors <- err
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(errors)
+
+	// Verify no SQLITE_BUSY errors
+	for err := range errors {
+		if strings.Contains(err.Error(), "BUSY") {
+			t.Errorf("Got SQLITE_BUSY: %v", err)
+		}
+	}
+}
+
+func TestConcurrentMixedWrites_NoBusyErrors(t *testing.T) {
+	store := openTestStore(t)
+
+	var wg sync.WaitGroup
+	errors := make(chan error, 200)
+
+	// Launch goroutines doing different write operations
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			// SaveStageMetric
+			metric := db.StageMetric{
+				TaskID:    n,
+				SprintID:  1,
+				Stage:     "analysis",
+				LLM:       "claude",
+				TokensIn:  100,
+				TokensOut: 50,
+				CostUSD:   0.01,
+				DurationS: 10,
+				Retries:   0,
+			}
+			if err := store.SaveStageMetric(metric); err != nil {
+				errors <- err
+			}
+		}(i)
+	}
+
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			// InsertStep and FinishStep
+			stepID, err := store.InsertStep(n, "test-step", "test prompt", "session-1")
+			if err != nil {
+				errors <- err
+				return
+			}
+			if err := store.FinishStep(stepID, "test response"); err != nil {
+				errors <- err
+			}
+		}(i)
+	}
+
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			// SaveIssueCache
+			issue := github.Issue{
+				Number:    1000 + n,
+				Title:     "Test Issue",
+				State:     "open",
+				Labels:    nil,
+				Assignees: nil,
+			}
+			if err := store.SaveIssueCache(issue, "v1.0", true); err != nil {
+				errors <- err
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(errors)
+
+	// Verify no SQLITE_BUSY errors
+	for err := range errors {
+		if strings.Contains(err.Error(), "BUSY") {
+			t.Errorf("Got SQLITE_BUSY: %v", err)
+		}
+	}
+}
+
+func TestWriteOrdering(t *testing.T) {
+	store := openTestStore(t)
+
+	// Submit numbered jobs and verify execution order
+	var wg sync.WaitGroup
+	results := make(chan int, 100)
+
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			metric := db.StageMetric{
+				TaskID:    n,
+				SprintID:  1,
+				Stage:     "test",
+				LLM:       "test-llm",
+				TokensIn:  100,
+				TokensOut: 50,
+				CostUSD:   0.01,
+				DurationS: 10,
+				Retries:   0,
+			}
+			if err := store.SaveStageMetric(metric); err != nil {
+				t.Errorf("SaveStageMetric failed: %v", err)
+			}
+			results <- n
+		}(i)
+	}
+
+	wg.Wait()
+	close(results)
+
+	// All jobs should complete without error
+	count := 0
+	for range results {
+		count++
+	}
+	if count != 50 {
+		t.Errorf("expected 50 completed jobs, got %d", count)
+	}
+}
+
+func TestGracefulShutdown(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "shutdown.db")
+	store, err := db.Open(path)
+	if err != nil {
+		t.Fatalf("opening store: %v", err)
+	}
+
+	// Submit jobs and track when all submissions are done
+	submitted := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			metric := db.StageMetric{
+				TaskID:    n,
+				SprintID:  1,
+				Stage:     "test",
+				LLM:       "test-llm",
+				TokensIn:  100,
+				TokensOut: 50,
+				CostUSD:   0.01,
+				DurationS: 10,
+				Retries:   0,
+			}
+			if err := store.SaveStageMetric(metric); err != nil {
+				t.Errorf("SaveStageMetric failed: %v", err)
+			}
+		}(i)
+	}
+
+	// Wait for all submissions to complete before closing
+	go func() {
+		wg.Wait()
+		close(submitted)
+	}()
+
+	select {
+	case <-submitted:
+		// All jobs submitted, now close
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for job submissions")
+	}
+
+	// Close after all jobs are submitted
+	if err := store.Close(); err != nil {
+		t.Fatalf("closing store: %v", err)
 	}
 }
