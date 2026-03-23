@@ -118,7 +118,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 	tmpls["wizard_modal.html"] = wizardModalTmpl
 
 	// Parse wizard partial templates (no layout)
-	wizardPartials := []string{"wizard_new.html", "wizard_refine.html", "wizard_title.html", "wizard_create.html", "wizard_error.html", "wizard_logs.html"}
+	wizardPartials := []string{"wizard_new.html", "wizard_refine.html", "wizard_create.html", "wizard_error.html", "wizard_logs.html"}
 	for _, page := range wizardPartials {
 		t, err := template.ParseFS(templateFS, "templates/wizard_steps.html", "templates/"+page)
 		if err != nil {
@@ -127,12 +127,6 @@ func parseTemplates() (map[string]*template.Template, error) {
 		tmpls[page] = t
 	}
 
-	t, err := template.ParseFS(templateFS, "templates/workers.html")
-	if err != nil {
-		return nil, fmt.Errorf("parsing workers.html: %w", err)
-	}
-	tmpls["workers.html"] = t
-
 	return tmpls, nil
 }
 
@@ -140,7 +134,6 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /{$}", s.handleBoard)
 	s.mux.HandleFunc("GET /backlog", s.handleBacklog)
 	s.mux.HandleFunc("GET /costs", s.handleCosts)
-	s.mux.HandleFunc("GET /api/workers", s.handleWorkers)
 	s.mux.HandleFunc("GET /api/current-task", s.handleCurrentTask)
 	s.mux.HandleFunc("GET /api/sprint/status", s.handleSprintStatus)
 	s.mux.HandleFunc("POST /api/sprint/start", s.handleSprintStart)
@@ -172,7 +165,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /wizard/select-type", s.handleWizardSelectType)
 	s.mux.HandleFunc("POST /wizard/cancel", s.handleWizardCancel)
 	s.mux.HandleFunc("POST /wizard/refine", s.handleWizardRefine)
-	s.mux.HandleFunc("POST /wizard/title", s.handleWizardGenerateTitle)
+	// REMOVED: s.mux.HandleFunc("POST /wizard/title", s.handleWizardGenerateTitle) (merged into refine step)
 	// REMOVED: s.mux.HandleFunc("POST /wizard/breakdown", s.handleWizardBreakdown)
 	s.mux.HandleFunc("POST /wizard/create", s.handleWizardCreate)
 	s.mux.HandleFunc("GET /wizard/logs/{sessionId}", s.handleWizardLogs)

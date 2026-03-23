@@ -14,7 +14,6 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
-	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
 
 type taskCard struct {
@@ -44,7 +43,6 @@ type boardData struct {
 	Merge          []taskCard
 	Done           []taskCard
 	Failed         []taskCard
-	DoneFilter     string // Filter for Done column: "all", "merged", "closed"
 }
 
 type backlogData struct {
@@ -54,15 +52,6 @@ type backlogData struct {
 
 type costsData struct {
 	Active string
-}
-
-type workerCard struct {
-	ID      string
-	Status  string
-	TaskID  int
-	Task    string
-	Stage   string
-	Elapsed string
 }
 
 func placeholderBoard() boardData {
@@ -107,14 +96,6 @@ func (s *Server) buildBoardData(r *http.Request) boardData {
 		Paused: true,
 	}
 
-	// Get filter from query parameter
-	if r != nil {
-		data.DoneFilter = r.URL.Query().Get("done_filter")
-	}
-	if data.DoneFilter == "" {
-		data.DoneFilter = "all"
-	}
-
 	if s.orchestrator != nil {
 		data.Paused = s.orchestrator.IsPaused()
 		data.Processing = s.orchestrator.IsProcessing()
@@ -150,19 +131,6 @@ func (s *Server) buildBoardData(r *http.Request) boardData {
 	for _, issue := range issues {
 		col := inferColumnFromIssue(issue)
 		s.addCardToColumn(&data, col, issue)
-	}
-
-	// Apply Done column filter
-	if data.DoneFilter != "all" && len(data.Done) > 0 {
-		var filteredDone []taskCard
-		for _, card := range data.Done {
-			if data.DoneFilter == "merged" && card.IsMerged {
-				filteredDone = append(filteredDone, card)
-			} else if data.DoneFilter == "closed" && !card.IsMerged {
-				filteredDone = append(filteredDone, card)
-			}
-		}
-		data.Done = filteredDone
 	}
 
 	// Check if sprint can be closed: all tasks in Done/Failed columns and not processing
@@ -281,19 +249,6 @@ func (s *Server) handleBacklog(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCosts(w http.ResponseWriter, r *http.Request) {
 	data := costsData{Active: "costs"}
 	s.render(w, "costs.html", data)
-}
-
-func (s *Server) handleWorkers(w http.ResponseWriter, r *http.Request) {
-	var cards []workerCard
-	if s.pool != nil {
-		for _, info := range s.pool() {
-			cards = append(cards, toWorkerCard(info))
-		}
-	}
-	if len(cards) == 0 {
-		cards = placeholderWorkers()
-	}
-	s.render(w, "workers.html", cards)
 }
 
 func (s *Server) handleAddEpic(w http.ResponseWriter, r *http.Request) {
@@ -763,17 +718,6 @@ func (s *Server) renderTemplateBlock(w http.ResponseWriter, name string, block s
 	}
 }
 
-func toWorkerCard(info worker.WorkerInfo) workerCard {
-	return workerCard{
-		ID:      info.ID,
-		Status:  string(info.Status),
-		TaskID:  info.TaskID,
-		Task:    info.TaskTitle,
-		Stage:   info.Stage,
-		Elapsed: formatDuration(info.Elapsed),
-	}
-}
-
 func formatDuration(d time.Duration) string {
 	if d == 0 {
 		return "-"
@@ -785,14 +729,6 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dm %ds", m, s)
 	}
 	return fmt.Sprintf("%ds", s)
-}
-
-func placeholderWorkers() []workerCard {
-	return []workerCard{
-		{ID: "worker-1", Status: "working", TaskID: 3, Task: "Implement auth service", Stage: "coding", Elapsed: "2m 15s"},
-		{ID: "worker-2", Status: "idle"},
-		{ID: "worker-3", Status: "working", TaskID: 7, Task: "Add unit tests", Stage: "testing", Elapsed: "45s"},
-	}
 }
 
 // LLMRequestTimeout is the timeout for LLM API requests
@@ -1185,14 +1121,24 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 
 	// If no opencode client, return mock response for testing
 	if s.oc == nil {
-		mockPlanning := "## Problem Statement / Feature Description\n\nAdd user authentication to the system.\n\n## Architecture Overview\n\nKey components involved: auth service, user database, session management.\n\n## Files Requiring Changes\n\n- `internal/auth/service.go`: Add authentication logic\n- `internal/db/users.go`: Add user storage\n\n## Component Dependencies\n\n- Database for user storage\n- Session management library\n\n## Implementation Boundaries\n\n- In scope: Login/logout functionality\n- Out of scope: Password reset, OAuth\n\n## Acceptance Criteria\n\n- [ ] Users can log in with username and password\n- [ ] Sessions are maintained across requests\n- [ ] Invalid credentials are rejected"
+		mockTitle := "[Feature] Add user authentication system"
+		if session.Type == WizardTypeBug {
+			mockTitle = "[Bug] Fix authentication issue"
+		}
+		mockPlanning := "## Description\n\nAdd user authentication to the system.\n\n## Tasks\n\n1. Create auth service in `internal/auth/service.go`\n2. Add user storage in `internal/db/users.go`\n3. Add login endpoint handler\n4. Write tests\n\n## Files to Modify\n\n- `internal/auth/service.go` - New file: authentication logic\n- `internal/db/users.go` - New file: user storage\n\n## Acceptance Criteria\n\n- Users can log in with username and password\n- Sessions are maintained across requests\n- Invalid credentials are rejected"
 		session.SetTechnicalPlanning(mockPlanning)
-		session.AddLog("assistant", mockPlanning)
+		session.SetGeneratedTitle(mockTitle)
+		session.SetPriority("medium")
+		session.SetComplexity("M")
+		session.AddLog("assistant", "Generated title: "+mockTitle+"\nPriority: medium | Complexity: M\n\n"+mockPlanning)
 
 		data := struct {
 			SessionID          string
 			Type               string
+			Title              string
 			TechnicalPlanning  string
+			Priority           string
+			Complexity         string
 			IsPage             bool
 			SkipBreakdown      bool
 			SprintName         string
@@ -1202,11 +1148,14 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		}{
 			SessionID:          session.ID,
 			Type:               string(session.Type),
+			Title:              session.GetFinalTitle(),
 			TechnicalPlanning:  mockPlanning,
+			Priority:           session.Priority,
+			Complexity:         session.Complexity,
 			IsPage:             isPage,
 			SkipBreakdown:      true, // Always skip breakdown in new flow
 			SprintName:         s.activeSprintName(),
-			CurrentStep:        2,     // Now step 2 is Technical Planning
+			CurrentStep:        2,     // Now step 2 is Review
 			ShowBreakdownStep:  false, // No more breakdown step
 			NeedsTypeSelection: false,
 		}
@@ -1215,8 +1164,8 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create LLM session for refinement
-	llmSession, err := s.oc.CreateSession("Wizard Refinement")
+	// Create LLM session
+	llmSession, err := s.oc.CreateSession("Wizard Issue Generation")
 	if err != nil {
 		log.Printf("[Wizard] Error creating LLM session: %v", err)
 		session.AddLog("system", "Error: Failed to create LLM session - "+err.Error())
@@ -1229,54 +1178,70 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// Build unified technical planning prompt with codebase context
 	codebaseContext := GetCodebaseContext()
-	prompt := BuildTechnicalPlanningPrompt(session.Type, inputText, codebaseContext, session.Language)
-	session.AddLog("system", "Sending technical planning request to LLM (language: "+session.Language+")")
+	prompt := BuildIssueGenerationPrompt(session.Type, inputText, codebaseContext, session.Language)
+	session.AddLog("system", "Sending issue generation request to LLM (language: "+session.Language+")")
 
-	// Send message to LLM with timeout
 	ctx, cancel := context.WithTimeout(r.Context(), LLMRequestTimeout)
 	defer cancel()
 
 	model := opencode.ParseModelRef(s.wizardLLM)
-	var output strings.Builder
-	response, err := s.oc.SendMessageStream(ctx, llmSession.ID, prompt, model, &output)
+	var result GeneratedIssue
+	err = s.oc.SendMessageStructured(ctx, llmSession.ID, prompt, model, GeneratedIssueSchema, &result)
 	if err != nil {
 		log.Printf("[Wizard] Error from LLM: %v", err)
 		session.AddLog("system", "LLM error: "+err.Error())
-
-		errorMsg := "Failed to generate technical planning. "
+		errorMsg := "Failed to generate issue. "
 		if ctx.Err() == context.DeadlineExceeded {
 			errorMsg += "The AI service timed out. Please try again with a shorter description."
 		} else {
 			errorMsg += "Please check your connection and try again."
 		}
-
 		s.renderError(w, errorMsg, session.ID, string(session.Type), isPage)
 		return
 	}
 
-	// Extract technical planning from response
-	var technicalPlanning string
-	if len(response.Parts) > 0 {
-		technicalPlanning = stripLLMPreamble(response.Parts[0].Text)
-	}
-
-	// Validate that we got a non-empty response
-	if technicalPlanning == "" {
-		log.Printf("[Wizard] LLM returned empty response for session %s", session.ID)
-		session.AddLog("system", "Error: LLM returned empty response")
+	if result.Description == "" {
+		log.Printf("[Wizard] LLM returned empty description for session %s", session.ID)
+		session.AddLog("system", "Error: LLM returned empty description")
 		s.renderError(w, "The AI returned an empty response. Please try again with a more detailed description.", session.ID, string(session.Type), isPage)
 		return
 	}
 
-	session.SetTechnicalPlanning(technicalPlanning)
-	session.AddLog("assistant", technicalPlanning)
+	// Ensure title has proper prefix
+	if result.Title != "" {
+		if !strings.HasPrefix(result.Title, "[Feature]") && !strings.HasPrefix(result.Title, "[Bug]") {
+			if session.Type == WizardTypeBug {
+				result.Title = "[Bug] " + result.Title
+			} else {
+				result.Title = "[Feature] " + result.Title
+			}
+		}
+		if len(result.Title) > 80 {
+			result.Title = result.Title[:77] + "..."
+		}
+	} else {
+		if session.Type == WizardTypeBug {
+			result.Title = "[Bug] Fix issue"
+		} else {
+			result.Title = "[Feature] New feature"
+		}
+	}
+
+	session.SetTechnicalPlanning(result.Description)
+	session.SetGeneratedTitle(result.Title)
+	session.SetPriority(result.Priority)
+	session.SetComplexity(result.Complexity)
+	session.AddLog("assistant", fmt.Sprintf("Generated title: %s\nPriority: %s | Complexity: %s\n\n%s",
+		result.Title, result.Priority, result.Complexity, result.Description))
 
 	data := struct {
 		SessionID          string
 		Type               string
+		Title              string
 		TechnicalPlanning  string
+		Priority           string
+		Complexity         string
 		IsPage             bool
 		SkipBreakdown      bool
 		SprintName         string
@@ -1286,203 +1251,19 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	}{
 		SessionID:          session.ID,
 		Type:               string(session.Type),
-		TechnicalPlanning:  technicalPlanning,
+		Title:              session.GetFinalTitle(),
+		TechnicalPlanning:  session.TechnicalPlanning,
+		Priority:           session.Priority,
+		Complexity:         session.Complexity,
 		IsPage:             isPage,
 		SkipBreakdown:      true, // Always skip breakdown in new flow
 		SprintName:         s.activeSprintName(),
-		CurrentStep:        2,     // Now step 2 is Technical Planning
+		CurrentStep:        2,     // Now step 2 is Review
 		ShowBreakdownStep:  false, // No more breakdown step
 		NeedsTypeSelection: false,
 	}
 
 	s.renderFragment(w, "wizard_refine.html", data)
-}
-
-// handleWizardGenerateTitle generates or regenerates the issue title from technical planning
-func (s *Server) handleWizardGenerateTitle(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid form data", http.StatusBadRequest)
-		return
-	}
-
-	sessionID := r.FormValue("session_id")
-	if sessionID == "" {
-		http.Error(w, "missing session_id", http.StatusBadRequest)
-		return
-	}
-
-	// Check for page mode
-	isPage := r.FormValue("page") == "1" || r.URL.Query().Get("page") == "1"
-
-	// Check if this is a regeneration request
-	regenerate := r.FormValue("regenerate") == "1"
-
-	session, ok := s.wizardStore.Get(sessionID)
-	if !ok {
-		http.Error(w, "session not found", http.StatusBadRequest)
-		return
-	}
-
-	// If user provided a custom title, store it
-	customTitle := r.FormValue("issue_title")
-	if customTitle != "" && !regenerate {
-		session.SetCustomTitle(customTitle)
-		session.SetUseCustomTitle(true)
-	}
-
-	session.SetStep(WizardStepTitle)
-
-	// If we already have a generated title and not regenerating, use it
-	if session.GeneratedTitle != "" && !regenerate {
-		title := session.GetFinalTitle()
-		s.renderTitlePage(w, session, title, isPage)
-		return
-	}
-
-	// Generate title using LLM
-	if s.oc == nil {
-		// Mock title generation for testing
-		mockTitle := generateMockTitle(session.Type, session.TechnicalPlanning)
-		session.SetGeneratedTitle(mockTitle)
-		session.AddLog("system", "Mock: Generated title: "+mockTitle)
-
-		title := session.GetFinalTitle()
-		s.renderTitlePage(w, session, title, isPage)
-		return
-	}
-
-	// Create LLM session for title generation
-	llmSession, err := s.oc.CreateSession("Wizard Title Generation")
-	if err != nil {
-		log.Printf("[Wizard] Error creating LLM session for title: %v", err)
-		session.AddLog("system", "Error: Failed to create LLM session for title - "+err.Error())
-		s.renderError(w, "Failed to connect to AI service for title generation. Please try again.", session.ID, string(session.Type), isPage)
-		return
-	}
-	defer func() {
-		if err := s.oc.DeleteSession(llmSession.ID); err != nil {
-			log.Printf("[Wizard] Error deleting LLM session %s: %v", llmSession.ID, err)
-		}
-	}()
-
-	// Build title generation prompt
-	prompt := BuildTitleGenerationPrompt(session.Type, session.TechnicalPlanning, session.Language)
-	session.AddLog("system", "Sending title generation request to LLM")
-
-	// Send message to LLM with timeout
-	ctx, cancel := context.WithTimeout(r.Context(), LLMRequestTimeout)
-	defer cancel()
-
-	model := opencode.ParseModelRef(s.wizardLLM)
-	var output strings.Builder
-	response, err := s.oc.SendMessageStream(ctx, llmSession.ID, prompt, model, &output)
-	if err != nil {
-		log.Printf("[Wizard] Error from LLM during title generation: %v", err)
-		session.AddLog("system", "LLM error during title generation: "+err.Error())
-
-		errorMsg := "Failed to generate title. "
-		if ctx.Err() == context.DeadlineExceeded {
-			errorMsg += "The AI service timed out. Please try again."
-		} else {
-			errorMsg += "Please check your connection and try again."
-		}
-
-		s.renderError(w, errorMsg, session.ID, string(session.Type), isPage)
-		return
-	}
-
-	// Extract title from response
-	var generatedTitle string
-	if len(response.Parts) > 0 {
-		generatedTitle = strings.TrimSpace(response.Parts[0].Text)
-	}
-
-	// Validate title
-	if generatedTitle == "" {
-		log.Printf("[Wizard] LLM returned empty title for session %s", session.ID)
-		session.AddLog("system", "Error: LLM returned empty title")
-		// Fallback to a default title based on type
-		if session.Type == WizardTypeBug {
-			generatedTitle = "[Bug] Fix issue"
-		} else {
-			generatedTitle = "[Feature] New feature"
-		}
-	}
-
-	// Ensure title has proper prefix
-	if !strings.HasPrefix(generatedTitle, "[Feature]") && !strings.HasPrefix(generatedTitle, "[Bug]") {
-		if session.Type == WizardTypeBug {
-			generatedTitle = "[Bug] " + generatedTitle
-		} else {
-			generatedTitle = "[Feature] " + generatedTitle
-		}
-	}
-
-	// Truncate if too long
-	if len(generatedTitle) > 80 {
-		generatedTitle = generatedTitle[:77] + "..."
-	}
-
-	session.SetGeneratedTitle(generatedTitle)
-	session.AddLog("assistant", "Generated title: "+generatedTitle)
-
-	title := session.GetFinalTitle()
-	s.renderTitlePage(w, session, title, isPage)
-}
-
-// renderTitlePage renders the title page with the given title
-func (s *Server) renderTitlePage(w http.ResponseWriter, session *WizardSession, title string, isPage bool) {
-	data := struct {
-		SessionID          string
-		Type               string
-		Title              string
-		IsPage             bool
-		SprintName         string
-		CurrentStep        int
-		ShowBreakdownStep  bool
-		NeedsTypeSelection bool
-	}{
-		SessionID:          session.ID,
-		Type:               string(session.Type),
-		Title:              title,
-		IsPage:             isPage,
-		SprintName:         s.activeSprintName(),
-		CurrentStep:        3, // Title is step 3
-		ShowBreakdownStep:  false,
-		NeedsTypeSelection: false,
-	}
-
-	s.renderFragment(w, "wizard_title.html", data)
-}
-
-// generateMockTitle generates a mock title for testing
-func generateMockTitle(wizardType WizardType, technicalPlanning string) string {
-	// Extract first line or first sentence for context
-	lines := strings.Split(technicalPlanning, "\n")
-	var context string
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed != "" && !strings.HasPrefix(trimmed, "#") && !strings.HasPrefix(trimmed, "-") {
-			context = trimmed
-			break
-		}
-	}
-
-	if context == "" {
-		context = "New implementation"
-	}
-
-	// Truncate context if too long
-	words := strings.Fields(context)
-	if len(words) > 5 {
-		words = words[:5]
-	}
-	context = strings.Join(words, " ")
-
-	if wizardType == WizardTypeBug {
-		return "[Bug] Fix " + context
-	}
-	return "[Feature] Add " + context
 }
 
 // renderError renders an error message in the wizard modal
@@ -1536,17 +1317,28 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 	s.handleWizardCreateSingle(w, r, session, isPage)
 }
 
-// handleWizardCreateSingle creates a single GitHub issue (for the unified technical planning flow)
+// handleWizardCreateSingle creates a single GitHub issue (for the unified flow)
 func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request, session *WizardSession, isPage bool) {
 	// Read sprint assignment preference from form
 	addToSprint := r.FormValue("add_to_sprint") == "1"
 	session.SetAddToSprint(addToSprint)
 
+	// Read custom title from form (user may have edited it on the review page)
+	customTitle := r.FormValue("issue_title")
+	if customTitle != "" {
+		session.SetCustomTitle(customTitle)
+		session.SetUseCustomTitle(true)
+	}
+
 	// If no GitHub client, return mock confirmation for testing
 	if s.gh == nil {
 		mockTitle := session.GetFinalTitle()
 		if mockTitle == "" {
-			mockTitle = generateMockTitle(session.Type, session.TechnicalPlanning)
+			if session.Type == WizardTypeBug {
+				mockTitle = "[Bug] Fix issue"
+			} else {
+				mockTitle = "[Feature] New feature"
+			}
 		}
 		mockIssue := CreatedIssue{
 			Number:  100,
@@ -1574,7 +1366,7 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 			HasErrors:          false,
 			IsPage:             isPage,
 			IsSingleIssue:      true,
-			CurrentStep:        4, // Step 4 is Create in new 4-step flow
+			CurrentStep:        3, // Step 3 is Create in new 3-step flow
 			ShowBreakdownStep:  false,
 			NeedsTypeSelection: false,
 			Type:               string(session.Type),
@@ -1593,11 +1385,24 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 		labels = append(labels, "bug")
 	}
 
+	// Add LLM-estimated priority and complexity labels
+	gi := GeneratedIssue{Priority: session.Priority, Complexity: session.Complexity}
+	if label := gi.PriorityLabel(); label != "" {
+		labels = append(labels, label)
+	}
+	if label := gi.ComplexityLabel(); label != "" {
+		labels = append(labels, label)
+	}
+
 	// Get title from session (either custom or generated)
 	title := session.GetFinalTitle()
 	if title == "" {
-		// Fallback: generate a simple title from technical planning
-		title = generateMockTitle(session.Type, session.TechnicalPlanning)
+		// Simple fallback
+		if session.Type == WizardTypeBug {
+			title = "[Bug] Fix issue"
+		} else {
+			title = "[Feature] New feature"
+		}
 	}
 
 	// Validate title length (GitHub limit is 256, but we enforce 80)
@@ -1652,7 +1457,7 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 		HasErrors:          false,
 		IsPage:             isPage,
 		IsSingleIssue:      true,
-		CurrentStep:        4, // Step 4 is Create in new 4-step flow
+		CurrentStep:        3, // Step 3 is Create in new 3-step flow
 		ShowBreakdownStep:  false,
 		NeedsTypeSelection: false,
 		Type:               string(session.Type),
