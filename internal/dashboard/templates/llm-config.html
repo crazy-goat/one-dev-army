@@ -1,0 +1,271 @@
+{{template "layout" .}}
+{{define "content"}}
+<style>
+.settings-container{max-width:1200px;margin:0 auto}
+.settings-section{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin-bottom:1.5rem}
+.settings-section h2{font-size:1.2rem;margin-bottom:1rem;color:var(--text);border-bottom:1px solid var(--border);padding-bottom:.5rem}
+.category-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+.model-variant{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:1rem}
+.model-variant h3{font-size:1rem;margin-bottom:.75rem;color:var(--accent)}
+.form-group{margin-bottom:1rem}
+.form-group label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:.25rem}
+.form-group input{width:100%;padding:.5rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:.85rem}
+.form-group input:focus{outline:none;border-color:var(--accent)}
+.form-group .help-text{font-size:.75rem;color:var(--muted);margin-top:.25rem}
+.routing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.forced-stages{margin-top:1rem}
+.forced-stages label{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;cursor:pointer}
+.forced-stages input[type="checkbox"]{width:auto}
+.form-actions{display:flex;gap:1rem;justify-content:flex-end;margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border)}
+.btn-save{background:var(--green);border-color:var(--green);color:#fff}
+.btn-save:hover{opacity:.9}
+.alert{padding:.75rem 1rem;border-radius:4px;margin-bottom:1rem}
+.alert-success{background:rgba(63,185,80,0.1);border:1px solid var(--green);color:var(--green)}
+.alert-error{background:rgba(248,81,73,0.1);border:1px solid var(--red);color:var(--red)}
+.validation-error{color:var(--red);font-size:.75rem;margin-top:.25rem}
+</style>
+
+<div class="settings-container">
+  <h1>LLM Configuration Settings</h1>
+  
+  {{if .Success}}
+  <div class="alert alert-success">{{.Success}}</div>
+  {{end}}
+  {{if .Error}}
+  <div class="alert alert-error">{{.Error}}</div>
+  {{end}}
+
+  <form method="post" action="/settings" hx-post="/settings" hx-target="#settings-content" hx-swap="outerHTML">
+    <div id="settings-content">
+      <!-- Development Category -->
+      <div class="settings-section">
+        <h2>Development</h2>
+        <div class="category-grid">
+          <div class="model-variant">
+            <h3>Strong Model</h3>
+            <div class="form-group">
+              <label for="development_strong_provider">Provider</label>
+              <input type="text" id="development_strong_provider" name="development_strong_provider" value="{{.Config.Development.Strong.Provider}}" placeholder="e.g., nexos-ai, openai, anthropic">
+            </div>
+            <div class="form-group">
+              <label for="development_strong_model">Model</label>
+              <input type="text" id="development_strong_model" name="development_strong_model" value="{{.Config.Development.Strong.Model}}" placeholder="e.g., Kimi K2.5, gpt-4, claude-3-opus">
+            </div>
+            <div class="form-group">
+              <label for="development_strong_api_key">API Key (optional)</label>
+              <input type="password" id="development_strong_api_key" name="development_strong_api_key" value="{{.Config.Development.Strong.APIKey}}" placeholder="Leave empty to use env var">
+            </div>
+            <div class="form-group">
+              <label for="development_strong_base_url">Base URL (optional)</label>
+              <input type="text" id="development_strong_base_url" name="development_strong_base_url" value="{{.Config.Development.Strong.BaseURL}}" placeholder="Custom API endpoint">
+            </div>
+          </div>
+          <div class="model-variant">
+            <h3>Weak Model</h3>
+            <div class="form-group">
+              <label for="development_weak_provider">Provider</label>
+              <input type="text" id="development_weak_provider" name="development_weak_provider" value="{{.Config.Development.Weak.Provider}}" placeholder="e.g., nexos-ai, openai, anthropic">
+            </div>
+            <div class="form-group">
+              <label for="development_weak_model">Model</label>
+              <input type="text" id="development_weak_model" name="development_weak_model" value="{{.Config.Development.Weak.Model}}" placeholder="e.g., Kimi K2.5, gpt-3.5-turbo">
+            </div>
+            <div class="form-group">
+              <label for="development_weak_api_key">API Key (optional)</label>
+              <input type="password" id="development_weak_api_key" name="development_weak_api_key" value="{{.Config.Development.Weak.APIKey}}" placeholder="Leave empty to use env var">
+            </div>
+            <div class="form-group">
+              <label for="development_weak_base_url">Base URL (optional)</label>
+              <input type="text" id="development_weak_base_url" name="development_weak_base_url" value="{{.Config.Development.Weak.BaseURL}}" placeholder="Custom API endpoint">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Planning Category -->
+      <div class="settings-section">
+        <h2>Planning</h2>
+        <div class="category-grid">
+          <div class="model-variant">
+            <h3>Strong Model</h3>
+            <div class="form-group">
+              <label for="planning_strong_provider">Provider</label>
+              <input type="text" id="planning_strong_provider" name="planning_strong_provider" value="{{.Config.Planning.Strong.Provider}}" placeholder="e.g., nexos-ai, openai, anthropic">
+            </div>
+            <div class="form-group">
+              <label for="planning_strong_model">Model</label>
+              <input type="text" id="planning_strong_model" name="planning_strong_model" value="{{.Config.Planning.Strong.Model}}" placeholder="e.g., Kimi K2.5, gpt-4, claude-3-opus">
+            </div>
+            <div class="form-group">
+              <label for="planning_strong_api_key">API Key (optional)</label>
+              <input type="password" id="planning_strong_api_key" name="planning_strong_api_key" value="{{.Config.Planning.Strong.APIKey}}" placeholder="Leave empty to use env var">
+            </div>
+            <div class="form-group">
+              <label for="planning_strong_base_url">Base URL (optional)</label>
+              <input type="text" id="planning_strong_base_url" name="planning_strong_base_url" value="{{.Config.Planning.Strong.BaseURL}}" placeholder="Custom API endpoint">
+            </div>
+          </div>
+          <div class="model-variant">
+            <h3>Weak Model</h3>
+            <div class="form-group">
+              <label for="planning_weak_provider">Provider</label>
+              <input type="text" id="planning_weak_provider" name="planning_weak_provider" value="{{.Config.Planning.Weak.Provider}}" placeholder="e.g., nexos-ai, openai, anthropic">
+            </div>
+            <div class="form-group">
+              <label for="planning_weak_model">Model</label>
+              <input type="text" id="planning_weak_model" name="planning_weak_model" value="{{.Config.Planning.Weak.Model}}" placeholder="e.g., Kimi K2.5, gpt-3.5-turbo">
+            </div>
+            <div class="form-group">
+              <label for="planning_weak_api_key">API Key (optional)</label>
+              <input type="password" id="planning_weak_api_key" name="planning_weak_api_key" value="{{.Config.Planning.Weak.APIKey}}" placeholder="Leave empty to use env var">
+            </div>
+            <div class="form-group">
+              <label for="planning_weak_base_url">Base URL (optional)</label>
+              <input type="text" id="planning_weak_base_url" name="planning_weak_base_url" value="{{.Config.Planning.Weak.BaseURL}}" placeholder="Custom API endpoint">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Orchestration Category -->
+      <div class="settings-section">
+        <h2>Orchestration</h2>
+        <div class="category-grid">
+          <div class="model-variant">
+            <h3>Strong Model</h3>
+            <div class="form-group">
+              <label for="orchestration_strong_provider">Provider</label>
+              <input type="text" id="orchestration_strong_provider" name="orchestration_strong_provider" value="{{.Config.Orchestration.Strong.Provider}}" placeholder="e.g., nexos-ai, openai, anthropic">
+            </div>
+            <div class="form-group">
+              <label for="orchestration_strong_model">Model</label>
+              <input type="text" id="orchestration_strong_model" name="orchestration_strong_model" value="{{.Config.Orchestration.Strong.Model}}" placeholder="e.g., Kimi K2.5, gpt-4, claude-3-opus">
+            </div>
+            <div class="form-group">
+              <label for="orchestration_strong_api_key">API Key (optional)</label>
+              <input type="password" id="orchestration_strong_api_key" name="orchestration_strong_api_key" value="{{.Config.Orchestration.Strong.APIKey}}" placeholder="Leave empty to use env var">
+            </div>
+            <div class="form-group">
+              <label for="orchestration_strong_base_url">Base URL (optional)</label>
+              <input type="text" id="orchestration_strong_base_url" name="orchestration_strong_base_url" value="{{.Config.Orchestration.Strong.BaseURL}}" placeholder="Custom API endpoint">
+            </div>
+          </div>
+          <div class="model-variant">
+            <h3>Weak Model</h3>
+            <div class="form-group">
+              <label for="orchestration_weak_provider">Provider</label>
+              <input type="text" id="orchestration_weak_provider" name="orchestration_weak_provider" value="{{.Config.Orchestration.Weak.Provider}}" placeholder="e.g., nexos-ai, openai, anthropic">
+            </div>
+            <div class="form-group">
+              <label for="orchestration_weak_model">Model</label>
+              <input type="text" id="orchestration_weak_model" name="orchestration_weak_model" value="{{.Config.Orchestration.Weak.Model}}" placeholder="e.g., Kimi K2.5, gpt-3.5-turbo">
+            </div>
+            <div class="form-group">
+              <label for="orchestration_weak_api_key">API Key (optional)</label>
+              <input type="password" id="orchestration_weak_api_key" name="orchestration_weak_api_key" value="{{.Config.Orchestration.Weak.APIKey}}" placeholder="Leave empty to use env var">
+            </div>
+            <div class="form-group">
+              <label for="orchestration_weak_base_url">Base URL (optional)</label>
+              <input type="text" id="orchestration_weak_base_url" name="orchestration_weak_base_url" value="{{.Config.Orchestration.Weak.BaseURL}}" placeholder="Custom API endpoint">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Setup Category -->
+      <div class="settings-section">
+        <h2>Setup</h2>
+        <div class="category-grid">
+          <div class="model-variant">
+            <h3>Strong Model</h3>
+            <div class="form-group">
+              <label for="setup_strong_provider">Provider</label>
+              <input type="text" id="setup_strong_provider" name="setup_strong_provider" value="{{.Config.Setup.Strong.Provider}}" placeholder="e.g., nexos-ai, openai, anthropic">
+            </div>
+            <div class="form-group">
+              <label for="setup_strong_model">Model</label>
+              <input type="text" id="setup_strong_model" name="setup_strong_model" value="{{.Config.Setup.Strong.Model}}" placeholder="e.g., Kimi K2.5, gpt-4, claude-3-opus">
+            </div>
+            <div class="form-group">
+              <label for="setup_strong_api_key">API Key (optional)</label>
+              <input type="password" id="setup_strong_api_key" name="setup_strong_api_key" value="{{.Config.Setup.Strong.APIKey}}" placeholder="Leave empty to use env var">
+            </div>
+            <div class="form-group">
+              <label for="setup_strong_base_url">Base URL (optional)</label>
+              <input type="text" id="setup_strong_base_url" name="setup_strong_base_url" value="{{.Config.Setup.Strong.BaseURL}}" placeholder="Custom API endpoint">
+            </div>
+          </div>
+          <div class="model-variant">
+            <h3>Weak Model</h3>
+            <div class="form-group">
+              <label for="setup_weak_provider">Provider</label>
+              <input type="text" id="setup_weak_provider" name="setup_weak_provider" value="{{.Config.Setup.Weak.Provider}}" placeholder="e.g., nexos-ai, openai, anthropic">
+            </div>
+            <div class="form-group">
+              <label for="setup_weak_model">Model</label>
+              <input type="text" id="setup_weak_model" name="setup_weak_model" value="{{.Config.Setup.Weak.Model}}" placeholder="e.g., Kimi K2.5, gpt-3.5-turbo">
+            </div>
+            <div class="form-group">
+              <label for="setup_weak_api_key">API Key (optional)</label>
+              <input type="password" id="setup_weak_api_key" name="setup_weak_api_key" value="{{.Config.Setup.Weak.APIKey}}" placeholder="Leave empty to use env var">
+            </div>
+            <div class="form-group">
+              <label for="setup_weak_base_url">Base URL (optional)</label>
+              <input type="text" id="setup_weak_base_url" name="setup_weak_base_url" value="{{.Config.Setup.Weak.BaseURL}}" placeholder="Custom API endpoint">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Routing Rules -->
+      <div class="settings-section">
+        <h2>Routing Rules</h2>
+        <div class="routing-grid">
+          <div class="form-group">
+            <label for="routing_code_size_threshold">Code Size Threshold (lines)</label>
+            <input type="number" id="routing_code_size_threshold" name="routing_code_size_threshold" value="{{.Config.RoutingRules.ComplexityThresholds.CodeSizeThreshold}}" min="1" placeholder="100">
+            <div class="help-text">Number of lines that triggers medium complexity</div>
+          </div>
+          <div class="form-group">
+            <label for="routing_high_complexity_threshold">High Complexity Threshold (lines)</label>
+            <input type="number" id="routing_high_complexity_threshold" name="routing_high_complexity_threshold" value="{{.Config.RoutingRules.ComplexityThresholds.HighComplexityThreshold}}" min="1" placeholder="500">
+            <div class="help-text">Number of lines that triggers high complexity</div>
+          </div>
+          <div class="form-group">
+            <label for="routing_file_count_threshold">File Count Threshold</label>
+            <input type="number" id="routing_file_count_threshold" name="routing_file_count_threshold" value="{{.Config.RoutingRules.ComplexityThresholds.FileCountThreshold}}" min="1" placeholder="5">
+            <div class="help-text">Number of files that triggers higher complexity</div>
+          </div>
+        </div>
+        <div class="forced-stages">
+          <h3 style="font-size:1rem;margin:1rem 0 .5rem;color:var(--muted)">Force Strong Model For Stages</h3>
+          <label>
+            <input type="checkbox" name="force_strong_stages" value="plan-review" {{if index .ForceStrongStages "plan-review"}}checked{{end}}>
+            Plan Review
+          </label>
+          <label>
+            <input type="checkbox" name="force_strong_stages" value="code-review" {{if index .ForceStrongStages "code-review"}}checked{{end}}>
+            Code Review
+          </label>
+          <label>
+            <input type="checkbox" name="force_strong_stages" value="merge" {{if index .ForceStrongStages "merge"}}checked{{end}}>
+            Merge
+          </label>
+          <label>
+            <input type="checkbox" name="force_strong_stages" value="analysis" {{if index .ForceStrongStages "analysis"}}checked{{end}}>
+            Analysis
+          </label>
+          <label>
+            <input type="checkbox" name="force_strong_stages" value="testing" {{if index .ForceStrongStages "testing"}}checked{{end}}>
+            Testing
+          </label>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-save">Save Settings</button>
+      </div>
+    </div>
+  </form>
+</div>
+{{end}}

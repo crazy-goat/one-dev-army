@@ -33,9 +33,10 @@ type Server struct {
 	hub              *Hub
 	syncService      *SyncService
 	rateLimitService *RateLimitService
+	rootDir          string
 }
 
-func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService) (*Server, error) {
+func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string) (*Server, error) {
 	tmpls, err := parseTemplates()
 	if err != nil {
 		return nil, err
@@ -60,6 +61,7 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 		wizardLLM:   wizardLLM,
 		hub:         hub,
 		syncService: syncService,
+		rootDir:     rootDir,
 	}
 	if s.wizardLLM == "" {
 		s.wizardLLM = DefaultLLMModel
@@ -117,6 +119,13 @@ func parseTemplates() (map[string]*template.Template, error) {
 	}
 	tmpls["wizard_modal.html"] = wizardModalTmpl
 
+	// Parse settings template
+	settingsTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/llm-config.html")
+	if err != nil {
+		return nil, fmt.Errorf("parsing llm-config.html: %w", err)
+	}
+	tmpls["llm-config.html"] = settingsTmpl
+
 	// Parse wizard partial templates (no layout)
 	wizardPartials := []string{"wizard_new.html", "wizard_refine.html", "wizard_create.html", "wizard_error.html", "wizard_logs.html"}
 	for _, page := range wizardPartials {
@@ -171,6 +180,10 @@ func (s *Server) routes() {
 	// Rate limit endpoints
 	s.mux.HandleFunc("GET /api/rate-limit", s.handleRateLimit)
 	s.mux.HandleFunc("POST /api/rate-limit/refresh", s.handleRateLimitRefresh)
+
+	// Settings routes
+	s.mux.HandleFunc("GET /settings", s.handleSettings)
+	s.mux.HandleFunc("POST /settings", s.handleSaveSettings)
 }
 
 func (s *Server) Start() error {

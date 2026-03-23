@@ -74,6 +74,16 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 	}
 	tmpls["wizard_modal.html"] = wizardModalTmpl
 
+	// Parse settings template
+	settingsTmpl, err := template.New("").Funcs(funcMap).ParseFiles(
+		filepath.Join(templateDir, "layout.html"),
+		filepath.Join(templateDir, "llm-config.html"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("parsing llm-config.html: %w", err)
+	}
+	tmpls["llm-config.html"] = settingsTmpl
+
 	// Parse wizard partial templates (no layout)
 	wizardPartials := []string{"wizard_new.html", "wizard_refine.html", "wizard_create.html", "wizard_error.html", "wizard_logs.html"}
 	for _, page := range wizardPartials {
@@ -3513,5 +3523,456 @@ func TestHandleSprintClose_WhileProcessing_WithMock(t *testing.T) {
 
 	if canClose {
 		t.Error("expected canClose to be false when processing is true")
+	}
+}
+
+// TestHandleSettings tests the GET /settings handler
+func TestHandleSettings(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".oda"), 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a minimal config file
+	configContent := `github:
+  repo: test/repo
+llm:
+  development:
+    strong:
+      provider: nexos-ai
+      model: Kimi K2.5
+    weak:
+      provider: nexos-ai
+      model: Kimi K2.5
+`
+	configPath := filepath.Join(tmpDir, ".oda", "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify the page contains expected content
+	if !strings.Contains(body, "LLM Configuration Settings") {
+		t.Error("settings page missing title")
+	}
+
+	// Verify form fields are present
+	if !strings.Contains(body, `name="development_strong_provider"`) {
+		t.Error("settings page missing development strong provider field")
+	}
+
+	if !strings.Contains(body, `name="development_strong_model"`) {
+		t.Error("settings page missing development strong model field")
+	}
+
+	// Verify navigation is marked as active
+	if !strings.Contains(body, `class="active"`) {
+		t.Error("settings page missing active navigation marker")
+	}
+}
+
+// TestHandleSettings_NoConfigFile tests settings handler when config file doesn't exist
+func TestHandleSettings_NoConfigFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleSettings(rec, req)
+
+	// Should still return 200 with default config
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+}
+
+// TestHandleSaveSettings tests the POST /settings handler
+func TestHandleSaveSettings(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".oda"), 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create initial config file
+	configContent := `github:
+  repo: test/repo
+llm:
+  development:
+    strong:
+      provider: nexos-ai
+      model: Kimi K2.5
+`
+	configPath := filepath.Join(tmpDir, ".oda", "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Prepare form data
+	form := url.Values{}
+	form.Set("development_strong_provider", "openai")
+	form.Set("development_strong_model", "gpt-4")
+	form.Set("development_strong_api_key", "test-api-key")
+	form.Set("development_weak_provider", "openai")
+	form.Set("development_weak_model", "gpt-3.5-turbo")
+	form.Set("planning_strong_provider", "anthropic")
+	form.Set("planning_strong_model", "claude-3-opus")
+	form.Set("orchestration_strong_provider", "nexos-ai")
+	form.Set("orchestration_strong_model", "Kimi K2.5")
+	form.Set("setup_strong_provider", "nexos-ai")
+	form.Set("setup_strong_model", "Kimi K2.5")
+	form.Set("routing_code_size_threshold", "150")
+	form.Set("routing_high_complexity_threshold", "600")
+	form.Set("routing_file_count_threshold", "10")
+	form.Add("force_strong_stages", "plan-review")
+	form.Add("force_strong_stages", "code-review")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+
+	// Verify success message
+	if !strings.Contains(body, "Configuration saved successfully") {
+		t.Error("expected success message in response")
+	}
+
+	// Verify the config was saved
+	savedConfig, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to read saved config: %v", err)
+	}
+
+	// Verify saved content contains our changes
+	savedContent := string(savedConfig)
+	if !strings.Contains(savedContent, "openai") {
+		t.Error("saved config should contain updated provider")
+	}
+	if !strings.Contains(savedContent, "gpt-4") {
+		t.Error("saved config should contain updated model")
+	}
+}
+
+// TestHandleSaveSettingsValidation tests form validation
+func TestHandleSaveSettingsValidation(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".oda"), 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create initial config file
+	configContent := `github:
+  repo: test/repo
+llm:
+  development:
+    strong:
+      provider: nexos-ai
+      model: Kimi K2.5
+`
+	configPath := filepath.Join(tmpDir, ".oda", "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Test missing provider
+	form := url.Values{}
+	form.Set("development_strong_provider", "") // Empty provider
+	form.Set("development_strong_model", "gpt-4")
+	form.Set("planning_strong_provider", "anthropic")
+	form.Set("planning_strong_model", "claude-3-opus")
+	form.Set("orchestration_strong_provider", "nexos-ai")
+	form.Set("orchestration_strong_model", "Kimi K2.5")
+	form.Set("setup_strong_provider", "nexos-ai")
+	form.Set("setup_strong_model", "Kimi K2.5")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	// Should still return 200 but with error message
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "requires provider and model") {
+		t.Errorf("expected validation error message, got: %s", body)
+	}
+}
+
+// TestHandleSaveSettings_InvalidThresholds tests validation of numeric thresholds
+func TestHandleSaveSettings_InvalidThresholds(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".oda"), 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create initial config file
+	configContent := `github:
+  repo: test/repo
+llm:
+  development:
+    strong:
+      provider: nexos-ai
+      model: Kimi K2.5
+`
+	configPath := filepath.Join(tmpDir, ".oda", "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Test negative threshold
+	form := url.Values{}
+	form.Set("development_strong_provider", "nexos-ai")
+	form.Set("development_strong_model", "Kimi K2.5")
+	form.Set("planning_strong_provider", "nexos-ai")
+	form.Set("planning_strong_model", "Kimi K2.5")
+	form.Set("orchestration_strong_provider", "nexos-ai")
+	form.Set("orchestration_strong_model", "Kimi K2.5")
+	form.Set("setup_strong_provider", "nexos-ai")
+	form.Set("setup_strong_model", "Kimi K2.5")
+	form.Set("routing_code_size_threshold", "-100") // Negative value
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	// Should still return 200 but with error message
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "positive integer") {
+		t.Errorf("expected validation error for negative threshold, got: %s", body)
+	}
+}
+
+// TestSettingsPersistence verifies that saved config persists and reloads correctly
+func TestSettingsPersistence(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".oda"), 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create initial config file
+	configContent := `github:
+  repo: test/repo
+llm:
+  development:
+    strong:
+      provider: nexos-ai
+      model: Kimi K2.5
+`
+	configPath := filepath.Join(tmpDir, ".oda", "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Save settings
+	form := url.Values{}
+	form.Set("development_strong_provider", "openai")
+	form.Set("development_strong_model", "gpt-4-turbo")
+	form.Set("development_strong_api_key", "secret-key")
+	form.Set("planning_strong_provider", "anthropic")
+	form.Set("planning_strong_model", "claude-3-opus")
+	form.Set("orchestration_strong_provider", "nexos-ai")
+	form.Set("orchestration_strong_model", "Kimi K2.5")
+	form.Set("setup_strong_provider", "nexos-ai")
+	form.Set("setup_strong_model", "Kimi K2.5")
+	form.Set("routing_code_size_threshold", "200")
+	form.Set("routing_high_complexity_threshold", "1000")
+	form.Set("routing_file_count_threshold", "15")
+	form.Add("force_strong_stages", "merge")
+	form.Add("force_strong_stages", "testing")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Now load the settings page again to verify persistence
+	req2 := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec2 := httptest.NewRecorder()
+
+	srv.handleSettings(rec2, req2)
+
+	if rec2.Code != http.StatusOK {
+		t.Errorf("expected status 200 on reload, got %d", rec2.Code)
+	}
+
+	body := rec2.Body.String()
+
+	// Verify saved values are displayed
+	if !strings.Contains(body, `value="openai"`) {
+		t.Error("reloaded settings should show saved provider")
+	}
+
+	if !strings.Contains(body, `value="gpt-4-turbo"`) {
+		t.Error("reloaded settings should show saved model")
+	}
+
+	if !strings.Contains(body, `value="200"`) {
+		t.Error("reloaded settings should show saved threshold")
+	}
+}
+
+// TestSettingsTemplate_ForceStrongStages verifies the force strong stages checkboxes
+func TestSettingsTemplate_ForceStrongStages(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".oda"), 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create config with forced stages
+	configContent := `github:
+  repo: test/repo
+llm:
+  development:
+    strong:
+      provider: nexos-ai
+      model: Kimi K2.5
+  routing_rules:
+    force_strong_for_stages:
+      - plan-review
+      - merge
+`
+	configPath := filepath.Join(tmpDir, ".oda", "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify checkboxes for forced stages are checked
+	// The template should render checked for plan-review and merge
+	if !strings.Contains(body, `value="plan-review"`) {
+		t.Error("settings page should have plan-review checkbox")
+	}
+
+	if !strings.Contains(body, `value="merge"`) {
+		t.Error("settings page should have merge checkbox")
+	}
+}
+
+// TestHandleSaveSettings_EmptyForm tests handling of empty form submission
+func TestHandleSaveSettings_EmptyForm(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".oda"), 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create initial config file
+	configContent := `github:
+  repo: test/repo
+llm:
+  development:
+    strong:
+      provider: nexos-ai
+      model: Kimi K2.5
+`
+	configPath := filepath.Join(tmpDir, ".oda", "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Submit empty form (should trigger validation errors)
+	form := url.Values{}
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	// Should return 200 with validation errors
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "requires provider and model") {
+		t.Error("expected validation errors for empty required fields")
 	}
 }
