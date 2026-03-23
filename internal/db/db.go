@@ -571,6 +571,21 @@ func (s *Store) GetIssuesCacheByMilestone(milestone string) ([]github.Issue, err
 	return s.scanIssues(rows)
 }
 
+// GetOpenIssuesCacheByMilestone retrieves only open cached issues for a specific milestone
+func (s *Store) GetOpenIssuesCacheByMilestone(milestone string) ([]github.Issue, error) {
+	rows, err := s.db.Query(
+		`SELECT issue_number, title, body, state, labels, assignee, milestone, updated_at, cached_at, pr_merged, merged_at
+		 FROM issue_cache WHERE milestone = ? AND state = 'open' ORDER BY issue_number`,
+		milestone,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying open issues by milestone: %w", err)
+	}
+	defer rows.Close()
+
+	return s.scanIssues(rows)
+}
+
 // GetAllCachedIssues retrieves all cached issues
 func (s *Store) GetAllCachedIssues() ([]github.Issue, error) {
 	rows, err := s.db.Query(

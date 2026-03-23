@@ -361,6 +361,62 @@ func TestGetIssuesCacheByMilestone(t *testing.T) {
 	}
 }
 
+func TestGetOpenIssuesCacheByMilestone(t *testing.T) {
+	store := openTestStore(t)
+
+	issues := []github.Issue{
+		{Number: 1, Title: "Issue 1", State: "open", Labels: nil, Assignees: nil},
+		{Number: 2, Title: "Issue 2", State: "closed", Labels: nil, Assignees: nil},
+		{Number: 3, Title: "Issue 3", State: "open", Labels: nil, Assignees: nil},
+		{Number: 4, Title: "Issue 4", State: "closed", Labels: nil, Assignees: nil},
+	}
+
+	for _, issue := range issues {
+		milestone := "v1.0"
+		if issue.Number == 3 || issue.Number == 4 {
+			milestone = "v2.0"
+		}
+		if err := store.SaveIssueCache(issue, milestone, true); err != nil {
+			t.Fatalf("saving issue cache: %v", err)
+		}
+	}
+
+	// Test v1.0 milestone - should only return open issues
+	got, err := store.GetOpenIssuesCacheByMilestone("v1.0")
+	if err != nil {
+		t.Fatalf("getting open issues by milestone: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Errorf("got %d open issues for v1.0, want 1", len(got))
+	}
+	if len(got) > 0 && got[0].Number != 1 {
+		t.Errorf("expected issue #1, got issue #%d", got[0].Number)
+	}
+
+	// Test v2.0 milestone - should only return open issues
+	got, err = store.GetOpenIssuesCacheByMilestone("v2.0")
+	if err != nil {
+		t.Fatalf("getting open issues by milestone: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Errorf("got %d open issues for v2.0, want 1", len(got))
+	}
+	if len(got) > 0 && got[0].Number != 3 {
+		t.Errorf("expected issue #3, got issue #%d", got[0].Number)
+	}
+
+	// Test non-existent milestone
+	got, err = store.GetOpenIssuesCacheByMilestone("v3.0")
+	if err != nil {
+		t.Fatalf("getting open issues for non-existent milestone: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %d issues for non-existent milestone, want 0", len(got))
+	}
+}
+
 func TestGetAllCachedIssues(t *testing.T) {
 	store := openTestStore(t)
 

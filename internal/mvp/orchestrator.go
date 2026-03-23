@@ -159,9 +159,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		}
 
 		log.Printf("[Orchestrator] Fetching issues for milestone %q...", milestone.Title)
-		issues, err := o.gh.ListIssuesForMilestone(milestone.Title)
+		issues, err := o.store.GetOpenIssuesCacheByMilestone(milestone.Title)
 		if err != nil {
-			log.Printf("[Orchestrator] Error listing issues: %v", err)
+			log.Printf("[Orchestrator] Error listing issues from cache: %v", err)
 			o.sleep(ctx, 30*time.Second)
 			continue
 		}
