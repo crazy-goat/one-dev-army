@@ -2,9 +2,11 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/crazy-goat/one-dev-army/internal/github"
 	_ "modernc.org/sqlite"
 )
 
@@ -102,6 +104,18 @@ type TaskStep struct {
 	PlanAttachmentURL string
 	StartedAt         *time.Time
 	FinishedAt        *time.Time
+}
+
+type IssueCache struct {
+	IssueNumber int
+	Title       string
+	Body        string
+	State       string
+	Labels      string // JSON array
+	Assignee    string
+	Milestone   string
+	UpdatedAt   *time.Time
+	CachedAt    time.Time
 }
 
 func (s *Store) InsertStep(issueNumber int, stepName, prompt, sessionID string) (int64, error) {
@@ -250,4 +264,157 @@ func (s *Store) GetPlanAttachmentURL(issueNumber int) (string, error) {
 		return "", fmt.Errorf("querying plan attachment URL: %w", err)
 	}
 	return url.String, nil
+}
+
+// SaveIssueCache stores an issue in the cache
+func (s *Store) SaveIssueCache(issue github.Issue, milestone string) error {
+	labelsJSON, err := json.Marshal(issue.GetLabelNames())
+	if err != nil {
+		return fmt.Errorf("marshaling labels: %w", err)
+	}
+
+	_, err = s.db.Exec(
+		`INSERT OR REPLACE INTO issue_cache (issue_number, title, body, state, labels, assignee, milestone, updated_at, cached_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		issue.Number, issue.Title, issue.Body, issue.State, string(labelsJSON), issue.GetAssignee(), milestone, time.Now(), time.Now(),
+	)
+	if err != nil {
+		return fmt.Errorf("saving issue cache: %w", err)
+	}
+	return nil
+}
+
+// GetIssueCache retrieves a cached issue by number
+func (s *Store) GetIssueCache(issueNumber int) (github.Issue, error) {
+	var cache IssueCache
+	var labelsJSON string
+	err := s.db.QueryRow(
+		`SELECT issue_number, title, body, state, labels, assignee, milestone, updated_at, cached_at
+		 FROM issue_cache WHERE issue_number = ?`,
+		issueNumber,
+	).Scan(&cache.IssueNumber, &cache.Title, &cache.Body, &cache.State, &labelsJSON, &cache.Assignee, &cache.Milestone, &cache.UpdatedAt, &cache.CachedAt)
+	if err == sql.ErrNoRows {
+		return github.Issue{}, fmt.Errorf("issue not found in cache: %d", issueNumber)
+	}
+	if err != nil {
+		return github.Issue{}, fmt.Errorf("getting issue cache: %w", err)
+	}
+
+	var labelNames []string
+	if labelsJSON != "" {
+		if err := json.Unmarshal([]byte(labelsJSON), &labelNames); err != nil {
+			return github.Issue{}, fmt.Errorf("unmarshaling labels: %w", err)
+		}
+	}
+
+	labels := make([]struct {
+		Name string `json:"name"`
+	}, len(labelNames))
+	for i, name := range labelNames {
+		labels[i].Name = name
+	}
+
+	var assignees []struct {
+		Login string `json:"login"`
+	}
+	if cache.Assignee != "" {
+		assignees = append(assignees, struct {
+			Login string `json:"login"`
+		}{Login: cache.Assignee})
+	}
+
+	return github.Issue{
+		Number:    cache.IssueNumber,
+		Title:     cache.Title,
+		Body:      cache.Body,
+		State:     cache.State,
+		Labels:    labels,
+		Assignees: assignees,
+	}, nil
+}
+
+// GetIssuesCacheByMilestone retrieves all cached issues for a specific milestone
+func (s *Store) GetIssuesCacheByMilestone(milestone string) ([]github.Issue, error) {
+	rows, err := s.db.Query(
+		`SELECT issue_number, title, body, state, labels, assignee, milestone, updated_at, cached_at
+		 FROM issue_cache WHERE milestone = ? ORDER BY issue_number`,
+		milestone,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying issues by milestone: %w", err)
+	}
+	defer rows.Close()
+
+	return s.scanIssues(rows)
+}
+
+// GetAllCachedIssues retrieves all cached issues
+func (s *Store) GetAllCachedIssues() ([]github.Issue, error) {
+	rows, err := s.db.Query(
+		`SELECT issue_number, title, body, state, labels, assignee, milestone, updated_at, cached_at
+		 FROM issue_cache ORDER BY issue_number`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying all cached issues: %w", err)
+	}
+	defer rows.Close()
+
+	return s.scanIssues(rows)
+}
+
+// ClearIssueCache deletes all cached issues
+func (s *Store) ClearIssueCache() error {
+	_, err := s.db.Exec(`DELETE FROM issue_cache`)
+	if err != nil {
+		return fmt.Errorf("clearing issue cache: %w", err)
+	}
+	return nil
+}
+
+// scanIssues scans rows and converts them to github.Issue slice
+func (s *Store) scanIssues(rows *sql.Rows) ([]github.Issue, error) {
+	var issues []github.Issue
+	for rows.Next() {
+		var cache IssueCache
+		var labelsJSON string
+		if err := rows.Scan(&cache.IssueNumber, &cache.Title, &cache.Body, &cache.State, &labelsJSON, &cache.Assignee, &cache.Milestone, &cache.UpdatedAt, &cache.CachedAt); err != nil {
+			return nil, fmt.Errorf("scanning issue cache: %w", err)
+		}
+
+		var labelNames []string
+		if labelsJSON != "" {
+			if err := json.Unmarshal([]byte(labelsJSON), &labelNames); err != nil {
+				return nil, fmt.Errorf("unmarshaling labels: %w", err)
+			}
+		}
+
+		labels := make([]struct {
+			Name string `json:"name"`
+		}, len(labelNames))
+		for i, name := range labelNames {
+			labels[i].Name = name
+		}
+
+		var assignees []struct {
+			Login string `json:"login"`
+		}
+		if cache.Assignee != "" {
+			assignees = append(assignees, struct {
+				Login string `json:"login"`
+			}{Login: cache.Assignee})
+		}
+
+		issues = append(issues, github.Issue{
+			Number:    cache.IssueNumber,
+			Title:     cache.Title,
+			Body:      cache.Body,
+			State:     cache.State,
+			Labels:    labels,
+			Assignees: assignees,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating issues: %w", err)
+	}
+	return issues, nil
 }

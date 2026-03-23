@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/crazy-goat/one-dev-army/internal/db"
+	"github.com/crazy-goat/one-dev-army/internal/github"
 )
 
 func openTestStore(t *testing.T) *db.Store {
@@ -253,5 +254,208 @@ func TestGetStepResponse_Migration(t *testing.T) {
 	}
 	if response2 != "combined response content" {
 		t.Errorf("response = %q, want %q", response2, "combined response content")
+	}
+}
+
+func TestSaveAndGetIssueCache(t *testing.T) {
+	store := openTestStore(t)
+
+	issue := github.Issue{
+		Number: 177,
+		Title:  "Create SQLite cache schema for issues",
+		Body:   "This is a test issue body",
+		State:  "open",
+		Labels: []struct {
+			Name string `json:"name"`
+		}{
+			{Name: "enhancement"},
+			{Name: "database"},
+		},
+		Assignees: []struct {
+			Login string `json:"login"`
+		}{
+			{Login: "testuser"},
+		},
+	}
+
+	if err := store.SaveIssueCache(issue, "v1.0"); err != nil {
+		t.Fatalf("saving issue cache: %v", err)
+	}
+
+	got, err := store.GetIssueCache(177)
+	if err != nil {
+		t.Fatalf("getting issue cache: %v", err)
+	}
+
+	if got.Number != 177 {
+		t.Errorf("number = %d, want 177", got.Number)
+	}
+	if got.Title != "Create SQLite cache schema for issues" {
+		t.Errorf("title = %q, want %q", got.Title, "Create SQLite cache schema for issues")
+	}
+	if got.Body != "This is a test issue body" {
+		t.Errorf("body = %q, want %q", got.Body, "This is a test issue body")
+	}
+	if got.State != "open" {
+		t.Errorf("state = %q, want %q", got.State, "open")
+	}
+	if len(got.Labels) != 2 {
+		t.Errorf("labels count = %d, want 2", len(got.Labels))
+	} else {
+		if got.Labels[0].Name != "enhancement" {
+			t.Errorf("label[0] = %q, want %q", got.Labels[0].Name, "enhancement")
+		}
+		if got.Labels[1].Name != "database" {
+			t.Errorf("label[1] = %q, want %q", got.Labels[1].Name, "database")
+		}
+	}
+	if len(got.Assignees) != 1 || got.Assignees[0].Login != "testuser" {
+		t.Errorf("assignee = %v, want testuser", got.Assignees)
+	}
+}
+
+func TestGetIssueCache_NotFound(t *testing.T) {
+	store := openTestStore(t)
+
+	_, err := store.GetIssueCache(99999)
+	if err == nil {
+		t.Fatal("expected error for non-existent issue, got nil")
+	}
+}
+
+func TestGetIssuesCacheByMilestone(t *testing.T) {
+	store := openTestStore(t)
+
+	issues := []github.Issue{
+		{Number: 1, Title: "Issue 1", State: "open", Labels: nil, Assignees: nil},
+		{Number: 2, Title: "Issue 2", State: "closed", Labels: nil, Assignees: nil},
+		{Number: 3, Title: "Issue 3", State: "open", Labels: nil, Assignees: nil},
+	}
+
+	for _, issue := range issues {
+		milestone := "v1.0"
+		if issue.Number == 3 {
+			milestone = "v2.0"
+		}
+		if err := store.SaveIssueCache(issue, milestone); err != nil {
+			t.Fatalf("saving issue cache: %v", err)
+		}
+	}
+
+	got, err := store.GetIssuesCacheByMilestone("v1.0")
+	if err != nil {
+		t.Fatalf("getting issues by milestone: %v", err)
+	}
+
+	if len(got) != 2 {
+		t.Errorf("got %d issues, want 2", len(got))
+	}
+
+	for _, issue := range got {
+		if issue.Number != 1 && issue.Number != 2 {
+			t.Errorf("unexpected issue number: %d", issue.Number)
+		}
+	}
+}
+
+func TestGetAllCachedIssues(t *testing.T) {
+	store := openTestStore(t)
+
+	issues := []github.Issue{
+		{Number: 10, Title: "Issue 10", State: "open", Labels: nil, Assignees: nil},
+		{Number: 20, Title: "Issue 20", State: "closed", Labels: nil, Assignees: nil},
+		{Number: 30, Title: "Issue 30", State: "open", Labels: nil, Assignees: nil},
+	}
+
+	for _, issue := range issues {
+		if err := store.SaveIssueCache(issue, "backlog"); err != nil {
+			t.Fatalf("saving issue cache: %v", err)
+		}
+	}
+
+	got, err := store.GetAllCachedIssues()
+	if err != nil {
+		t.Fatalf("getting all cached issues: %v", err)
+	}
+
+	if len(got) != 3 {
+		t.Errorf("got %d issues, want 3", len(got))
+	}
+}
+
+func TestClearIssueCache(t *testing.T) {
+	store := openTestStore(t)
+
+	issue := github.Issue{
+		Number: 100,
+		Title:  "Test Issue",
+		State:  "open",
+		Labels: nil,
+	}
+
+	if err := store.SaveIssueCache(issue, "v1.0"); err != nil {
+		t.Fatalf("saving issue cache: %v", err)
+	}
+
+	got, err := store.GetAllCachedIssues()
+	if err != nil {
+		t.Fatalf("getting all cached issues: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 issue before clear, got %d", len(got))
+	}
+
+	if err := store.ClearIssueCache(); err != nil {
+		t.Fatalf("clearing issue cache: %v", err)
+	}
+
+	got, err = store.GetAllCachedIssues()
+	if err != nil {
+		t.Fatalf("getting all cached issues after clear: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("expected 0 issues after clear, got %d", len(got))
+	}
+}
+
+func TestIssueCache_JSONLabels(t *testing.T) {
+	store := openTestStore(t)
+
+	issue := github.Issue{
+		Number: 200,
+		Title:  "Issue with labels",
+		State:  "open",
+		Labels: []struct {
+			Name string `json:"name"`
+		}{
+			{Name: "bug"},
+			{Name: "critical"},
+			{Name: "help wanted"},
+		},
+	}
+
+	if err := store.SaveIssueCache(issue, ""); err != nil {
+		t.Fatalf("saving issue cache: %v", err)
+	}
+
+	got, err := store.GetIssueCache(200)
+	if err != nil {
+		t.Fatalf("getting issue cache: %v", err)
+	}
+
+	if len(got.Labels) != 3 {
+		t.Errorf("labels count = %d, want 3", len(got.Labels))
+	}
+
+	labelNames := make([]string, len(got.Labels))
+	for i, l := range got.Labels {
+		labelNames[i] = l.Name
+	}
+
+	expected := []string{"bug", "critical", "help wanted"}
+	for i, exp := range expected {
+		if labelNames[i] != exp {
+			t.Errorf("label[%d] = %q, want %q", i, labelNames[i], exp)
+		}
 	}
 }

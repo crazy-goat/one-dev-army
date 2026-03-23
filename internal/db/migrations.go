@@ -34,6 +34,20 @@ var migrations = []string{
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_task_steps_issue ON task_steps(issue_number)`,
 	`ALTER TABLE task_steps ADD COLUMN plan_attachment_url TEXT NOT NULL DEFAULT ''`,
+	`CREATE TABLE IF NOT EXISTS issue_cache (
+		issue_number INTEGER PRIMARY KEY,
+		title TEXT NOT NULL,
+		body TEXT,
+		state TEXT NOT NULL,
+		labels TEXT,
+		assignee TEXT,
+		milestone TEXT,
+		updated_at DATETIME,
+		cached_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_issue_cache_state ON issue_cache(state)`,
+	`CREATE INDEX IF NOT EXISTS idx_issue_cache_cached_at ON issue_cache(cached_at)`,
+	`CREATE INDEX IF NOT EXISTS idx_issue_cache_milestone ON issue_cache(milestone)`,
 }
 
 // columnExists checks if a column exists in a table
@@ -50,9 +64,9 @@ func columnExists(db *sql.DB, table, column string) bool {
 }
 
 func migrate(db *sql.DB) error {
-	for i, m := range migrations {
-		// Special handling for the plan_attachment_url migration (last one)
-		if i == len(migrations)-1 && strings.Contains(m, "plan_attachment_url") {
+	for _, m := range migrations {
+		// Special handling for the plan_attachment_url migration
+		if strings.Contains(m, "plan_attachment_url") {
 			if columnExists(db, "task_steps", "plan_attachment_url") {
 				continue // Skip if column already exists
 			}
