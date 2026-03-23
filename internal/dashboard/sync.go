@@ -159,16 +159,11 @@ func (s *SyncService) syncNow() {
 			continue
 		}
 		cachedCount++
-
-		// Broadcast update to WebSocket clients
-		if s.hub != nil {
-			s.hub.BroadcastIssueUpdate(issue)
-		}
 	}
 
 	log.Printf("[SyncService] Cached %d/%d issues", cachedCount, len(issues))
 
-	// Broadcast sync completion
+	// Broadcast sync completion - frontend will refresh board
 	if s.hub != nil {
 		s.hub.BroadcastSyncComplete(cachedCount)
 	}

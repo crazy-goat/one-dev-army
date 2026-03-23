@@ -436,7 +436,7 @@ func (s *Store) SaveIssueCache(issue github.Issue, milestone string, force bool)
 		_, err = s.db.Exec(
 			`INSERT OR REPLACE INTO issue_cache (issue_number, title, body, state, labels, assignee, milestone, updated_at, cached_at, pr_merged, merged_at)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			issue.Number, issue.Title, issue.Body, issue.State, string(labelsJSON), issue.GetAssignee(), milestone, issue.UpdatedAt, time.Now(),
+			issue.Number, issue.Title, issue.Body, issue.State, string(labelsJSON), issue.GetAssignee(), milestone, issue.UpdatedAt, time.Now().UTC(),
 			issue.PRMerged, issue.MergedAt,
 		)
 		if err != nil {
@@ -575,7 +575,7 @@ func (s *Store) GetIssuesCacheByMilestone(milestone string) ([]github.Issue, err
 func (s *Store) GetOpenIssuesCacheByMilestone(milestone string) ([]github.Issue, error) {
 	rows, err := s.db.Query(
 		`SELECT issue_number, title, body, state, labels, assignee, milestone, updated_at, cached_at, pr_merged, merged_at
-		 FROM issue_cache WHERE milestone = ? AND state = 'open' ORDER BY issue_number`,
+		 FROM issue_cache WHERE milestone = ? AND UPPER(state) = 'OPEN' ORDER BY issue_number`,
 		milestone,
 	)
 	if err != nil {

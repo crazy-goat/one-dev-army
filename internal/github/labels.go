@@ -102,13 +102,47 @@ func (c *Client) SetStageLabel(issueNumber int, stage string) (Issue, error) {
 		}
 	}
 
-	// Fetch fresh issue data
-	updatedIssue, err := c.GetIssue(issueNumber)
-	if err != nil {
-		return Issue{}, fmt.Errorf("fetching updated issue #%d: %w", issueNumber, err)
+	// Build updated issue locally instead of fetching from GitHub
+	// This prevents sync from overwriting our local changes
+	updatedIssue := Issue{
+		Number:    issue.Number,
+		Title:     issue.Title,
+		Body:      issue.Body,
+		State:     issue.State,
+		Assignees: issue.Assignees,
+		UpdatedAt: issue.UpdatedAt,
 	}
 
-	return *updatedIssue, nil
+	// Rebuild labels: remove stage labels, add new ones
+	for _, label := range issue.Labels {
+		labelName := label.Name
+		isStageLabel := false
+		for _, prefix := range StageLabelPrefixes {
+			if strings.HasPrefix(labelName, prefix) || labelName == prefix {
+				isStageLabel = true
+				break
+			}
+		}
+		if !isStageLabel {
+			updatedIssue.Labels = append(updatedIssue.Labels, label)
+		}
+	}
+
+	// Add new stage labels
+	if stage != "Backlog" {
+		for _, label := range labels {
+			updatedIssue.Labels = append(updatedIssue.Labels, struct {
+				Name string `json:"name"`
+			}{Name: label})
+		}
+	}
+
+	// Handle special case: Done stage closes the issue
+	if stage == "Done" {
+		updatedIssue.State = "closed"
+	}
+
+	return updatedIssue, nil
 }
 
 // getStageLabelsToRemove returns all stage-related labels that should be removed from an issue

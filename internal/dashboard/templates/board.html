@@ -72,7 +72,10 @@
   </div>
 </div>
 
+<div class="board" id="board-container" hx-get="/api/board-data" hx-swap="innerHTML" hx-trigger="refresh">
 {{template "board-columns" .}}
+
+</div>
 
 <!-- Decline modal -->
 <div id="decline-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center">
@@ -144,7 +147,6 @@ function triggerSync() {
 {{end}}
 
 {{define "board-columns"}}
-<div class="board" id="board-container" hx-get="/api/board-data" hx-swap="outerHTML" hx-trigger="refresh">
   <div class="column col-blocked">
     <div class="column-title">Blocked <span class="count">{{len .Blocked}}</span></div>
     {{range .Blocked}}
@@ -293,5 +295,4 @@ function triggerSync() {
     <div class="empty-state">No failed tickets</div>
     {{end}}
   </div>
-</div>
 {{end}}
