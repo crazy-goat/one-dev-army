@@ -35,7 +35,8 @@ type boardData struct {
 	CurrentIssue string
 	Blocked      []taskCard
 	Backlog      []taskCard
-	Progress     []taskCard
+	Plan         []taskCard
+	Code         []taskCard
 	AIReview     []taskCard
 	Approve      []taskCard
 	Done         []taskCard
@@ -67,18 +68,21 @@ func placeholderBoard() boardData {
 			{ID: 1, Title: "Set up CI pipeline", Status: "backlog"},
 			{ID: 2, Title: "Add logging middleware", Status: "backlog"},
 		},
-		Progress: []taskCard{
-			{ID: 3, Title: "Implement auth service", Status: "in_progress", Worker: "worker-1"},
+		Plan: []taskCard{
+			{ID: 3, Title: "Design auth service architecture", Status: "plan", Worker: "worker-1"},
+		},
+		Code: []taskCard{
+			{ID: 4, Title: "Implement auth service", Status: "code", Worker: "worker-2"},
 		},
 		AIReview: []taskCard{
-			{ID: 4, Title: "Database migrations", Status: "ai_review"},
+			{ID: 5, Title: "Database migrations", Status: "ai_review"},
 		},
 		Approve: []taskCard{},
 		Done: []taskCard{
-			{ID: 5, Title: "Project skeleton", Status: "done"},
+			{ID: 6, Title: "Project skeleton", Status: "done"},
 		},
 		Blocked: []taskCard{
-			{ID: 6, Title: "Deploy to staging", Status: "blocked"},
+			{ID: 7, Title: "Deploy to staging", Status: "blocked"},
 		},
 	}
 }
@@ -217,10 +221,15 @@ func inferColumnFromIssue(issue github.Issue) string {
 	if labelSet["blocked"] || labelSet["blocker"] {
 		return "Blocked"
 	}
-	if labelSet["in-progress"] || labelSet["in progress"] || labelSet["wip"] || labelSet["working"] {
-		return "In Progress"
+	// Plan column: analysis and planning stages
+	if labelSet["stage:analysis"] || labelSet["stage:planning"] {
+		return "Plan"
 	}
-	if labelSet["review"] || labelSet["in-review"] || labelSet["pr-ready"] {
+	// Code column: coding and testing stages, or legacy in-progress label
+	if labelSet["stage:coding"] || labelSet["stage:testing"] || labelSet["in-progress"] || labelSet["in progress"] || labelSet["wip"] || labelSet["working"] {
+		return "Code"
+	}
+	if labelSet["review"] || labelSet["in-review"] || labelSet["pr-ready"] || labelSet["stage:plan-review"] || labelSet["stage:code-review"] {
 		return "AI Review"
 	}
 	if labelSet["awaiting-approval"] || labelSet["approve"] || labelSet["merge-ready"] {
@@ -250,8 +259,10 @@ func (s *Server) addCardToColumn(data *boardData, col string, issue github.Issue
 	switch col {
 	case "Backlog":
 		data.Backlog = append(data.Backlog, card)
-	case "In Progress":
-		data.Progress = append(data.Progress, card)
+	case "Plan":
+		data.Plan = append(data.Plan, card)
+	case "Code":
+		data.Code = append(data.Code, card)
 	case "AI Review":
 		data.AIReview = append(data.AIReview, card)
 	case "Approve":

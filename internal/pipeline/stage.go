@@ -18,12 +18,13 @@ const (
 type Column string
 
 const (
-	ColumnBacklog    Column = "Backlog"
-	ColumnInProgress Column = "In Progress"
-	ColumnAIReview   Column = "AI Review"
-	ColumnApprove    Column = "Approve"
-	ColumnDone       Column = "Done"
-	ColumnBlocked    Column = "Blocked"
+	ColumnBacklog  Column = "Backlog"
+	ColumnPlan     Column = "Plan"
+	ColumnCode     Column = "Code"
+	ColumnAIReview Column = "AI Review"
+	ColumnApprove  Column = "Approve"
+	ColumnDone     Column = "Done"
+	ColumnBlocked  Column = "Blocked"
 )
 
 var stageOrder = []Stage{
@@ -42,8 +43,10 @@ func (s Stage) Column() Column {
 	switch s {
 	case StageQueued:
 		return ColumnBacklog
-	case StageAnalysis, StagePlanning, StageCoding, StageTesting:
-		return ColumnInProgress
+	case StageAnalysis, StagePlanning:
+		return ColumnPlan
+	case StageCoding, StageTesting:
+		return ColumnCode
 	case StagePlanReview, StageCodeReview:
 		return ColumnAIReview
 	case StageMerging:

@@ -8,12 +8,14 @@ import (
 )
 
 var ProjectColumns = []string{
+	"Blocked",
 	"Backlog",
-	"In Progress",
+	"Plan",
+	"Code",
 	"AI Review",
 	"Approve",
 	"Done",
-	"Blocked",
+	"Failed",
 }
 
 type Project struct {
@@ -166,12 +168,14 @@ func (c *Client) createStatusField(projectID string, projectNumber int, owner st
 
 // columnColors maps column names to GitHub project colors.
 var columnColors = map[string]string{
-	"Backlog":     "GRAY",
-	"In Progress": "BLUE",
-	"AI Review":   "YELLOW",
-	"Approve":     "PURPLE",
-	"Done":        "GREEN",
-	"Blocked":     "RED",
+	"Blocked":   "RED",
+	"Backlog":   "GRAY",
+	"Plan":      "YELLOW",
+	"Code":      "BLUE",
+	"AI Review": "YELLOW",
+	"Approve":   "PURPLE",
+	"Done":      "GREEN",
+	"Failed":    "RED",
 }
 
 // ProjectItem represents an item in a GitHub Project with its status

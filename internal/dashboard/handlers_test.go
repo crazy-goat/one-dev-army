@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/crazy-goat/one-dev-army/internal/github"
 )
 
 // parseTemplatesFromDisk parses templates from disk for testing
@@ -2290,7 +2292,7 @@ func TestBoardLayout_ValidHTMLStructure(t *testing.T) {
 		"board-header":  `class="board-header"`,
 		"board-actions": `class="board-actions"`,
 		"board grid":    `class="board"`,
-		"7 columns":     "grid-template-columns:repeat(7,1fr)",
+		"8 columns":     "grid-template-columns:repeat(8,1fr)",
 	}
 
 	for name, pattern := range structureChecks {
@@ -2905,6 +2907,293 @@ func TestHandleWizardCreate_UsesSessionTitle(t *testing.T) {
 	body := rec.Body.String()
 	if !strings.Contains(body, "[Feature] Add user authentication system") {
 		t.Errorf("Expected response to contain the generated title, got: %s", body)
+	}
+}
+
+// TestInferColumnFromIssue tests the column inference logic for Plan and Code columns
+func TestInferColumnFromIssue(t *testing.T) {
+	tests := []struct {
+		name     string
+		labels   []string
+		state    string
+		expected string
+	}{
+		{
+			name:     "stage:analysis label maps to Plan",
+			labels:   []string{"stage:analysis"},
+			expected: "Plan",
+		},
+		{
+			name:     "stage:planning label maps to Plan",
+			labels:   []string{"stage:planning"},
+			expected: "Plan",
+		},
+		{
+			name:     "stage:coding label maps to Code",
+			labels:   []string{"stage:coding"},
+			expected: "Code",
+		},
+		{
+			name:     "stage:testing label maps to Code",
+			labels:   []string{"stage:testing"},
+			expected: "Code",
+		},
+		{
+			name:     "in-progress label maps to Code",
+			labels:   []string{"in-progress"},
+			expected: "Code",
+		},
+		{
+			name:     "wip label maps to Code",
+			labels:   []string{"wip"},
+			expected: "Code",
+		},
+		{
+			name:     "failed label takes precedence",
+			labels:   []string{"stage:coding", "failed"},
+			expected: "Failed",
+		},
+		{
+			name:     "blocked label takes precedence over Plan",
+			labels:   []string{"stage:analysis", "blocked"},
+			expected: "Blocked",
+		},
+		{
+			name:     "review label maps to AI Review",
+			labels:   []string{"review"},
+			expected: "AI Review",
+		},
+		{
+			name:     "awaiting-approval maps to Approve",
+			labels:   []string{"awaiting-approval"},
+			expected: "Approve",
+		},
+		{
+			name:     "done label maps to Done",
+			labels:   []string{"done"},
+			expected: "Done",
+		},
+		{
+			name:     "closed state maps to Done",
+			labels:   []string{},
+			state:    "CLOSED",
+			expected: "Done",
+		},
+		{
+			name:     "no labels defaults to Backlog",
+			labels:   []string{},
+			expected: "Backlog",
+		},
+		{
+			name:     "unknown label defaults to Backlog",
+			labels:   []string{"unknown-label"},
+			expected: "Backlog",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			issue := github.Issue{
+				Number: 1,
+				Title:  "Test Issue",
+				State:  tt.state,
+			}
+			// Add labels to the issue
+			for _, label := range tt.labels {
+				issue.Labels = append(issue.Labels, struct {
+					Name string `json:"name"`
+				}{Name: label})
+			}
+
+			got := inferColumnFromIssue(issue)
+			if got != tt.expected {
+				t.Errorf("inferColumnFromIssue() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestAddCardToColumn tests that cards are added to correct Plan/Code fields
+func TestAddCardToColumn(t *testing.T) {
+	srv := &Server{
+		tmpls: make(map[string]*template.Template),
+	}
+
+	tests := []struct {
+		name          string
+		column        string
+		expectedField string
+	}{
+		{
+			name:          "Plan column adds to Plan field",
+			column:        "Plan",
+			expectedField: "Plan",
+		},
+		{
+			name:          "Code column adds to Code field",
+			column:        "Code",
+			expectedField: "Code",
+		},
+		{
+			name:          "Backlog column adds to Backlog field",
+			column:        "Backlog",
+			expectedField: "Backlog",
+		},
+		{
+			name:          "AI Review column adds to AIReview field",
+			column:        "AI Review",
+			expectedField: "AIReview",
+		},
+		{
+			name:          "Approve column adds to Approve field",
+			column:        "Approve",
+			expectedField: "Approve",
+		},
+		{
+			name:          "Done column adds to Done field",
+			column:        "Done",
+			expectedField: "Done",
+		},
+		{
+			name:          "Blocked column adds to Blocked field",
+			column:        "Blocked",
+			expectedField: "Blocked",
+		},
+		{
+			name:          "Failed column adds to Failed field",
+			column:        "Failed",
+			expectedField: "Failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := boardData{}
+			issue := github.Issue{
+				Number: 1,
+				Title:  "Test Issue",
+			}
+
+			srv.addCardToColumn(&data, tt.column, issue)
+
+			var count int
+			switch tt.expectedField {
+			case "Plan":
+				count = len(data.Plan)
+			case "Code":
+				count = len(data.Code)
+			case "Backlog":
+				count = len(data.Backlog)
+			case "AIReview":
+				count = len(data.AIReview)
+			case "Approve":
+				count = len(data.Approve)
+			case "Done":
+				count = len(data.Done)
+			case "Blocked":
+				count = len(data.Blocked)
+			case "Failed":
+				count = len(data.Failed)
+			}
+
+			if count != 1 {
+				t.Errorf("expected 1 card in %s field, got %d", tt.expectedField, count)
+			}
+		})
+	}
+}
+
+// TestAddCardToColumn_CardProperties verifies card properties are set correctly
+func TestAddCardToColumn_CardProperties(t *testing.T) {
+	srv := &Server{
+		tmpls: make(map[string]*template.Template),
+	}
+
+	data := boardData{}
+	issue := github.Issue{
+		Number: 42,
+		Title:  "Test Issue Title",
+		Assignees: []struct {
+			Login string `json:"login"`
+		}{{Login: "testuser"}},
+		Labels: []struct {
+			Name string `json:"name"`
+		}{{Name: "bug"}, {Name: "priority:high"}},
+	}
+
+	srv.addCardToColumn(&data, "Plan", issue)
+
+	if len(data.Plan) != 1 {
+		t.Fatalf("expected 1 card in Plan field, got %d", len(data.Plan))
+	}
+
+	card := data.Plan[0]
+
+	if card.ID != 42 {
+		t.Errorf("expected card ID to be 42, got %d", card.ID)
+	}
+
+	if card.Title != "Test Issue Title" {
+		t.Errorf("expected card Title to be 'Test Issue Title', got %q", card.Title)
+	}
+
+	if card.Status != "Plan" {
+		t.Errorf("expected card Status to be 'Plan', got %q", card.Status)
+	}
+
+	if card.Assignee != "testuser" {
+		t.Errorf("expected card Assignee to be 'testuser', got %q", card.Assignee)
+	}
+
+	if len(card.Labels) != 2 {
+		t.Errorf("expected 2 labels, got %d", len(card.Labels))
+	}
+}
+
+// TestInferColumnFromIssue_LabelCaseInsensitivity tests that label matching is case-insensitive
+func TestInferColumnFromIssue_LabelCaseInsensitivity(t *testing.T) {
+	tests := []struct {
+		name     string
+		label    string
+		expected string
+	}{
+		{
+			name:     "uppercase STAGE:ANALYSIS",
+			label:    "STAGE:ANALYSIS",
+			expected: "Plan",
+		},
+		{
+			name:     "mixed case Stage:Coding",
+			label:    "Stage:Coding",
+			expected: "Code",
+		},
+		{
+			name:     "uppercase FAILED",
+			label:    "FAILED",
+			expected: "Failed",
+		},
+		{
+			name:     "mixed case In-Progress",
+			label:    "In-Progress",
+			expected: "Code",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			issue := github.Issue{
+				Number: 1,
+				Title:  "Test Issue",
+				Labels: []struct {
+					Name string `json:"name"`
+				}{{Name: tt.label}},
+			}
+
+			got := inferColumnFromIssue(issue)
+			if got != tt.expected {
+				t.Errorf("inferColumnFromIssue() = %q, want %q", got, tt.expected)
+			}
+		})
 	}
 }
 
