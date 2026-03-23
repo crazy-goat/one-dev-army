@@ -299,6 +299,12 @@ func TestBuildRefinementPrompt_Feature(t *testing.T) {
 	if !strings.Contains(prompt, "how this fits with existing codebase patterns") {
 		t.Error("expected prompt to instruct analyzing codebase patterns")
 	}
+	if !strings.Contains(prompt, "CRITICAL: Return ONLY") {
+		t.Error("expected prompt to contain anti-preamble instruction")
+	}
+	if !strings.Contains(prompt, "No introduction, no preamble") {
+		t.Error("expected prompt to forbid conversational preamble")
+	}
 }
 
 func TestBuildRefinementPrompt_Bug(t *testing.T) {
@@ -315,6 +321,12 @@ func TestBuildRefinementPrompt_Bug(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "EXISTING CODEBASE CONTEXT") {
 		t.Error("expected prompt to contain codebase context section header")
+	}
+	if !strings.Contains(prompt, "CRITICAL: Return ONLY") {
+		t.Error("expected prompt to contain anti-preamble instruction")
+	}
+	if !strings.Contains(prompt, "No introduction, no preamble") {
+		t.Error("expected prompt to forbid conversational preamble")
 	}
 }
 
