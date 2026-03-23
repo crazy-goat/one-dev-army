@@ -1,7 +1,7 @@
 # Implementation Plan for Issue #168
 
-**Created:** 2026-03-23T12:33:47+01:00
-**Updated:** 2026-03-23T12:33:47+01:00
+**Created:** 2026-03-23T12:34:05+01:00
+**Updated:** 2026-03-23T12:34:05+01:00
 
 ## Analysis
 
@@ -93,4 +93,100 @@ func (w *Worker) technicalPlanning(ctx context.Context, task *Task) (analysis, p
 - Verify step storage in database uses new "technical-planning" name
 
 **Key risk:** The wizard implementation (`internal/dashboard/prompts.go`) already has a unified technical planning prompt template that could be adapted for the worker.
+
+## Implementation Steps
+
+### Step 1: **Replace separate prompts (lines 23-53) with combined prompt:**
+
+- Remove `analysisPrompt` and `planningPrompt` constants
+- Create new `technicalPlanningPrompt` that combines both:
+- Include issue analysis requirements (from analysisPrompt lines 28-33)
+- Include implementation plan requirements (from planningPrompt lines 41-52)
+- Add section markers: `## Analysis` and `## Implementation Plan`
+- Keep `ALREADY_DONE:` detection capability
+
+### Step 2: **Update stepOrder (line 132):**
+
+```go
+var stepOrder = []string{"technical-planning", "implement", "code-review", "create-pr"}
+```
+
+### Step 3: **Create new `technicalPlanning()` function (replace lines 309-373):**
+
+```go
+func (w *Worker) technicalPlanning(ctx context.Context, task *Task) (analysis, plan string, err error)
+```
+- Single LLM call using combined prompt
+- Parse response to extract analysis and plan sections
+- Handle `ALREADY_DONE:` detection
+- Create/update plan.md with combined content (merge operations from both old functions)
+
+### Step 4: **Update `Process()` method (lines 176-211):**
+
+- Replace separate analyze/plan calls with single technicalPlanning call
+- Update resume logic to handle new step name
+- Handle migration from old "analyze"/"plan" steps
+### Phase 2: Database Migration Support
+**File: `internal/db/db.go`**
+
+### Step 5: **Update `GetLastCompletedStep()` (lines 165-178):**
+
+- Add migration logic: if last step is "analyze" or "plan", return "technical-planning"
+- This ensures old tickets resume correctly from the new combined step
+
+### Step 6: **Update `GetStepResponse()` (lines 180-193):**
+
+- Add fallback: if "technical-planning" not found, check for "plan" response
+- Combine "analyze" + "plan" responses if resuming from old steps
+### Phase 3: Resume Logic Migration
+**File: `internal/mvp/worker.go`**
+
+### Step 7: **Update resume logic in `Process()` (lines 143-157):**
+
+- Handle migration: if `lastDone` is "analyze" or "plan", treat as "technical-planning" completed
+- When resuming from old steps, fetch both old responses and combine them
+### Phase 4: Testing
+**File: `internal/mvp/worker_test.go`**
+
+### Step 8: **Add new tests:**
+
+- `TestTechnicalPlanning()` - Verify single LLM call and response parsing
+- `TestTechnicalPlanningAlreadyDone()` - Verify `ALREADY_DONE:` detection works
+- `TestProcessResumeFromOldSteps()` - Test migration from "analyze"/"plan"
+
+### Step 9: **Update existing tests:**
+
+- Update any tests referencing "analyze" or "plan" step names
+- Update step count assertions (5 steps → 4 steps)
+### Phase 5: Verification
+
+### Step 10: **Run tests:**
+
+```bash
+go test ./internal/mvp/... -v
+go test ./internal/db/... -v
+```
+### Implementation Order
+
+### Step 1: Create combined prompt constant
+
+### Step 2: Create `technicalPlanning()` function
+
+### Step 3: Update `stepOrder`
+
+### Step 4: Update `Process()` to use new function
+
+### Step 5: Add database migration logic
+
+### Step 6: Update resume logic
+
+### Step 7: Add/update tests
+
+### Step 8: Run full test suite
+
+### Key Design Decisions
+- **Prompt structure:** Use clear markdown section headers (`## Analysis`, `## Implementation Plan`) for easy parsing
+- **Backward compatibility:** Database migration ensures old tickets resume correctly
+- **Plan.md handling:** Single operation creates plan.md with both analysis and plan sections
+- **Error handling:** Preserve existing `ALREADY_DONE:` detection and `ErrAlreadyDone` handling
 
