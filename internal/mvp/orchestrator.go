@@ -168,10 +168,10 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 		}
 
-		var openCount int
+		var openCount, skippedCount int
 		var inProgressIssue *github.Issue
 		var candidates []github.Issue
-		var blocking []github.Issue // issues that block new work (not done yet)
+		var blocking []github.Issue // issues with active branches that block new work
 		for i := range issues {
 			if !strings.EqualFold(issues[i].State, "open") {
 				continue
@@ -183,18 +183,21 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				}
 				continue
 			}
-			isBlocked := hasLabel(issues[i], "awaiting-approval") ||
-				hasLabel(issues[i], "failed") ||
-				hasLabel(issues[i], "stage:needs-user") ||
-				blockedOnBoard[issues[i].Number]
-			if isBlocked {
+			// Issues with active branches — block the entire queue
+			if hasLabel(issues[i], "awaiting-approval") || hasLabel(issues[i], "failed") {
 				blocking = append(blocking, issues[i])
 				log.Printf("[Orchestrator]   blocking #%d %q (%s)", issues[i].Number, issues[i].Title, labelNames(issues[i]))
 				continue
 			}
+			// Issues waiting on external input — skip but don't block others
+			if hasLabel(issues[i], "stage:needs-user") || blockedOnBoard[issues[i].Number] {
+				skippedCount++
+				log.Printf("[Orchestrator]   skip #%d %q (blocked/needs-user)", issues[i].Number, issues[i].Title)
+				continue
+			}
 			candidates = append(candidates, issues[i])
 		}
-		log.Printf("[Orchestrator] Found %d issues (%d open, %d blocking, %d candidates)", len(issues), openCount, len(blocking), len(candidates))
+		log.Printf("[Orchestrator] Found %d issues (%d open, %d blocking, %d skipped, %d candidates)", len(issues), openCount, len(blocking), skippedCount, len(candidates))
 
 		var nextIssue *github.Issue
 		if inProgressIssue != nil {
