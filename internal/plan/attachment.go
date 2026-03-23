@@ -72,8 +72,8 @@ func (am *AttachmentManager) CreateAndAttach(
 	planURL := fmt.Sprintf("https://github.com/%s/blob/%s/plan.md", am.gh.Repo, branch)
 	plan.GitHubURL = planURL
 
-	// Add comment to issue
-	comment := fmt.Sprintf("📋 Implementation Plan: [plan.md](%s)", planURL)
+	// Add comment to issue with full technical plan
+	comment := formatTechnicalPlanComment(plan, planURL)
 	if err := am.gh.AddComment(issueNum, comment); err != nil {
 		log.Printf("[AttachmentManager] Warning: failed to add plan comment to issue #%d: %v", issueNum, err)
 		// Don't fail if comment addition fails
@@ -323,6 +323,42 @@ func (am *AttachmentManager) FileExists() bool {
 	planPath := GetPlanFilePath(am.worktree.Path)
 	_, err := os.Stat(planPath)
 	return err == nil
+}
+
+// formatTechnicalPlanComment formats the plan as a technical planning comment
+func formatTechnicalPlanComment(p *Plan, planURL string) string {
+	var sb strings.Builder
+
+	sb.WriteString("## 📋 Technical Planning\n\n")
+
+	if p.Analysis != "" {
+		sb.WriteString("### Analysis\n\n")
+		sb.WriteString(p.Analysis)
+		sb.WriteString("\n\n")
+	}
+
+	if len(p.ImplementationSteps) > 0 {
+		sb.WriteString("### Implementation Steps\n\n")
+		for _, step := range p.ImplementationSteps {
+			sb.WriteString(fmt.Sprintf("**Step %d: %s**\n\n", step.Order, step.Description))
+			if len(step.Files) > 0 {
+				sb.WriteString("**Files to modify:**\n")
+				for _, file := range step.Files {
+					sb.WriteString(fmt.Sprintf("- `%s`\n", file))
+				}
+				sb.WriteString("\n")
+			}
+			if step.Details != "" {
+				sb.WriteString(step.Details)
+				sb.WriteString("\n\n")
+			}
+		}
+	}
+
+	sb.WriteString("---\n\n")
+	sb.WriteString(fmt.Sprintf("📎 **Full Plan:** [plan.md](%s)\n", planURL))
+
+	return sb.String()
 }
 
 // GetPlanPath returns the full path to plan.md
