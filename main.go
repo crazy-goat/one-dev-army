@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -202,18 +201,6 @@ func runServe() error {
 		fmt.Println("  ! no active sprint found")
 	}
 
-	projectName := cfg.GitHub.Repo
-	if idx := strings.LastIndex(projectName, "/"); idx >= 0 {
-		projectName = projectName[idx+1:]
-	}
-	project, err := gh.EnsureProject(projectName)
-	if err != nil {
-		return fmt.Errorf("ensuring project: %w", err)
-	}
-	if err := gh.EnsureProjectColumns(project.ID, project.Number); err != nil {
-		return fmt.Errorf("ensuring project columns: %w", err)
-	}
-
 	s := setup.New(dir, oc, cfg)
 	if err := s.CheckAndGenerate(); err != nil {
 		return fmt.Errorf("setup check failed: %w", err)
@@ -223,7 +210,7 @@ func runServe() error {
 
 	processor := worker.NewProcessor(cfg, oc, gh, store, brMgr)
 
-	orchestrator := mvp.NewOrchestrator(cfg, gh, oc, brMgr, store, project.Number)
+	orchestrator := mvp.NewOrchestrator(cfg, gh, oc, brMgr, store)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -241,7 +228,7 @@ func runServe() error {
 		}
 	}()
 
-	srv, err := dashboard.NewServer(cfg.Dashboard.Port, store, pool.Workers, gh, project.Number, orchestrator, oc, cfg.Planning.LLM)
+	srv, err := dashboard.NewServer(cfg.Dashboard.Port, store, pool.Workers, gh, orchestrator, oc, cfg.Planning.LLM)
 	if err != nil {
 		return fmt.Errorf("creating dashboard server: %w", err)
 	}
