@@ -8,8 +8,13 @@
     {{if .IsPage}}<input type="hidden" name="page" value="1">{{end}}
     
     <div class="form-group">
-      <label for="refined_description">Refined Description (edit if needed):</label>
-      <textarea id="refined_description" name="refined_description" rows="8">{{.RefinedDescription}}</textarea>
+      <label for="refined_description">Refined Description:</label>
+      <div class="markdown-tabs">
+        <button type="button" class="tab-btn active" data-tab="preview" onclick="switchTab('preview')">Preview</button>
+        <button type="button" class="tab-btn" data-tab="edit" onclick="switchTab('edit')">Edit</button>
+      </div>
+      <div id="preview-container" class="markdown-preview"></div>
+      <textarea id="refined_description" name="refined_description" rows="8" style="display:none;">{{.RefinedDescription}}</textarea>
     </div>
     
     {{if eq .Type "feature"}}
@@ -56,4 +61,167 @@
   </form>
   
 </div>
+
+<style>
+.markdown-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.tab-btn {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tab-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.tab-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.markdown-preview {
+  min-height: 200px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  line-height: 1.6;
+}
+
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4,
+.markdown-preview h5,
+.markdown-preview h6 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.markdown-preview h1 { font-size: 1.5rem; }
+.markdown-preview h2 { font-size: 1.25rem; }
+.markdown-preview h3 { font-size: 1.1rem; }
+
+.markdown-preview p {
+  margin-bottom: 0.75rem;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  margin-bottom: 0.75rem;
+  padding-left: 1.5rem;
+}
+
+.markdown-preview li {
+  margin-bottom: 0.25rem;
+}
+
+.markdown-preview code {
+  background: var(--bg);
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: 0.9em;
+}
+
+.markdown-preview pre {
+  background: var(--bg);
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin-bottom: 0.75rem;
+}
+
+.markdown-preview pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown-preview blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 1rem;
+  margin: 0.75rem 0;
+  color: var(--muted);
+}
+
+.markdown-preview strong {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.markdown-preview a {
+  color: var(--accent);
+}
+
+.markdown-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 0.75rem;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+  border: 1px solid var(--border);
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.markdown-preview th {
+  background: var(--bg);
+  font-weight: 600;
+}
+</style>
+
+<script>
+(function() {
+  const textarea = document.getElementById('refined_description');
+  const previewContainer = document.getElementById('preview-container');
+  
+  function renderMarkdown() {
+    if (typeof marked !== 'undefined' && textarea && previewContainer) {
+      previewContainer.innerHTML = marked.parse(textarea.value);
+    }
+  }
+  
+  window.switchTab = function(tabName) {
+    const previewTab = document.querySelector('[data-tab="preview"]');
+    const editTab = document.querySelector('[data-tab="edit"]');
+    
+    if (tabName === 'preview') {
+      previewTab.classList.add('active');
+      editTab.classList.remove('active');
+      previewContainer.style.display = 'block';
+      textarea.style.display = 'none';
+      renderMarkdown();
+    } else {
+      editTab.classList.add('active');
+      previewTab.classList.remove('active');
+      previewContainer.style.display = 'none';
+      textarea.style.display = 'block';
+    }
+  };
+  
+  if (textarea) {
+    textarea.addEventListener('input', renderMarkdown);
+    renderMarkdown();
+  }
+})();
+</script>
+
 {{end}}
