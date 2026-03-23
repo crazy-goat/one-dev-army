@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/gorilla/websocket"
 )
 
@@ -164,7 +165,12 @@ func TestHubBroadcastIssueUpdate(t *testing.T) {
 	waitForClientCount(t, hub, 1, time.Second)
 
 	// Broadcast issue update
-	hub.BroadcastIssueUpdate(42, "Test Issue", "open", "Backlog")
+	issue := github.Issue{
+		Number: 42,
+		Title:  "Test Issue",
+		State:  "open",
+	}
+	hub.BroadcastIssueUpdate(issue)
 
 	// Verify client received the message
 	conn.SetReadDeadline(time.Now().Add(time.Second))
@@ -187,14 +193,14 @@ func TestHubBroadcastIssueUpdate(t *testing.T) {
 		t.Fatalf("Failed to unmarshal payload: %v", err)
 	}
 
-	if payload.IssueNumber != 42 {
-		t.Errorf("Expected issue number 42, got %d", payload.IssueNumber)
+	if payload.Number != 42 {
+		t.Errorf("Expected issue number 42, got %d", payload.Number)
 	}
 	if payload.Title != "Test Issue" {
 		t.Errorf("Expected title 'Test Issue', got %s", payload.Title)
 	}
-	if payload.Column != "Backlog" {
-		t.Errorf("Expected column 'Backlog', got %s", payload.Column)
+	if payload.State != "open" {
+		t.Errorf("Expected state 'open', got %s", payload.State)
 	}
 }
 
@@ -221,7 +227,7 @@ func TestHubBroadcastSyncComplete(t *testing.T) {
 	waitForClientCount(t, hub, 1, time.Second)
 
 	// Broadcast sync complete
-	hub.BroadcastSyncComplete(true, "Sprint 1", "")
+	hub.BroadcastSyncComplete(10)
 
 	// Verify client received the message
 	conn.SetReadDeadline(time.Now().Add(time.Second))
@@ -244,11 +250,8 @@ func TestHubBroadcastSyncComplete(t *testing.T) {
 		t.Fatalf("Failed to unmarshal payload: %v", err)
 	}
 
-	if !payload.Success {
-		t.Error("Expected success to be true")
-	}
-	if payload.Milestone != "Sprint 1" {
-		t.Errorf("Expected milestone 'Sprint 1', got %s", payload.Milestone)
+	if payload.Count != 10 {
+		t.Errorf("Expected count 10, got %d", payload.Count)
 	}
 }
 
@@ -431,10 +434,10 @@ func TestMessageTypes(t *testing.T) {
 
 func TestIssueUpdatePayloadMarshal(t *testing.T) {
 	payload := IssueUpdatePayload{
-		IssueNumber: 123,
-		Title:       "Test Title",
-		Status:      "open",
-		Column:      "In Progress",
+		Number: 123,
+		Title:  "Test Title",
+		State:  "open",
+		Column: "In Progress",
 	}
 
 	data, err := json.Marshal(payload)
@@ -447,14 +450,14 @@ func TestIssueUpdatePayloadMarshal(t *testing.T) {
 		t.Fatalf("Failed to unmarshal payload: %v", err)
 	}
 
-	if decoded.IssueNumber != payload.IssueNumber {
-		t.Errorf("IssueNumber mismatch: got %d, want %d", decoded.IssueNumber, payload.IssueNumber)
+	if decoded.Number != payload.Number {
+		t.Errorf("Number mismatch: got %d, want %d", decoded.Number, payload.Number)
 	}
 	if decoded.Title != payload.Title {
 		t.Errorf("Title mismatch: got %s, want %s", decoded.Title, payload.Title)
 	}
-	if decoded.Status != payload.Status {
-		t.Errorf("Status mismatch: got %s, want %s", decoded.Status, payload.Status)
+	if decoded.State != payload.State {
+		t.Errorf("State mismatch: got %s, want %s", decoded.State, payload.State)
 	}
 	if decoded.Column != payload.Column {
 		t.Errorf("Column mismatch: got %s, want %s", decoded.Column, payload.Column)
@@ -463,9 +466,7 @@ func TestIssueUpdatePayloadMarshal(t *testing.T) {
 
 func TestSyncCompletePayloadMarshal(t *testing.T) {
 	payload := SyncCompletePayload{
-		Success:   false,
-		Milestone: "",
-		Error:     "connection failed",
+		Count: 42,
 	}
 
 	data, err := json.Marshal(payload)
@@ -478,11 +479,8 @@ func TestSyncCompletePayloadMarshal(t *testing.T) {
 		t.Fatalf("Failed to unmarshal payload: %v", err)
 	}
 
-	if decoded.Success != payload.Success {
-		t.Errorf("Success mismatch: got %v, want %v", decoded.Success, payload.Success)
-	}
-	if decoded.Error != payload.Error {
-		t.Errorf("Error mismatch: got %s, want %s", decoded.Error, payload.Error)
+	if decoded.Count != payload.Count {
+		t.Errorf("Count mismatch: got %d, want %d", decoded.Count, payload.Count)
 	}
 }
 
