@@ -152,6 +152,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /wizard", s.handleWizardPage)
 	s.mux.HandleFunc("GET /wizard/new", s.handleWizardNew)
 	s.mux.HandleFunc("GET /wizard/modal", s.handleWizardModal)
+	s.mux.HandleFunc("POST /wizard/select-type", s.handleWizardSelectType)
 	s.mux.HandleFunc("POST /wizard/cancel", s.handleWizardCancel)
 	s.mux.HandleFunc("POST /wizard/refine", s.handleWizardRefine)
 	s.mux.HandleFunc("POST /wizard/breakdown", s.handleWizardBreakdown)

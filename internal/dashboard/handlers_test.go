@@ -274,9 +274,10 @@ func TestHandleWizardNew_InvalidType(t *testing.T) {
 
 	srv.handleWizardNew(rec, req)
 
-	// Should return 400 Bad Request for invalid type
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400 for invalid type, got %d", rec.Code)
+	// With new implementation, invalid type defaults to showing type selector
+	// No session should be created
+	if srv.wizardStore.Count() != 0 {
+		t.Errorf("expected 0 sessions for invalid type (type selector shown), got %d", srv.wizardStore.Count())
 	}
 }
 
@@ -805,15 +806,15 @@ func TestHandleWizardPage(t *testing.T) {
 		t.Errorf("expected 2 sessions, got %d", srv.wizardStore.Count())
 	}
 
-	// Test default type (should default to feature)
+	// Test default type (no type param - should show type selector, not create session)
 	req = httptest.NewRequest(http.MethodGet, "/wizard", nil)
 	rec = httptest.NewRecorder()
 
 	srv.handleWizardPage(rec, req)
 
-	// Should have 3 sessions now
-	if srv.wizardStore.Count() != 3 {
-		t.Errorf("expected 3 sessions, got %d", srv.wizardStore.Count())
+	// Should still have 2 sessions (no new session created for type selector)
+	if srv.wizardStore.Count() != 2 {
+		t.Errorf("expected 2 sessions (type selector shown, no session created), got %d", srv.wizardStore.Count())
 	}
 }
 
@@ -916,7 +917,7 @@ func TestConcurrentHandlerAccess(t *testing.T) {
 	}
 }
 
-// TestHeaderButtons_FromBoard verifies header buttons are present on the board page
+// TestHeaderButtons_FromBoard verifies header button is present on the board page
 func TestHeaderButtons_FromBoard(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
@@ -932,22 +933,23 @@ func TestHeaderButtons_FromBoard(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// Verify both header buttons are present with correct hrefs
-	if !strings.Contains(body, `href="/wizard?type=feature"`) {
-		t.Error("board page missing New Feature button with correct href")
+	// Verify single header button is present with correct href
+	if !strings.Contains(body, `href="/wizard"`) {
+		t.Error("board page missing New Issue button with correct href")
 	}
-	if !strings.Contains(body, `href="/wizard?type=bug"`) {
-		t.Error("board page missing New Bug button with correct href")
+	if !strings.Contains(body, "+ New Issue") {
+		t.Error("board page missing 'New Issue' button text")
 	}
-	if !strings.Contains(body, "+ New Feature") {
-		t.Error("board page missing 'New Feature' button text")
+	// Verify old buttons are NOT present
+	if strings.Contains(body, `href="/wizard?type=feature"`) {
+		t.Error("board page should not have old New Feature button")
 	}
-	if !strings.Contains(body, "+ New Bug") {
-		t.Error("board page missing 'New Bug' button text")
+	if strings.Contains(body, `href="/wizard?type=bug"`) {
+		t.Error("board page should not have old New Bug button")
 	}
 }
 
-// TestHeaderButtons_FromBacklog verifies header buttons are present on the backlog page
+// TestHeaderButtons_FromBacklog verifies header button is present on the backlog page
 func TestHeaderButtons_FromBacklog(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
@@ -963,22 +965,23 @@ func TestHeaderButtons_FromBacklog(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// Verify both header buttons are present with correct hrefs
-	if !strings.Contains(body, `href="/wizard?type=feature"`) {
-		t.Error("backlog page missing New Feature button with correct href")
+	// Verify single header button is present with correct href
+	if !strings.Contains(body, `href="/wizard"`) {
+		t.Error("backlog page missing New Issue button with correct href")
 	}
-	if !strings.Contains(body, `href="/wizard?type=bug"`) {
-		t.Error("backlog page missing New Bug button with correct href")
+	if !strings.Contains(body, "+ New Issue") {
+		t.Error("backlog page missing 'New Issue' button text")
 	}
-	if !strings.Contains(body, "+ New Feature") {
-		t.Error("backlog page missing 'New Feature' button text")
+	// Verify old buttons are NOT present
+	if strings.Contains(body, `href="/wizard?type=feature"`) {
+		t.Error("backlog page should not have old New Feature button")
 	}
-	if !strings.Contains(body, "+ New Bug") {
-		t.Error("backlog page missing 'New Bug' button text")
+	if strings.Contains(body, `href="/wizard?type=bug"`) {
+		t.Error("backlog page should not have old New Bug button")
 	}
 }
 
-// TestHeaderButtons_FromCosts verifies header buttons are present on the costs page
+// TestHeaderButtons_FromCosts verifies header button is present on the costs page
 func TestHeaderButtons_FromCosts(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
@@ -994,22 +997,23 @@ func TestHeaderButtons_FromCosts(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// Verify both header buttons are present with correct hrefs
-	if !strings.Contains(body, `href="/wizard?type=feature"`) {
-		t.Error("costs page missing New Feature button with correct href")
+	// Verify single header button is present with correct href
+	if !strings.Contains(body, `href="/wizard"`) {
+		t.Error("costs page missing New Issue button with correct href")
 	}
-	if !strings.Contains(body, `href="/wizard?type=bug"`) {
-		t.Error("costs page missing New Bug button with correct href")
+	if !strings.Contains(body, "+ New Issue") {
+		t.Error("costs page missing 'New Issue' button text")
 	}
-	if !strings.Contains(body, "+ New Feature") {
-		t.Error("costs page missing 'New Feature' button text")
+	// Verify old buttons are NOT present
+	if strings.Contains(body, `href="/wizard?type=feature"`) {
+		t.Error("costs page should not have old New Feature button")
 	}
-	if !strings.Contains(body, "+ New Bug") {
-		t.Error("costs page missing 'New Bug' button text")
+	if strings.Contains(body, `href="/wizard?type=bug"`) {
+		t.Error("costs page should not have old New Bug button")
 	}
 }
 
-// TestHeaderButtons_FromTask verifies header buttons are present on the task detail page
+// TestHeaderButtons_FromTask verifies header button is present on the task detail page
 func TestHeaderButtons_FromTask(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	// Keep store as nil - handler now handles nil store gracefully
@@ -1027,22 +1031,23 @@ func TestHeaderButtons_FromTask(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// Verify both header buttons are present with correct hrefs
-	if !strings.Contains(body, `href="/wizard?type=feature"`) {
-		t.Error("task page missing New Feature button with correct href")
+	// Verify single header button is present with correct href
+	if !strings.Contains(body, `href="/wizard"`) {
+		t.Error("task page missing New Issue button with correct href")
 	}
-	if !strings.Contains(body, `href="/wizard?type=bug"`) {
-		t.Error("task page missing New Bug button with correct href")
+	if !strings.Contains(body, "+ New Issue") {
+		t.Error("task page missing 'New Issue' button text")
 	}
-	if !strings.Contains(body, "+ New Feature") {
-		t.Error("task page missing 'New Feature' button text")
+	// Verify old buttons are NOT present
+	if strings.Contains(body, `href="/wizard?type=feature"`) {
+		t.Error("task page should not have old New Feature button")
 	}
-	if !strings.Contains(body, "+ New Bug") {
-		t.Error("task page missing 'New Bug' button text")
+	if strings.Contains(body, `href="/wizard?type=bug"`) {
+		t.Error("task page should not have old New Bug button")
 	}
 }
 
-// TestHeaderButtons_FromWizard verifies header buttons are present on the wizard page itself
+// TestHeaderButtons_FromWizard verifies header button is present on the wizard page itself
 func TestHeaderButtons_FromWizard(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
@@ -1058,18 +1063,16 @@ func TestHeaderButtons_FromWizard(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// Verify both header buttons are present with correct hrefs
-	if !strings.Contains(body, `href="/wizard?type=feature"`) {
-		t.Error("wizard page missing New Feature button with correct href")
+	// Verify single header button is present with correct href
+	if !strings.Contains(body, `href="/wizard"`) {
+		t.Error("wizard page missing New Issue button with correct href")
 	}
-	if !strings.Contains(body, `href="/wizard?type=bug"`) {
-		t.Error("wizard page missing New Bug button with correct href")
+	if !strings.Contains(body, "+ New Issue") {
+		t.Error("wizard page missing 'New Issue' button text")
 	}
-	if !strings.Contains(body, "+ New Feature") {
-		t.Error("wizard page missing 'New Feature' button text")
-	}
-	if !strings.Contains(body, "+ New Bug") {
-		t.Error("wizard page missing 'New Bug' button text")
+	// Verify old buttons are NOT present
+	if strings.Contains(body, `href="/wizard?type=feature"`) && !strings.Contains(body, `href="/wizard"`) {
+		t.Error("wizard page should not have separate New Feature button (should be unified)")
 	}
 }
 
@@ -1078,7 +1081,7 @@ func TestWizardFlow_FromBacklog(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
 
-	// Step 1: Verify backlog page renders with header buttons
+	// Step 1: Verify backlog page renders with unified header button
 	req := httptest.NewRequest(http.MethodGet, "/backlog", nil)
 	rec := httptest.NewRecorder()
 	srv.handleBacklog(rec, req)
@@ -1088,12 +1091,12 @@ func TestWizardFlow_FromBacklog(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-	if !strings.Contains(body, `href="/wizard?type=feature"`) {
-		t.Fatal("Step 1 failed: backlog page missing New Feature button")
+	if !strings.Contains(body, `href="/wizard"`) {
+		t.Fatal("Step 1 failed: backlog page missing New Issue button")
 	}
 
-	// Step 2: Click New Feature button - request wizard page
-	req = httptest.NewRequest(http.MethodGet, "/wizard?type=feature", nil)
+	// Step 2: Click New Issue button - request wizard page (shows type selector)
+	req = httptest.NewRequest(http.MethodGet, "/wizard", nil)
 	rec = httptest.NewRecorder()
 	srv.handleWizardPage(rec, req)
 
@@ -1101,18 +1104,37 @@ func TestWizardFlow_FromBacklog(t *testing.T) {
 		t.Fatalf("Step 2 failed: expected status 200, got %d", rec.Code)
 	}
 
-	// Verify session was created
-	if srv.wizardStore.Count() != 1 {
-		t.Fatalf("Step 2 failed: expected 1 session, got %d", srv.wizardStore.Count())
+	// No session yet - user needs to select type
+	if srv.wizardStore.Count() != 0 {
+		t.Fatalf("Step 2 failed: expected 0 sessions (type selector shown), got %d", srv.wizardStore.Count())
 	}
 
-	// Get the session ID by creating a test session and getting its ID
-	// Since we can't access internal map directly, we'll create a test session
-	testSession, _ := srv.wizardStore.Create("feature")
-	sessionID := testSession.ID
-
-	// Step 3: Submit idea for refinement
+	// Step 3: Select feature type via POST to select-type endpoint
 	formData := url.Values{}
+	formData.Set("wizard_type", "feature")
+	req = httptest.NewRequest(http.MethodPost, "/wizard/select-type", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	srv.handleWizardSelectType(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("Step 3 failed: expected redirect (303), got %d", rec.Code)
+	}
+
+	// Now session should be created
+	if srv.wizardStore.Count() != 1 {
+		t.Fatalf("Step 3 failed: expected 1 session after type selection, got %d", srv.wizardStore.Count())
+	}
+
+	// Get the session ID from the redirect URL
+	redirectURL := rec.Header().Get("Location")
+	var sessionID string
+	if strings.Contains(redirectURL, "session_id=") {
+		sessionID = strings.Split(strings.Split(redirectURL, "session_id=")[1], "&")[0]
+	}
+
+	// Step 4: Submit idea for refinement
+	formData = url.Values{}
 	formData.Set("session_id", sessionID)
 	formData.Set("idea", "Create a user dashboard with analytics")
 
@@ -1122,10 +1144,10 @@ func TestWizardFlow_FromBacklog(t *testing.T) {
 	srv.handleWizardRefine(rec, req)
 
 	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
-		t.Fatalf("Step 3 failed: expected status 200 or 500, got %d", rec.Code)
+		t.Fatalf("Step 4 failed: expected status 200 or 500, got %d", rec.Code)
 	}
 
-	// Step 4: Request breakdown
+	// Step 5: Request breakdown
 	formData = url.Values{}
 	formData.Set("session_id", sessionID)
 
@@ -1135,10 +1157,10 @@ func TestWizardFlow_FromBacklog(t *testing.T) {
 	srv.handleWizardBreakdown(rec, req)
 
 	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
-		t.Fatalf("Step 4 failed: expected status 200 or 500, got %d", rec.Code)
+		t.Fatalf("Step 5 failed: expected status 200 or 500, got %d", rec.Code)
 	}
 
-	// Step 5: Create issues
+	// Step 6: Create issues
 	formData = url.Values{}
 	formData.Set("session_id", sessionID)
 
@@ -1148,7 +1170,7 @@ func TestWizardFlow_FromBacklog(t *testing.T) {
 	srv.handleWizardCreate(rec, req)
 
 	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
-		t.Fatalf("Step 5 failed: expected status 200 or 500, got %d", rec.Code)
+		t.Fatalf("Step 6 failed: expected status 200 or 500, got %d", rec.Code)
 	}
 
 	t.Log("Wizard flow from backlog completed successfully")
@@ -1159,7 +1181,7 @@ func TestWizardFlow_FromCosts(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
 
-	// Step 1: Verify costs page renders with header buttons
+	// Step 1: Verify costs page renders with unified header button
 	req := httptest.NewRequest(http.MethodGet, "/costs", nil)
 	rec := httptest.NewRecorder()
 	srv.handleCosts(rec, req)
@@ -1169,12 +1191,12 @@ func TestWizardFlow_FromCosts(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-	if !strings.Contains(body, `href="/wizard?type=bug"`) {
-		t.Fatal("Step 1 failed: costs page missing New Bug button")
+	if !strings.Contains(body, `href="/wizard"`) {
+		t.Fatal("Step 1 failed: costs page missing New Issue button")
 	}
 
-	// Step 2: Click New Bug button - request wizard page
-	req = httptest.NewRequest(http.MethodGet, "/wizard?type=bug", nil)
+	// Step 2: Click New Issue button - request wizard page (shows type selector)
+	req = httptest.NewRequest(http.MethodGet, "/wizard", nil)
 	rec = httptest.NewRecorder()
 	srv.handleWizardPage(rec, req)
 
@@ -1182,22 +1204,43 @@ func TestWizardFlow_FromCosts(t *testing.T) {
 		t.Fatalf("Step 2 failed: expected status 200, got %d", rec.Code)
 	}
 
-	// Verify session was created
-	if srv.wizardStore.Count() != 1 {
-		t.Fatalf("Step 2 failed: expected 1 session, got %d", srv.wizardStore.Count())
+	// No session yet - user needs to select type
+	if srv.wizardStore.Count() != 0 {
+		t.Fatalf("Step 2 failed: expected 0 sessions (type selector shown), got %d", srv.wizardStore.Count())
 	}
 
-	// Get the session ID by creating a test session
-	testSession, _ := srv.wizardStore.Create("bug")
-	sessionID := testSession.ID
+	// Step 3: Select bug type via POST to select-type endpoint
+	formData := url.Values{}
+	formData.Set("wizard_type", "bug")
+	req = httptest.NewRequest(http.MethodPost, "/wizard/select-type", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	srv.handleWizardSelectType(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("Step 3 failed: expected redirect (303), got %d", rec.Code)
+	}
+
+	// Now session should be created
+	if srv.wizardStore.Count() != 1 {
+		t.Fatalf("Step 3 failed: expected 1 session after type selection, got %d", srv.wizardStore.Count())
+	}
+
+	// Get the session ID from the redirect URL
+	redirectURL := rec.Header().Get("Location")
+	var sessionID string
+	if strings.Contains(redirectURL, "session_id=") {
+		sessionID = strings.Split(strings.Split(redirectURL, "session_id=")[1], "&")[0]
+	}
 
 	// Verify it's a bug type
-	if testSession.Type != "bug" {
-		t.Fatalf("Step 2 failed: expected session type 'bug', got %q", testSession.Type)
+	session, _ := srv.wizardStore.Get(sessionID)
+	if session == nil || session.Type != "bug" {
+		t.Fatalf("Step 3 failed: expected session type 'bug', got %v", session)
 	}
 
-	// Step 3: Submit bug description for refinement
-	formData := url.Values{}
+	// Step 4: Submit bug description for refinement
+	formData = url.Values{}
 	formData.Set("session_id", sessionID)
 	formData.Set("idea", "Fix login page validation error")
 
@@ -1207,10 +1250,10 @@ func TestWizardFlow_FromCosts(t *testing.T) {
 	srv.handleWizardRefine(rec, req)
 
 	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
-		t.Fatalf("Step 3 failed: expected status 200 or 500, got %d", rec.Code)
+		t.Fatalf("Step 4 failed: expected status 200 or 500, got %d", rec.Code)
 	}
 
-	// Step 4: Request breakdown
+	// Step 5: Request breakdown
 	formData = url.Values{}
 	formData.Set("session_id", sessionID)
 
@@ -1220,10 +1263,10 @@ func TestWizardFlow_FromCosts(t *testing.T) {
 	srv.handleWizardBreakdown(rec, req)
 
 	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
-		t.Fatalf("Step 4 failed: expected status 200 or 500, got %d", rec.Code)
+		t.Fatalf("Step 5 failed: expected status 200 or 500, got %d", rec.Code)
 	}
 
-	// Step 5: Create issues
+	// Step 6: Create issues
 	formData = url.Values{}
 	formData.Set("session_id", sessionID)
 
@@ -1233,7 +1276,7 @@ func TestWizardFlow_FromCosts(t *testing.T) {
 	srv.handleWizardCreate(rec, req)
 
 	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
-		t.Fatalf("Step 5 failed: expected status 200 or 500, got %d", rec.Code)
+		t.Fatalf("Step 6 failed: expected status 200 or 500, got %d", rec.Code)
 	}
 
 	t.Log("Wizard flow from costs completed successfully")
@@ -1317,28 +1360,25 @@ func TestLayoutNavigationButtons(t *testing.T) {
 
 	output := buf.String()
 
-	// Check for New Feature button as a link (changed from HTMX to regular links)
-	if !strings.Contains(output, `href="/wizard?type=feature"`) {
-		t.Error("layout template missing New Feature button with correct href attribute")
+	// Check for New Issue button as a link (unified entry point)
+	if !strings.Contains(output, `href="/wizard"`) {
+		t.Error("layout template missing New Issue button with correct href attribute")
 	}
-	if !strings.Contains(output, "+ New Feature") {
-		t.Error("layout template missing 'New Feature' button text")
-	}
-
-	// Check for New Bug button as a link (changed from HTMX to regular links)
-	if !strings.Contains(output, `href="/wizard?type=bug"`) {
-		t.Error("layout template missing New Bug button with correct href attribute")
-	}
-	if !strings.Contains(output, "+ New Bug") {
-		t.Error("layout template missing 'New Bug' button text")
+	if !strings.Contains(output, "+ New Issue") {
+		t.Error("layout template missing 'New Issue' button text")
 	}
 
-	// Check for correct CSS classes
-	if !strings.Contains(output, "btn btn-success") {
-		t.Error("layout template missing btn-success class on New Feature button")
+	// Verify old buttons are NOT present
+	if strings.Contains(output, `href="/wizard?type=feature"`) {
+		t.Error("layout template should not have old New Feature button href")
 	}
-	if !strings.Contains(output, "btn btn-danger") {
-		t.Error("layout template missing btn-danger class on New Bug button")
+	if strings.Contains(output, `href="/wizard?type=bug"`) {
+		t.Error("layout template should not have old New Bug button href")
+	}
+
+	// Check for correct CSS class on unified button
+	if !strings.Contains(output, "btn btn-primary") {
+		t.Error("layout template missing btn-primary class on New Issue button")
 	}
 
 	// Check for nav-actions container
@@ -1617,10 +1657,7 @@ func TestHandleWizardCreate_SubTaskBodyFormat(t *testing.T) {
 
 // TestWizardFlow_ValidationErrors tests all validation scenarios in sequence
 func TestWizardFlow_ValidationErrors(t *testing.T) {
-	srv := &Server{
-		tmpls:       make(map[string]*template.Template),
-		wizardStore: NewWizardSessionStore(),
-	}
+	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
 
 	tests := []struct {
@@ -1637,8 +1674,8 @@ func TestWizardFlow_ValidationErrors(t *testing.T) {
 				return req, httptest.NewRecorder()
 			},
 			handler:    srv.handleWizardNew,
-			wantStatus: http.StatusBadRequest,
-			wantError:  "Invalid wizard type",
+			wantStatus: http.StatusOK,       // New behavior: shows type selector instead of error
+			wantError:  "Select Issue Type", // Type selector UI is shown
 		},
 		{
 			name: "missing session_id on refine",
@@ -2214,7 +2251,7 @@ func TestHandleWizardCreate_SkipsBreakdownWhenFlagSet(t *testing.T) {
 	}
 }
 
-// TestBoardLayout_AfterButtonRemoval verifies board renders without duplicate buttons in board-actions
+// TestBoardLayout_AfterButtonRemoval verifies board renders with unified New Issue button in header
 func TestBoardLayout_AfterButtonRemoval(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
@@ -2230,21 +2267,22 @@ func TestBoardLayout_AfterButtonRemoval(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// Verify NO duplicate +Feature or +Bug buttons in board-actions section
-	// These should only exist in the header navigation (layout.html)
-	if strings.Contains(body, "+ Feature") && !strings.Contains(body, "+ New Feature") {
-		t.Error("board page contains duplicate '+ Feature' button in board-actions - should only be in header")
-	}
-	if strings.Contains(body, "+ Bug") && !strings.Contains(body, "+ New Bug") {
-		t.Error("board page contains duplicate '+ Bug' button in board-actions - should only be in header")
+	// Verify unified "+ New Issue" button is present in header navigation
+	if !strings.Contains(body, "+ New Issue") {
+		t.Error("board page missing '+ New Issue' button in header navigation")
 	}
 
-	// Verify header buttons ARE present (from layout.html)
-	if !strings.Contains(body, "+ New Feature") {
-		t.Error("board page missing '+ New Feature' button in header navigation")
+	// Verify old separate buttons are NOT present
+	if strings.Contains(body, "+ New Feature") {
+		t.Error("board page should not have old '+ New Feature' button")
 	}
-	if !strings.Contains(body, "+ New Bug") {
-		t.Error("board page missing '+ New Bug' button in header navigation")
+	if strings.Contains(body, "+ New Bug") {
+		t.Error("board page should not have old '+ New Bug' button")
+	}
+
+	// Verify the unified button links to /wizard (without type param)
+	if !strings.Contains(body, `href="/wizard"`) {
+		t.Error("board page New Issue button should link to /wizard")
 	}
 }
 

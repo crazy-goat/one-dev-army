@@ -1,5 +1,44 @@
 {{define "wizard-step-content"}}
 <div class="wizard-step-content">
+  {{if .NeedsTypeSelection}}
+  <h1>Select Issue Type</h1>
+  
+  <form hx-post="/wizard/select-type{{if .IsPage}}?page=1{{end}}" hx-target="#wizard-content" hx-swap="innerHTML" hx-disabled-elt="button[type='submit']">
+    {{if .IsPage}}<input type="hidden" name="page" value="1">{{end}}
+    
+    <div class="type-selector">
+      <label class="type-card feature-card">
+        <input type="radio" name="wizard_type" value="feature" required>
+        <div class="type-card-content">
+          <div class="type-icon">✨</div>
+          <div class="type-title">Feature</div>
+          <div class="type-description">New functionality or enhancement</div>
+        </div>
+      </label>
+      
+      <label class="type-card bug-card">
+        <input type="radio" name="wizard_type" value="bug" required>
+        <div class="type-card-content">
+          <div class="type-icon">🐛</div>
+          <div class="type-title">Bug</div>
+          <div class="type-description">Something is not working correctly</div>
+        </div>
+      </label>
+    </div>
+    
+    <div class="form-actions">
+      {{if .IsPage}}
+      <a href="/" class="btn">Cancel</a>
+      {{else}}
+      <button type="button" class="btn" onclick="closeWizardModal()">Cancel</button>
+      {{end}}
+      <button type="submit" class="btn btn-primary">
+        <span class="spinner" style="display:none;">⏳</span>
+        <span class="label">Continue</span>
+      </button>
+    </div>
+  </form>
+  {{else}}
   <h1>Create New {{if eq .Type "bug"}}Bug Report{{else}}Feature{{end}}</h1>
   
   <form hx-post="/wizard/refine{{if .IsPage}}?page=1{{end}}" hx-target="#wizard-content" hx-swap="innerHTML" hx-disabled-elt="button[type='submit']">
@@ -24,6 +63,7 @@
       </button>
     </div>
   </form>
+  {{end}}
 </div>
 
 <style>
@@ -48,6 +88,61 @@
 .form-actions { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1.5rem; }
 .htmx-request .spinner { display: inline !important; }
 .htmx-request .label { display: none; }
+
+/* Type selector styles */
+.type-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.type-card {
+  cursor: pointer;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+  transition: all 0.2s;
+  background: var(--surface);
+}
+.type-card:hover {
+  border-color: var(--accent);
+}
+.type-card input[type="radio"] {
+  display: none;
+}
+.type-card input[type="radio"]:checked + .type-card-content {
+  color: var(--accent);
+}
+.type-card:has(input[type="radio"]:checked) {
+  border-color: var(--accent);
+  background: rgba(88, 166, 255, 0.1);
+}
+.type-card.feature-card:has(input[type="radio"]:checked) {
+  border-color: var(--accent);
+  background: rgba(88, 166, 255, 0.1);
+}
+.type-card.bug-card:has(input[type="radio"]:checked) {
+  border-color: var(--red);
+  background: rgba(248, 81, 73, 0.1);
+}
+.type-card.bug-card:hover {
+  border-color: var(--red);
+}
+.type-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+.type-title {
+  font-weight: 600;
+  font-size: 1.1rem;
+  margin-bottom: 0.25rem;
+  color: var(--text);
+}
+.type-description {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
 </style>
 {{end}}
 
