@@ -204,6 +204,30 @@ func BuildTechnicalPlanningPrompt(wizardType WizardType, idea string, codebaseCo
 	)
 }
 
+// BuildTitleGenerationPrompt creates the prompt for generating a concise issue title
+// wizardType: the type of wizard (feature or bug)
+// technicalPlanning: the technical planning content to base the title on
+// language: the output language (e.g., "en-US", "pl-PL")
+func BuildTitleGenerationPrompt(wizardType WizardType, technicalPlanning string, language string) string {
+	// Default to English if no language specified
+	if language == "" {
+		language = "en-US"
+	}
+
+	var typeLabel string
+	if wizardType == WizardTypeBug {
+		typeLabel = "Bug"
+	} else {
+		typeLabel = "Feature"
+	}
+
+	return fmt.Sprintf(TitleGenerationPromptTemplate,
+		language,
+		typeLabel,
+		technicalPlanning,
+	)
+}
+
 // GetCodebaseContext gathers context about the existing codebase
 // This is a placeholder implementation that can be enhanced to:
 // - Read key configuration files (package.json, go.mod, etc.)
@@ -228,6 +252,24 @@ func GetCodebaseContext() string {
 
 	return context.String()
 }
+
+// TitleGenerationPromptTemplate generates concise GitHub issue titles from technical planning
+// It instructs the LLM to create a short, scannable title with a type prefix
+const TitleGenerationPromptTemplate = `You are a GitHub issue title generator. Your ONLY output is a concise issue title.
+
+CRITICAL RULES:
+- Output ONLY the title text. Nothing else. No quotes, no explanation, no preamble.
+- Title MUST be 5-8 words, maximum 80 characters.
+- Title MUST start with [Feature] or [Bug] prefix based on the issue type.
+- Title should be scannable and descriptive.
+- Output MUST be in %s regardless of input language.
+
+Issue Type: %s
+
+Technical Planning:
+%s
+
+Generate a concise title:`
 
 // stripLLMPreamble removes conversational preamble that LLMs sometimes prepend
 // before the actual content. It looks for the first markdown heading or list item

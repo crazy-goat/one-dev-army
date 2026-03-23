@@ -45,6 +45,7 @@ const (
 	WizardStepNew    WizardStep = "new"
 	WizardStepRefine WizardStep = "refine"
 	// REMOVED: WizardStepBreakdown WizardStep = "breakdown"
+	WizardStepTitle  WizardStep = "title" // NEW: Title generation step
 	WizardStepCreate WizardStep = "create"
 	WizardStepDone   WizardStep = "done"
 )
@@ -83,6 +84,9 @@ type WizardSession struct {
 	RefinedDescription string     `json:"refined_description"`
 	// REMOVED: Tasks              []WizardTask   `json:"tasks"`
 	TechnicalPlanning string         `json:"technical_planning"` // NEW FIELD
+	GeneratedTitle    string         `json:"generated_title"`    // NEW: LLM-generated title
+	CustomTitle       string         `json:"custom_title"`       // NEW: User-edited title
+	UseCustomTitle    bool           `json:"use_custom_title"`   // NEW: Whether to use custom title
 	CreatedIssues     []CreatedIssue `json:"created_issues"`
 	EpicNumber        int            `json:"epic_number"`
 	AddToSprint       bool           `json:"add_to_sprint"`
@@ -129,6 +133,41 @@ func (s *WizardSession) SetTechnicalPlanning(planning string) {
 	defer s.mu.Unlock()
 	s.TechnicalPlanning = planning
 	s.UpdatedAt = time.Now()
+}
+
+// SetGeneratedTitle updates the generated title (thread-safe)
+func (s *WizardSession) SetGeneratedTitle(title string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.GeneratedTitle = title
+	s.UpdatedAt = time.Now()
+}
+
+// SetCustomTitle updates the custom title (thread-safe)
+func (s *WizardSession) SetCustomTitle(title string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.CustomTitle = title
+	s.UpdatedAt = time.Now()
+}
+
+// SetUseCustomTitle updates the flag for using custom title (thread-safe)
+func (s *WizardSession) SetUseCustomTitle(use bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.UseCustomTitle = use
+	s.UpdatedAt = time.Now()
+}
+
+// GetFinalTitle returns the title to use for issue creation (thread-safe)
+// Returns custom title if UseCustomTitle is true, otherwise returns generated title
+func (s *WizardSession) GetFinalTitle() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.UseCustomTitle && s.CustomTitle != "" {
+		return s.CustomTitle
+	}
+	return s.GeneratedTitle
 }
 
 // SetLanguage updates the language preference (thread-safe)

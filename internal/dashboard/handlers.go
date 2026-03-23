@@ -1030,6 +1030,193 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 	s.renderFragment(w, "wizard_refine.html", data)
 }
 
+// handleWizardGenerateTitle generates or regenerates the issue title from technical planning
+func (s *Server) handleWizardGenerateTitle(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	sessionID := r.FormValue("session_id")
+	if sessionID == "" {
+		http.Error(w, "missing session_id", http.StatusBadRequest)
+		return
+	}
+
+	// Check for page mode
+	isPage := r.FormValue("page") == "1" || r.URL.Query().Get("page") == "1"
+
+	// Check if this is a regeneration request
+	regenerate := r.FormValue("regenerate") == "1"
+
+	session, ok := s.wizardStore.Get(sessionID)
+	if !ok {
+		http.Error(w, "session not found", http.StatusBadRequest)
+		return
+	}
+
+	// If user provided a custom title, store it
+	customTitle := r.FormValue("issue_title")
+	if customTitle != "" && !regenerate {
+		session.SetCustomTitle(customTitle)
+		session.SetUseCustomTitle(true)
+	}
+
+	session.SetStep(WizardStepTitle)
+
+	// If we already have a generated title and not regenerating, use it
+	if session.GeneratedTitle != "" && !regenerate {
+		title := session.GetFinalTitle()
+		s.renderTitlePage(w, session, title, isPage)
+		return
+	}
+
+	// Generate title using LLM
+	if s.oc == nil {
+		// Mock title generation for testing
+		mockTitle := generateMockTitle(session.Type, session.TechnicalPlanning)
+		session.SetGeneratedTitle(mockTitle)
+		session.AddLog("system", "Mock: Generated title: "+mockTitle)
+
+		title := session.GetFinalTitle()
+		s.renderTitlePage(w, session, title, isPage)
+		return
+	}
+
+	// Create LLM session for title generation
+	llmSession, err := s.oc.CreateSession("Wizard Title Generation")
+	if err != nil {
+		log.Printf("[Wizard] Error creating LLM session for title: %v", err)
+		session.AddLog("system", "Error: Failed to create LLM session for title - "+err.Error())
+		s.renderError(w, "Failed to connect to AI service for title generation. Please try again.", session.ID, string(session.Type), isPage)
+		return
+	}
+	defer func() {
+		if err := s.oc.DeleteSession(llmSession.ID); err != nil {
+			log.Printf("[Wizard] Error deleting LLM session %s: %v", llmSession.ID, err)
+		}
+	}()
+
+	// Build title generation prompt
+	prompt := BuildTitleGenerationPrompt(session.Type, session.TechnicalPlanning, session.Language)
+	session.AddLog("system", "Sending title generation request to LLM")
+
+	// Send message to LLM with timeout
+	ctx, cancel := context.WithTimeout(r.Context(), LLMRequestTimeout)
+	defer cancel()
+
+	model := opencode.ParseModelRef(s.wizardLLM)
+	var output strings.Builder
+	response, err := s.oc.SendMessageStream(ctx, llmSession.ID, prompt, model, &output)
+	if err != nil {
+		log.Printf("[Wizard] Error from LLM during title generation: %v", err)
+		session.AddLog("system", "LLM error during title generation: "+err.Error())
+
+		errorMsg := "Failed to generate title. "
+		if ctx.Err() == context.DeadlineExceeded {
+			errorMsg += "The AI service timed out. Please try again."
+		} else {
+			errorMsg += "Please check your connection and try again."
+		}
+
+		s.renderError(w, errorMsg, session.ID, string(session.Type), isPage)
+		return
+	}
+
+	// Extract title from response
+	var generatedTitle string
+	if len(response.Parts) > 0 {
+		generatedTitle = strings.TrimSpace(response.Parts[0].Text)
+	}
+
+	// Validate title
+	if generatedTitle == "" {
+		log.Printf("[Wizard] LLM returned empty title for session %s", session.ID)
+		session.AddLog("system", "Error: LLM returned empty title")
+		// Fallback to a default title based on type
+		if session.Type == WizardTypeBug {
+			generatedTitle = "[Bug] Fix issue"
+		} else {
+			generatedTitle = "[Feature] New feature"
+		}
+	}
+
+	// Ensure title has proper prefix
+	if !strings.HasPrefix(generatedTitle, "[Feature]") && !strings.HasPrefix(generatedTitle, "[Bug]") {
+		if session.Type == WizardTypeBug {
+			generatedTitle = "[Bug] " + generatedTitle
+		} else {
+			generatedTitle = "[Feature] " + generatedTitle
+		}
+	}
+
+	// Truncate if too long
+	if len(generatedTitle) > 80 {
+		generatedTitle = generatedTitle[:77] + "..."
+	}
+
+	session.SetGeneratedTitle(generatedTitle)
+	session.AddLog("assistant", "Generated title: "+generatedTitle)
+
+	title := session.GetFinalTitle()
+	s.renderTitlePage(w, session, title, isPage)
+}
+
+// renderTitlePage renders the title page with the given title
+func (s *Server) renderTitlePage(w http.ResponseWriter, session *WizardSession, title string, isPage bool) {
+	data := struct {
+		SessionID          string
+		Type               string
+		Title              string
+		IsPage             bool
+		SprintName         string
+		CurrentStep        int
+		ShowBreakdownStep  bool
+		NeedsTypeSelection bool
+	}{
+		SessionID:          session.ID,
+		Type:               string(session.Type),
+		Title:              title,
+		IsPage:             isPage,
+		SprintName:         s.activeSprintName(),
+		CurrentStep:        3, // Title is step 3
+		ShowBreakdownStep:  false,
+		NeedsTypeSelection: false,
+	}
+
+	s.renderFragment(w, "wizard_title.html", data)
+}
+
+// generateMockTitle generates a mock title for testing
+func generateMockTitle(wizardType WizardType, technicalPlanning string) string {
+	// Extract first line or first sentence for context
+	lines := strings.Split(technicalPlanning, "\n")
+	var context string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" && !strings.HasPrefix(trimmed, "#") && !strings.HasPrefix(trimmed, "-") {
+			context = trimmed
+			break
+		}
+	}
+
+	if context == "" {
+		context = "New implementation"
+	}
+
+	// Truncate context if too long
+	words := strings.Fields(context)
+	if len(words) > 5 {
+		words = words[:5]
+	}
+	context = strings.Join(words, " ")
+
+	if wizardType == WizardTypeBug {
+		return "[Bug] Fix " + context
+	}
+	return "[Feature] Add " + context
+}
+
 // renderError renders an error message in the wizard modal
 func (s *Server) renderError(w http.ResponseWriter, errorMsg, sessionID, wizardType string, isPage bool) {
 	data := struct {
@@ -1089,12 +1276,9 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 
 	// If no GitHub client, return mock confirmation for testing
 	if s.gh == nil {
-		mockTitle := session.TechnicalPlanning
+		mockTitle := session.GetFinalTitle()
 		if mockTitle == "" {
-			mockTitle = session.IdeaText
-		}
-		if len(mockTitle) > 200 {
-			mockTitle = mockTitle[:197] + "..."
+			mockTitle = generateMockTitle(session.Type, session.TechnicalPlanning)
 		}
 		mockIssue := CreatedIssue{
 			Number:  100,
@@ -1122,7 +1306,7 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 			HasErrors:          false,
 			IsPage:             isPage,
 			IsSingleIssue:      true,
-			CurrentStep:        3, // Step 3 is Create in new 3-step flow
+			CurrentStep:        4, // Step 4 is Create in new 4-step flow
 			ShowBreakdownStep:  false,
 			NeedsTypeSelection: false,
 			Type:               string(session.Type),
@@ -1141,13 +1325,16 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 		labels = append(labels, "bug")
 	}
 
-	// Build title from technical planning (truncated to 200 chars)
-	title := session.TechnicalPlanning
+	// Get title from session (either custom or generated)
+	title := session.GetFinalTitle()
 	if title == "" {
-		title = session.IdeaText
+		// Fallback: generate a simple title from technical planning
+		title = generateMockTitle(session.Type, session.TechnicalPlanning)
 	}
-	if len(title) > 200 {
-		title = title[:197] + "..."
+
+	// Validate title length (GitHub limit is 256, but we enforce 80)
+	if len(title) > 80 {
+		title = title[:77] + "..."
 	}
 
 	// Create the single issue
@@ -1197,7 +1384,7 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 		HasErrors:          false,
 		IsPage:             isPage,
 		IsSingleIssue:      true,
-		CurrentStep:        3, // Step 3 is Create in new 3-step flow
+		CurrentStep:        4, // Step 4 is Create in new 4-step flow
 		ShowBreakdownStep:  false,
 		NeedsTypeSelection: false,
 		Type:               string(session.Type),
@@ -1335,12 +1522,14 @@ func (s *Server) handleWizardModal(w http.ResponseWriter, r *http.Request) {
 		CurrentStep        int
 		ShowBreakdownStep  bool
 		NeedsTypeSelection bool
+		IsPage             bool
 	}{
 		Type:               wizardType,
 		SessionID:          "",
 		CurrentStep:        1,
 		ShowBreakdownStep:  false,
 		NeedsTypeSelection: needsTypeSelection,
+		IsPage:             false, // Modal is never page mode
 	}
 
 	if session != nil {
