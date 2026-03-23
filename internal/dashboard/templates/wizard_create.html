@@ -60,10 +60,14 @@
   <div class="form-actions">
     {{if .IsPage}}
     <a href="/" class="btn btn-primary">Close Wizard</a>
+    <a href="/wizard?type={{.Type}}" class="btn btn-success">+ Create Another</a>
     <a href="/backlog" class="btn">View Backlog →</a>
     {{else}}
     <button type="button" class="btn btn-primary" onclick="closeWizardModal()">
       Close Wizard
+    </button>
+    <button type="button" class="btn btn-success" onclick="closeWizardModal(); window.location.href='/wizard?type={{.Type}}'">
+      + Create Another
     </button>
     <a href="/backlog" class="btn" onclick="closeWizardModal()">View Backlog →</a>
     {{end}}

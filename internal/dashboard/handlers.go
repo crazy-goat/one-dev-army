@@ -1459,6 +1459,7 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 		CurrentStep        int
 		ShowBreakdownStep  bool
 		NeedsTypeSelection bool
+		Type               string
 	}{
 		Epic:               epicIssue,
 		SubTasks:           subTasks,
@@ -1468,6 +1469,7 @@ func (s *Server) handleWizardCreate(w http.ResponseWriter, r *http.Request) {
 		CurrentStep:        4,
 		ShowBreakdownStep:  !session.SkipBreakdown,
 		NeedsTypeSelection: false,
+		Type:               string(session.Type),
 	}
 
 	// Clean up session after creation to free memory
@@ -1510,6 +1512,7 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 			CurrentStep        int
 			ShowBreakdownStep  bool
 			NeedsTypeSelection bool
+			Type               string
 		}{
 			Epic:               mockIssue,
 			SubTasks:           []CreatedIssue{},
@@ -1519,6 +1522,7 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 			CurrentStep:        4,
 			ShowBreakdownStep:  false,
 			NeedsTypeSelection: false,
+			Type:               string(session.Type),
 		}
 
 		s.wizardStore.Delete(session.ID)
@@ -1583,6 +1587,7 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 		CurrentStep        int
 		ShowBreakdownStep  bool
 		NeedsTypeSelection bool
+		Type               string
 	}{
 		Epic:               issue,
 		SubTasks:           []CreatedIssue{},
@@ -1592,6 +1597,7 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 		CurrentStep:        4,
 		ShowBreakdownStep:  false,
 		NeedsTypeSelection: false,
+		Type:               string(session.Type),
 	}
 
 	// Clean up session after creation to free memory
