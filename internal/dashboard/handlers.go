@@ -644,10 +644,14 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	steps, err := s.store.GetSteps(issueNum)
-	if err != nil {
-		log.Printf("[Dashboard] Error getting steps for #%d: %v", issueNum, err)
-		steps = nil
+	var steps []db.TaskStep
+	if s.store != nil {
+		var err error
+		steps, err = s.store.GetSteps(issueNum)
+		if err != nil {
+			log.Printf("[Dashboard] Error getting steps for #%d: %v", issueNum, err)
+			steps = nil
+		}
 	}
 
 	isActive := false
