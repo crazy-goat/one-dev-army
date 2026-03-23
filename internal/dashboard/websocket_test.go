@@ -76,8 +76,8 @@ func TestHubRegisterUnregister(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// Wait for registration
-	time.Sleep(100 * time.Millisecond)
+	// Wait for registration using polling
+	waitForClientCount(t, hub, 1, time.Second)
 
 	if count := hub.ClientCount(); count != 1 {
 		t.Errorf("Expected 1 client, got %d", count)
@@ -86,8 +86,8 @@ func TestHubRegisterUnregister(t *testing.T) {
 	// Close connection to trigger unregistration
 	conn.Close()
 
-	// Wait for unregistration
-	time.Sleep(100 * time.Millisecond)
+	// Wait for unregistration using polling
+	waitForClientCount(t, hub, 0, time.Second)
 
 	if count := hub.ClientCount(); count != 0 {
 		t.Errorf("Expected 0 clients after disconnect, got %d", count)
@@ -117,15 +117,15 @@ func TestHubBroadcast(t *testing.T) {
 		defer conn.Close()
 	}
 
-	// Wait for registration
-	time.Sleep(100 * time.Millisecond)
+	// Wait for registration using polling
+	waitForClientCount(t, hub, 3, time.Second)
+
+	// Give clients time to start their read pumps
+	time.Sleep(50 * time.Millisecond)
 
 	// Broadcast a message
 	testMsg := []byte(`{"type":"test","payload":"hello"}`)
 	hub.Broadcast(testMsg)
-
-	// Wait for message delivery
-	time.Sleep(100 * time.Millisecond)
 
 	// Verify all clients received the message
 	for i, conn := range conns {
@@ -160,14 +160,11 @@ func TestHubBroadcastIssueUpdate(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// Wait for registration
-	time.Sleep(100 * time.Millisecond)
+	// Wait for registration using polling
+	waitForClientCount(t, hub, 1, time.Second)
 
 	// Broadcast issue update
 	hub.BroadcastIssueUpdate(42, "Test Issue", "open", "Backlog")
-
-	// Wait for message delivery
-	time.Sleep(100 * time.Millisecond)
 
 	// Verify client received the message
 	conn.SetReadDeadline(time.Now().Add(time.Second))
@@ -220,14 +217,11 @@ func TestHubBroadcastSyncComplete(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// Wait for registration
-	time.Sleep(100 * time.Millisecond)
+	// Wait for registration using polling
+	waitForClientCount(t, hub, 1, time.Second)
 
 	// Broadcast sync complete
 	hub.BroadcastSyncComplete(true, "Sprint 1", "")
-
-	// Wait for message delivery
-	time.Sleep(100 * time.Millisecond)
 
 	// Verify client received the message
 	conn.SetReadDeadline(time.Now().Add(time.Second))
@@ -282,8 +276,8 @@ func TestHubConnectionLimit(t *testing.T) {
 		defer conn.Close()
 	}
 
-	// Wait for registration
-	time.Sleep(100 * time.Millisecond)
+	// Wait for registration using polling
+	waitForClientCount(t, hub, 2, time.Second)
 
 	if count := hub.ClientCount(); count != 2 {
 		t.Errorf("Expected 2 clients, got %d", count)
@@ -296,8 +290,14 @@ func TestHubConnectionLimit(t *testing.T) {
 		conn.Close()
 	}
 
-	// Wait a bit for any rejection to process
-	time.Sleep(100 * time.Millisecond)
+	// Wait a bit for any rejection to process using polling
+	start := time.Now()
+	for time.Since(start) < 200*time.Millisecond {
+		if hub.ClientCount() == 2 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	// Should still have only 2 clients
 	if count := hub.ClientCount(); count != 2 {
@@ -338,8 +338,8 @@ func TestHubConcurrentClients(t *testing.T) {
 
 	wg.Wait()
 
-	// Wait for all registrations
-	time.Sleep(100 * time.Millisecond)
+	// Wait for all registrations using polling
+	waitForClientCount(t, hub, numClients, time.Second)
 
 	if count := hub.ClientCount(); count != numClients {
 		t.Errorf("Expected %d clients, got %d", numClients, count)
@@ -352,8 +352,8 @@ func TestHubConcurrentClients(t *testing.T) {
 		}
 	}
 
-	// Wait for unregistrations
-	time.Sleep(100 * time.Millisecond)
+	// Wait for unregistrations using polling
+	waitForClientCount(t, hub, 0, time.Second)
 
 	if count := hub.ClientCount(); count != 0 {
 		t.Errorf("Expected 0 clients after disconnect, got %d", count)
@@ -382,8 +382,8 @@ func TestHubStop(t *testing.T) {
 		conns = append(conns, conn)
 	}
 
-	// Wait for registration
-	time.Sleep(100 * time.Millisecond)
+	// Wait for registration using polling
+	waitForClientCount(t, hub, 3, time.Second)
 
 	if count := hub.ClientCount(); count != 3 {
 		t.Errorf("Expected 3 clients, got %d", count)
@@ -392,8 +392,8 @@ func TestHubStop(t *testing.T) {
 	// Stop the hub
 	hub.Stop()
 
-	// Wait for stop to process
-	time.Sleep(100 * time.Millisecond)
+	// Wait for stop to process using polling
+	waitForClientCount(t, hub, 0, time.Second)
 
 	if count := hub.ClientCount(); count != 0 {
 		t.Errorf("Expected 0 clients after stop, got %d", count)
@@ -504,8 +504,8 @@ func TestClientPingPong(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// Wait for registration
-	time.Sleep(100 * time.Millisecond)
+	// Wait for registration using polling
+	waitForClientCount(t, hub, 1, time.Second)
 
 	// Send a ping message
 	ping := Message{Type: MessageTypePing}
@@ -528,5 +528,20 @@ func TestClientPingPong(t *testing.T) {
 
 	if received.Type != MessageTypePong {
 		t.Errorf("Expected pong, got %s", received.Type)
+	}
+}
+
+// waitForClientCount polls the hub until it reaches the expected client count or timeout
+func waitForClientCount(t *testing.T, hub *Hub, expected int, timeout time.Duration) {
+	t.Helper()
+	start := time.Now()
+	for {
+		if hub.ClientCount() == expected {
+			return
+		}
+		if time.Since(start) > timeout {
+			t.Fatalf("Timeout waiting for client count %d, got %d", expected, hub.ClientCount())
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

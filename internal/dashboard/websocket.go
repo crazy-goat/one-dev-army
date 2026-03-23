@@ -2,8 +2,11 @@ package dashboard
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,8 +34,32 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		// Allow all origins in development; restrict in production via CORS middleware
-		return true
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+
+		// Allow localhost origins for development
+		if strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1") {
+			return true
+		}
+
+		// Check allowed origins from environment variable
+		allowedOrigins := os.Getenv("WEBSOCKET_ALLOWED_ORIGINS")
+		if allowedOrigins == "" {
+			// Default: only allow same-origin requests
+			return origin == "" || r.Host == origin
+		}
+
+		allowedList := strings.Split(allowedOrigins, ",")
+		for _, allowed := range allowedList {
+			if strings.TrimSpace(allowed) == origin {
+				return true
+			}
+		}
+
+		log.Printf("[WebSocket] Rejected connection from origin: %s", origin)
+		return false
 	},
 }
 
@@ -303,6 +330,7 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
+		c.hub.unregister <- c
 		c.conn.Close()
 	}()
 
@@ -329,6 +357,17 @@ func (c *Client) writePump() {
 
 // ServeWs handles WebSocket requests from clients
 func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
+	// Check authentication token if WEBSOCKET_AUTH_TOKEN is set
+	authToken := os.Getenv("WEBSOCKET_AUTH_TOKEN")
+	if authToken != "" {
+		queryToken := r.URL.Query().Get("token")
+		if queryToken != authToken {
+			log.Printf("[WebSocket] Authentication failed: invalid or missing token from %s", r.RemoteAddr)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("[WebSocket] Upgrade error: %v", err)
@@ -358,5 +397,5 @@ func generateClientID() string {
 	clientIDMu.Lock()
 	defer clientIDMu.Unlock()
 	clientIDCounter++
-	return time.Now().Format("20060102150405") + "-" + string(rune(clientIDCounter))
+	return fmt.Sprintf("%s-%d", time.Now().Format("20060102150405"), clientIDCounter)
 }
