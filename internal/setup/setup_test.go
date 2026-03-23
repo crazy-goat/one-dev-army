@@ -3,6 +3,7 @@ package setup
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
@@ -23,6 +24,153 @@ func TestCheckAgentsMD_Exists(t *testing.T) {
 
 	if err := s.checkAgentsMD(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify existing file was not overwritten
+	content, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) != "# Agents" {
+		t.Errorf("existing AGENTS.md was overwritten: got %q, want %q", string(content), "# Agents")
+	}
+}
+
+func TestCheckAgentsMD_CreatesTemplate(t *testing.T) {
+	dir := t.TempDir()
+
+	s := &Setup{
+		projectDir: dir,
+		oc:         opencode.NewClient("http://localhost:0"),
+		cfg:        &config.Config{},
+	}
+
+	if err := s.checkAgentsMD(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify file was created
+	path := filepath.Join(dir, "AGENTS.md")
+	if !fileExists(path) {
+		t.Fatal("AGENTS.md was not created")
+	}
+
+	// Verify content contains project name
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contentStr := string(content)
+	if !strings.Contains(contentStr, filepath.Base(dir)) {
+		t.Errorf("AGENTS.md does not contain project name: %q", contentStr)
+	}
+
+	// Verify file permissions
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mode := info.Mode().Perm()
+	if mode != 0o644 {
+		t.Errorf("AGENTS.md has wrong permissions: got %o, want %o", mode, 0o644)
+	}
+}
+
+func TestDetectLanguage(t *testing.T) {
+	tests := []struct {
+		name     string
+		files    map[string]string
+		expected string
+	}{
+		{
+			name:     "Go project",
+			files:    map[string]string{"go.mod": "module test"},
+			expected: "Go",
+		},
+		{
+			name:     "Rust project",
+			files:    map[string]string{"Cargo.toml": "[package]"},
+			expected: "Rust",
+		},
+		{
+			name:     "Node.js project",
+			files:    map[string]string{"package.json": "{}"},
+			expected: "JavaScript/TypeScript",
+		},
+		{
+			name:     "Python project (requirements.txt)",
+			files:    map[string]string{"requirements.txt": "requests"},
+			expected: "Python",
+		},
+		{
+			name:     "Python project (pyproject.toml)",
+			files:    map[string]string{"pyproject.toml": "[project]"},
+			expected: "Python",
+		},
+		{
+			name:     "PHP project",
+			files:    map[string]string{"composer.json": "{}"},
+			expected: "PHP",
+		},
+		{
+			name:     "Java project (pom.xml)",
+			files:    map[string]string{"pom.xml": "<project>"},
+			expected: "Java",
+		},
+		{
+			name:     "Java/Kotlin project (build.gradle)",
+			files:    map[string]string{"build.gradle": "plugins"},
+			expected: "Java/Kotlin",
+		},
+		{
+			name:     "Ruby project",
+			files:    map[string]string{"Gemfile": "source"},
+			expected: "Ruby",
+		},
+		{
+			name:     "Unknown project",
+			files:    map[string]string{},
+			expected: "Unknown",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for filename, content := range tt.files {
+				if err := os.WriteFile(filepath.Join(dir, filename), []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			got := detectLanguage(dir)
+			if got != tt.expected {
+				t.Errorf("detectLanguage() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGenerateAgentsTemplate(t *testing.T) {
+	projectName := "my-awesome-project"
+	language := "Go"
+
+	got := generateAgentsTemplate(projectName, language)
+
+	if !strings.Contains(got, projectName) {
+		t.Errorf("template does not contain project name: %q", got)
+	}
+	if !strings.Contains(got, language) {
+		t.Errorf("template does not contain language: %q", got)
+	}
+	if !strings.Contains(got, "# my-awesome-project") {
+		t.Errorf("template does not contain header: %q", got)
+	}
+	if !strings.Contains(got, "Project Overview") {
+		t.Errorf("template does not contain 'Project Overview' section: %q", got)
+	}
+	if !strings.Contains(got, "Development Guidelines") {
+		t.Errorf("template does not contain 'Development Guidelines' section: %q", got)
 	}
 }
 
