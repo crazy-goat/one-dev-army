@@ -564,3 +564,14 @@ func (o *Orchestrator) activeMilestone() string {
 	}
 	return ""
 }
+
+// CheckoutDefault switches to the default branch (main or master) after merge.
+// This is a non-critical operation - errors are logged but not returned.
+func (o *Orchestrator) CheckoutDefault() {
+	if o.brMgr == nil {
+		return
+	}
+	if err := o.brMgr.CheckoutDefault(); err != nil {
+		log.Printf("[Orchestrator] Warning: failed to checkout default branch: %v", err)
+	}
+}
