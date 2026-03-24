@@ -84,36 +84,29 @@ func Load(rootDir string) (*Config, error) {
 func (cfg *Config) applyLLMDefaults() {
 	defaults := DefaultLLMConfig()
 
-	// If Development strong model is empty, use defaults
-	if cfg.LLM.Development.Strong.Model == "" {
-		cfg.LLM.Development.Strong = defaults.Development.Strong
-	}
-	if cfg.LLM.Development.Weak.Model == "" {
-		cfg.LLM.Development.Weak = defaults.Development.Weak
+	// If Setup model is empty, use defaults
+	if cfg.LLM.Setup.Model == "" {
+		cfg.LLM.Setup.Model = defaults.Setup.Model
 	}
 
-	// If Planning strong model is empty, use defaults
-	if cfg.LLM.Planning.Strong.Model == "" {
-		cfg.LLM.Planning.Strong = defaults.Planning.Strong
-	}
-	if cfg.LLM.Planning.Weak.Model == "" {
-		cfg.LLM.Planning.Weak = defaults.Planning.Weak
+	// If Planning model is empty, use defaults
+	if cfg.LLM.Planning.Model == "" {
+		cfg.LLM.Planning.Model = defaults.Planning.Model
 	}
 
-	// If Orchestration strong model is empty, use defaults
-	if cfg.LLM.Orchestration.Strong.Model == "" {
-		cfg.LLM.Orchestration.Strong = defaults.Orchestration.Strong
-	}
-	if cfg.LLM.Orchestration.Weak.Model == "" {
-		cfg.LLM.Orchestration.Weak = defaults.Orchestration.Weak
+	// If Orchestration model is empty, use defaults
+	if cfg.LLM.Orchestration.Model == "" {
+		cfg.LLM.Orchestration.Model = defaults.Orchestration.Model
 	}
 
-	// If Setup strong model is empty, use defaults
-	if cfg.LLM.Setup.Strong.Model == "" {
-		cfg.LLM.Setup.Strong = defaults.Setup.Strong
+	// If Code model is empty, use defaults
+	if cfg.LLM.Code.Model == "" {
+		cfg.LLM.Code.Model = defaults.Code.Model
 	}
-	if cfg.LLM.Setup.Weak.Model == "" {
-		cfg.LLM.Setup.Weak = defaults.Setup.Weak
+
+	// If CodeHeavy model is empty, use defaults
+	if cfg.LLM.CodeHeavy.Model == "" {
+		cfg.LLM.CodeHeavy.Model = defaults.CodeHeavy.Model
 	}
 
 	// Apply default complexity if not set

@@ -556,7 +556,8 @@ func (s *Server) render(w http.ResponseWriter, name string, data any) {
 		execName = "workers.html"
 	}
 	if err := t.ExecuteTemplate(w, execName, data); err != nil {
-		http.Error(w, "template error", http.StatusInternalServerError)
+		log.Printf("[Dashboard] Template execution error: %v", err)
+		http.Error(w, fmt.Sprintf("template error: %v", err), http.StatusInternalServerError)
 	}
 }
 
@@ -1756,44 +1757,30 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	// Parse and validate form data
 	var errors []string
 
-	// Parse Development models
-	cfg.LLM.Development.Strong.Model = r.FormValue("development_strong_model")
-	cfg.LLM.Development.Weak.Model = r.FormValue("development_weak_model")
+	// Parse model selections for each mode (5 independent dropdowns)
+	cfg.LLM.Setup.Model = r.FormValue("setup_model")
+	cfg.LLM.Planning.Model = r.FormValue("planning_model")
+	cfg.LLM.Orchestration.Model = r.FormValue("orchestration_model")
+	cfg.LLM.Code.Model = r.FormValue("code_model")
+	cfg.LLM.CodeHeavy.Model = r.FormValue("code_heavy_model")
 
-	// Parse Planning models
-	cfg.LLM.Planning.Strong.Model = r.FormValue("planning_strong_model")
-	cfg.LLM.Planning.Weak.Model = r.FormValue("planning_weak_model")
-
-	// Parse Orchestration models
-	cfg.LLM.Orchestration.Strong.Model = r.FormValue("orchestration_strong_model")
-	cfg.LLM.Orchestration.Weak.Model = r.FormValue("orchestration_weak_model")
-
-	// Parse Setup models
-	cfg.LLM.Setup.Strong.Model = r.FormValue("setup_strong_model")
-	cfg.LLM.Setup.Weak.Model = r.FormValue("setup_weak_model")
-
-	// Validate required fields
-	categories := []struct {
-		name   string
-		strong config.ModelConfig
-		weak   config.ModelConfig
+	// Validate required fields - 5 single models instead of 4 strong/weak pairs
+	modes := []struct {
+		name  string
+		model string
 	}{
-		{"Development", cfg.LLM.Development.Strong, cfg.LLM.Development.Weak},
-		{"Planning", cfg.LLM.Planning.Strong, cfg.LLM.Planning.Weak},
-		{"Orchestration", cfg.LLM.Orchestration.Strong, cfg.LLM.Orchestration.Weak},
-		{"Setup", cfg.LLM.Setup.Strong, cfg.LLM.Setup.Weak},
+		{"Setup", cfg.LLM.Setup.Model},
+		{"Planning", cfg.LLM.Planning.Model},
+		{"Orchestration", cfg.LLM.Orchestration.Model},
+		{"Code", cfg.LLM.Code.Model},
+		{"Code Heavy", cfg.LLM.CodeHeavy.Model},
 	}
 
-	for _, cat := range categories {
-		if cat.strong.Model == "" {
-			errors = append(errors, fmt.Sprintf("%s Strong: Model is required", cat.name))
-		} else if !validateModelFormat(cat.strong.Model) {
-			errors = append(errors, fmt.Sprintf("%s Strong: Model must be in 'provider/model' format (e.g., 'nexos-ai/Kimi K2.5')", cat.name))
-		}
-		if cat.weak.Model == "" {
-			errors = append(errors, fmt.Sprintf("%s Weak: Model is required", cat.name))
-		} else if !validateModelFormat(cat.weak.Model) {
-			errors = append(errors, fmt.Sprintf("%s Weak: Model must be in 'provider/model' format (e.g., 'nexos-ai/Kimi K2.5')", cat.name))
+	for _, mode := range modes {
+		if mode.model == "" {
+			errors = append(errors, fmt.Sprintf("%s: Model is required", mode.name))
+		} else if !validateModelFormat(mode.model) {
+			errors = append(errors, fmt.Sprintf("%s: Model must be in 'provider/model' format (e.g., 'nexos-ai/Kimi K2.5')", mode.name))
 		}
 	}
 
@@ -1803,14 +1790,11 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 			name  string
 			model string
 		}{
-			{"Development Strong", cfg.LLM.Development.Strong.Model},
-			{"Development Weak", cfg.LLM.Development.Weak.Model},
-			{"Planning Strong", cfg.LLM.Planning.Strong.Model},
-			{"Planning Weak", cfg.LLM.Planning.Weak.Model},
-			{"Orchestration Strong", cfg.LLM.Orchestration.Strong.Model},
-			{"Orchestration Weak", cfg.LLM.Orchestration.Weak.Model},
-			{"Setup Strong", cfg.LLM.Setup.Strong.Model},
-			{"Setup Weak", cfg.LLM.Setup.Weak.Model},
+			{"Setup", cfg.LLM.Setup.Model},
+			{"Planning", cfg.LLM.Planning.Model},
+			{"Orchestration", cfg.LLM.Orchestration.Model},
+			{"Code", cfg.LLM.Code.Model},
+			{"Code Heavy", cfg.LLM.CodeHeavy.Model},
 		}
 
 		for _, mv := range modelValidations {

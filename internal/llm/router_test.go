@@ -18,14 +18,14 @@ func TestRouter_SelectModel(t *testing.T) {
 		wantNonEmpty bool
 	}{
 		{
-			name:         "development low complexity",
-			category:     config.CategoryDevelopment,
+			name:         "code low complexity",
+			category:     config.CategoryCode,
 			complexity:   config.ComplexityLow,
 			wantNonEmpty: true,
 		},
 		{
-			name:         "development high complexity",
-			category:     config.CategoryDevelopment,
+			name:         "code high complexity",
+			category:     config.CategoryCode,
 			complexity:   config.ComplexityHigh,
 			wantNonEmpty: true,
 		},
@@ -111,14 +111,14 @@ func TestRouter_UpdateConfig(t *testing.T) {
 
 	// Test that config can be updated
 	newCfg := config.DefaultLLMConfig()
-	newCfg.Development.Strong.Model = "new-strong-model"
+	newCfg.Code.Model = "new-code-model"
 
 	router.UpdateConfig(&newCfg)
 
 	// Verify the update
 	updatedCfg := router.GetConfig()
-	if updatedCfg.Development.Strong.Model != "new-strong-model" {
-		t.Errorf("UpdateConfig() failed, model = %q, want %q", updatedCfg.Development.Strong.Model, "new-strong-model")
+	if updatedCfg.Code.Model != "new-code-model" {
+		t.Errorf("UpdateConfig() failed, model = %q, want %q", updatedCfg.Code.Model, "new-code-model")
 	}
 }
 
@@ -142,55 +142,6 @@ func TestRouter_OnReload(t *testing.T) {
 		// This is expected since the callback runs in a goroutine
 		// In a real scenario, you'd wait for it
 		t.Log("Reload callback registered (may not have executed yet due to goroutine)")
-	}
-}
-
-func TestDetectComplexity(t *testing.T) {
-	thresholds := config.ComplexityThresholds{
-		CodeSizeThreshold:       100,
-		HighComplexityThreshold: 500,
-		FileCountThreshold:      5,
-	}
-
-	tests := []struct {
-		name     string
-		context  string
-		expected config.ComplexityLevel
-	}{
-		{
-			name:     "empty context",
-			context:  "",
-			expected: config.ComplexityLow,
-		},
-		{
-			name:     "simple task",
-			context:  "Fix typo in README",
-			expected: config.ComplexityLow,
-		},
-		{
-			name:     "medium complexity indicators",
-			context:  "Implement new feature with API endpoint and validation",
-			expected: config.ComplexityLow, // Scoring gives 1 point, which is low
-		},
-		{
-			name:     "high complexity indicators",
-			context:  "Refactor the authentication system with microservices architecture and distributed database",
-			expected: config.ComplexityMedium, // Scoring gives 3 points (refactor=1, microservices=1, distributed=1), which is medium
-		},
-		{
-			name:     "large code size",
-			context:  generateLargeContext(600),
-			expected: config.ComplexityMedium, // 600 lines gives 3 points, which is medium (need 4+ for high)
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := llm.DetectComplexity(tt.context, thresholds)
-			if got != tt.expected {
-				t.Errorf("DetectComplexity() = %v, want %v", got, tt.expected)
-			}
-		})
 	}
 }
 

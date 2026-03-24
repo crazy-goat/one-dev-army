@@ -1,10 +1,49 @@
 package llm
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
 )
+
+// countLines counts non-empty lines in text
+func countLines(text string) int {
+	if text == "" {
+		return 0
+	}
+
+	lines := strings.Split(text, "\n")
+	count := 0
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			count++
+		}
+	}
+	return count
+}
+
+// complexityIndicators are patterns that suggest high complexity
+var complexityIndicators = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)\b(refactor|rearchitecture|redesign)\b`),
+	regexp.MustCompile(`(?i)\b(algorithm|complex|optimization)\b`),
+	regexp.MustCompile(`(?i)\b(concurrency|parallel|async|goroutine|thread)\b`),
+	regexp.MustCompile(`(?i)\b(distributed|microservice|service mesh)\b`),
+	regexp.MustCompile(`(?i)\b(critical|security|performance|scalability)\b`),
+	regexp.MustCompile(`(?i)\b(database migration|schema change)\b`),
+	regexp.MustCompile(`(?i)\b(api design|interface design|protocol)\b`),
+}
+
+// countComplexityIndicators counts how many high-complexity patterns are found
+func countComplexityIndicators(text string) int {
+	score := 0
+	for _, re := range complexityIndicators {
+		if re.MatchString(text) {
+			score++
+		}
+	}
+	return score
+}
 
 // ComplexityAnalyzer provides detailed complexity analysis for tasks
 type ComplexityAnalyzer struct {
@@ -213,4 +252,14 @@ func EstimateFromKeywords(text string, keywords TaskKeywords) config.ComplexityL
 	}
 
 	return config.ComplexityLow
+}
+
+// DetectComplexity analyzes context and returns complexity level
+// This is a simplified version that uses default thresholds
+// Deprecated: Complexity-based routing is being phased out
+func DetectComplexity(context string) config.ComplexityLevel {
+	thresholds := config.DefaultLLMConfig().RoutingRules.ComplexityThresholds
+	analyzer := NewComplexityAnalyzer(thresholds)
+	report := analyzer.AnalyzeTask(context, []string{}, nil)
+	return report.Complexity
 }

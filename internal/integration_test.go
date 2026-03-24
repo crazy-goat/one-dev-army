@@ -506,12 +506,7 @@ func TestConfigToProcessorWiring(t *testing.T) {
 		},
 		LLM: config.LLMConfig{
 			Planning: config.CategoryModels{
-				Strong: config.ModelConfig{
-					Model: "custom/custom-model-for-analysis",
-				},
-				Weak: config.ModelConfig{
-					Model: "custom/custom-model-for-analysis",
-				},
+				Model: "custom/custom-model-for-analysis",
 			},
 		},
 	}

@@ -450,11 +450,11 @@ func (w *Worker) implement(ctx context.Context, task *Task, planStr string) erro
 	}
 	prompt := fmt.Sprintf(implementationPrompt, task.Issue.Number, task.Issue.Title, planStr, task.Worktree, testCmd)
 
-	// Use router to select model for development category with complexity detection
+	// Use router to select model for code category with complexity detection
 	llmModel := w.cfg.EpicAnalysis.LLM
 	if w.router != nil {
-		complexity := llm.DetectComplexity(planStr, w.router.GetConfig().RoutingRules.ComplexityThresholds)
-		llmModel = w.router.SelectModel(config.CategoryDevelopment, complexity, nil)
+		complexity := llm.DetectComplexity(planStr)
+		llmModel = w.router.SelectModel(config.CategoryCode, complexity, nil)
 	}
 
 	_, err = w.llmStep(ctx, task, "implement", prompt, llmModel)
@@ -486,10 +486,10 @@ func (w *Worker) fixFromReview(ctx context.Context, task *Task, review string) e
 	}
 	prompt := fmt.Sprintf(fixFromReviewPrompt, task.Issue.Number, task.Issue.Title, task.Worktree, testCmd, review)
 
-	// Use router to select model for development category
+	// Use router to select model for code category
 	llmModel := w.cfg.EpicAnalysis.LLM
 	if w.router != nil {
-		llmModel = w.router.SelectModel(config.CategoryDevelopment, config.ComplexityMedium, nil)
+		llmModel = w.router.SelectModel(config.CategoryCode, config.ComplexityMedium, nil)
 	}
 
 	_, err := w.llmStep(ctx, task, "fix-from-review", prompt, llmModel)
@@ -546,11 +546,11 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (appr
 		}
 	}
 
-	// Use router to select model for development category with high complexity (code review is important)
+	// Use router to select model for code category with high complexity (code review is important)
 	llmModel := w.cfg.Planning.LLM
 	if w.router != nil {
 		hints := map[string]any{"stage": "code-review"}
-		llmModel = w.router.SelectModel(config.CategoryDevelopment, config.ComplexityHigh, hints)
+		llmModel = w.router.SelectModel(config.CategoryCode, config.ComplexityHigh, hints)
 	}
 
 	model := opencode.ParseModelRef(llmModel)
