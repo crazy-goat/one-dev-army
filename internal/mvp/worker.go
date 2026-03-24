@@ -114,6 +114,7 @@ type Worker struct {
 	repoDir      string
 	orchestrator *Orchestrator
 	router       *llm.Router
+	decisionCh   chan UserDecision // receives approve/decline from dashboard
 }
 
 func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Client, brMgr *git.BranchManager, store *db.Store, orchestrator *Orchestrator, router *llm.Router) *Worker {
@@ -127,6 +128,7 @@ func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Clien
 		repoDir:      brMgr.RepoDir(),
 		orchestrator: orchestrator,
 		router:       router,
+		decisionCh:   make(chan UserDecision, 1),
 	}
 }
 

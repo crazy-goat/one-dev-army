@@ -26,6 +26,8 @@ const (
 	ReasonWorkerCompletedCoding     StageChangeReason = "worker_completed_coding"
 	ReasonWorkerCompletedCodeReview StageChangeReason = "worker_completed_code_review"
 	ReasonWorkerCompletedCreatePR   StageChangeReason = "worker_completed_create_pr"
+	ReasonWorkerCompletedMerge      StageChangeReason = "worker_completed_merge"
+	ReasonWorkerDeclined            StageChangeReason = "worker_declined"
 	ReasonWorkerNeedsUser           StageChangeReason = "worker_needs_user"
 	ReasonWorkerBlocked             StageChangeReason = "worker_blocked"
 	ReasonWorkerStageUpdate         StageChangeReason = "worker_stage_update"
@@ -80,6 +82,10 @@ func (r StageChangeReason) String() string {
 		return "Worker completed code-review, advancing to create-pr"
 	case ReasonWorkerCompletedCreatePR:
 		return "Worker completed PR creation, advancing to approval"
+	case ReasonWorkerCompletedMerge:
+		return "Worker completed merge, ticket done"
+	case ReasonWorkerDeclined:
+		return "User declined PR via worker, sent back for fixes"
 	case ReasonWorkerNeedsUser:
 		return "Worker needs user intervention"
 	case ReasonWorkerBlocked:

@@ -535,6 +535,14 @@ func (o *Orchestrator) decideNextStage(event WorkerEvent) (github.Stage, github.
 		if event.Status == EventSuccess {
 			return github.StageApprove, github.ReasonWorkerCompletedCreatePR, true
 		}
+	case "awaiting-approval":
+		if event.Status == EventSuccess {
+			return github.StageMerge, github.ReasonManualMerge, true
+		}
+	case "merge":
+		if event.Status == EventSuccess {
+			return github.StageDone, github.ReasonWorkerCompletedMerge, true
+		}
 	}
 
 	if event.Status == EventFailed {

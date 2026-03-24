@@ -10,14 +10,16 @@ import (
 type TaskStatus string
 
 const (
-	StatusPending    TaskStatus = "pending"
-	StatusAnalyzing  TaskStatus = "analyzing"
-	StatusPlanning   TaskStatus = "planning"
-	StatusCoding     TaskStatus = "coding"
-	StatusReviewing  TaskStatus = "reviewing"
-	StatusCreatingPR TaskStatus = "creating_pr"
-	StatusDone       TaskStatus = "done"
-	StatusFailed     TaskStatus = "failed"
+	StatusPending          TaskStatus = "pending"
+	StatusAnalyzing        TaskStatus = "analyzing"
+	StatusPlanning         TaskStatus = "planning"
+	StatusCoding           TaskStatus = "coding"
+	StatusReviewing        TaskStatus = "reviewing"
+	StatusCreatingPR       TaskStatus = "creating_pr"
+	StatusAwaitingApproval TaskStatus = "awaiting_approval"
+	StatusMerging          TaskStatus = "merging"
+	StatusDone             TaskStatus = "done"
+	StatusFailed           TaskStatus = "failed"
 )
 
 type Task struct {
