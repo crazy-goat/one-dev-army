@@ -63,6 +63,25 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
 /* Arrow for tooltip */
 .rate-limit-tooltip::after{content:'';position:absolute;top:100%;right:1rem;border:6px solid transparent;border-top-color:var(--surface)}
 .rate-limit-tooltip::before{content:'';position:absolute;top:100%;right:calc(1rem - 1px);border:7px solid transparent;border-top-color:var(--border)}
+
+/* Worker status indicator */
+.worker-status-container{position:relative;display:inline-flex;align-items:center;gap:.5rem;padding:.25rem .5rem;border-radius:4px;background:var(--bg);border:1px solid var(--border);cursor:pointer;transition:opacity .2s;margin-right:.75rem}
+.worker-status-container:hover{opacity:.8}
+.worker-status-container:hover .worker-status-tooltip{display:block}
+.worker-status-dot{width:10px;height:10px;border-radius:50%;background:var(--muted);transition:background .3s}
+.worker-status-dot.active{background:var(--green);animation:pulse 1.5s ease-in-out infinite}
+.worker-status-dot.paused{background:var(--orange)}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.2)}}
+
+/* Worker status tooltip */
+.worker-status-tooltip{display:none;position:absolute;bottom:100%;right:0;margin-bottom:.5rem;padding:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.3);min-width:200px;z-index:1000}
+.worker-status-tooltip-header{font-weight:600;font-size:.9rem;margin-bottom:.5rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);color:var(--text)}
+.worker-status-tooltip-content{display:flex;flex-direction:column;gap:.5rem}
+.worker-status-row{display:flex;align-items:center;gap:.5rem;font-size:.8rem}
+.worker-status-label{min-width:60px;color:var(--muted)}
+.worker-status-value{font-weight:500;flex:1}
+.worker-status-tooltip::after{content:'';position:absolute;top:100%;right:1rem;border:6px solid transparent;border-top-color:var(--surface)}
+.worker-status-tooltip::before{content:'';position:absolute;top:100%;right:calc(1rem - 1px);border:7px solid transparent;border-top-color:var(--border)}
 </style>
 </head>
 <body>
@@ -85,6 +104,19 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
     <svg class="ws-icon-connected" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-9"/></svg>
     <svg class="ws-icon-disconnected" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
   </span>
+  <div class="worker-status-container" id="worker-status-container">
+    <div class="worker-status-dot" id="worker-status-dot"></div>
+    <span style="font-size:.75rem;color:var(--muted)">Worker</span>
+    <div class="worker-status-tooltip" id="worker-status-tooltip">
+      <div class="worker-status-tooltip-header">Worker Status</div>
+      <div class="worker-status-tooltip-content">
+        <div class="worker-status-row"><span class="worker-status-label">State:</span><span class="worker-status-value" id="worker-tooltip-state">Idle</span></div>
+        <div class="worker-status-row"><span class="worker-status-label">Step:</span><span class="worker-status-value" id="worker-tooltip-step">-</span></div>
+        <div class="worker-status-row"><span class="worker-status-label">Issue:</span><span class="worker-status-value" id="worker-tooltip-issue">-</span></div>
+        <div class="worker-status-row"><span class="worker-status-label">Time:</span><span class="worker-status-value" id="worker-tooltip-time">-</span></div>
+      </div>
+    </div>
+  </div>
   <div hx-get="/api/rate-limit" hx-trigger="load, every 30s" hx-swap="innerHTML">
     <span class="rate-limit-unknown">GitHub API: Loading...</span>
   </div>
@@ -124,6 +156,19 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
                 
                 if (msg.type === 'issue_update' || msg.type === 'sync_complete' || msg.type === 'worker_update') {
                     refreshBoard();
+                }
+                
+                // Handle worker status updates
+                if (msg.type === 'worker_update' && msg.payload) {
+                    const payload = JSON.parse(msg.payload);
+                    handleWorkerUpdate({
+                        active: payload.status === 'active',
+                        paused: false,
+                        step: payload.stage,
+                        issue_id: payload.task_id,
+                        issue_title: payload.task_title,
+                        elapsed: payload.elapsed_seconds
+                    });
                 }
             };
             
@@ -179,11 +224,111 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
         }
     }
     
+    // Worker status management
+    let workerStatus = {
+        active: false,
+        paused: true,
+        step: '',
+        issueId: 0,
+        issueTitle: '',
+        elapsed: 0,
+        startTime: null
+    };
+    
+    function updateWorkerStatusUI() {
+        const dot = document.getElementById('worker-status-dot');
+        const stateEl = document.getElementById('worker-tooltip-state');
+        const stepEl = document.getElementById('worker-tooltip-step');
+        const issueEl = document.getElementById('worker-tooltip-issue');
+        const timeEl = document.getElementById('worker-tooltip-time');
+        
+        if (!dot) return;
+        
+        // Update dot appearance
+        dot.classList.remove('active', 'paused');
+        if (workerStatus.active && !workerStatus.paused) {
+            dot.classList.add('active');
+        } else if (workerStatus.paused && workerStatus.active) {
+            dot.classList.add('paused');
+        }
+        
+        // Update tooltip content
+        if (stateEl) {
+            if (workerStatus.active && !workerStatus.paused) {
+                stateEl.textContent = 'Processing';
+                stateEl.style.color = 'var(--green)';
+            } else if (workerStatus.paused && workerStatus.active) {
+                stateEl.textContent = 'Paused';
+                stateEl.style.color = 'var(--orange)';
+            } else {
+                stateEl.textContent = 'Idle';
+                stateEl.style.color = 'var(--muted)';
+            }
+        }
+        
+        if (stepEl) {
+            stepEl.textContent = workerStatus.step || '-';
+        }
+        
+        if (issueEl) {
+            if (workerStatus.issueId) {
+                issueEl.textContent = '#' + workerStatus.issueId;
+            } else {
+                issueEl.textContent = '-';
+            }
+        }
+        
+        if (timeEl) {
+            if (workerStatus.active && workerStatus.startTime) {
+                const elapsed = Math.floor((Date.now() - workerStatus.startTime) / 1000);
+                const mins = Math.floor(elapsed / 60);
+                const secs = elapsed % 60;
+                timeEl.textContent = mins + 'm ' + secs + 's';
+            } else {
+                timeEl.textContent = '-';
+            }
+        }
+    }
+    
+    function handleWorkerUpdate(data) {
+        workerStatus.active = data.active || false;
+        workerStatus.paused = data.paused || false;
+        workerStatus.step = data.step || '';
+        workerStatus.issueId = data.issue_id || 0;
+        workerStatus.issueTitle = data.issue_title || '';
+        
+        // Track start time when worker becomes active
+        if (workerStatus.active && !workerStatus.paused && !workerStatus.startTime) {
+            workerStatus.startTime = Date.now() - (data.elapsed || 0) * 1000;
+        }
+        // Reset start time when worker becomes idle
+        if (!workerStatus.active) {
+            workerStatus.startTime = null;
+        }
+        
+        updateWorkerStatusUI();
+    }
+    
+    function fetchWorkerStatus() {
+        fetch('/api/worker-status')
+            .then(response => response.json())
+            .then(data => handleWorkerUpdate(data))
+            .catch(err => console.error('[WorkerStatus] Error fetching status:', err));
+    }
+    
+    // Fetch initial status on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        fetchWorkerStatus();
+        // Update elapsed time display every second
+        setInterval(updateWorkerStatusUI, 1000);
+    });
+    
     // Expose for global access
     window.WebSocketClient = {
         connect: connect,
         disconnect: disconnect,
-        refreshBoard: refreshBoard
+        refreshBoard: refreshBoard,
+        handleWorkerUpdate: handleWorkerUpdate
     };
     
     // Auto-connect on page load

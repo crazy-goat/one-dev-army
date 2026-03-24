@@ -54,9 +54,6 @@
       <button type="submit" class="btn btn-danger">Pause Sprint</button>
     </form>
     {{end}}
-    {{if .Processing}}<span style="color:var(--green);font-size:.85rem;margin-left:.5rem">{{.CurrentIssue}}</span>{{end}}
-    {{if and (not .Paused) (not .Processing)}}<span style="color:var(--green);font-size:.85rem;margin-left:.5rem">Running</span>{{end}}
-    {{if .Paused}}<span style="color:var(--muted);font-size:.85rem;margin-left:.5rem">Paused</span>{{end}}
     <button type="button" id="sync-btn" class="btn" onclick="triggerSync()">
       <span id="sync-spinner" style="display:none;">⟳</span>
       <span id="sync-text">Sync</span>
