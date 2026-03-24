@@ -16,6 +16,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/mvp"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
+	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
 
 type taskCard struct {
@@ -529,11 +530,7 @@ func (s *Server) render(w http.ResponseWriter, name string, data any) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	execName := "layout"
-	if name == "workers.html" {
-		execName = "workers.html"
-	}
-	if err := t.ExecuteTemplate(w, execName, data); err != nil {
+	if err := t.ExecuteTemplate(w, "layout", data); err != nil {
 		log.Printf("[Dashboard] Template execution error: %v", err)
 		http.Error(w, fmt.Sprintf("template error: %v", err), http.StatusInternalServerError)
 	}
@@ -755,6 +752,23 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 		Status:       status,
 	}
 	s.render(w, "task.html", data)
+}
+
+type workersData struct {
+	Active       string
+	OpenCodePort int
+	Workers      []worker.WorkerInfo
+}
+
+func (s *Server) handleWorkers(w http.ResponseWriter, r *http.Request) {
+	workers := s.pool()
+
+	data := workersData{
+		Active:       "workers",
+		OpenCodePort: s.webPort,
+		Workers:      workers,
+	}
+	s.render(w, "workers.html", data)
 }
 
 func (s *Server) handleTaskStream(w http.ResponseWriter, r *http.Request) {

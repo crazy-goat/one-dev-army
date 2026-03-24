@@ -1,0 +1,59 @@
+{{template "layout" .}}
+{{define "content"}}
+<style>
+.workers-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem}
+.workers-header h1{font-size:1.3rem}
+.workers-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem}
+.worker-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem}
+.worker-card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;padding-bottom:.75rem;border-bottom:1px solid var(--border)}
+.worker-id{font-weight:600;font-size:.9rem}
+.worker-status{display:inline-flex;align-items:center;gap:.4rem;padding:.2rem .6rem;border-radius:4px;font-size:.75rem;font-weight:600}
+.worker-status.idle{background:var(--muted);color:#fff}
+.worker-status.working{background:var(--green);color:#fff}
+.worker-info{display:flex;flex-direction:column;gap:.5rem}
+.worker-info-row{display:flex;justify-content:space-between;align-items:center;font-size:.85rem}
+.worker-info-label{color:var(--muted)}
+.worker-info-value{font-weight:500}
+.worker-task{margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border)}
+.worker-task-title{font-size:.85rem;font-weight:600;margin-bottom:.25rem}
+.worker-task-stage{font-size:.75rem;color:var(--muted)}
+.worker-task-elapsed{font-size:.75rem;color:var(--muted);margin-top:.25rem}
+.empty-state{color:var(--muted);text-align:center;padding:3rem;font-style:italic;background:var(--surface);border:1px solid var(--border);border-radius:8px}
+</style>
+
+<div class="workers-header">
+  <div>
+    <a href="/" style="color:var(--muted);text-decoration:none;font-size:.85rem">&larr; Back to board</a>
+    <h1>Workers</h1>
+  </div>
+  <span style="color:var(--muted);font-size:.85rem">{{len .Workers}} worker{{if ne (len .Workers) 1}}s{{end}} available</span>
+</div>
+
+<div class="workers-grid">
+  {{range .Workers}}
+  <div class="worker-card">
+    <div class="worker-card-header">
+      <span class="worker-id">Worker {{.ID}}</span>
+      <span class="worker-status {{.Status}}">{{.Status}}</span>
+    </div>
+    <div class="worker-info">
+      <div class="worker-info-row">
+        <span class="worker-info-label">Status</span>
+        <span class="worker-info-value">{{.Status}}</span>
+      </div>
+      {{if eq .Status "working"}}
+      <div class="worker-task">
+        <div class="worker-task-title">#{{.TaskID}}: {{.TaskTitle}}</div>
+        <div class="worker-task-stage">Stage: {{.Stage}}</div>
+        {{if .Elapsed}}
+        <div class="worker-task-elapsed">Elapsed: {{.Elapsed}}</div>
+        {{end}}
+      </div>
+      {{end}}
+    </div>
+  </div>
+  {{else}}
+  <div class="empty-state">No workers available</div>
+  {{end}}
+</div>
+{{end}}
