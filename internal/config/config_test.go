@@ -102,6 +102,52 @@ func TestLoad_Sprint(t *testing.T) {
 	if cfg.Sprint.TasksPerSprint != 10 {
 		t.Errorf("sprint.tasks_per_sprint = %d, want 10", cfg.Sprint.TasksPerSprint)
 	}
+	if cfg.Sprint.AutoStart {
+		t.Errorf("sprint.auto_start = %v, want false (default)", cfg.Sprint.AutoStart)
+	}
+}
+
+func TestLoad_SprintAutoStart(t *testing.T) {
+	configWithAutoStart := `github:
+  repo: "owner/repo"
+sprint:
+  tasks_per_sprint: 5
+  auto_start: true
+`
+	dir := setupConfigDir(t, configWithAutoStart)
+
+	cfg, err := config.Load(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Sprint.TasksPerSprint != 5 {
+		t.Errorf("sprint.tasks_per_sprint = %d, want 5", cfg.Sprint.TasksPerSprint)
+	}
+	if !cfg.Sprint.AutoStart {
+		t.Errorf("sprint.auto_start = %v, want true", cfg.Sprint.AutoStart)
+	}
+}
+
+func TestLoad_SprintAutoStartDefault(t *testing.T) {
+	configWithoutAutoStart := `github:
+  repo: "owner/repo"
+sprint:
+  tasks_per_sprint: 8
+`
+	dir := setupConfigDir(t, configWithoutAutoStart)
+
+	cfg, err := config.Load(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Sprint.TasksPerSprint != 8 {
+		t.Errorf("sprint.tasks_per_sprint = %d, want 8", cfg.Sprint.TasksPerSprint)
+	}
+	if cfg.Sprint.AutoStart {
+		t.Errorf("sprint.auto_start = %v, want false (default)", cfg.Sprint.AutoStart)
+	}
 }
 
 func TestLoad_GitHubUseProjects(t *testing.T) {

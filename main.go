@@ -349,6 +349,13 @@ func runServe(dir string, debugWebSocket bool) error {
 
 	orchestrator := mvp.NewOrchestrator(cfg, gh, oc, brMgr, store, hub, router)
 
+	// Auto-start sprint if configured
+	if cfg.Sprint.AutoStart {
+		fmt.Println("Auto-starting sprint (auto_start: true)...")
+		orchestrator.Start()
+		fmt.Println("  ✓ sprint auto-started")
+	}
+
 	processor := worker.NewProcessor(cfg, oc, gh, store, brMgr, router, orchestrator)
 
 	// Set orchestrator in sync service

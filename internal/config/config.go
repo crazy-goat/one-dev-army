@@ -49,7 +49,8 @@ type Pipeline struct {
 }
 
 type Sprint struct {
-	TasksPerSprint int `yaml:"tasks_per_sprint"`
+	TasksPerSprint int  `yaml:"tasks_per_sprint"`
+	AutoStart      bool `yaml:"auto_start"`
 }
 
 func Load(rootDir string, availableModels ...string) (*Config, error) {
