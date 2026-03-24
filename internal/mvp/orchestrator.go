@@ -136,6 +136,10 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case event := <-o.workerEventCh:
+			// Handle worker event
+			o.HandleWorkerEvent(event)
+			continue
 		default:
 		}
 
