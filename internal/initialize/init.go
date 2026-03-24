@@ -85,14 +85,12 @@ func (i *Init) Run() error {
 }
 
 type configFile struct {
-	GitHub       ghSection       `yaml:"github"`
-	Dashboard    dashSection     `yaml:"dashboard"`
-	Workers      workersSection  `yaml:"workers"`
-	OpenCode     ocSection       `yaml:"opencode"`
-	Pipeline     pipelineSection `yaml:"pipeline"`
-	Planning     llmSection      `yaml:"planning"`
-	EpicAnalysis llmSection      `yaml:"epic_analysis"`
-	Sprint       sprintSection   `yaml:"sprint"`
+	GitHub    ghSection       `yaml:"github"`
+	Dashboard dashSection     `yaml:"dashboard"`
+	Workers   workersSection  `yaml:"workers"`
+	OpenCode  ocSection       `yaml:"opencode"`
+	Pipeline  pipelineSection `yaml:"pipeline"`
+	Sprint    sprintSection   `yaml:"sprint"`
 }
 
 type ghSection struct {
@@ -116,10 +114,6 @@ type pipelineSection struct {
 	MaxRetries int `yaml:"max_retries"`
 }
 
-type llmSection struct {
-	LLM string `yaml:"llm"`
-}
-
 type sprintSection struct {
 	TasksPerSprint int `yaml:"tasks_per_sprint"`
 }
@@ -133,9 +127,7 @@ func defaultConfig(repo string) configFile {
 		Pipeline: pipelineSection{
 			MaxRetries: 5,
 		},
-		Planning:     llmSection{LLM: "claude-opus-4"},
-		EpicAnalysis: llmSection{LLM: "claude-sonnet-4"},
-		Sprint:       sprintSection{TasksPerSprint: 10},
+		Sprint: sprintSection{TasksPerSprint: 10},
 	}
 }
 

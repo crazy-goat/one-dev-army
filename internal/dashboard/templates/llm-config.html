@@ -29,7 +29,6 @@
           <input type="text" id="setup_model" name="setup_model" value="{{.Config.Setup.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
           <div class="model-dropdown-list" id="dropdown-setup_model"></div>
         </div>
-        <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
       </div>
       
       <div class="form-group">
@@ -38,7 +37,6 @@
           <input type="text" id="planning_model" name="planning_model" value="{{.Config.Planning.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
           <div class="model-dropdown-list" id="dropdown-planning_model"></div>
         </div>
-        <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
       </div>
       
       <div class="form-group">
@@ -47,7 +45,6 @@
           <input type="text" id="orchestration_model" name="orchestration_model" value="{{.Config.Orchestration.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
           <div class="model-dropdown-list" id="dropdown-orchestration_model"></div>
         </div>
-        <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
       </div>
       
       <div class="form-group">
@@ -56,7 +53,6 @@
           <input type="text" id="code_model" name="code_model" value="{{.Config.Code.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
           <div class="model-dropdown-list" id="dropdown-code_model"></div>
         </div>
-        <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
       </div>
       
       <div class="form-group">
@@ -65,32 +61,6 @@
           <input type="text" id="code_heavy_model" name="code_heavy_model" value="{{.Config.CodeHeavy.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
           <div class="model-dropdown-list" id="dropdown-code_heavy_model"></div>
         </div>
-        <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
-      </div>
-    </div>
-    
-    <!-- Routing Rules -->
-    <div class="category-section">
-      <h2>Routing Rules</h2>
-      <div class="form-group">
-        <label for="routing_code_size_threshold">Code Size Threshold (lines)</label>
-        <input type="number" id="routing_code_size_threshold" name="routing_code_size_threshold" value="{{.Config.RoutingRules.ComplexityThresholds.CodeSizeThreshold}}" min="1" required>
-        <small>Number of lines that triggers medium complexity</small>
-      </div>
-      <div class="form-group">
-        <label for="routing_high_complexity_threshold">High Complexity Threshold (lines)</label>
-        <input type="number" id="routing_high_complexity_threshold" name="routing_high_complexity_threshold" value="{{.Config.RoutingRules.ComplexityThresholds.HighComplexityThreshold}}" min="1" required>
-        <small>Number of lines that triggers high complexity</small>
-      </div>
-      <div class="form-group">
-        <label for="routing_file_count_threshold">File Count Threshold</label>
-        <input type="number" id="routing_file_count_threshold" name="routing_file_count_threshold" value="{{.Config.RoutingRules.ComplexityThresholds.FileCountThreshold}}" min="1" required>
-        <small>Number of files that triggers higher complexity</small>
-      </div>
-      <div class="form-group">
-        <label for="routing_force_strong_stages">Force Strong For Stages (comma-separated)</label>
-        <input type="text" id="routing_force_strong_stages" name="routing_force_strong_stages" value="{{.ForceStrongStages}}" placeholder="plan-review, code-review, merge">
-        <small>Pipeline stages that always use strong models</small>
       </div>
     </div>
     

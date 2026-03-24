@@ -224,9 +224,11 @@ func TestWorkerProcessEndToEnd(t *testing.T) {
 	gh := &github.Client{Repo: "owner/repo"}
 
 	cfg := &config.Config{
-		Planning:     config.Planning{LLM: "claude-sonnet-4"},
-		EpicAnalysis: config.EpicAnalysis{LLM: "claude-sonnet-4"},
-		Tools:        config.Tools{TestCmd: "echo test-ok"},
+		LLM: config.LLMConfig{
+			Planning: config.CategoryModels{Model: "claude-sonnet-4"},
+			Code:     config.CategoryModels{Model: "claude-sonnet-4"},
+		},
+		Tools: config.Tools{TestCmd: "echo test-ok"},
 	}
 
 	router := llm.NewRouter(&cfg.LLM)
@@ -287,9 +289,11 @@ func TestWorkerProcessStatusTransitions(t *testing.T) {
 	gh := &github.Client{Repo: "owner/repo"}
 
 	cfg := &config.Config{
-		Planning:     config.Planning{LLM: "claude-sonnet-4"},
-		EpicAnalysis: config.EpicAnalysis{LLM: "claude-sonnet-4"},
-		Tools:        config.Tools{TestCmd: "echo ok"},
+		LLM: config.LLMConfig{
+			Planning: config.CategoryModels{Model: "claude-sonnet-4"},
+			Code:     config.CategoryModels{Model: "claude-sonnet-4"},
+		},
+		Tools: config.Tools{TestCmd: "echo ok"},
 	}
 
 	router := llm.NewRouter(&cfg.LLM)
@@ -323,9 +327,11 @@ func TestWorkerProcessTestFailure(t *testing.T) {
 	gh := &github.Client{Repo: "owner/repo"}
 
 	cfg := &config.Config{
-		Planning:     config.Planning{LLM: "claude-sonnet-4"},
-		EpicAnalysis: config.EpicAnalysis{LLM: "claude-sonnet-4"},
-		Tools:        config.Tools{TestCmd: "exit 1"},
+		LLM: config.LLMConfig{
+			Planning: config.CategoryModels{Model: "claude-sonnet-4"},
+			Code:     config.CategoryModels{Model: "claude-sonnet-4"},
+		},
+		Tools: config.Tools{TestCmd: "exit 1"},
 	}
 
 	router := llm.NewRouter(&cfg.LLM)

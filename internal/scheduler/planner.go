@@ -53,7 +53,7 @@ func (p *Planner) PlanSprint() (*Sprint, error) {
 	prompt := prompts.MustGet(prompts.WorkerAutomatedPipeline) + buildSprintPrompt(issues, p.cfg.Sprint.TasksPerSprint)
 
 	// Use router to select model for planning category
-	llmModel := p.cfg.Planning.LLM
+	llmModel := p.cfg.LLM.Planning.Model
 	if p.router != nil {
 		llmModel = p.router.SelectModel(config.CategoryPlanning, config.ComplexityMedium, nil)
 	}
@@ -131,7 +131,7 @@ func (p *Planner) AnalyzeInsights(sprintID int) error {
 	prompt := buildInsightPrompt(allInsights)
 
 	// Use router to select model for planning category
-	llmModel := p.cfg.Planning.LLM
+	llmModel := p.cfg.LLM.Planning.Model
 	if p.router != nil {
 		llmModel = p.router.SelectModel(config.CategoryPlanning, config.ComplexityLow, nil)
 	}

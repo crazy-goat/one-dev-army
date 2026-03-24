@@ -7,49 +7,26 @@ workers:
     count: 3
 opencode:
     url: http://localhost:4096
-    web_port: 8081  # Port for opencode web UI (auto-started by ODA)
+    web_port: 8081
 tools:
     lint_cmd: ""
     test_cmd: go test ./...
     e2e_cmd: ""
 pipeline:
     max_retries: 5
-planning:
-    llm: nexos-ai/Kimi K2.5
-epic_analysis:
-    llm: nexos-ai/Kimi K2.5
 sprint:
     tasks_per_sprint: 10
 yolo_mode: false
 
 # Multi-model LLM configuration with task-based routing
 llm:
-    development:
-        strong:
-            model: nexos-ai/Kimi K2.5
-        weak:
-            model: nexos-ai/Kimi K2.5
-    planning:
-        strong:
-            model: nexos-ai/Kimi K2.5
-        weak:
-            model: nexos-ai/Kimi K2.5
-    orchestration:
-        strong:
-            model: nexos-ai/Kimi K2.5
-        weak:
-            model: nexos-ai/Kimi K2.5
     setup:
-        strong:
-            model: nexos-ai/Kimi K2.5
-        weak:
-            model: nexos-ai/Kimi K2.5
-    default_complexity: medium
-    routing_rules:
-        complexity_thresholds:
-            code_size_threshold: 100
-            high_complexity_threshold: 500
-            file_count_threshold: 5
-        force_strong_for_stages:
-            - plan-review
-            - code-review
+        model: nexos-ai/Kimi K2.5
+    planning:
+        model: nexos-ai/Kimi K2.5
+    orchestration:
+        model: nexos-ai/Kimi K2.5
+    code:
+        model: nexos-ai/Kimi K2.5
+    code-heavy:
+        model: nexos-ai/Kimi K2.5

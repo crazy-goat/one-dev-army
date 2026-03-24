@@ -141,7 +141,7 @@ func TestRouter_OnReload(t *testing.T) {
 }
 
 func TestComplexityAnalyzer(t *testing.T) {
-	thresholds := config.ComplexityThresholds{ //nolint:staticcheck // deprecated but kept for backward compatibility
+	thresholds := llm.ComplexityThresholds{
 		CodeSizeThreshold:       100,
 		HighComplexityThreshold: 500,
 		FileCountThreshold:      5,

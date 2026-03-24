@@ -146,7 +146,7 @@ func (s *Setup) generateWithLLM(title, prompt string) (string, error) {
 	}
 
 	// Use router to select model for setup category
-	llmModel := s.cfg.Planning.LLM
+	llmModel := s.cfg.LLM.Setup.Model
 	if s.router != nil {
 		llmModel = s.router.SelectModel(config.CategorySetup, config.ComplexityMedium, nil)
 	}

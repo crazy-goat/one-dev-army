@@ -372,7 +372,7 @@ func runServe(dir string, debugWebSocket bool) error {
 		}
 	}()
 
-	srv, err := dashboard.NewServer(cfg.Dashboard.Port, cfg.OpenCode.WebPort, store, pool.Workers, gh, orchestrator, oc, cfg.Planning.LLM, hub, syncService, dir)
+	srv, err := dashboard.NewServer(cfg.Dashboard.Port, cfg.OpenCode.WebPort, store, pool.Workers, gh, orchestrator, oc, cfg.LLM.Planning.Model, hub, syncService, dir)
 	if err != nil {
 		return fmt.Errorf("creating dashboard server: %w", err)
 	}
@@ -449,10 +449,6 @@ func collectConfigModels(cfg *config.Config) []opencode.ModelRef {
 		seen[llm] = true
 		models = append(models, opencode.ParseModelRef(llm))
 	}
-
-	// Add legacy config models for backward compatibility
-	add(cfg.Planning.LLM)
-	add(cfg.EpicAnalysis.LLM)
 
 	// Add models from new LLM config (5 independent modes)
 	add(cfg.LLM.Setup.Model)

@@ -9,17 +9,15 @@ import (
 )
 
 type Config struct {
-	GitHub       GitHub       `yaml:"github"`
-	Dashboard    Dashboard    `yaml:"dashboard"`
-	Workers      Workers      `yaml:"workers"`
-	OpenCode     OpenCode     `yaml:"opencode"`
-	Tools        Tools        `yaml:"tools"`
-	Pipeline     Pipeline     `yaml:"pipeline"`
-	Planning     Planning     `yaml:"planning"`
-	EpicAnalysis EpicAnalysis `yaml:"epic_analysis"`
-	Sprint       Sprint       `yaml:"sprint"`
-	LLM          LLMConfig    `yaml:"llm"`
-	YoloMode     bool         `yaml:"yolo_mode"`
+	GitHub    GitHub    `yaml:"github"`
+	Dashboard Dashboard `yaml:"dashboard"`
+	Workers   Workers   `yaml:"workers"`
+	OpenCode  OpenCode  `yaml:"opencode"`
+	Tools     Tools     `yaml:"tools"`
+	Pipeline  Pipeline  `yaml:"pipeline"`
+	Sprint    Sprint    `yaml:"sprint"`
+	LLM       LLMConfig `yaml:"llm"`
+	YoloMode  bool      `yaml:"yolo_mode"`
 }
 
 type GitHub struct {
@@ -50,14 +48,6 @@ type Pipeline struct {
 	MaxRetries int `yaml:"max_retries"`
 }
 
-type Planning struct {
-	LLM string `yaml:"llm"`
-}
-
-type EpicAnalysis struct {
-	LLM string `yaml:"llm"`
-}
-
 type Sprint struct {
 	TasksPerSprint int `yaml:"tasks_per_sprint"`
 }
@@ -75,6 +65,9 @@ func Load(rootDir string, availableModels ...string) (*Config, error) {
 		return nil, fmt.Errorf("parsing config %s: %w", path, err)
 	}
 
+	// Migrate from legacy top-level planning/epic_analysis fields if present
+	cfg.migrateFromLegacyFields(data)
+
 	// Apply default LLM config if not fully specified
 	cfg.applyLLMDefaults()
 
@@ -84,6 +77,33 @@ func Load(rootDir string, availableModels ...string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// migrateFromLegacyFields migrates old top-level planning.llm and epic_analysis.llm to new structure
+func (cfg *Config) migrateFromLegacyFields(data []byte) {
+	// Check if old fields exist in raw YAML
+	var raw map[string]any
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return
+	}
+
+	// Migrate planning.llm -> llm.planning.model
+	if planning, ok := raw["planning"].(map[string]any); ok {
+		if llm, ok := planning["llm"].(string); ok && llm != "" {
+			if cfg.LLM.Planning.Model == "" {
+				cfg.LLM.Planning.Model = llm
+			}
+		}
+	}
+
+	// Migrate epic_analysis.llm -> llm.planning.model (epic analysis uses planning model)
+	if epicAnalysis, ok := raw["epic_analysis"].(map[string]any); ok {
+		if llm, ok := epicAnalysis["llm"].(string); ok && llm != "" {
+			if cfg.LLM.Planning.Model == "" {
+				cfg.LLM.Planning.Model = llm
+			}
+		}
+	}
 }
 
 // applyLLMDefaults fills in missing LLM configuration with defaults
@@ -113,15 +133,5 @@ func (cfg *Config) applyLLMDefaults() {
 	// If CodeHeavy model is empty, use defaults
 	if cfg.LLM.CodeHeavy.Model == "" {
 		cfg.LLM.CodeHeavy.Model = defaults.CodeHeavy.Model
-	}
-
-	// Apply default complexity if not set
-	if cfg.LLM.DefaultComplexity == "" {
-		cfg.LLM.DefaultComplexity = defaults.DefaultComplexity
-	}
-
-	// Apply default routing rules if not set
-	if cfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold == 0 {
-		cfg.LLM.RoutingRules.ComplexityThresholds = defaults.RoutingRules.ComplexityThresholds
 	}
 }

@@ -368,7 +368,7 @@ func (w *Worker) technicalPlanning(ctx context.Context, task *Task) (analysis, i
 	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPTechnicalPlanning), task.Issue.Number, task.Issue.Title, task.Issue.Body)
 
 	// Use router to select model for planning category
-	llmModel := w.cfg.Planning.LLM
+	llmModel := w.cfg.LLM.Planning.Model
 	if w.router != nil {
 		llmModel = w.router.SelectModel(config.CategoryPlanning, config.ComplexityMedium, nil)
 	}
@@ -473,7 +473,7 @@ func (w *Worker) implement(ctx context.Context, task *Task, planStr string) erro
 	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPImplementation), task.Issue.Number, task.Issue.Title, planStr, task.Worktree, testCmd)
 
 	// Use router to select model for code category with complexity detection
-	llmModel := w.cfg.EpicAnalysis.LLM
+	llmModel := w.cfg.LLM.Code.Model
 	if w.router != nil {
 		complexity := llm.DetectComplexity(planStr) //nolint:staticcheck // deprecated but still used
 		llmModel = w.router.SelectModel(config.CategoryCode, complexity, nil)
@@ -508,7 +508,7 @@ func (w *Worker) fixFromReview(ctx context.Context, task *Task, review string) e
 	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPFixFromReview), task.Issue.Number, task.Issue.Title, task.Worktree, testCmd, review)
 
 	// Use router to select model for code category
-	llmModel := w.cfg.EpicAnalysis.LLM
+	llmModel := w.cfg.LLM.Code.Model
 	if w.router != nil {
 		llmModel = w.router.SelectModel(config.CategoryCode, config.ComplexityMedium, nil)
 	}
@@ -571,7 +571,7 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (appr
 	task.AddChatMessage("user", prompt)
 
 	// Use router to select model for code category with high complexity (code review is important)
-	llmModel := w.cfg.Planning.LLM
+	llmModel := w.cfg.LLM.Code.Model
 	if w.router != nil {
 		hints := map[string]any{"stage": "code-review"}
 		llmModel = w.router.SelectModel(config.CategoryCode, config.ComplexityHigh, hints)

@@ -22,12 +22,19 @@ tools:
   e2e_cmd: "make e2e"
 pipeline:
   max_retries: 5
-planning:
-  llm: claude-opus-4
-epic_analysis:
-  llm: claude-sonnet-4
 sprint:
   tasks_per_sprint: 10
+llm:
+  setup:
+    model: "nexos-ai/Kimi K2.5"
+  planning:
+    model: "nexos-ai/Kimi K2.5"
+  orchestration:
+    model: "nexos-ai/Kimi K2.5"
+  code:
+    model: "nexos-ai/Kimi K2.5"
+  code-heavy:
+    model: "nexos-ai/Kimi K2.5"
 `
 
 func setupConfigDir(t *testing.T, content string) string {
@@ -81,22 +88,6 @@ func TestLoad_ToolsFields(t *testing.T) {
 	}
 	if cfg.Tools.E2ECmd != "make e2e" {
 		t.Errorf("tools.e2e_cmd = %q, want %q", cfg.Tools.E2ECmd, "make e2e")
-	}
-}
-
-func TestLoad_PlanningAndEpicAnalysis(t *testing.T) {
-	dir := setupConfigDir(t, validConfig)
-
-	cfg, err := config.Load(dir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if cfg.Planning.LLM != "claude-opus-4" {
-		t.Errorf("planning.llm = %q, want %q", cfg.Planning.LLM, "claude-opus-4")
-	}
-	if cfg.EpicAnalysis.LLM != "claude-sonnet-4" {
-		t.Errorf("epic_analysis.llm = %q, want %q", cfg.EpicAnalysis.LLM, "claude-sonnet-4")
 	}
 }
 
