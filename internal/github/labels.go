@@ -297,15 +297,15 @@ func (c *Client) EnsureLabels() error {
 	}
 
 	if len(missing) == 0 {
-		log.Println("  ✓ all GitHub labels exist")
+		log.Println("  ✓ all required labels exist")
 		return nil
 	}
 
-	log.Printf("  → creating %d missing label(s)...", len(missing))
+	log.Printf("  → creating %d missing labels...", len(missing))
 
 	var wg sync.WaitGroup
-	errChan := make(chan error, len(missing))
-	createdChan := make(chan string, len(missing))
+	errs := make(chan error, len(missing))
+	created := make(chan string, len(missing))
 
 	for _, l := range missing {
 		wg.Add(1)
@@ -313,26 +313,26 @@ func (c *Client) EnsureLabels() error {
 			defer wg.Done()
 			_, err := c.gh("label", "create", l.Name, "--color", l.Color, "--force")
 			if err != nil {
-				errChan <- fmt.Errorf("creating label %s: %w", l.Name, err)
+				errs <- fmt.Errorf("creating label %s: %w", l.Name, err)
 			} else {
-				createdChan <- l.Name
+				created <- l.Name
 			}
 		}(l)
 	}
 
 	wg.Wait()
-	close(errChan)
-	close(createdChan)
+	close(errs)
+	close(created)
 
-	for err := range errChan {
+	for err := range errs {
 		return err
 	}
 
-	var created []string
-	for name := range createdChan {
-		created = append(created, name)
+	var createdLabels []string
+	for label := range created {
+		createdLabels = append(createdLabels, label)
 	}
-	log.Printf("  ✓ created %d label(s): %v", len(created), created)
+	log.Printf("  ✓ created labels: %s", strings.Join(createdLabels, ", "))
 
 	return nil
 }
