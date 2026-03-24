@@ -41,7 +41,13 @@ Follow this exact sequence:
    - Follow project conventions
    - Don't break existing functionality
 
-9. **Commit Changes** - Stage and commit all changes with a descriptive commit message referencing the issue.
+9. **Merge Latest Default Branch** - Before committing, merge the latest default branch into your feature branch to catch conflicts early:
+   - Run `git fetch origin`
+   - Run `git merge origin/master` (or `origin/main` depending on the project)
+   - If there are merge conflicts, resolve them, then re-run tests and lint (steps 5-6)
+   - This is **critical** — skipping this step can cause merge failures when creating the PR
+
+10. **Commit Changes** - Stage and commit all changes with a descriptive commit message referencing the issue.
 
 ## Critical Rules
 
