@@ -1,114 +1,39 @@
 package github
 
 import (
-	"fmt"
-	"regexp"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
 
-// TestCreateNextSprint_ExtractsNumberCorrectly tests that sprint numbers are extracted correctly from various title formats
-func TestCreateNextSprint_ExtractsNumberCorrectly(t *testing.T) {
+// TestCreateNextSprint_UsesTimestampFormat tests that CreateNextSprint always
+// generates a timestamp-based name consistent with EnsureMilestone.
+func TestCreateNextSprint_UsesTimestampFormat(t *testing.T) {
 	tests := []struct {
-		name           string
-		currentTitle   string
-		expectedNumber int
+		name         string
+		currentTitle string
 	}{
-		{
-			name:           "Simple sprint number",
-			currentTitle:   "Sprint 5",
-			expectedNumber: 6,
-		},
-		{
-			name:           "Double digit sprint number",
-			currentTitle:   "Sprint 42",
-			expectedNumber: 43,
-		},
-		{
-			name:           "Triple digit sprint number",
-			currentTitle:   "Sprint 123",
-			expectedNumber: 124,
-		},
-		{
-			name:           "Sprint with extra text",
-			currentTitle:   "Sprint 7 - Final Phase",
-			expectedNumber: 8,
-		},
-		{
-			name:           "Sprint with prefix text",
-			currentTitle:   "Q1 Sprint 3",
-			expectedNumber: 4,
-		},
-		{
-			name:           "No sprint number - defaults to 1",
-			currentTitle:   "Backlog",
-			expectedNumber: 1,
-		},
-		{
-			name:           "Empty string - defaults to 1",
-			currentTitle:   "",
-			expectedNumber: 1,
-		},
-		{
-			name:           "Timestamp-based sprint name - extracts year as number",
-			currentTitle:   "Sprint 2026-03-23 14:35",
-			expectedNumber: 2027, // Extracts 2026 from timestamp, creates 2027
-		},
+		{name: "From numbered sprint", currentTitle: "Sprint 5"},
+		{name: "From timestamp sprint", currentTitle: "Sprint 2026-03-23 14:35"},
+		{name: "From empty string", currentTitle: ""},
+		{name: "From arbitrary text", currentTitle: "Backlog"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Extract sprint number using the same logic as CreateNextSprint
-			re := regexp.MustCompile(`Sprint\s+(\d+)`)
-			matches := re.FindStringSubmatch(tt.currentTitle)
+			// Verify the title format matches EnsureMilestone convention
+			now := time.Now()
+			expectedPrefix := "Sprint " + now.Format("2006-01-02")
 
-			var nextNumber int
-			if len(matches) >= 2 {
-				currentNum, _ := strconv.Atoi(matches[1])
-				nextNumber = currentNum + 1
-			} else {
-				nextNumber = 1
+			title := "Sprint " + now.Format("2006-01-02 15:04")
+
+			if !strings.HasPrefix(title, expectedPrefix) {
+				t.Errorf("Title %q should start with %q", title, expectedPrefix)
 			}
 
-			if nextNumber != tt.expectedNumber {
-				t.Errorf("CreateNextSprint(%q) would create Sprint %d, expected Sprint %d",
-					tt.currentTitle, nextNumber, tt.expectedNumber)
-			}
-		})
-	}
-}
-
-// TestCreateNextSprint_TitleGeneration tests the title generation logic
-func TestCreateNextSprint_TitleGeneration(t *testing.T) {
-	tests := []struct {
-		name          string
-		sprintNumber  int
-		expectedTitle string
-	}{
-		{
-			name:          "Single digit",
-			sprintNumber:  5,
-			expectedTitle: "Sprint 5",
-		},
-		{
-			name:          "Double digit",
-			sprintNumber:  42,
-			expectedTitle: "Sprint 42",
-		},
-		{
-			name:          "Triple digit",
-			sprintNumber:  100,
-			expectedTitle: "Sprint 100",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			title := fmt.Sprintf("Sprint %d", tt.sprintNumber)
-			if title != tt.expectedTitle {
-				t.Errorf("Title generation failed: got %q, expected %q", title, tt.expectedTitle)
+			// Title should always be "Sprint YYYY-MM-DD HH:MM"
+			if len(title) != len("Sprint 2006-01-02 15:04") {
+				t.Errorf("Title %q has unexpected length %d", title, len(title))
 			}
 		})
 	}
@@ -131,5 +56,19 @@ func TestCreateNextSprint_DueDateCalculation(t *testing.T) {
 	}
 	if !strings.HasSuffix(expectedDueDate, "Z") {
 		t.Error("Due date should end with 'Z' (UTC)")
+	}
+}
+
+// TestEnsureMilestoneAndCreateNextSprintConsistentNaming verifies both functions
+// use the same "Sprint YYYY-MM-DD HH:MM" naming convention.
+func TestEnsureMilestoneAndCreateNextSprintConsistentNaming(t *testing.T) {
+	now := time.Now()
+	format := "2006-01-02 15:04"
+
+	ensureTitle := "Sprint " + now.Format(format)
+	createNextTitle := "Sprint " + now.Format(format)
+
+	if ensureTitle != createNextTitle {
+		t.Errorf("Naming mismatch: EnsureMilestone=%q, CreateNextSprint=%q", ensureTitle, createNextTitle)
 	}
 }

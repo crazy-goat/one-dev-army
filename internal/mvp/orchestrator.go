@@ -602,8 +602,10 @@ func (o *Orchestrator) changeStage(issueNumber int, toStage, reason string) erro
 	return nil
 }
 
-// activeMilestone returns the current active milestone
+// activeMilestone returns the current active milestone title
 func (o *Orchestrator) activeMilestone() string {
-	// TODO: Get from config or current sprint
+	if o.gh != nil && o.gh.GetActiveMilestone() != nil {
+		return o.gh.GetActiveMilestone().Title
+	}
 	return ""
 }
