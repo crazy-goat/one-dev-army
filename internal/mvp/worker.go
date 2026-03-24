@@ -142,6 +142,28 @@ func (w *Worker) broadcastWorkerStatus(stage string) {
 	w.orchestrator.BroadcastWorkerStatus(workerID, string(task.Status), task.Issue.Number, task.Issue.Title, stage, elapsed)
 }
 
+// reportStageComplete reports stage completion to orchestrator
+func (w *Worker) reportStageComplete(stage string, status EventStatus, output string) {
+	if w.orchestrator == nil || w.orchestrator.currentTask == nil {
+		return
+	}
+
+	event := WorkerEvent{
+		IssueNumber: w.orchestrator.currentTask.Issue.Number,
+		Stage:       stage,
+		Status:      status,
+		Output:      output,
+	}
+
+	// Send to orchestrator (non-blocking)
+	select {
+	case w.orchestrator.workerEventCh <- event:
+		log.Printf("[Worker] Reported completion of stage %s for issue #%d", stage, event.IssueNumber)
+	default:
+		log.Printf("[Worker] Failed to report stage completion - channel full")
+	}
+}
+
 var stepOrder = []string{"technical-planning", "implement", "code-review", "create-pr"}
 
 func stepIndex(name string) int {
@@ -208,6 +230,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			return task.Result.Error
 		}
 		log.Printf("[Worker %d] [1/4] Technical planning done (%s, analysis=%d chars, plan=%d chars)", w.id, time.Since(stepStart).Round(time.Second), len(analysis), len(implPlan))
+		w.reportStageComplete("analysis", EventSuccess, "technical planning completed")
 	} else {
 		log.Printf("[Worker %d] [1/4] Skipping technical-planning (completed previously)", w.id)
 		if w.store != nil {
@@ -234,6 +257,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			return task.Result.Error
 		}
 		log.Printf("[Worker %d] [2/4] Implementation done (%s)", w.id, time.Since(stepStart).Round(time.Second))
+		w.reportStageComplete("coding", EventSuccess, "implementation completed")
 	} else {
 		log.Printf("[Worker %d] [2/4] Skipping implement (completed previously)", w.id)
 	}
@@ -287,6 +311,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 				return task.Result.Error
 			}
 		}
+		w.reportStageComplete("code-review", EventSuccess, "code review approved")
 	} else {
 		log.Printf("[Worker %d] [3/4] Skipping code-review (completed previously)", w.id)
 	}
@@ -303,6 +328,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			return task.Result.Error
 		}
 		log.Printf("[Worker %d] [4/4] PR created: %s (%s)", w.id, prURL, time.Since(stepStart).Round(time.Second))
+		w.reportStageComplete("create-pr", EventSuccess, "PR created: "+prURL)
 	} else {
 		log.Printf("[Worker %d] [4/4] Skipping create-pr (completed previously)", w.id)
 		if w.store != nil {
