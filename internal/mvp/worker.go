@@ -186,6 +186,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			// Retry with fixes
 			log.Printf("[Worker %d] Code review not approved, fixing...", w.id)
 			task.Status = StatusCoding
+			w.reportStageComplete("coding", EventInProgress, "fixing from AI review")
 			stepStart = time.Now()
 			if fixErr := w.fixFromReview(ctx, task, review); fixErr != nil {
 				task.Status = StatusFailed
@@ -315,6 +316,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		// Decline — fix and retry
 		log.Printf("[Worker %d] PR declined for #%d, fixing: %s", w.id, task.Issue.Number, decision.Reason)
 		task.Status = StatusCoding
+		w.reportStageComplete("coding", EventInProgress, "fixing from user decline")
 
 		if decision.Reason != "" {
 			comment := "**Declined** — sent back for fixes.\n\n" + decision.Reason
@@ -354,6 +356,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		if !approved {
 			// One more fix attempt
 			task.Status = StatusCoding
+			w.reportStageComplete("coding", EventInProgress, "fixing from re-review after decline")
 			if fixErr := w.fixFromReview(ctx, task, review); fixErr != nil {
 				task.Status = StatusFailed
 				task.Result = &TaskResult{Error: fmt.Errorf("fixing from re-review: %w", fixErr)}

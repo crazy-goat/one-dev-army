@@ -461,6 +461,9 @@ func (*Orchestrator) decideNextStage(event WorkerEvent) (github.Stage, github.St
 		if event.Status == EventSuccess {
 			return github.StageReview, github.ReasonWorkerCompletedCoding, true
 		}
+		if event.Status == EventInProgress {
+			return github.StageCode, github.ReasonWorkerFixingFromReview, true
+		}
 	case "code-review":
 		if event.Status == EventSuccess {
 			return github.StageCreatePR, github.ReasonWorkerCompletedCodeReview, true

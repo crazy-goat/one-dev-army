@@ -11,7 +11,8 @@ type WorkerEvent struct {
 type EventStatus string
 
 const (
-	EventSuccess EventStatus = "success"
-	EventFailed  EventStatus = "failed"
-	EventBlocked EventStatus = "blocked"
+	EventSuccess    EventStatus = "success"
+	EventFailed     EventStatus = "failed"
+	EventBlocked    EventStatus = "blocked"
+	EventInProgress EventStatus = "in_progress"
 )

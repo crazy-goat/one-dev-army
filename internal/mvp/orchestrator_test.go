@@ -377,3 +377,23 @@ func TestDecideNextStage_AwaitingApprovalSuccess(t *testing.T) {
 		t.Errorf("reason = %q, want %q", reason, github.ReasonManualMerge)
 	}
 }
+
+func TestDecideNextStage_CodingInProgress(t *testing.T) {
+	o := &Orchestrator{}
+	event := WorkerEvent{
+		IssueNumber: 42,
+		Stage:       "coding",
+		Status:      EventInProgress,
+	}
+
+	stage, reason, ok := o.decideNextStage(event)
+	if !ok {
+		t.Fatal("expected transition for coding in-progress")
+	}
+	if stage != github.StageCode {
+		t.Errorf("stage = %q, want %q", stage, github.StageCode)
+	}
+	if reason != github.ReasonWorkerFixingFromReview {
+		t.Errorf("reason = %q, want %q", reason, github.ReasonWorkerFixingFromReview)
+	}
+}
