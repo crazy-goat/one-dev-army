@@ -14,6 +14,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/mvp"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
@@ -429,37 +430,30 @@ func (s *Server) handleDecline(w http.ResponseWriter, r *http.Request) {
 	if _, err := fmt.Sscanf(id, "%d", &issueNum); err != nil {
 		log.Printf("[Dashboard] Error parsing issue ID %q: %v", id, err)
 	}
-	if issueNum == 0 || s.gh == nil {
+	if issueNum == 0 {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 
 	reason := r.FormValue("reason")
-
 	s.recordStep(issueNum, "declined", reason)
 
-	// Set stage label to coding (removes awaiting-approval and adds coding label)
-	err := s.orchestrator.ChangeStage(issueNum, github.StageCode, github.ReasonManualDecline)
+	err := s.orchestrator.SendDecision(issueNum, mvp.UserDecision{Action: "decline", Reason: reason})
 	if err != nil {
-		log.Printf("[Dashboard] Error setting Code stage on #%d: %v", issueNum, err)
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-
-	if reason != "" {
-		comment := fmt.Sprintf("**Declined** — sent back for fixes.\n\n%s", reason)
-		if err := s.gh.AddComment(issueNum, comment); err != nil {
-			log.Printf("[Dashboard] Error adding decline comment to #%d: %v", issueNum, err)
+		log.Printf("[Dashboard] Error sending decline decision for #%d: %v — falling back to direct stage change", issueNum, err)
+		// Fallback: direct stage change if worker not processing
+		_ = s.orchestrator.ChangeStage(issueNum, github.StageCode, github.ReasonManualDecline)
+		if reason != "" {
+			comment := fmt.Sprintf("**Declined** — sent back for fixes.\n\n%s", reason)
+			_ = s.gh.AddComment(issueNum, comment)
 		}
-	}
-
-	if s.store != nil {
-		if err := s.store.DeleteSteps(issueNum); err != nil {
-			log.Printf("[Dashboard] Error deleting steps for #%d: %v", issueNum, err)
+		if s.store != nil {
+			_ = s.store.DeleteSteps(issueNum)
 		}
+	} else {
+		log.Printf("[Dashboard] ✓ Sent decline decision for #%d", issueNum)
 	}
 
-	log.Printf("[Dashboard] Declined #%d — reason: %s", issueNum, reason)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -469,7 +463,29 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 	if _, err := fmt.Sscanf(id, "%d", &issueNum); err != nil {
 		log.Printf("[Dashboard] Error parsing issue ID %q: %v", id, err)
 	}
-	if issueNum == 0 || s.gh == nil {
+	if issueNum == 0 {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	s.recordStep(issueNum, "approved", "Manual approval granted")
+
+	err := s.orchestrator.SendDecision(issueNum, mvp.UserDecision{Action: "approve"})
+	if err != nil {
+		log.Printf("[Dashboard] Error sending approve decision for #%d: %v — falling back to direct merge", issueNum, err)
+		// Fallback: if worker is not processing (e.g. after restart), do direct merge
+		s.handleDirectMerge(w, r, issueNum)
+		return
+	}
+
+	log.Printf("[Dashboard] ✓ Sent approve decision for #%d", issueNum)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// handleDirectMerge is a fallback for when the worker is not processing the issue
+// (e.g. after ODA restart while in awaiting-approval state).
+func (s *Server) handleDirectMerge(w http.ResponseWriter, r *http.Request, issueNum int) {
+	if s.gh == nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
@@ -481,58 +497,28 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.recordStep(issueNum, "approved", "Manual approval granted")
-
-	// Transition to Merge stage before attempting merge
 	mergeStageErr := s.orchestrator.ChangeStage(issueNum, github.StageMerge, github.ReasonManualMerge)
 	if mergeStageErr != nil {
 		log.Printf("[Dashboard] Error setting Merge stage on #%d: %v", issueNum, mergeStageErr)
 	}
 
-	log.Printf("[Dashboard] Approving & merging PR for #%d (branch: %s)", issueNum, branch)
+	log.Printf("[Dashboard] Direct merging PR for #%d (branch: %s)", issueNum, branch)
 	if err := s.gh.MergePR(branch); err != nil {
-		log.Printf("[Dashboard] ✗ Merge failed for #%d (likely conflict): %v", issueNum, err)
-		s.recordStep(issueNum, "merge-failed", err.Error())
-
+		log.Printf("[Dashboard] ✗ Direct merge failed for #%d: %v", issueNum, err)
 		if closeErr := s.gh.ClosePR(branch); closeErr != nil {
 			log.Printf("[Dashboard] Error closing PR for #%d: %v", issueNum, closeErr)
 		}
-
-		// Set stage label to failed on merge failure
-		labelErr := s.orchestrator.ChangeStage(issueNum, github.StageFailed, github.ReasonManualMergeFailed)
-		if labelErr != nil {
-			log.Printf("[Dashboard] Error setting Failed stage on #%d: %v", issueNum, labelErr)
-		}
-
-		if s.store != nil {
-			if delErr := s.store.DeleteSteps(issueNum); delErr != nil {
-				log.Printf("[Dashboard] Error deleting steps for #%d: %v", issueNum, delErr)
-			}
-		}
+		_ = s.orchestrator.ChangeStage(issueNum, github.StageFailed, github.ReasonManualMergeFailed)
 
 		comment := fmt.Sprintf("Merge failed (likely conflict). PR closed, task moved to Failed.\n\nError: %s", err.Error())
-		if cmtErr := s.gh.AddComment(issueNum, comment); cmtErr != nil {
-			log.Printf("[Dashboard] Error adding comment to #%d: %v", issueNum, cmtErr)
-		}
+		_ = s.gh.AddComment(issueNum, comment)
 
-		log.Printf("[Dashboard] ✗ Merge conflict on #%d — PR closed, moved to Failed", issueNum)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 
-	s.recordStep(issueNum, "merged", "PR merged successfully")
-
-	// Set stage label to done on successful merge
-	err = s.orchestrator.ChangeStage(issueNum, github.StageDone, github.ReasonManualMerge)
-	if err != nil {
-		log.Printf("[Dashboard] Error setting Done stage on #%d: %v", issueNum, err)
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-
-	s.recordStep(issueNum, "done", "Moved to Done")
-
-	log.Printf("[Dashboard] ✓ Approved & merged #%d", issueNum)
+	_ = s.orchestrator.ChangeStage(issueNum, github.StageDone, github.ReasonManualMerge)
+	log.Printf("[Dashboard] ✓ Direct merged #%d (fallback)", issueNum)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
