@@ -18,111 +18,54 @@
   
   <form method="post" action="/settings" hx-post="/settings" hx-target=".settings-container" hx-swap="outerHTML">
     
-    <!-- Development Category -->
+    <!-- Models Section - 5 independent mode selectors -->
     <div class="category-section">
-      <h2>Development</h2>
-      <div class="model-variant">
-        <h3>Strong Model</h3>
-        <div class="form-group">
-          <label for="development_strong_model">Model</label>
-          <div class="model-dropdown" data-field="development_strong_model">
-            <input type="text" id="development_strong_model" name="development_strong_model" value="{{.Config.Development.Strong.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
-            <div class="model-dropdown-list" id="dropdown-development_strong_model"></div>
-          </div>
-          <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
+      <h2>Models</h2>
+      <p class="section-description">Select a model for each operational mode. Each mode uses its own dedicated model.</p>
+      
+      <div class="form-group">
+        <label for="setup_model">Setup</label>
+        <div class="model-dropdown" data-field="setup_model">
+          <input type="text" id="setup_model" name="setup_model" value="{{.Config.Setup.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
+          <div class="model-dropdown-list" id="dropdown-setup_model"></div>
         </div>
+        <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
       </div>
-      <div class="model-variant">
-        <h3>Weak Model</h3>
-        <div class="form-group">
-          <label for="development_weak_model">Model</label>
-          <div class="model-dropdown" data-field="development_weak_model">
-            <input type="text" id="development_weak_model" name="development_weak_model" value="{{.Config.Development.Weak.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
-            <div class="model-dropdown-list" id="dropdown-development_weak_model"></div>
-          </div>
-          <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
+      
+      <div class="form-group">
+        <label for="planning_model">Planning</label>
+        <div class="model-dropdown" data-field="planning_model">
+          <input type="text" id="planning_model" name="planning_model" value="{{.Config.Planning.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
+          <div class="model-dropdown-list" id="dropdown-planning_model"></div>
         </div>
+        <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
       </div>
-    </div>
-    
-    <!-- Planning Category -->
-    <div class="category-section">
-      <h2>Planning</h2>
-      <div class="model-variant">
-        <h3>Strong Model</h3>
-        <div class="form-group">
-          <label for="planning_strong_model">Model</label>
-          <div class="model-dropdown" data-field="planning_strong_model">
-            <input type="text" id="planning_strong_model" name="planning_strong_model" value="{{.Config.Planning.Strong.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
-            <div class="model-dropdown-list" id="dropdown-planning_strong_model"></div>
-          </div>
-          <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
+      
+      <div class="form-group">
+        <label for="orchestration_model">Orchestration</label>
+        <div class="model-dropdown" data-field="orchestration_model">
+          <input type="text" id="orchestration_model" name="orchestration_model" value="{{.Config.Orchestration.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
+          <div class="model-dropdown-list" id="dropdown-orchestration_model"></div>
         </div>
+        <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
       </div>
-      <div class="model-variant">
-        <h3>Weak Model</h3>
-        <div class="form-group">
-          <label for="planning_weak_model">Model</label>
-          <div class="model-dropdown" data-field="planning_weak_model">
-            <input type="text" id="planning_weak_model" name="planning_weak_model" value="{{.Config.Planning.Weak.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
-            <div class="model-dropdown-list" id="dropdown-planning_weak_model"></div>
-          </div>
-          <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
+      
+      <div class="form-group">
+        <label for="code_model">Code</label>
+        <div class="model-dropdown" data-field="code_model">
+          <input type="text" id="code_model" name="code_model" value="{{.Config.Code.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
+          <div class="model-dropdown-list" id="dropdown-code_model"></div>
         </div>
+        <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
       </div>
-    </div>
-    
-    <!-- Orchestration Category -->
-    <div class="category-section">
-      <h2>Orchestration</h2>
-      <div class="model-variant">
-        <h3>Strong Model</h3>
-        <div class="form-group">
-          <label for="orchestration_strong_model">Model</label>
-          <div class="model-dropdown" data-field="orchestration_strong_model">
-            <input type="text" id="orchestration_strong_model" name="orchestration_strong_model" value="{{.Config.Orchestration.Strong.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
-            <div class="model-dropdown-list" id="dropdown-orchestration_strong_model"></div>
-          </div>
-          <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
+      
+      <div class="form-group">
+        <label for="code_heavy_model">Code Heavy</label>
+        <div class="model-dropdown" data-field="code_heavy_model">
+          <input type="text" id="code_heavy_model" name="code_heavy_model" value="{{.Config.CodeHeavy.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
+          <div class="model-dropdown-list" id="dropdown-code_heavy_model"></div>
         </div>
-      </div>
-      <div class="model-variant">
-        <h3>Weak Model</h3>
-        <div class="form-group">
-          <label for="orchestration_weak_model">Model</label>
-          <div class="model-dropdown" data-field="orchestration_weak_model">
-            <input type="text" id="orchestration_weak_model" name="orchestration_weak_model" value="{{.Config.Orchestration.Weak.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
-            <div class="model-dropdown-list" id="dropdown-orchestration_weak_model"></div>
-          </div>
-          <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Setup Category -->
-    <div class="category-section">
-      <h2>Setup</h2>
-      <div class="model-variant">
-        <h3>Strong Model</h3>
-        <div class="form-group">
-          <label for="setup_strong_model">Model</label>
-          <div class="model-dropdown" data-field="setup_strong_model">
-            <input type="text" id="setup_strong_model" name="setup_strong_model" value="{{.Config.Setup.Strong.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
-            <div class="model-dropdown-list" id="dropdown-setup_strong_model"></div>
-          </div>
-          <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
-        </div>
-      </div>
-      <div class="model-variant">
-        <h3>Weak Model</h3>
-        <div class="form-group">
-          <label for="setup_weak_model">Model</label>
-          <div class="model-dropdown" data-field="setup_weak_model">
-            <input type="text" id="setup_weak_model" name="setup_weak_model" value="{{.Config.Setup.Weak.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
-            <div class="model-dropdown-list" id="dropdown-setup_weak_model"></div>
-          </div>
-          <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
-        </div>
+        <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
       </div>
     </div>
     
@@ -178,28 +121,16 @@
 
 .category-section h2 {
   margin-top: 0;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   color: var(--accent);
   font-size: 1.2rem;
 }
 
-.model-variant {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 1rem;
-  margin-bottom: 1rem;
-}
-
-.model-variant:last-child {
-  margin-bottom: 0;
-}
-
-.model-variant h3 {
+.section-description {
   margin-top: 0;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1.5rem;
   color: var(--muted);
-  font-size: 1rem;
+  font-size: 0.9rem;
 }
 
 .form-group {
@@ -211,6 +142,7 @@
   margin-bottom: 0.25rem;
   color: var(--text);
   font-size: 0.9rem;
+  font-weight: 500;
 }
 
 .form-group input {

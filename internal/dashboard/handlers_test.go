@@ -3679,11 +3679,16 @@ func TestHandleSettings(t *testing.T) {
 
 	// Create a minimal config file
 	configContent := `llm:
-  development:
-    strong:
-      model: test-provider/test-model
-    weak:
-      model: test-provider/test-model-weak
+  code:
+    model: test-provider/test-model
+  code-heavy:
+    model: test-provider/test-model-heavy
+  planning:
+    model: test-provider/test-model-planning
+  orchestration:
+    model: test-provider/test-model-orchestration
+  setup:
+    model: test-provider/test-model-setup
 `
 	configPath := filepath.Join(odaDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
@@ -3711,8 +3716,8 @@ func TestHandleSettings(t *testing.T) {
 	if !strings.Contains(body, "LLM Configuration Settings") {
 		t.Error("response should contain 'LLM Configuration Settings' heading")
 	}
-	if !strings.Contains(body, "Development") {
-		t.Error("response should contain 'Development' category")
+	if !strings.Contains(body, "Models") {
+		t.Error("response should contain 'Models' section")
 	}
 	if !strings.Contains(body, "test-provider/test-model") {
 		t.Error("response should contain the model value from config")
@@ -3778,14 +3783,11 @@ func TestHandleSaveSettings(t *testing.T) {
 
 	// Test POST /settings with valid data
 	form := url.Values{}
-	form.Set("development_strong_model", "new-provider/new-model")
-	form.Set("development_weak_model", "new-provider/new-model-weak")
-	form.Set("planning_strong_model", "planning-provider/planning-model")
-	form.Set("planning_weak_model", "planning-provider/planning-model-weak")
-	form.Set("orchestration_strong_model", "orch-provider/orch-model")
-	form.Set("orchestration_weak_model", "orch-provider/orch-model-weak")
-	form.Set("setup_strong_model", "setup-provider/setup-model")
-	form.Set("setup_weak_model", "setup-provider/setup-model-weak")
+	form.Set("setup_model", "setup-provider/setup-model")
+	form.Set("planning_model", "planning-provider/planning-model")
+	form.Set("orchestration_model", "orch-provider/orch-model")
+	form.Set("code_model", "code-provider/code-model")
+	form.Set("code_heavy_model", "code-heavy-provider/code-heavy-model")
 	form.Set("routing_code_size_threshold", "150")
 	form.Set("routing_high_complexity_threshold", "600")
 	form.Set("routing_file_count_threshold", "10")
@@ -3815,7 +3817,7 @@ func TestHandleSaveSettings(t *testing.T) {
 	}
 
 	savedContent := string(savedData)
-	if !strings.Contains(savedContent, "new-provider/new-model") {
+	if !strings.Contains(savedContent, "code-provider/code-model") {
 		t.Error("saved config should contain new model")
 	}
 	if !strings.Contains(savedContent, "150") {
@@ -3854,14 +3856,11 @@ func TestHandleSaveSettingsValidation(t *testing.T) {
 
 	// Test POST /settings with invalid data (empty required fields)
 	form := url.Values{}
-	form.Set("development_strong_model", "") // Empty - should fail validation
-	form.Set("development_weak_model", "weak-provider/weak-model")
-	form.Set("planning_strong_model", "planning-provider/planning-model")
-	form.Set("planning_weak_model", "planning-provider/planning-model-weak")
-	form.Set("orchestration_strong_model", "orch-provider/orch-model")
-	form.Set("orchestration_weak_model", "orch-provider/orch-model-weak")
-	form.Set("setup_strong_model", "setup-provider/setup-model")
-	form.Set("setup_weak_model", "setup-provider/setup-model-weak")
+	form.Set("setup_model", "setup-provider/setup-model")
+	form.Set("planning_model", "planning-provider/planning-model")
+	form.Set("orchestration_model", "orch-provider/orch-model")
+	form.Set("code_model", "") // Empty - should fail validation
+	form.Set("code_heavy_model", "code-heavy-provider/code-heavy-model")
 	form.Set("routing_code_size_threshold", "150")
 	form.Set("routing_high_complexity_threshold", "600")
 	form.Set("routing_file_count_threshold", "10")
@@ -3915,14 +3914,11 @@ func TestHandleSaveSettingsValidationNegativeThresholds(t *testing.T) {
 
 	// Test POST /settings with negative threshold
 	form := url.Values{}
-	form.Set("development_strong_model", "provider/model")
-	form.Set("development_weak_model", "weak-provider/weak-model")
-	form.Set("planning_strong_model", "planning-provider/planning-model")
-	form.Set("planning_weak_model", "planning-provider/planning-model-weak")
-	form.Set("orchestration_strong_model", "orch-provider/orch-model")
-	form.Set("orchestration_weak_model", "orch-provider/orch-model-weak")
-	form.Set("setup_strong_model", "setup-provider/setup-model")
-	form.Set("setup_weak_model", "setup-provider/setup-model-weak")
+	form.Set("setup_model", "setup-provider/setup-model")
+	form.Set("planning_model", "planning-provider/planning-model")
+	form.Set("orchestration_model", "orch-provider/orch-model")
+	form.Set("code_model", "code-provider/code-model")
+	form.Set("code_heavy_model", "code-heavy-provider/code-heavy-model")
 	form.Set("routing_code_size_threshold", "-1") // Negative - should fail validation
 	form.Set("routing_high_complexity_threshold", "600")
 	form.Set("routing_file_count_threshold", "10")
@@ -3959,11 +3955,8 @@ func TestSettingsPersistence(t *testing.T) {
 	// Create a minimal config file
 	configPath := filepath.Join(odaDir, "config.yaml")
 	configContent := `llm:
-  development:
-    strong:
-      model: original-provider/original-model
-    weak:
-      model: original-provider/original-model-weak
+  code:
+    model: original-provider/original-model
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config file: %v", err)
@@ -3976,14 +3969,11 @@ func TestSettingsPersistence(t *testing.T) {
 
 	// Save new settings
 	form := url.Values{}
-	form.Set("development_strong_model", "persisted-provider/persisted-model")
-	form.Set("development_weak_model", "persisted-provider/persisted-model-weak")
-	form.Set("planning_strong_model", "planning-provider/planning-model")
-	form.Set("planning_weak_model", "planning-provider/planning-model-weak")
-	form.Set("orchestration_strong_model", "orch-provider/orch-model")
-	form.Set("orchestration_weak_model", "orch-provider/orch-model-weak")
-	form.Set("setup_strong_model", "setup-provider/setup-model")
-	form.Set("setup_weak_model", "setup-provider/setup-model-weak")
+	form.Set("setup_model", "setup-provider/setup-model")
+	form.Set("planning_model", "planning-provider/planning-model")
+	form.Set("orchestration_model", "orch-provider/orch-model")
+	form.Set("code_model", "persisted-provider/persisted-model")
+	form.Set("code_heavy_model", "code-heavy-provider/code-heavy-model")
 	form.Set("routing_code_size_threshold", "200")
 	form.Set("routing_high_complexity_threshold", "700")
 	form.Set("routing_file_count_threshold", "15")
@@ -4006,8 +3996,8 @@ func TestSettingsPersistence(t *testing.T) {
 	}
 
 	// Verify the values were persisted
-	if reloadedCfg.LLM.Development.Strong.Model != "persisted-provider/persisted-model" {
-		t.Errorf("expected model to be 'persisted-provider/persisted-model', got %q", reloadedCfg.LLM.Development.Strong.Model)
+	if reloadedCfg.LLM.Code.Model != "persisted-provider/persisted-model" {
+		t.Errorf("expected model to be 'persisted-provider/persisted-model', got %q", reloadedCfg.LLM.Code.Model)
 	}
 	if reloadedCfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold != 200 {
 		t.Errorf("expected code size threshold to be 200, got %d", reloadedCfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold)
@@ -4030,11 +4020,8 @@ func TestHandleSettings_WithModels(t *testing.T) {
 
 	// Create a minimal config file
 	configContent := `llm:
-  development:
-    strong:
-      model: test-provider/test-model
-    weak:
-      model: test-provider/test-model-weak
+  code:
+    model: test-provider/test-model
 `
 	configPath := filepath.Join(odaDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
@@ -4085,11 +4072,8 @@ func TestHandleSaveSettings_InvalidModel(t *testing.T) {
 	// Create a minimal config file
 	configPath := filepath.Join(odaDir, "config.yaml")
 	configContent := `llm:
-  development:
-    strong:
-      model: test-provider/test-model
-    weak:
-      model: test-provider/test-model-weak
+  code:
+    model: test-provider/test-model
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config file: %v", err)
@@ -4106,14 +4090,11 @@ func TestHandleSaveSettings_InvalidModel(t *testing.T) {
 
 	// Test POST /settings with invalid model
 	form := url.Values{}
-	form.Set("development_strong_model", "openai/invalid-model") // Invalid model
-	form.Set("development_weak_model", "openai/gpt-4")           // Valid model
-	form.Set("planning_strong_model", "openai/gpt-4")
-	form.Set("planning_weak_model", "openai/gpt-4")
-	form.Set("orchestration_strong_model", "openai/gpt-4")
-	form.Set("orchestration_weak_model", "openai/gpt-4")
-	form.Set("setup_strong_model", "openai/gpt-4")
-	form.Set("setup_weak_model", "openai/gpt-4")
+	form.Set("setup_model", "openai/gpt-4")
+	form.Set("planning_model", "openai/gpt-4")
+	form.Set("orchestration_model", "openai/gpt-4")
+	form.Set("code_model", "openai/invalid-model") // Invalid model
+	form.Set("code_heavy_model", "openai/gpt-4")
 	form.Set("routing_code_size_threshold", "150")
 	form.Set("routing_high_complexity_threshold", "600")
 	form.Set("routing_file_count_threshold", "10")
@@ -4153,11 +4134,8 @@ func TestHandleSaveSettings_ValidModel(t *testing.T) {
 	// Create a minimal config file
 	configPath := filepath.Join(odaDir, "config.yaml")
 	configContent := `llm:
-  development:
-    strong:
-      model: test-provider/test-model
-    weak:
-      model: test-provider/test-model-weak
+  code:
+    model: test-provider/test-model
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config file: %v", err)
@@ -4174,14 +4152,11 @@ func TestHandleSaveSettings_ValidModel(t *testing.T) {
 
 	// Test POST /settings with valid models
 	form := url.Values{}
-	form.Set("development_strong_model", "openai/gpt-4")
-	form.Set("development_weak_model", "anthropic/claude-3")
-	form.Set("planning_strong_model", "openai/gpt-4")
-	form.Set("planning_weak_model", "openai/gpt-4")
-	form.Set("orchestration_strong_model", "openai/gpt-4")
-	form.Set("orchestration_weak_model", "openai/gpt-4")
-	form.Set("setup_strong_model", "openai/gpt-4")
-	form.Set("setup_weak_model", "openai/gpt-4")
+	form.Set("setup_model", "openai/gpt-4")
+	form.Set("planning_model", "openai/gpt-4")
+	form.Set("orchestration_model", "openai/gpt-4")
+	form.Set("code_model", "openai/gpt-4")
+	form.Set("code_heavy_model", "anthropic/claude-3")
 	form.Set("routing_code_size_threshold", "150")
 	form.Set("routing_high_complexity_threshold", "600")
 	form.Set("routing_file_count_threshold", "10")
@@ -4284,11 +4259,8 @@ func TestHandleSaveSettings_EmptyCache(t *testing.T) {
 	// Create a minimal config file
 	configPath := filepath.Join(odaDir, "config.yaml")
 	configContent := `llm:
-  development:
-    strong:
-      model: test-provider/test-model
-    weak:
-      model: test-provider/test-model-weak
+  code:
+    model: test-provider/test-model
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config file: %v", err)
@@ -4302,14 +4274,11 @@ func TestHandleSaveSettings_EmptyCache(t *testing.T) {
 
 	// Test POST /settings with any model (should be allowed when cache is empty)
 	form := url.Values{}
-	form.Set("development_strong_model", "custom-provider/custom-model")
-	form.Set("development_weak_model", "custom-provider/another-custom-model")
-	form.Set("planning_strong_model", "custom-provider/custom-model")
-	form.Set("planning_weak_model", "custom-provider/custom-model")
-	form.Set("orchestration_strong_model", "custom-provider/custom-model")
-	form.Set("orchestration_weak_model", "custom-provider/custom-model")
-	form.Set("setup_strong_model", "custom-provider/custom-model")
-	form.Set("setup_weak_model", "custom-provider/custom-model")
+	form.Set("setup_model", "custom-provider/custom-model")
+	form.Set("planning_model", "custom-provider/custom-model")
+	form.Set("orchestration_model", "custom-provider/custom-model")
+	form.Set("code_model", "custom-provider/custom-model")
+	form.Set("code_heavy_model", "custom-provider/custom-model")
 	form.Set("routing_code_size_threshold", "150")
 	form.Set("routing_high_complexity_threshold", "600")
 	form.Set("routing_file_count_threshold", "10")

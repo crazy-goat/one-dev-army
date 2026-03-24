@@ -413,15 +413,12 @@ func collectConfigModels(cfg *config.Config) []opencode.ModelRef {
 	add(cfg.Planning.LLM)
 	add(cfg.EpicAnalysis.LLM)
 
-	// Add models from new LLM config
-	add(cfg.LLM.Development.Strong.ToModelRef())
-	add(cfg.LLM.Development.Weak.ToModelRef())
-	add(cfg.LLM.Planning.Strong.ToModelRef())
-	add(cfg.LLM.Planning.Weak.ToModelRef())
-	add(cfg.LLM.Orchestration.Strong.ToModelRef())
-	add(cfg.LLM.Orchestration.Weak.ToModelRef())
-	add(cfg.LLM.Setup.Strong.ToModelRef())
-	add(cfg.LLM.Setup.Weak.ToModelRef())
+	// Add models from new LLM config (5 independent modes)
+	add(cfg.LLM.Setup.Model)
+	add(cfg.LLM.Planning.Model)
+	add(cfg.LLM.Orchestration.Model)
+	add(cfg.LLM.Code.Model)
+	add(cfg.LLM.CodeHeavy.Model)
 
 	return models
 }
