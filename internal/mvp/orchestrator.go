@@ -250,6 +250,11 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		processErr := o.worker.Process(ctx, task)
 
+		// Drain pending worker events before setting final stage.
+		// Worker events carry intermediate stage transitions (analysis→coding→…)
+		// that must be recorded in the ledger before the final post-process stage.
+		o.drainWorkerEvents()
+
 		// Explicit cleanup: ensure branch is deleted after worker finishes (success or failure)
 		if task.Branch != "" {
 			log.Printf("[Orchestrator] Cleaning up branch %q for issue #%d", task.Branch, task.Issue.Number)
@@ -463,6 +468,20 @@ func (o *Orchestrator) HandleSyncEvent(issue github.Issue) {
 			if err := o.gh.AddLabel(issue.Number, "stage:merging"); err != nil {
 				log.Printf("[Orchestrator] Error adding stage:merging label to #%d: %v", issue.Number, err)
 			}
+		}
+	}
+}
+
+// drainWorkerEvents processes all pending worker events from the channel.
+// Must be called after worker.Process() returns and before setting the final
+// post-process stage, so the ledger records transitions in correct order.
+func (o *Orchestrator) drainWorkerEvents() {
+	for {
+		select {
+		case event := <-o.workerEventCh:
+			o.HandleWorkerEvent(event)
+		default:
+			return
 		}
 	}
 }
