@@ -1757,48 +1757,20 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	var errors []string
 
 	// Parse Development models
-	cfg.LLM.Development.Strong.Provider = r.FormValue("development_strong_provider")
 	cfg.LLM.Development.Strong.Model = r.FormValue("development_strong_model")
-	cfg.LLM.Development.Strong.APIKey = r.FormValue("development_strong_api_key")
-	cfg.LLM.Development.Strong.BaseURL = r.FormValue("development_strong_base_url")
-
-	cfg.LLM.Development.Weak.Provider = r.FormValue("development_weak_provider")
 	cfg.LLM.Development.Weak.Model = r.FormValue("development_weak_model")
-	cfg.LLM.Development.Weak.APIKey = r.FormValue("development_weak_api_key")
-	cfg.LLM.Development.Weak.BaseURL = r.FormValue("development_weak_base_url")
 
 	// Parse Planning models
-	cfg.LLM.Planning.Strong.Provider = r.FormValue("planning_strong_provider")
 	cfg.LLM.Planning.Strong.Model = r.FormValue("planning_strong_model")
-	cfg.LLM.Planning.Strong.APIKey = r.FormValue("planning_strong_api_key")
-	cfg.LLM.Planning.Strong.BaseURL = r.FormValue("planning_strong_base_url")
-
-	cfg.LLM.Planning.Weak.Provider = r.FormValue("planning_weak_provider")
 	cfg.LLM.Planning.Weak.Model = r.FormValue("planning_weak_model")
-	cfg.LLM.Planning.Weak.APIKey = r.FormValue("planning_weak_api_key")
-	cfg.LLM.Planning.Weak.BaseURL = r.FormValue("planning_weak_base_url")
 
 	// Parse Orchestration models
-	cfg.LLM.Orchestration.Strong.Provider = r.FormValue("orchestration_strong_provider")
 	cfg.LLM.Orchestration.Strong.Model = r.FormValue("orchestration_strong_model")
-	cfg.LLM.Orchestration.Strong.APIKey = r.FormValue("orchestration_strong_api_key")
-	cfg.LLM.Orchestration.Strong.BaseURL = r.FormValue("orchestration_strong_base_url")
-
-	cfg.LLM.Orchestration.Weak.Provider = r.FormValue("orchestration_weak_provider")
 	cfg.LLM.Orchestration.Weak.Model = r.FormValue("orchestration_weak_model")
-	cfg.LLM.Orchestration.Weak.APIKey = r.FormValue("orchestration_weak_api_key")
-	cfg.LLM.Orchestration.Weak.BaseURL = r.FormValue("orchestration_weak_base_url")
 
 	// Parse Setup models
-	cfg.LLM.Setup.Strong.Provider = r.FormValue("setup_strong_provider")
 	cfg.LLM.Setup.Strong.Model = r.FormValue("setup_strong_model")
-	cfg.LLM.Setup.Strong.APIKey = r.FormValue("setup_strong_api_key")
-	cfg.LLM.Setup.Strong.BaseURL = r.FormValue("setup_strong_base_url")
-
-	cfg.LLM.Setup.Weak.Provider = r.FormValue("setup_weak_provider")
 	cfg.LLM.Setup.Weak.Model = r.FormValue("setup_weak_model")
-	cfg.LLM.Setup.Weak.APIKey = r.FormValue("setup_weak_api_key")
-	cfg.LLM.Setup.Weak.BaseURL = r.FormValue("setup_weak_base_url")
 
 	// Validate required fields
 	categories := []struct {
@@ -1813,40 +1785,37 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, cat := range categories {
-		if cat.strong.Provider == "" {
-			errors = append(errors, fmt.Sprintf("%s Strong: Provider is required", cat.name))
-		}
 		if cat.strong.Model == "" {
 			errors = append(errors, fmt.Sprintf("%s Strong: Model is required", cat.name))
-		}
-		if cat.weak.Provider == "" {
-			errors = append(errors, fmt.Sprintf("%s Weak: Provider is required", cat.name))
+		} else if !validateModelFormat(cat.strong.Model) {
+			errors = append(errors, fmt.Sprintf("%s Strong: Model must be in 'provider/model' format (e.g., 'nexos-ai/Kimi K2.5')", cat.name))
 		}
 		if cat.weak.Model == "" {
 			errors = append(errors, fmt.Sprintf("%s Weak: Model is required", cat.name))
+		} else if !validateModelFormat(cat.weak.Model) {
+			errors = append(errors, fmt.Sprintf("%s Weak: Model must be in 'provider/model' format (e.g., 'nexos-ai/Kimi K2.5')", cat.name))
 		}
 	}
 
 	// Validate model selections against available models
 	if len(s.modelsCache) > 0 {
 		modelValidations := []struct {
-			name     string
-			provider string
-			model    string
+			name  string
+			model string
 		}{
-			{"Development Strong", cfg.LLM.Development.Strong.Provider, cfg.LLM.Development.Strong.Model},
-			{"Development Weak", cfg.LLM.Development.Weak.Provider, cfg.LLM.Development.Weak.Model},
-			{"Planning Strong", cfg.LLM.Planning.Strong.Provider, cfg.LLM.Planning.Strong.Model},
-			{"Planning Weak", cfg.LLM.Planning.Weak.Provider, cfg.LLM.Planning.Weak.Model},
-			{"Orchestration Strong", cfg.LLM.Orchestration.Strong.Provider, cfg.LLM.Orchestration.Strong.Model},
-			{"Orchestration Weak", cfg.LLM.Orchestration.Weak.Provider, cfg.LLM.Orchestration.Weak.Model},
-			{"Setup Strong", cfg.LLM.Setup.Strong.Provider, cfg.LLM.Setup.Strong.Model},
-			{"Setup Weak", cfg.LLM.Setup.Weak.Provider, cfg.LLM.Setup.Weak.Model},
+			{"Development Strong", cfg.LLM.Development.Strong.Model},
+			{"Development Weak", cfg.LLM.Development.Weak.Model},
+			{"Planning Strong", cfg.LLM.Planning.Strong.Model},
+			{"Planning Weak", cfg.LLM.Planning.Weak.Model},
+			{"Orchestration Strong", cfg.LLM.Orchestration.Strong.Model},
+			{"Orchestration Weak", cfg.LLM.Orchestration.Weak.Model},
+			{"Setup Strong", cfg.LLM.Setup.Strong.Model},
+			{"Setup Weak", cfg.LLM.Setup.Weak.Model},
 		}
 
 		for _, mv := range modelValidations {
-			if mv.provider != "" && mv.model != "" && !s.validateModelSelection(mv.provider, mv.model) {
-				errors = append(errors, fmt.Sprintf("%s: Invalid model '%s/%s' - not found in available models", mv.name, mv.provider, mv.model))
+			if mv.model != "" && !s.validateModelSelection(mv.model) {
+				errors = append(errors, fmt.Sprintf("%s: Invalid model '%s' - not found in available models", mv.name, mv.model))
 			}
 		}
 	}
@@ -1943,14 +1912,23 @@ func (s *Server) renderSettingsWithErrors(w http.ResponseWriter, r *http.Request
 	s.render(w, "llm-config.html", data)
 }
 
+// validateModelFormat checks if the model string is in the correct "provider/model" format
+func validateModelFormat(model string) bool {
+	if model == "" {
+		return false
+	}
+	parts := strings.Split(model, "/")
+	return len(parts) == 2 && parts[0] != "" && parts[1] != ""
+}
+
 // validateModelSelection checks if a model selection is valid against the cached models
-func (s *Server) validateModelSelection(provider, model string) bool {
+func (s *Server) validateModelSelection(model string) bool {
 	if len(s.modelsCache) == 0 {
 		return true // Skip validation if cache is empty (API unavailable)
 	}
 
 	for _, m := range s.modelsCache {
-		if m.ProviderID == provider && m.ID == model {
+		if m.ID == model {
 			return true
 		}
 	}

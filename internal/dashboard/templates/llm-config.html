@@ -24,45 +24,23 @@
       <div class="model-variant">
         <h3>Strong Model</h3>
         <div class="form-group">
-          <label for="development_strong_provider">Provider</label>
-          <input type="text" id="development_strong_provider" name="development_strong_provider" value="{{.Config.Development.Strong.Provider}}" required>
-        </div>
-        <div class="form-group">
           <label for="development_strong_model">Model</label>
           <div class="model-dropdown" data-field="development_strong_model">
-            <input type="text" id="development_strong_model" name="development_strong_model" value="{{.Config.Development.Strong.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="Type to search models...">
+            <input type="text" id="development_strong_model" name="development_strong_model" value="{{.Config.Development.Strong.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
             <div class="model-dropdown-list" id="dropdown-development_strong_model"></div>
           </div>
-        </div>
-        <div class="form-group">
-          <label for="development_strong_api_key">API Key (optional)</label>
-          <input type="password" id="development_strong_api_key" name="development_strong_api_key" value="{{.Config.Development.Strong.APIKey}}" placeholder="Leave empty to use env var">
-        </div>
-        <div class="form-group">
-          <label for="development_strong_base_url">Base URL (optional)</label>
-          <input type="text" id="development_strong_base_url" name="development_strong_base_url" value="{{.Config.Development.Strong.BaseURL}}" placeholder="https://api.example.com">
+          <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
         </div>
       </div>
       <div class="model-variant">
         <h3>Weak Model</h3>
         <div class="form-group">
-          <label for="development_weak_provider">Provider</label>
-          <input type="text" id="development_weak_provider" name="development_weak_provider" value="{{.Config.Development.Weak.Provider}}" required>
-        </div>
-        <div class="form-group">
           <label for="development_weak_model">Model</label>
           <div class="model-dropdown" data-field="development_weak_model">
-            <input type="text" id="development_weak_model" name="development_weak_model" value="{{.Config.Development.Weak.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="Type to search models...">
+            <input type="text" id="development_weak_model" name="development_weak_model" value="{{.Config.Development.Weak.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
             <div class="model-dropdown-list" id="dropdown-development_weak_model"></div>
           </div>
-        </div>
-        <div class="form-group">
-          <label for="development_weak_api_key">API Key (optional)</label>
-          <input type="password" id="development_weak_api_key" name="development_weak_api_key" value="{{.Config.Development.Weak.APIKey}}" placeholder="Leave empty to use env var">
-        </div>
-        <div class="form-group">
-          <label for="development_weak_base_url">Base URL (optional)</label>
-          <input type="text" id="development_weak_base_url" name="development_weak_base_url" value="{{.Config.Development.Weak.BaseURL}}" placeholder="https://api.example.com">
+          <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
         </div>
       </div>
     </div>
@@ -73,45 +51,23 @@
       <div class="model-variant">
         <h3>Strong Model</h3>
         <div class="form-group">
-          <label for="planning_strong_provider">Provider</label>
-          <input type="text" id="planning_strong_provider" name="planning_strong_provider" value="{{.Config.Planning.Strong.Provider}}" required>
-        </div>
-        <div class="form-group">
           <label for="planning_strong_model">Model</label>
           <div class="model-dropdown" data-field="planning_strong_model">
-            <input type="text" id="planning_strong_model" name="planning_strong_model" value="{{.Config.Planning.Strong.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="Type to search models...">
+            <input type="text" id="planning_strong_model" name="planning_strong_model" value="{{.Config.Planning.Strong.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
             <div class="model-dropdown-list" id="dropdown-planning_strong_model"></div>
           </div>
-        </div>
-        <div class="form-group">
-          <label for="planning_strong_api_key">API Key (optional)</label>
-          <input type="password" id="planning_strong_api_key" name="planning_strong_api_key" value="{{.Config.Planning.Strong.APIKey}}" placeholder="Leave empty to use env var">
-        </div>
-        <div class="form-group">
-          <label for="planning_strong_base_url">Base URL (optional)</label>
-          <input type="text" id="planning_strong_base_url" name="planning_strong_base_url" value="{{.Config.Planning.Strong.BaseURL}}" placeholder="https://api.example.com">
+          <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
         </div>
       </div>
       <div class="model-variant">
         <h3>Weak Model</h3>
         <div class="form-group">
-          <label for="planning_weak_provider">Provider</label>
-          <input type="text" id="planning_weak_provider" name="planning_weak_provider" value="{{.Config.Planning.Weak.Provider}}" required>
-        </div>
-        <div class="form-group">
           <label for="planning_weak_model">Model</label>
           <div class="model-dropdown" data-field="planning_weak_model">
-            <input type="text" id="planning_weak_model" name="planning_weak_model" value="{{.Config.Planning.Weak.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="Type to search models...">
+            <input type="text" id="planning_weak_model" name="planning_weak_model" value="{{.Config.Planning.Weak.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
             <div class="model-dropdown-list" id="dropdown-planning_weak_model"></div>
           </div>
-        </div>
-        <div class="form-group">
-          <label for="planning_weak_api_key">API Key (optional)</label>
-          <input type="password" id="planning_weak_api_key" name="planning_weak_api_key" value="{{.Config.Planning.Weak.APIKey}}" placeholder="Leave empty to use env var">
-        </div>
-        <div class="form-group">
-          <label for="planning_weak_base_url">Base URL (optional)</label>
-          <input type="text" id="planning_weak_base_url" name="planning_weak_base_url" value="{{.Config.Planning.Weak.BaseURL}}" placeholder="https://api.example.com">
+          <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
         </div>
       </div>
     </div>
@@ -122,45 +78,23 @@
       <div class="model-variant">
         <h3>Strong Model</h3>
         <div class="form-group">
-          <label for="orchestration_strong_provider">Provider</label>
-          <input type="text" id="orchestration_strong_provider" name="orchestration_strong_provider" value="{{.Config.Orchestration.Strong.Provider}}" required>
-        </div>
-        <div class="form-group">
           <label for="orchestration_strong_model">Model</label>
           <div class="model-dropdown" data-field="orchestration_strong_model">
-            <input type="text" id="orchestration_strong_model" name="orchestration_strong_model" value="{{.Config.Orchestration.Strong.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="Type to search models...">
+            <input type="text" id="orchestration_strong_model" name="orchestration_strong_model" value="{{.Config.Orchestration.Strong.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
             <div class="model-dropdown-list" id="dropdown-orchestration_strong_model"></div>
           </div>
-        </div>
-        <div class="form-group">
-          <label for="orchestration_strong_api_key">API Key (optional)</label>
-          <input type="password" id="orchestration_strong_api_key" name="orchestration_strong_api_key" value="{{.Config.Orchestration.Strong.APIKey}}" placeholder="Leave empty to use env var">
-        </div>
-        <div class="form-group">
-          <label for="orchestration_strong_base_url">Base URL (optional)</label>
-          <input type="text" id="orchestration_strong_base_url" name="orchestration_strong_base_url" value="{{.Config.Orchestration.Strong.BaseURL}}" placeholder="https://api.example.com">
+          <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
         </div>
       </div>
       <div class="model-variant">
         <h3>Weak Model</h3>
         <div class="form-group">
-          <label for="orchestration_weak_provider">Provider</label>
-          <input type="text" id="orchestration_weak_provider" name="orchestration_weak_provider" value="{{.Config.Orchestration.Weak.Provider}}" required>
-        </div>
-        <div class="form-group">
           <label for="orchestration_weak_model">Model</label>
           <div class="model-dropdown" data-field="orchestration_weak_model">
-            <input type="text" id="orchestration_weak_model" name="orchestration_weak_model" value="{{.Config.Orchestration.Weak.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="Type to search models...">
+            <input type="text" id="orchestration_weak_model" name="orchestration_weak_model" value="{{.Config.Orchestration.Weak.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
             <div class="model-dropdown-list" id="dropdown-orchestration_weak_model"></div>
           </div>
-        </div>
-        <div class="form-group">
-          <label for="orchestration_weak_api_key">API Key (optional)</label>
-          <input type="password" id="orchestration_weak_api_key" name="orchestration_weak_api_key" value="{{.Config.Orchestration.Weak.APIKey}}" placeholder="Leave empty to use env var">
-        </div>
-        <div class="form-group">
-          <label for="orchestration_weak_base_url">Base URL (optional)</label>
-          <input type="text" id="orchestration_weak_base_url" name="orchestration_weak_base_url" value="{{.Config.Orchestration.Weak.BaseURL}}" placeholder="https://api.example.com">
+          <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
         </div>
       </div>
     </div>
@@ -171,45 +105,23 @@
       <div class="model-variant">
         <h3>Strong Model</h3>
         <div class="form-group">
-          <label for="setup_strong_provider">Provider</label>
-          <input type="text" id="setup_strong_provider" name="setup_strong_provider" value="{{.Config.Setup.Strong.Provider}}" required>
-        </div>
-        <div class="form-group">
           <label for="setup_strong_model">Model</label>
           <div class="model-dropdown" data-field="setup_strong_model">
-            <input type="text" id="setup_strong_model" name="setup_strong_model" value="{{.Config.Setup.Strong.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="Type to search models...">
+            <input type="text" id="setup_strong_model" name="setup_strong_model" value="{{.Config.Setup.Strong.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
             <div class="model-dropdown-list" id="dropdown-setup_strong_model"></div>
           </div>
-        </div>
-        <div class="form-group">
-          <label for="setup_strong_api_key">API Key (optional)</label>
-          <input type="password" id="setup_strong_api_key" name="setup_strong_api_key" value="{{.Config.Setup.Strong.APIKey}}" placeholder="Leave empty to use env var">
-        </div>
-        <div class="form-group">
-          <label for="setup_strong_base_url">Base URL (optional)</label>
-          <input type="text" id="setup_strong_base_url" name="setup_strong_base_url" value="{{.Config.Setup.Strong.BaseURL}}" placeholder="https://api.example.com">
+          <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
         </div>
       </div>
       <div class="model-variant">
         <h3>Weak Model</h3>
         <div class="form-group">
-          <label for="setup_weak_provider">Provider</label>
-          <input type="text" id="setup_weak_provider" name="setup_weak_provider" value="{{.Config.Setup.Weak.Provider}}" required>
-        </div>
-        <div class="form-group">
           <label for="setup_weak_model">Model</label>
           <div class="model-dropdown" data-field="setup_weak_model">
-            <input type="text" id="setup_weak_model" name="setup_weak_model" value="{{.Config.Setup.Weak.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="Type to search models...">
+            <input type="text" id="setup_weak_model" name="setup_weak_model" value="{{.Config.Setup.Weak.Model}}" required autocomplete="off" class="model-dropdown-input" placeholder="e.g., nexos-ai/Kimi K2.5">
             <div class="model-dropdown-list" id="dropdown-setup_weak_model"></div>
           </div>
-        </div>
-        <div class="form-group">
-          <label for="setup_weak_api_key">API Key (optional)</label>
-          <input type="password" id="setup_weak_api_key" name="setup_weak_api_key" value="{{.Config.Setup.Weak.APIKey}}" placeholder="Leave empty to use env var">
-        </div>
-        <div class="form-group">
-          <label for="setup_weak_base_url">Base URL (optional)</label>
-          <input type="text" id="setup_weak_base_url" name="setup_weak_base_url" value="{{.Config.Setup.Weak.BaseURL}}" placeholder="https://api.example.com">
+          <small>Format: provider/model (e.g., nexos-ai/Kimi K2.5)</small>
         </div>
       </div>
     </div>
@@ -605,16 +517,6 @@ function updateSelection(list, selectedIndex) {
 function selectModel(model, input, list) {
   input.value = model.id;
   list.classList.remove('visible');
-  
-  // Update the provider field if it exists
-  const fieldName = input.getAttribute('name');
-  if (fieldName) {
-    const providerFieldName = fieldName.replace('_model', '_provider');
-    const providerInput = document.querySelector('input[name="' + providerFieldName + '"]');
-    if (providerInput) {
-      providerInput.value = model.providerID;
-    }
-  }
 }
 
 function escapeHtml(text) {

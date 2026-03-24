@@ -1,5 +1,7 @@
 package config
 
+import "strings"
+
 // TaskCategory represents the type of task for LLM routing
 type TaskCategory string
 
@@ -29,10 +31,35 @@ const (
 
 // ModelConfig represents a single LLM model configuration
 type ModelConfig struct {
-	Provider string `yaml:"provider"`           // e.g., "openai", "anthropic", "local"
-	Model    string `yaml:"model"`              // e.g., "gpt-4", "claude-3-opus"
-	APIKey   string `yaml:"api_key,omitempty"`  // Optional API key (can use env var)
-	BaseURL  string `yaml:"base_url,omitempty"` // Optional custom base URL
+	Model string `yaml:"model"` // e.g., "nexos-ai/Kimi K2.5" (format: "provider/model")
+}
+
+// ParseModel extracts the provider and model name from the Model field
+// Expected format: "provider/model" (e.g., "nexos-ai/Kimi K2.5")
+func (mc *ModelConfig) ParseModel() (provider, model string) {
+	if mc.Model == "" {
+		return "", ""
+	}
+
+	parts := strings.SplitN(mc.Model, "/", 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+
+	// If no slash found, return empty provider and full string as model
+	return "", mc.Model
+}
+
+// GetProvider returns the provider from the Model field
+func (mc *ModelConfig) GetProvider() string {
+	provider, _ := mc.ParseModel()
+	return provider
+}
+
+// GetModelName returns the model name from the Model field
+func (mc *ModelConfig) GetModelName() string {
+	_, model := mc.ParseModel()
+	return model
 }
 
 // CategoryModels holds strong and weak model variants for a category
@@ -82,42 +109,34 @@ func DefaultLLMConfig() LLMConfig {
 	return LLMConfig{
 		Development: CategoryModels{
 			Strong: ModelConfig{
-				Provider: "nexos-ai",
-				Model:    "Kimi K2.5",
+				Model: "nexos-ai/Kimi K2.5",
 			},
 			Weak: ModelConfig{
-				Provider: "nexos-ai",
-				Model:    "Kimi K2.5",
+				Model: "nexos-ai/Kimi K2.5",
 			},
 		},
 		Planning: CategoryModels{
 			Strong: ModelConfig{
-				Provider: "nexos-ai",
-				Model:    "Kimi K2.5",
+				Model: "nexos-ai/Kimi K2.5",
 			},
 			Weak: ModelConfig{
-				Provider: "nexos-ai",
-				Model:    "Kimi K2.5",
+				Model: "nexos-ai/Kimi K2.5",
 			},
 		},
 		Orchestration: CategoryModels{
 			Strong: ModelConfig{
-				Provider: "nexos-ai",
-				Model:    "Kimi K2.5",
+				Model: "nexos-ai/Kimi K2.5",
 			},
 			Weak: ModelConfig{
-				Provider: "nexos-ai",
-				Model:    "Kimi K2.5",
+				Model: "nexos-ai/Kimi K2.5",
 			},
 		},
 		Setup: CategoryModels{
 			Strong: ModelConfig{
-				Provider: "nexos-ai",
-				Model:    "Kimi K2.5",
+				Model: "nexos-ai/Kimi K2.5",
 			},
 			Weak: ModelConfig{
-				Provider: "nexos-ai",
-				Model:    "Kimi K2.5",
+				Model: "nexos-ai/Kimi K2.5",
 			},
 		},
 		DefaultComplexity: ComplexityMedium,
@@ -172,8 +191,5 @@ func (cfg *LLMConfig) ShouldUseStrongModel(complexity ComplexityLevel, stage str
 
 // ToModelRef converts a ModelConfig to a model reference string
 func (mc *ModelConfig) ToModelRef() string {
-	if mc.Provider == "" || mc.Model == "" {
-		return ""
-	}
-	return mc.Provider + "/" + mc.Model
+	return mc.Model
 }

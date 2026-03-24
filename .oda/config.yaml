@@ -25,32 +25,24 @@ sprint:
 llm:
     development:
         strong:
-            provider: nexos-ai
-            model: Kimi K2.5
+            model: nexos-ai/Kimi K2.5
         weak:
-            provider: nexos-ai
-            model: Kimi K2.5
+            model: nexos-ai/Kimi K2.5
     planning:
         strong:
-            provider: nexos-ai
-            model: Kimi K2.5
+            model: nexos-ai/Kimi K2.5
         weak:
-            provider: nexos-ai
-            model: Kimi K2.5
+            model: nexos-ai/Kimi K2.5
     orchestration:
         strong:
-            provider: nexos-ai
-            model: Kimi K2.5
+            model: nexos-ai/Kimi K2.5
         weak:
-            provider: nexos-ai
-            model: Kimi K2.5
+            model: nexos-ai/Kimi K2.5
     setup:
         strong:
-            provider: nexos-ai
-            model: Kimi K2.5
+            model: nexos-ai/Kimi K2.5
         weak:
-            provider: nexos-ai
-            model: Kimi K2.5
+            model: nexos-ai/Kimi K2.5
     default_complexity: medium
     routing_rules:
         complexity_thresholds:
