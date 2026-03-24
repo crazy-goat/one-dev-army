@@ -70,7 +70,7 @@ func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client,
 		router: router,
 		paused: true,
 	}
-	o.worker = NewWorker(1, cfg, oc, gh, brMgr, store, o, router)
+	o.worker = NewWorker(1, cfg, oc.Clone(), gh, brMgr, store, o, router)
 	return o
 }
 

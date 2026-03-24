@@ -136,6 +136,13 @@ func (c *Client) BaseURL() string {
 	return c.baseURL
 }
 
+func (c *Client) Clone() *Client {
+	return &Client{
+		baseURL:    c.baseURL,
+		httpClient: c.httpClient,
+	}
+}
+
 func (c *Client) SetDirectory(dir string) {
 	c.directory = dir
 }

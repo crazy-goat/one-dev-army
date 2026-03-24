@@ -432,3 +432,37 @@ func TestSendMessageStream_WithToolCalls(t *testing.T) {
 		t.Errorf("parts[2].tool_result.output = %q, should contain 'total 32'", msg.Parts[2].ToolResult.Output)
 	}
 }
+
+func TestClientClone(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(opencode.Session{
+			ID:    "sess-clone-test",
+			Title: "clone-test",
+		})
+	}))
+	defer srv.Close()
+
+	original := opencode.NewClient(srv.URL)
+	original.SetDirectory("/original/path")
+
+	cloned := original.Clone()
+
+	if cloned.BaseURL() != original.BaseURL() {
+		t.Errorf("cloned.BaseURL() = %q, want %q", cloned.BaseURL(), original.BaseURL())
+	}
+
+	session, err := cloned.CreateSession("clone-test")
+	if err != nil {
+		t.Fatalf("unexpected error creating session with cloned client: %v", err)
+	}
+	if session.ID != "sess-clone-test" {
+		t.Errorf("session.ID = %q, want %q", session.ID, "sess-clone-test")
+	}
+
+	cloned.SetDirectory("/cloned/path")
+
+	if original.BaseURL() != srv.URL {
+		t.Errorf("original.BaseURL() changed after cloning: got %q, want %q", original.BaseURL(), srv.URL)
+	}
+}
