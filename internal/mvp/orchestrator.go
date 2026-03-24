@@ -44,31 +44,33 @@ type StageBroadcaster interface {
 }
 
 type Orchestrator struct {
-	cfg         *config.Config
-	worker      *Worker
-	gh          *github.Client
-	oc          *opencode.Client
-	brMgr       *git.BranchManager
-	store       *db.Store
-	hub         StageBroadcaster
-	router      *llm.Router
-	running     bool
-	paused      bool
-	processing  bool
-	currentTask *Task
-	mu          sync.Mutex
+	cfg           *config.Config
+	worker        *Worker
+	gh            *github.Client
+	oc            *opencode.Client
+	brMgr         *git.BranchManager
+	store         *db.Store
+	hub           StageBroadcaster
+	router        *llm.Router
+	running       bool
+	paused        bool
+	processing    bool
+	currentTask   *Task
+	mu            sync.Mutex
+	workerEventCh chan WorkerEvent // Channel for worker events
 }
 
 func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client, brMgr *git.BranchManager, store *db.Store, hub StageBroadcaster, router *llm.Router) *Orchestrator {
 	o := &Orchestrator{
-		cfg:    cfg,
-		gh:     gh,
-		oc:     oc,
-		brMgr:  brMgr,
-		store:  store,
-		hub:    hub,
-		router: router,
-		paused: true,
+		cfg:           cfg,
+		gh:            gh,
+		oc:            oc,
+		brMgr:         brMgr,
+		store:         store,
+		hub:           hub,
+		router:        router,
+		paused:        true,
+		workerEventCh: make(chan WorkerEvent, 100), // Buffered channel for worker events
 	}
 	o.worker = NewWorker(1, cfg, oc, gh, brMgr, store, o, router)
 	return o
@@ -487,4 +489,107 @@ func (o *Orchestrator) getStageFromIssue(issue github.Issue) string {
 		}
 	}
 	return "Backlog"
+}
+
+// HandleWorkerEvent processes events from worker
+func (o *Orchestrator) HandleWorkerEvent(event WorkerEvent) {
+	log.Printf("[Orchestrator] Received event from worker: issue #%d completed stage %s with status %s",
+		event.IssueNumber, event.Stage, event.Status)
+
+	// Decide next stage based on state machine
+	nextStage := o.decideNextStage(event)
+
+	// Update stage
+	if nextStage != "" {
+		if err := o.changeStage(event.IssueNumber, nextStage, "worker_completed_"+event.Stage); err != nil {
+			log.Printf("[Orchestrator] Error changing stage for #%d: %v", event.IssueNumber, err)
+		}
+	}
+}
+
+// decideNextStage determines the next stage based on current state and event
+func (o *Orchestrator) decideNextStage(event WorkerEvent) string {
+	// State machine logic
+	switch event.Stage {
+	case "analysis":
+		if event.Status == EventSuccess {
+			return "Code"
+		}
+	case "coding":
+		if event.Status == EventSuccess {
+			return "AI Review"
+		}
+	case "code-review":
+		if event.Status == EventSuccess {
+			return "Create PR"
+		}
+	case "create-pr":
+		if event.Status == EventSuccess {
+			return "Approve"
+		}
+	}
+
+	if event.Status == EventFailed {
+		return "Failed"
+	}
+
+	if event.Status == EventBlocked {
+		return "NeedsUser"
+	}
+
+	return ""
+}
+
+// changeStage is the ONLY way to change stages
+// It updates: GitHub, cache, ledger, WebSocket
+func (o *Orchestrator) changeStage(issueNumber int, toStage, reason string) error {
+	log.Printf("[Orchestrator] Changing stage of #%d to %s (reason: %s)", issueNumber, toStage, reason)
+
+	// Get current stage from cache
+	fromStage := "Unknown"
+	if o.store != nil {
+		if existing, err := o.store.GetIssueCache(issueNumber); err == nil {
+			fromStage = o.getStageFromIssue(existing)
+		}
+	}
+
+	// Update GitHub
+	updatedIssue, err := o.gh.SetStageLabel(issueNumber, toStage)
+	if err != nil {
+		return fmt.Errorf("setting stage %s on #%d: %w", toStage, issueNumber, err)
+	}
+
+	// Update cache
+	if o.store != nil {
+		milestone := o.activeMilestone()
+		now := time.Now().UTC()
+		updatedIssue.UpdatedAt = &now
+
+		if err := o.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
+			log.Printf("[Orchestrator] Error saving issue cache for #%d: %v", issueNumber, err)
+		}
+
+		// Save to ledger
+		toLabel := toStage
+		if labels, ok := github.StageToLabels[toStage]; ok && len(labels) > 0 {
+			toLabel = labels[0]
+		}
+		if err := o.store.SaveStageChange(issueNumber, fromStage, toLabel, reason, "orchestrator"); err != nil {
+			log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", issueNumber, err)
+		}
+	}
+
+	// Broadcast
+	if o.hub != nil {
+		o.hub.BroadcastIssueUpdate(updatedIssue)
+	}
+
+	log.Printf("[Orchestrator] Successfully changed stage of #%d from %s to %s", issueNumber, fromStage, toStage)
+	return nil
+}
+
+// activeMilestone returns the current active milestone
+func (o *Orchestrator) activeMilestone() string {
+	// TODO: Get from config or current sprint
+	return ""
 }
