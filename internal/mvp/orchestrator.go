@@ -270,17 +270,17 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if err := o.gh.AddComment(nextIssue.Number, comment); err != nil {
 				log.Printf("[Orchestrator] Error adding comment: %v", err)
 			}
-			log.Printf("[Orchestrator] Setting Done stage for #%d (reason: worker_done)", nextIssue.Number)
+			log.Printf("[Orchestrator] Setting stage:done for #%d (reason: worker_done)", nextIssue.Number)
 			if err := o.changeStage(nextIssue.Number, "Done", "worker_done"); err != nil {
-				log.Printf("[Orchestrator] Error setting Done stage for #%d: %v", nextIssue.Number, err)
+				log.Printf("[Orchestrator] Error setting stage:done for #%d: %v", nextIssue.Number, err)
 			}
 			o.recordStep(nextIssue.Number, "done", "Closed as already done")
 		} else if processErr != nil {
 			log.Printf("[Orchestrator] ✗ Failed #%d: %v", nextIssue.Number, processErr)
 			o.recordStep(nextIssue.Number, "failed", processErr.Error())
-			log.Printf("[Orchestrator] Setting Failed stage for #%d (reason: worker_failed)", nextIssue.Number)
+			log.Printf("[Orchestrator] Setting stage:failed for #%d (reason: worker_failed)", nextIssue.Number)
 			if err := o.changeStage(nextIssue.Number, "Failed", "worker_failed"); err != nil {
-				log.Printf("[Orchestrator] Error setting Failed stage for #%d: %v", nextIssue.Number, err)
+				log.Printf("[Orchestrator] Error setting stage:failed for #%d: %v", nextIssue.Number, err)
 			}
 		} else {
 			prURL := ""
@@ -289,9 +289,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 			log.Printf("[Orchestrator] ✓ Completed #%d → awaiting approval: %s", nextIssue.Number, prURL)
 			o.recordStep(nextIssue.Number, "waiting-for-approval", prURL)
-			log.Printf("[Orchestrator] Setting Approve stage for #%d (reason: worker_approve)", nextIssue.Number)
+			log.Printf("[Orchestrator] Setting stage:awaiting-approval for #%d (reason: worker_approve)", nextIssue.Number)
 			if err := o.changeStage(nextIssue.Number, "Approve", "worker_approve"); err != nil {
-				log.Printf("[Orchestrator] Error setting Approve stage for #%d: %v", nextIssue.Number, err)
+				log.Printf("[Orchestrator] Error setting stage:awaiting-approval for #%d: %v", nextIssue.Number, err)
 			}
 			if prURL != "" {
 				comment := fmt.Sprintf("AI review passed ✓ — awaiting manual approval.\n\nPR: %s", prURL)
@@ -391,7 +391,13 @@ func (o *Orchestrator) recordStep(issueNumber int, stepName, response string) {
 func (o *Orchestrator) BroadcastStageUpdate(issueNumber int, stage string) {
 	// Run GitHub API call asynchronously to avoid blocking worker
 	go func() {
-		log.Printf("[Orchestrator] Updating stage label %s for #%d (async, reason: worker_stage_update)", stage, issueNumber)
+		// Convert stage name to label for logging
+		toLabel := stage
+		if labels, ok := github.StageToLabels[stage]; ok && len(labels) > 0 {
+			toLabel = labels[0]
+		}
+
+		log.Printf("[Orchestrator] Updating %s for #%d (async, reason: worker_stage_update)", toLabel, issueNumber)
 
 		// Get current stage from cache for ledger
 		fromStage := "Unknown"
@@ -404,17 +410,12 @@ func (o *Orchestrator) BroadcastStageUpdate(issueNumber int, stage string) {
 		// Set the stage label on GitHub
 		updatedIssue, err := o.gh.SetStageLabel(issueNumber, stage)
 		if err != nil {
-			log.Printf("[Orchestrator] Error setting stage label %s for #%d: %v", stage, issueNumber, err)
+			log.Printf("[Orchestrator] Error setting %s for #%d: %v", toLabel, issueNumber, err)
 			return
 		}
 
 		// Save to ledger
 		if o.store != nil {
-			// Convert stage name to label for consistency
-			toLabel := stage
-			if labels, ok := github.StageToLabels[stage]; ok && len(labels) > 0 {
-				toLabel = labels[0]
-			}
 			if err := o.store.SaveStageChange(issueNumber, fromStage, toLabel, "worker_stage_update", "orchestrator"); err != nil {
 				log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", issueNumber, err)
 			}
@@ -422,7 +423,7 @@ func (o *Orchestrator) BroadcastStageUpdate(issueNumber int, stage string) {
 
 		// Broadcast the update via hub if available
 		if o.hub != nil {
-			log.Printf("[Orchestrator] Broadcasting stage update %s for #%d to WebSocket clients", stage, issueNumber)
+			log.Printf("[Orchestrator] Broadcasting %s update for #%d to WebSocket clients", toLabel, issueNumber)
 			o.hub.BroadcastIssueUpdate(updatedIssue)
 		}
 	}()
@@ -431,6 +432,38 @@ func (o *Orchestrator) BroadcastStageUpdate(issueNumber int, stage string) {
 func (o *Orchestrator) BroadcastWorkerStatus(workerID, status string, taskID int, taskTitle, stage string, elapsedSeconds int) {
 	if o.hub != nil {
 		o.hub.BroadcastWorkerUpdate(workerID, status, taskID, taskTitle, stage, elapsedSeconds)
+	}
+}
+
+// HandleSyncEvent processes external changes from GitHub sync
+// This is called by SyncService when it detects changes from GitHub
+func (o *Orchestrator) HandleSyncEvent(issue github.Issue) {
+	log.Printf("[Orchestrator] Processing sync event for issue #%d", issue.Number)
+
+	// Skip if this issue is currently being processed by worker
+	if o.currentTask != nil && o.currentTask.Issue.Number == issue.Number {
+		log.Printf("[Orchestrator] Issue #%d is being processed, skipping sync event", issue.Number)
+		return
+	}
+
+	// Ensure closed issues have stage:done label
+	if strings.EqualFold(issue.State, "CLOSED") {
+		if !hasLabel(issue, "stage:done") {
+			log.Printf("[Orchestrator] Adding missing stage:done label to closed issue #%d", issue.Number)
+			if err := o.gh.AddLabel(issue.Number, "stage:done"); err != nil {
+				log.Printf("[Orchestrator] Error adding stage:done label to #%d: %v", issue.Number, err)
+			}
+		}
+	}
+
+	// Ensure merged PRs have stage:merging label
+	if issue.PRMerged && !issue.MergedAt.IsZero() {
+		if !hasLabel(issue, "stage:merging") {
+			log.Printf("[Orchestrator] Adding missing stage:merging label to merged issue #%d", issue.Number)
+			if err := o.gh.AddLabel(issue.Number, "stage:merging"); err != nil {
+				log.Printf("[Orchestrator] Error adding stage:merging label to #%d: %v", issue.Number, err)
+			}
+		}
 	}
 }
 
@@ -552,18 +585,20 @@ func (o *Orchestrator) changeStage(issueNumber int, toStage, reason string) erro
 		o.hub.BroadcastIssueUpdate(updatedIssue)
 	}
 
+	// Prepare label for ledger and logging
+	toLabel := toStage
+	if labels, ok := github.StageToLabels[toStage]; ok && len(labels) > 0 {
+		toLabel = labels[0]
+	}
+
 	// Save to ledger (last)
 	if o.store != nil {
-		toLabel := toStage
-		if labels, ok := github.StageToLabels[toStage]; ok && len(labels) > 0 {
-			toLabel = labels[0]
-		}
 		if err := o.store.SaveStageChange(issueNumber, fromStage, toLabel, reason, "orchestrator"); err != nil {
 			log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", issueNumber, err)
 		}
 	}
 
-	log.Printf("[Orchestrator] Successfully changed stage of #%d from %s to %s", issueNumber, fromStage, toStage)
+	log.Printf("[Orchestrator] Successfully changed stage of #%d from %s to %s", issueNumber, fromStage, toLabel)
 	return nil
 }
 

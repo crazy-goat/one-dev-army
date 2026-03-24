@@ -12,6 +12,7 @@ import (
 // GitHubClient defines the interface for GitHub operations needed by SyncService
 type GitHubClient interface {
 	ListIssuesWithPRStatus(milestone string) ([]github.Issue, error)
+	AddLabel(issueNum int, label string) error
 }
 
 // Store defines the interface for database operations needed by SyncService
@@ -24,6 +25,7 @@ type SyncService struct {
 	gh              GitHubClient
 	store           Store
 	hub             *Hub
+	orchestrator    OrchestratorClient
 	activeMilestone string
 	ticker          *time.Ticker
 	stopCh          chan struct{}
@@ -32,13 +34,19 @@ type SyncService struct {
 	wg              sync.WaitGroup
 }
 
+// OrchestratorClient defines the interface for orchestrator operations needed by SyncService
+type OrchestratorClient interface {
+	HandleSyncEvent(issue github.Issue)
+}
+
 // NewSyncService creates a new SyncService instance
-func NewSyncService(gh GitHubClient, store Store, hub *Hub) *SyncService {
+func NewSyncService(gh GitHubClient, store Store, hub *Hub, orchestrator OrchestratorClient) *SyncService {
 	return &SyncService{
-		gh:     gh,
-		store:  store,
-		hub:    hub,
-		stopCh: make(chan struct{}),
+		gh:           gh,
+		store:        store,
+		hub:          hub,
+		orchestrator: orchestrator,
+		stopCh:       make(chan struct{}),
 	}
 }
 
@@ -47,6 +55,13 @@ func (s *SyncService) SetActiveMilestone(milestone string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.activeMilestone = milestone
+}
+
+// SetOrchestrator sets the orchestrator for sync event handling
+func (s *SyncService) SetOrchestrator(orchestrator OrchestratorClient) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.orchestrator = orchestrator
 }
 
 // GetActiveMilestone returns the currently active milestone
@@ -151,7 +166,7 @@ func (s *SyncService) syncNow() {
 
 	log.Printf("[SyncService] Fetched %d issues from GitHub (single query)", len(issues))
 
-	// Cache each issue
+	// Cache each issue and notify orchestrator
 	cachedCount := 0
 	for _, issue := range issues {
 		if err := s.store.SaveIssueCache(issue, milestone, false); err != nil {
@@ -159,6 +174,11 @@ func (s *SyncService) syncNow() {
 			continue
 		}
 		cachedCount++
+
+		// Notify orchestrator of sync event
+		if s.orchestrator != nil {
+			s.orchestrator.HandleSyncEvent(issue)
+		}
 	}
 
 	log.Printf("[SyncService] Cached %d/%d issues", cachedCount, len(issues))
