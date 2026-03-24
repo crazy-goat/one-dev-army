@@ -30,9 +30,11 @@ const (
 	ReasonWorkerStageUpdate         StageChangeReason = "worker_stage_update"
 
 	// Sync changes
-	ReasonSyncInitial  StageChangeReason = "sync_initial"
-	ReasonSyncPeriodic StageChangeReason = "sync_periodic"
-	ReasonSyncManual   StageChangeReason = "sync_manual"
+	ReasonSyncInitial     StageChangeReason = "sync_initial"
+	ReasonSyncPeriodic    StageChangeReason = "sync_periodic"
+	ReasonSyncManual      StageChangeReason = "sync_manual"
+	ReasonSyncClosedIssue StageChangeReason = "sync_closed_issue"
+	ReasonSyncMergedPR    StageChangeReason = "sync_merged_pr"
 )
 
 // Label returns the short, DB-safe identifier for this reason.
@@ -87,6 +89,10 @@ func (r StageChangeReason) String() string {
 		return "Periodic sync from GitHub"
 	case ReasonSyncManual:
 		return "Manual sync from GitHub"
+	case ReasonSyncClosedIssue:
+		return "Sync detected closed issue without stage:done"
+	case ReasonSyncMergedPR:
+		return "Sync detected merged PR without stage:merging"
 	default:
 		return string(r)
 	}

@@ -105,6 +105,9 @@ func (c *Client) CreateMilestone(title string) error {
 }
 
 func (c *Client) AddLabel(issueNum int, label string) error {
+	if IsStageLabel(label) {
+		return fmt.Errorf("cannot add stage label %q via AddLabel — use SetStageLabel instead", label)
+	}
 	_, err := c.gh("issue", "edit", strconv.Itoa(issueNum), "--add-label", label)
 	if err != nil {
 		return fmt.Errorf("adding label %s to #%d: %w", label, issueNum, err)

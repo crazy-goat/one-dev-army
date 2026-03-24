@@ -409,8 +409,10 @@ func (o *Orchestrator) BroadcastWorkerStatus(workerID, status string, taskID int
 	}
 }
 
-// HandleSyncEvent processes external changes from GitHub sync
-// This is called by SyncService when it detects changes from GitHub
+// HandleSyncEvent processes external changes from GitHub sync.
+// This is called by SyncService when it detects changes from GitHub.
+// All stage changes go through ChangeStage to ensure labels, cache, ledger,
+// and WebSocket are updated consistently.
 func (o *Orchestrator) HandleSyncEvent(issue github.Issue) {
 	log.Printf("[Orchestrator] Processing sync event for issue #%d", issue.Number)
 
@@ -423,9 +425,9 @@ func (o *Orchestrator) HandleSyncEvent(issue github.Issue) {
 	// Ensure closed issues have stage:done label
 	if strings.EqualFold(issue.State, "CLOSED") {
 		if !hasLabel(issue, "stage:done") {
-			log.Printf("[Orchestrator] Adding missing stage:done label to closed issue #%d", issue.Number)
-			if err := o.gh.AddLabel(issue.Number, "stage:done"); err != nil {
-				log.Printf("[Orchestrator] Error adding stage:done label to #%d: %v", issue.Number, err)
+			log.Printf("[Orchestrator] Sync: closed issue #%d missing stage:done, fixing", issue.Number)
+			if err := o.ChangeStage(issue.Number, github.StageDone, github.ReasonSyncClosedIssue); err != nil {
+				log.Printf("[Orchestrator] Error setting stage:done for #%d: %v", issue.Number, err)
 			}
 		}
 	}
@@ -433,9 +435,9 @@ func (o *Orchestrator) HandleSyncEvent(issue github.Issue) {
 	// Ensure merged PRs have stage:merging label
 	if issue.PRMerged && !issue.MergedAt.IsZero() {
 		if !hasLabel(issue, "stage:merging") {
-			log.Printf("[Orchestrator] Adding missing stage:merging label to merged issue #%d", issue.Number)
-			if err := o.gh.AddLabel(issue.Number, "stage:merging"); err != nil {
-				log.Printf("[Orchestrator] Error adding stage:merging label to #%d: %v", issue.Number, err)
+			log.Printf("[Orchestrator] Sync: merged issue #%d missing stage:merging, fixing", issue.Number)
+			if err := o.ChangeStage(issue.Number, github.StageMerge, github.ReasonSyncMergedPR); err != nil {
+				log.Printf("[Orchestrator] Error setting stage:merging for #%d: %v", issue.Number, err)
 			}
 		}
 	}
