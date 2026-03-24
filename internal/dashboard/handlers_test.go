@@ -4059,7 +4059,7 @@ func TestHandleSettings_WithModels(t *testing.T) {
 	}
 }
 
-// TestHandleSaveSettings_InvalidModel verifies that validation rejects invalid models
+// TestHandleSaveSettings_InvalidModel verifies that invalid models are replaced with fallback
 func TestHandleSaveSettings_InvalidModel(t *testing.T) {
 	// Create a temporary directory for config
 	tmpDir := t.TempDir()
@@ -4106,18 +4106,20 @@ func TestHandleSaveSettings_InvalidModel(t *testing.T) {
 
 	srv.handleSaveSettings(rec, req)
 
-	// Should return 200 OK but with error message
+	// Should return 200 OK (success with fallback)
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", rec.Code)
 	}
 
-	// Verify error message about invalid model
+	// Verify success message (not error)
 	body := rec.Body.String()
-	if !strings.Contains(body, "Invalid model") {
-		t.Error("response should contain validation error for invalid model")
+	if !strings.Contains(body, "saved successfully") {
+		t.Errorf("response should contain success message, got: %s", body)
 	}
-	if !strings.Contains(body, "invalid-model") {
-		t.Error("response should mention the invalid model name")
+
+	// Verify warning about model fallback
+	if !strings.Contains(body, "not available") && !strings.Contains(body, "fell back") {
+		t.Error("response should contain warning about model fallback")
 	}
 }
 

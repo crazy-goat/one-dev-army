@@ -61,7 +61,7 @@ type Sprint struct {
 	TasksPerSprint int `yaml:"tasks_per_sprint"`
 }
 
-func Load(rootDir string) (*Config, error) {
+func Load(rootDir string, availableModels ...string) (*Config, error) {
 	path := filepath.Join(rootDir, ".oda", "config.yaml")
 
 	data, err := os.ReadFile(path)
@@ -76,6 +76,11 @@ func Load(rootDir string) (*Config, error) {
 
 	// Apply default LLM config if not fully specified
 	cfg.applyLLMDefaults()
+
+	// Validate and fallback models if available list provided
+	if len(availableModels) > 0 {
+		cfg.LLM.ValidateAndFallbackModels(availableModels)
+	}
 
 	return &cfg, nil
 }

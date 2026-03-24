@@ -267,6 +267,19 @@ func (s *Server) Hub() *Hub {
 	return s.hub
 }
 
+// GetAvailableModelIDs returns a list of available model IDs from the cache
+func (s *Server) GetAvailableModelIDs() []string {
+	if len(s.modelsCache) == 0 {
+		return nil
+	}
+
+	ids := make([]string, len(s.modelsCache))
+	for i, m := range s.modelsCache {
+		ids[i] = m.ID
+	}
+	return ids
+}
+
 // handleWebSocket handles WebSocket upgrade requests
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ServeWs(s.hub, w, r)

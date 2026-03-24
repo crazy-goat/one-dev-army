@@ -230,3 +230,78 @@ func (cfg *LLMConfig) MigrateFromLegacy(legacy *LegacyLLMConfig) bool {
 
 	return migrated
 }
+
+// ModelValidationResult tracks which models were replaced during validation
+type ModelValidationResult struct {
+	ReplacedModels map[string]struct {
+		OldModel string
+		NewModel string
+	}
+	HasReplacements bool
+}
+
+// ValidateAndFallbackModels validates all models against available models and falls back to first available if invalid
+// Returns a result indicating which models were replaced
+func (cfg *LLMConfig) ValidateAndFallbackModels(availableModels []string) ModelValidationResult {
+	result := ModelValidationResult{
+		ReplacedModels: make(map[string]struct {
+			OldModel string
+			NewModel string
+		}),
+	}
+
+	// If no available models, skip validation (API might be unavailable)
+	if len(availableModels) == 0 {
+		return result
+	}
+
+	// Build set of available models for O(1) lookup
+	availableSet := make(map[string]bool)
+	for _, m := range availableModels {
+		availableSet[m] = true
+	}
+
+	// Get first available model as fallback
+	fallbackModel := availableModels[0]
+
+	// Validate and fallback each model
+	modes := []struct {
+		name      string
+		model     *string
+		defaultTo string
+	}{
+		{"Setup", &cfg.Setup.Model, fallbackModel},
+		{"Planning", &cfg.Planning.Model, fallbackModel},
+		{"Orchestration", &cfg.Orchestration.Model, fallbackModel},
+		{"Code", &cfg.Code.Model, fallbackModel},
+		{"CodeHeavy", &cfg.CodeHeavy.Model, fallbackModel},
+	}
+
+	for _, mode := range modes {
+		if *mode.model == "" || !availableSet[*mode.model] {
+			oldModel := *mode.model
+			if oldModel == "" {
+				oldModel = "(empty)"
+			}
+			*mode.model = mode.defaultTo
+			result.ReplacedModels[mode.name] = struct {
+				OldModel string
+				NewModel string
+			}{
+				OldModel: oldModel,
+				NewModel: mode.defaultTo,
+			}
+			result.HasReplacements = true
+		}
+	}
+
+	return result
+}
+
+// GetFirstAvailableModel returns the first available model from the list, or empty if none available
+func GetFirstAvailableModel(availableModels []string) string {
+	if len(availableModels) > 0 {
+		return availableModels[0]
+	}
+	return ""
+}
