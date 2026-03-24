@@ -11,11 +11,11 @@ import (
 const validConfig = `github:
   repo: "owner/repo"
 dashboard:
-  port: 8080
+  port: 5000
 workers:
   count: 3
 opencode:
-  url: "http://localhost:4096"
+  url: "http://localhost:5002"
 tools:
   lint_cmd: "make lint"
   test_cmd: "make test"
@@ -61,14 +61,14 @@ func TestLoad_ValidConfig(t *testing.T) {
 	if cfg.GitHub.Repo != "owner/repo" {
 		t.Errorf("github.repo = %q, want %q", cfg.GitHub.Repo, "owner/repo")
 	}
-	if cfg.Dashboard.Port != 8080 {
-		t.Errorf("dashboard.port = %d, want %d", cfg.Dashboard.Port, 8080)
+	if cfg.Dashboard.Port != 5000 {
+		t.Errorf("dashboard.port = %d, want %d", cfg.Dashboard.Port, 5000)
 	}
 	if cfg.Workers.Count != 3 {
 		t.Errorf("workers.count = %d, want %d", cfg.Workers.Count, 3)
 	}
-	if cfg.OpenCode.URL != "http://localhost:4096" {
-		t.Errorf("opencode.url = %q, want %q", cfg.OpenCode.URL, "http://localhost:4096")
+	if cfg.OpenCode.URL != "http://localhost:5002" {
+		t.Errorf("opencode.url = %q, want %q", cfg.OpenCode.URL, "http://localhost:5002")
 	}
 }
 
@@ -423,5 +423,87 @@ func TestGetFirstAvailableModel(t *testing.T) {
 				t.Errorf("GetFirstAvailableModel() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestCategoryModels_NormalizeModel(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "already normalized",
+			input: "nexos-ai/Kimi K2.5",
+			want:  "nexos-ai/Kimi K2.5",
+		},
+		{
+			name:  "kimi without provider",
+			input: "Kimi K2.5",
+			want:  "nexos-ai/Kimi K2.5",
+		},
+		{
+			name:  "claude without provider",
+			input: "claude-sonnet-4",
+			want:  "anthropic/claude-sonnet-4",
+		},
+		{
+			name:  "gpt without provider",
+			input: "gpt-4o",
+			want:  "openai/gpt-4o",
+		},
+		{
+			name:  "gemini without provider",
+			input: "gemini-2.5-pro",
+			want:  "google/gemini-2.5-pro",
+		},
+		{
+			name:  "empty model",
+			input: "",
+			want:  "",
+		},
+		{
+			name:  "unknown model without provider",
+			input: "unknown-model",
+			want:  "unknown-model",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cm := config.CategoryModels{Model: tt.input}
+			got := cm.NormalizeModel()
+			if got != tt.want {
+				t.Errorf("NormalizeModel() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLLMConfig_NormalizeAllModels(t *testing.T) {
+	cfg := config.LLMConfig{
+		Setup:         config.CategoryModels{Model: "Kimi K2.5"},
+		Planning:      config.CategoryModels{Model: "claude-sonnet-4"},
+		Orchestration: config.CategoryModels{Model: "gpt-4o"},
+		Code:          config.CategoryModels{Model: "gemini-2.5-pro"},
+		CodeHeavy:     config.CategoryModels{Model: "deepseek-r1"},
+	}
+
+	cfg.NormalizeAllModels()
+
+	if cfg.Setup.Model != "nexos-ai/Kimi K2.5" {
+		t.Errorf("Setup.Model = %q, want %q", cfg.Setup.Model, "nexos-ai/Kimi K2.5")
+	}
+	if cfg.Planning.Model != "anthropic/claude-sonnet-4" {
+		t.Errorf("Planning.Model = %q, want %q", cfg.Planning.Model, "anthropic/claude-sonnet-4")
+	}
+	if cfg.Orchestration.Model != "openai/gpt-4o" {
+		t.Errorf("Orchestration.Model = %q, want %q", cfg.Orchestration.Model, "openai/gpt-4o")
+	}
+	if cfg.Code.Model != "google/gemini-2.5-pro" {
+		t.Errorf("Code.Model = %q, want %q", cfg.Code.Model, "google/gemini-2.5-pro")
+	}
+	if cfg.CodeHeavy.Model != "deepseek/deepseek-r1" {
+		t.Errorf("CodeHeavy.Model = %q, want %q", cfg.CodeHeavy.Model, "deepseek/deepseek-r1")
 	}
 }

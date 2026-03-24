@@ -65,6 +65,54 @@ type CategoryModels struct {
 	Model string `yaml:"model"`
 }
 
+// NormalizeModel ensures the model is in "provider/model" format.
+// If the model doesn't contain a "/", it attempts to detect the provider
+// based on known model name prefixes.
+func (cm *CategoryModels) NormalizeModel() string {
+	if cm.Model == "" {
+		return ""
+	}
+
+	// If already in provider/model format, return as-is
+	if strings.Contains(cm.Model, "/") {
+		return cm.Model
+	}
+
+	// Otherwise, try to detect provider from model name
+	provider := detectProvider(cm.Model)
+	if provider != "" {
+		return provider + "/" + cm.Model
+	}
+
+	// If no provider detected, return as-is (will need manual fix)
+	return cm.Model
+}
+
+// detectProvider attempts to detect the provider from a model name
+func detectProvider(modelName string) string {
+	// Known provider prefixes
+	prefixes := map[string]string{
+		"claude":   "anthropic",
+		"gpt":      "openai",
+		"o3":       "openai",
+		"o4":       "openai",
+		"gemini":   "google",
+		"llama":    "groq",
+		"mistral":  "mistral",
+		"deepseek": "deepseek",
+		"kimi":     "nexos-ai",
+	}
+
+	lowerModel := strings.ToLower(modelName)
+	for prefix, provider := range prefixes {
+		if strings.HasPrefix(lowerModel, prefix) {
+			return provider
+		}
+	}
+
+	return ""
+}
+
 // LLMConfig holds the multi-model configuration with task-based routing
 type LLMConfig struct {
 	// Categories define models for each task type (5 independent modes)
@@ -73,6 +121,16 @@ type LLMConfig struct {
 	Orchestration CategoryModels `yaml:"orchestration"`
 	Code          CategoryModels `yaml:"code"`       // renamed from Development
 	CodeHeavy     CategoryModels `yaml:"code-heavy"` // new
+}
+
+// NormalizeAllModels ensures all models are in "provider/model" format.
+// This should be called before saving the configuration.
+func (cfg *LLMConfig) NormalizeAllModels() {
+	cfg.Setup.Model = cfg.Setup.NormalizeModel()
+	cfg.Planning.Model = cfg.Planning.NormalizeModel()
+	cfg.Orchestration.Model = cfg.Orchestration.NormalizeModel()
+	cfg.Code.Model = cfg.Code.NormalizeModel()
+	cfg.CodeHeavy.Model = cfg.CodeHeavy.NormalizeModel()
 }
 
 // DefaultLLMConfig returns a default configuration with sensible defaults

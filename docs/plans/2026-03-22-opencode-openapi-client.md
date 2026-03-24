@@ -65,7 +65,7 @@ git commit -m "deps: add oapi-codegen for OpenAPI client generation"
 opencode serve &
 
 # Fetch the OpenAPI spec
-curl -s http://localhost:8080/doc > api/opencode.yaml
+curl -s http://localhost:5002/doc > api/opencode.yaml
 ```
 
 **Step 2: Verify spec is valid OpenAPI 3.1**

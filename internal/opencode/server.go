@@ -13,17 +13,18 @@ type Server struct {
 	baseURL string
 }
 
-// StartServer starts "opencode serve" as a background process in the given directory.
-// It waits up to timeout for the health check to pass.
+// StartServer starts "opencode serve" as a background process in the given directory
+// on the specified port. It waits up to timeout for the health check to pass.
 // Returns a *Server that must be stopped via Stop() when done.
-func StartServer(baseURL, dir string, timeout time.Duration) (*Server, error) {
-	cmd := exec.Command("opencode", "serve")
+func StartServer(port int, dir string, timeout time.Duration) (*Server, error) {
+	cmd := exec.Command("opencode", "serve", "--port", fmt.Sprintf("%d", port))
 	cmd.Dir = dir
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("starting opencode serve: %w", err)
 	}
 
+	baseURL := fmt.Sprintf("http://localhost:%d", port)
 	s := &Server{cmd: cmd, baseURL: baseURL}
 
 	if err := s.waitHealthy(timeout); err != nil {
@@ -32,6 +33,11 @@ func StartServer(baseURL, dir string, timeout time.Duration) (*Server, error) {
 	}
 
 	return s, nil
+}
+
+// BaseURL returns the base URL of the spawned server.
+func (s *Server) BaseURL() string {
+	return s.baseURL
 }
 
 // Stop terminates the spawned opencode serve process.

@@ -22,7 +22,7 @@ A single Go binary that turns a solo developer into a full scrum team. The agent
 │  │ Dashboard │  │ Scheduler │  │ GitHub Client │  │
 │  │ HTMX+Go  │  │ (Sprint   │  │ (gh CLI)      │  │
 │  │ templates │  │  Planner) │  │ (Issues, PRs, │  │
-│  │ :8080    │  │           │  │  Projects,    │  │
+│  │ :5000    │  │           │  │  Projects,    │  │
 │  └──────────┘  └───────────┘  │  Milestones)  │  │
 │                               └───────────────┘  │
 │  ┌──────────────────────────────────────────┐    │
@@ -149,13 +149,13 @@ github:
   repo: "owner/repo"  # auto-detected from git remote, can override
 
 dashboard:
-  port: 8080
+  port: 5000
 
 workers:
   count: 3
 
 opencode:
-  url: "http://localhost:4096"
+  url: "http://localhost:5002"
 
 tools:
   lint_cmd: "make lint"

@@ -1,12 +1,12 @@
 github:
     repo: crazy-goat/one-dev-army
 dashboard:
-    port: 8080
+    port: 5000
 workers:
     count: 3
 opencode:
-    url: http://localhost:4096
-    web_port: 8081
+    url: http://localhost:5002
+    web_port: 5001
 tools:
     lint_cmd: ""
     test_cmd: go test ./...
@@ -18,13 +18,13 @@ sprint:
     auto_start: false
 llm:
     setup:
-        model: '"Claude Haiku 4.5"'
+        model: nexos-ai/Claude Haiku 4.5
     planning:
-        model: '"Claude Opus 4.6"'
+        model: nexos-ai/Claude Opus 4.6
     orchestration:
-        model: '"Kimi K2.5"'
+        model: nexos-ai/Kimi K2.5
     code:
         model: nexos-ai/Kimi K2.5
     code-heavy:
-        model: '"Claude Opus 4.6"'
+        model: nexos-ai/Claude Opus 4.6
 yolo_mode: true

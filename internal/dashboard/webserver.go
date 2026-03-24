@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	defaultWebPort      = 8081
+	defaultWebPort      = 5001
 	healthCheckInterval = 30 * time.Second
 	restartDelay        = 5 * time.Second
 	maxRestartAttempts  = 5

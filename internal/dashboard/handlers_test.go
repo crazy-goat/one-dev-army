@@ -140,7 +140,7 @@ func createTestServerWithTemplates(t *testing.T) *Server {
 
 	srv := &Server{
 		tmpls:       tmpls,
-		webPort:     8081,
+		webPort:     5001,
 		wizardStore: NewWizardSessionStore(),
 	}
 
@@ -1046,7 +1046,7 @@ func TestLayoutNavigationButtons(t *testing.T) {
 		YoloMode     bool
 	}{
 		Active:       "board",
-		OpenCodePort: 8081,
+		OpenCodePort: 5001,
 		WorkerCount:  1,
 		YoloMode:     false,
 	}

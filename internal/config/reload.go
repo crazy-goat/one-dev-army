@@ -202,6 +202,9 @@ func (fw *FileWatcher) check() {
 func SaveConfig(rootDir string, cfg *Config) error {
 	path := filepath.Join(rootDir, ".oda", "config.yaml")
 
+	// Normalize all model formats before saving to ensure provider/model format
+	cfg.LLM.NormalizeAllModels()
+
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshaling config: %w", err)

@@ -65,7 +65,7 @@ func TestBranchName(t *testing.T) {
 func testConfig() *config.Config {
 	cfg := &config.Config{
 		GitHub:   config.GitHub{Repo: "owner/repo"},
-		OpenCode: config.OpenCode{URL: "http://localhost:4096"},
+		OpenCode: config.OpenCode{URL: "http://localhost:5002"},
 		Tools: config.Tools{
 			LintCmd: "echo lint-ok",
 			TestCmd: "echo test-ok",

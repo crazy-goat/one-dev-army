@@ -15,7 +15,7 @@ Config lives in `.oda/config.yaml`. Key sections:
 
 - `github.repo` — target repository (owner/repo)
 - `workers.count` — number of parallel workers
-- `opencode.url` — opencode API endpoint (default: `http://localhost:4096`)
+- `opencode.url` — opencode API endpoint (default: `http://localhost:5002`)
 - `tools.test_cmd` — test command workers run after implementation
 - `llm.*` — per-mode model configuration with strong/weak variants
 - `pipeline.max_retries` — max retry attempts before escalating to user

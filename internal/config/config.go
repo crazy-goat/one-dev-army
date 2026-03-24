@@ -69,6 +69,9 @@ func Load(rootDir string, availableModels ...string) (*Config, error) {
 	// Migrate from legacy top-level planning/epic_analysis fields if present
 	cfg.migrateFromLegacyFields(data)
 
+	// Normalize model formats to ensure provider/model format
+	cfg.LLM.NormalizeAllModels()
+
 	// Apply default LLM config if not fully specified
 	cfg.applyLLMDefaults()
 

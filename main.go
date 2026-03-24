@@ -140,7 +140,10 @@ func runIssue(args []string, dir string) error {
 }
 
 func runServe(dir string, debugWebSocket bool) error {
-	const opencodeURL = "http://localhost:4096"
+	const (
+		opencodeURL  = "http://localhost:5002"
+		opencodePort = 5002
+	)
 
 	var err error
 	var spawnedServer *opencode.Server
@@ -192,7 +195,7 @@ func runServe(dir string, debugWebSocket bool) error {
 			}
 
 			fmt.Println("  → opencode not running, starting opencode serve...")
-			spawnedServer, err = opencode.StartServer(opencodeURL, dir, 10*time.Second)
+			spawnedServer, err = opencode.StartServer(opencodePort, dir, 10*time.Second)
 			if err != nil {
 				return fmt.Errorf("auto-starting opencode serve: %w\n\n  Start manually: opencode serve", err)
 			}

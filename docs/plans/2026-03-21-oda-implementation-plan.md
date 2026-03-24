@@ -52,11 +52,11 @@ func TestLoadConfig(t *testing.T) {
 	yaml := `github:
   repo: "owner/repo"
 dashboard:
-  port: 8080
+  port: 5000
 workers:
   count: 3
 opencode:
-  url: "http://localhost:4096"
+  url: "http://localhost:5002"
 tools:
   lint_cmd: "make lint"
   test_cmd: "make test"
@@ -94,8 +94,8 @@ sprint:
 	if cfg.Workers.Count != 3 {
 		t.Errorf("expected 3 workers, got %d", cfg.Workers.Count)
 	}
-	if cfg.Dashboard.Port != 8080 {
-		t.Errorf("expected port 8080, got %d", cfg.Dashboard.Port)
+	if cfg.Dashboard.Port != 5000 {
+		t.Errorf("expected port 5000, got %d", cfg.Dashboard.Port)
 	}
 	if len(cfg.Pipeline.Stages) != 7 {
 		t.Errorf("expected 7 stages, got %d", len(cfg.Pipeline.Stages))

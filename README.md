@@ -58,11 +58,11 @@ github:
   repo: "owner/repo"
   use_projects: false  # Set to true to enable GitHub Projects integration
 dashboard:
-  port: 8080
+  port: 5000
 workers:
   count: 3
 opencode:
-  url: "http://localhost:4096"
+  url: "http://localhost:5002"
 tools:
   lint_cmd: "make lint"
   test_cmd: "make test"

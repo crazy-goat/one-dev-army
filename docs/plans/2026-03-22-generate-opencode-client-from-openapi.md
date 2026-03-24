@@ -42,7 +42,7 @@ git commit -m "deps: add oapi-codegen v2 for OpenAPI client generation"
 
 **Step 1: Fetch OpenAPI spec from running server**
 
-Run: `curl -s http://localhost:8080/doc > api/opencode.yaml`
+Run: `curl -s http://localhost:5002/doc > api/opencode.yaml`
 
 **Step 2: Verify spec is valid YAML**
 

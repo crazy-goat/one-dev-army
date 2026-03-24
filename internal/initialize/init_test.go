@@ -65,14 +65,14 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.GitHub.Repo != "owner/repo" {
 		t.Errorf("repo = %q, want %q", cfg.GitHub.Repo, "owner/repo")
 	}
-	if cfg.Dashboard.Port != 8080 {
-		t.Errorf("port = %d, want 8080", cfg.Dashboard.Port)
+	if cfg.Dashboard.Port != 5000 {
+		t.Errorf("port = %d, want 5000", cfg.Dashboard.Port)
 	}
 	if cfg.Workers.Count != 3 {
 		t.Errorf("workers = %d, want 3", cfg.Workers.Count)
 	}
-	if cfg.OpenCode.URL != "http://localhost:4096" {
-		t.Errorf("opencode url = %q, want %q", cfg.OpenCode.URL, "http://localhost:4096")
+	if cfg.OpenCode.URL != "http://localhost:5002" {
+		t.Errorf("opencode url = %q, want %q", cfg.OpenCode.URL, "http://localhost:5002")
 	}
 	if cfg.Pipeline.MaxRetries != 5 {
 		t.Errorf("max_retries = %d, want 5", cfg.Pipeline.MaxRetries)

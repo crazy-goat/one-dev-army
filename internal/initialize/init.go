@@ -121,9 +121,9 @@ type sprintSection struct {
 func defaultConfig(repo string) configFile {
 	return configFile{
 		GitHub:    ghSection{Repo: repo, UseProjects: false},
-		Dashboard: dashSection{Port: 8080},
+		Dashboard: dashSection{Port: 5000},
 		Workers:   workersSection{Count: 3},
-		OpenCode:  ocSection{URL: "http://localhost:4096"},
+		OpenCode:  ocSection{URL: "http://localhost:5002"},
 		Pipeline: pipelineSection{
 			MaxRetries: 5,
 		},
