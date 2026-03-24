@@ -579,7 +579,7 @@ func TestDashboardRendering(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-	srv, err := dashboard.NewServer(0, store, poolFn, nil, nil, nil, "", nil, nil, tmpDir)
+	srv, err := dashboard.NewServer(0, 8081, store, poolFn, nil, nil, nil, "", nil, nil, tmpDir)
 	if err != nil {
 		t.Fatalf("creating dashboard server: %v", err)
 	}
@@ -630,7 +630,7 @@ func TestDashboard_WizardFlow_Integration(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-	srv, err := dashboard.NewServer(0, store, poolFn, nil, nil, nil, "", nil, nil, tmpDir)
+	srv, err := dashboard.NewServer(0, 8081, store, poolFn, nil, nil, nil, "", nil, nil, tmpDir)
 	if err != nil {
 		t.Fatalf("creating dashboard server: %v", err)
 	}

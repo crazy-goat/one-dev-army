@@ -30,6 +30,7 @@ type taskCard struct {
 
 type boardData struct {
 	Active         string
+	OpenCodePort   int
 	SprintName     string
 	Paused         bool
 	Processing     bool
@@ -84,8 +85,9 @@ func (s *Server) handleBoardData(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) buildBoardData(r *http.Request) boardData {
 	data := boardData{
-		Active: "board",
-		Paused: true,
+		Active:       "board",
+		OpenCodePort: s.webPort,
+		Paused:       true,
 	}
 
 	if s.orchestrator != nil {
@@ -731,12 +733,13 @@ func (s *Server) handleSprintClose(w http.ResponseWriter, r *http.Request) {
 }
 
 type taskDetailData struct {
-	Active      string
-	IssueNumber int
-	IssueTitle  string
-	Steps       []db.TaskStep
-	IsActive    bool
-	Status      string
+	Active       string
+	OpenCodePort int
+	IssueNumber  int
+	IssueTitle   string
+	Steps        []db.TaskStep
+	IsActive     bool
+	Status       string
 }
 
 func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
@@ -778,12 +781,13 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := taskDetailData{
-		Active:      "task",
-		IssueNumber: issueNum,
-		IssueTitle:  issueTitle,
-		Steps:       steps,
-		IsActive:    isActive,
-		Status:      status,
+		Active:       "task",
+		OpenCodePort: s.webPort,
+		IssueNumber:  issueNum,
+		IssueTitle:   issueTitle,
+		Steps:        steps,
+		IsActive:     isActive,
+		Status:       status,
 	}
 	s.render(w, "task.html", data)
 }
@@ -1443,6 +1447,7 @@ func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
 
 	data := struct {
 		Active             string
+		OpenCodePort       int
 		Type               string
 		SessionID          string
 		CurrentStep        int
@@ -1451,6 +1456,7 @@ func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
 		NeedsTypeSelection bool
 	}{
 		Active:             "wizard",
+		OpenCodePort:       s.webPort,
 		Type:               wizardType,
 		SessionID:          "",
 		CurrentStep:        1,
@@ -1700,6 +1706,7 @@ func (s *Server) handleRateLimitRefresh(w http.ResponseWriter, r *http.Request) 
 // settingsData holds the data for the settings template
 type settingsData struct {
 	Active            string
+	OpenCodePort      int
 	Config            config.LLMConfig
 	ForceStrongStages string
 	Success           bool
@@ -1723,6 +1730,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 
 	data := settingsData{
 		Active:            "settings",
+		OpenCodePort:      s.webPort,
 		Config:            cfg.LLM,
 		ForceStrongStages: forceStrongStages,
 		AvailableModels:   s.modelsCache,
@@ -1900,6 +1908,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	forceStrongStages := strings.Join(cfg.LLM.RoutingRules.ForceStrongForStages, ", ")
 	data := settingsData{
 		Active:            "settings",
+		OpenCodePort:      s.webPort,
 		Config:            cfg.LLM,
 		ForceStrongStages: forceStrongStages,
 		Success:           true,
@@ -1924,6 +1933,7 @@ func (s *Server) renderSettingsWithErrors(w http.ResponseWriter, r *http.Request
 
 	data := settingsData{
 		Active:            "settings",
+		OpenCodePort:      s.webPort,
 		Config:            cfg.LLM,
 		ForceStrongStages: forceStrongStages,
 		Errors:            errors,
