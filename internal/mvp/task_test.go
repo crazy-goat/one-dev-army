@@ -14,6 +14,8 @@ func TestTaskStatusConstants(t *testing.T) {
 		StatusCoding,
 		StatusReviewing,
 		StatusCreatingPR,
+		StatusAwaitingApproval,
+		StatusMerging,
 		StatusDone,
 		StatusFailed,
 	}
@@ -25,6 +27,8 @@ func TestTaskStatusConstants(t *testing.T) {
 		"coding",
 		"reviewing",
 		"creating_pr",
+		"awaiting_approval",
+		"merging",
 		"done",
 		"failed",
 	}
