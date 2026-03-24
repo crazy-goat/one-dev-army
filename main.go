@@ -28,7 +28,9 @@ import (
 func main() {
 	// Define flags
 	var debugWebSocket bool
+	var workingDir string
 	flag.BoolVar(&debugWebSocket, "debug-websocket", false, "Enable WebSocket debug logging")
+	flag.StringVar(&workingDir, "working-dir", ".", "Working directory for opencode (defaults to current directory)")
 
 	// Custom usage message
 	flag.Usage = printUsage
@@ -36,13 +38,34 @@ func main() {
 	// Parse flags
 	flag.Parse()
 
+	// Validate and convert working directory to absolute path
+	absDir, err := filepath.Abs(workingDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: resolving working directory: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Check if directory exists and is accessible
+	info, err := os.Stat(absDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: working directory does not exist or is not accessible: %s\n", absDir)
+		os.Exit(1)
+	}
+	if !info.IsDir() {
+		fmt.Fprintf(os.Stderr, "error: working directory path is not a directory: %s\n", absDir)
+		os.Exit(1)
+	}
+
+	// Log startup message with absolute path
+	fmt.Printf("Starting opencode in: %s\n", absDir)
+
 	// Get remaining args after flag parsing
 	args := flag.Args()
 
 	if len(args) > 0 {
 		switch args[0] {
 		case "init":
-			if err := runInit(); err != nil {
+			if err := runInit(absDir); err != nil {
 				fmt.Fprintf(os.Stderr, "error: %v\n", err)
 				os.Exit(1)
 			}
@@ -57,7 +80,7 @@ func main() {
 		}
 	}
 
-	if err := runServe(debugWebSocket); err != nil {
+	if err := runServe(absDir, debugWebSocket); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
@@ -74,14 +97,10 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("Options:")
 	fmt.Println("  --debug-websocket    Enable WebSocket debug logging")
+	fmt.Println("  --working-dir        Working directory for opencode (default: current directory)")
 }
 
-func runInit() error {
-	dir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("getting working directory: %w", err)
-	}
-
+func runInit(dir string) error {
 	if err := preflight.CheckGitRepo(dir); err != nil {
 		return err
 	}
@@ -90,13 +109,13 @@ func runInit() error {
 	return i.Run()
 }
 
-func runServe(debugWebSocket bool) error {
-	dir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("getting working directory: %w", err)
-	}
-
+func runServe(dir string, debugWebSocket bool) error {
 	const opencodeURL = "http://localhost:4096"
+
+	var err error
+	var spawnedServer *opencode.Server
+
+	fmt.Println("Running preflight checks...")
 
 	fmt.Println("Running preflight checks...")
 	results := preflight.RunAll(dir, opencodeURL, func(name string, index, total int, status string) {
@@ -117,7 +136,6 @@ func runServe(debugWebSocket bool) error {
 	}
 
 	// If opencode is not reachable, try to auto-start it.
-	var spawnedServer *opencode.Server
 	if !allOK {
 		opencodeOK := true
 		for _, r := range results {
