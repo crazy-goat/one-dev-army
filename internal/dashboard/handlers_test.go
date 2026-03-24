@@ -1042,9 +1042,11 @@ func TestLayoutNavigationButtons(t *testing.T) {
 	data := struct {
 		Active       string
 		OpenCodePort int
+		WorkerCount  int
 	}{
 		Active:       "board",
 		OpenCodePort: 8081,
+		WorkerCount:  1,
 	}
 
 	// We need to define a content template for the layout to work
@@ -1084,6 +1086,60 @@ func TestLayoutNavigationButtons(t *testing.T) {
 	// Check for nav-actions container
 	if !strings.Contains(output, "nav-actions") {
 		t.Error("layout template missing nav-actions container div")
+	}
+}
+
+// TestWorkersTab_ConditionalRendering verifies the Workers tab is hidden when <= 1 worker
+func TestWorkersTab_ConditionalRendering(t *testing.T) {
+	tests := []struct {
+		name          string
+		workerCount   int
+		shouldShowTab bool
+	}{
+		{"0 workers - tab hidden", 0, false},
+		{"1 worker - tab hidden", 1, false},
+		{"2 workers - tab shown", 2, true},
+		{"3 workers - tab shown", 3, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpl, err := template.ParseFiles("templates/layout.html")
+			if err != nil {
+				t.Fatalf("failed to parse layout template: %v", err)
+			}
+
+			var buf strings.Builder
+			data := struct {
+				Active       string
+				OpenCodePort int
+				WorkerCount  int
+			}{
+				Active:       "board",
+				OpenCodePort: 8081,
+				WorkerCount:  tt.workerCount,
+			}
+
+			tmpl, err = tmpl.New("content").Parse("<div>Test Content</div>")
+			if err != nil {
+				t.Fatalf("failed to parse content template: %v", err)
+			}
+
+			err = tmpl.ExecuteTemplate(&buf, "layout", data)
+			if err != nil {
+				t.Fatalf("failed to execute template: %v", err)
+			}
+
+			output := buf.String()
+			hasWorkersLink := strings.Contains(output, `href="/workers"`)
+
+			if tt.shouldShowTab && !hasWorkersLink {
+				t.Errorf("expected Workers tab to be shown for %d workers, but it was hidden", tt.workerCount)
+			}
+			if !tt.shouldShowTab && hasWorkersLink {
+				t.Errorf("expected Workers tab to be hidden for %d workers, but it was shown", tt.workerCount)
+			}
+		})
 	}
 }
 
