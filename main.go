@@ -251,6 +251,16 @@ func runServe(debugWebSocket bool) error {
 		fmt.Println("! no active milestone, skipping initial cache population")
 	}
 
+	// Start opencode web UI server (non-blocking - failure is logged but not fatal)
+	fmt.Println("Starting opencode web UI...")
+	webServer := dashboard.NewWebServer(cfg.OpenCode.WebPort, dir)
+	if err := webServer.Start(); err != nil {
+		fmt.Printf("  ! warning: failed to start opencode web UI: %v\n", err)
+		fmt.Println("  → continuing without web UI")
+	} else {
+		fmt.Printf("  ✓ opencode web UI started at %s\n", webServer.URL())
+	}
+
 	// Step 6: Create WebSocket hub
 	fmt.Println("Creating WebSocket hub...")
 	hub := dashboard.NewHub(debugWebSocket)
@@ -352,6 +362,14 @@ func runServe(debugWebSocket bool) error {
 		fmt.Println("Stopping opencode serve...")
 		if err := spawnedServer.Stop(); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: stopping opencode serve: %v\n", err)
+		}
+	}
+
+	// Stop opencode web UI server
+	if webServer != nil {
+		fmt.Println("Stopping opencode web UI...")
+		if err := webServer.Stop(); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: stopping opencode web UI: %v\n", err)
 		}
 	}
 
