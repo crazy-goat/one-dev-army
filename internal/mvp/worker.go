@@ -132,16 +132,6 @@ func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Clien
 	}
 }
 
-func (w *Worker) setStageLabel(stage string) {
-	if w.orchestrator == nil || w.orchestrator.currentTask == nil {
-		return
-	}
-	// Broadcast worker status immediately to WebSocket (synchronous)
-	w.broadcastWorkerStatus(stage)
-	// Update GitHub and SQLite asynchronously to avoid blocking
-	w.orchestrator.BroadcastStageUpdate(w.orchestrator.currentTask.Issue.Number, stage)
-}
-
 func (w *Worker) broadcastWorkerStatus(stage string) {
 	if w.orchestrator == nil || w.orchestrator.currentTask == nil {
 		return
@@ -209,7 +199,6 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 
 	if resumeFrom <= 0 {
 		log.Printf("[Worker %d] [1/4] Technical planning for #%d...", w.id, task.Issue.Number)
-		w.setStageLabel("Plan")
 		stepStart := time.Now()
 		analysis, implPlan, err = w.technicalPlanning(ctx, task)
 		if err != nil {
@@ -237,7 +226,6 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	if resumeFrom <= 1 {
 		task.Status = StatusCoding
 		log.Printf("[Worker %d] [2/4] Implementing #%d (includes tests)...", w.id, task.Issue.Number)
-		w.setStageLabel("Code")
 		stepStart := time.Now()
 		if err := w.implement(ctx, task, implPlan); err != nil {
 			task.Status = StatusFailed
@@ -253,7 +241,6 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	if resumeFrom <= 2 {
 		task.Status = StatusReviewing
 		log.Printf("[Worker %d] [3/4] Code review #%d...", w.id, task.Issue.Number)
-		w.setStageLabel("AI Review")
 		stepStart := time.Now()
 		approved, review, crErr := w.codeReview(ctx, task, "")
 		if crErr != nil {
@@ -307,7 +294,6 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	if resumeFrom <= 3 {
 		task.Status = StatusCreatingPR
 		log.Printf("[Worker %d] [4/4] Creating PR for #%d...", w.id, task.Issue.Number)
-		w.setStageLabel("Create PR")
 		stepStart := time.Now()
 		prURL, err = w.createPR(ctx, task)
 		if err != nil {
