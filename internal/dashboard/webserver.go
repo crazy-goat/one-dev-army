@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -128,23 +130,44 @@ func (w *WebServer) URL() string {
 	return fmt.Sprintf("http://localhost:%d", w.port)
 }
 
+// xdgOpenShimDir returns the path to the directory containing the no-op xdg-open shim.
+func (w *WebServer) xdgOpenShimDir() string {
+	return filepath.Join(os.TempDir(), "oda-shims")
+}
+
+// ensureXdgOpenShim creates a no-op xdg-open script that exits immediately.
+// This prevents the opencode `open` npm package from launching a browser.
+func (w *WebServer) ensureXdgOpenShim() error {
+	dir := w.xdgOpenShimDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("creating shim dir: %w", err)
+	}
+	shimPath := filepath.Join(dir, "xdg-open")
+	return os.WriteFile(shimPath, []byte("#!/bin/sh\nexit 0\n"), 0o755)
+}
+
 // startProcess starts the opencode web process.
 func (w *WebServer) startProcess() error {
 	w.cmd = exec.Command("opencode", "web", "--port", fmt.Sprintf("%d", w.port))
 	w.cmd.Dir = w.dir
+
 	// Prevent opencode from opening a browser window on startup.
-	// The open npm package spawns xdg-open which, on systems with a desktop
-	// environment (GNOME, KDE, etc.), ignores $BROWSER and uses the DE's
-	// native opener. Unsetting DISPLAY makes xdg-open fall back to the
-	// generic path where $BROWSER=false suppresses the launch entirely.
-	env := w.cmd.Environ()
-	filtered := env[:0]
-	for _, e := range env {
-		if !strings.HasPrefix(e, "DISPLAY=") {
-			filtered = append(filtered, e)
+	// The bundled `open` npm package calls xdg-open as a detached subprocess.
+	// We prepend a directory with a no-op xdg-open shim to PATH so the
+	// package finds our shim instead of the real xdg-open.
+	if err := w.ensureXdgOpenShim(); err != nil {
+		log.Printf("[WebServer] Warning: could not create xdg-open shim: %v", err)
+	} else {
+		shimDir := w.xdgOpenShimDir()
+		env := w.cmd.Environ()
+		for i, e := range env {
+			if strings.HasPrefix(e, "PATH=") {
+				env[i] = "PATH=" + shimDir + ":" + e[5:]
+				break
+			}
 		}
+		w.cmd.Env = env
 	}
-	w.cmd.Env = append(filtered, "BROWSER=false")
 
 	if err := w.cmd.Start(); err != nil {
 		return fmt.Errorf("starting process: %w", err)
