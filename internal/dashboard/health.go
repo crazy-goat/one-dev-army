@@ -13,7 +13,6 @@ type HealthChecker struct {
 	port      int
 	interval  time.Duration
 	client    *http.Client
-	stopCh    chan struct{}
 	mu        sync.RWMutex
 	lastCheck time.Time
 	healthy   bool
@@ -27,7 +26,6 @@ func NewHealthChecker(port int, interval time.Duration) *HealthChecker {
 		client: &http.Client{
 			Timeout: 5 * time.Second,
 		},
-		stopCh:  make(chan struct{}),
 		healthy: false,
 	}
 }
@@ -54,11 +52,6 @@ func (h *HealthChecker) Check() bool {
 	}
 
 	return isHealthy
-}
-
-// Stop stops the health checker.
-func (h *HealthChecker) Stop() {
-	close(h.stopCh)
 }
 
 // IsHealthy returns the last known health status.

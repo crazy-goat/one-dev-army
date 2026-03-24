@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os/exec"
@@ -23,23 +24,33 @@ type WebServer struct {
 	cmd           *exec.Cmd
 	mu            sync.RWMutex
 	stopCh        chan struct{}
+	stopOnce      sync.Once
 	wg            sync.WaitGroup
 	restartCount  int
 	lastRestart   time.Time
 	healthChecker *HealthChecker
+	ctx           context.Context
+	cancel        context.CancelFunc
 }
 
 // NewWebServer creates a new WebServer instance.
-func NewWebServer(port int, dir string) *WebServer {
+func NewWebServer(port int, dir string) (*WebServer, error) {
 	if port == 0 {
 		port = defaultWebPort
 	}
+	// Validate port range (1-65535)
+	if port < 1 || port > 65535 {
+		return nil, fmt.Errorf("invalid port %d: must be between 1 and 65535", port)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
 	return &WebServer{
 		port:          port,
 		dir:           dir,
 		stopCh:        make(chan struct{}),
 		healthChecker: NewHealthChecker(port, healthCheckInterval),
-	}
+		ctx:           ctx,
+		cancel:        cancel,
+	}, nil
 }
 
 // Start starts the opencode web UI process and begins health monitoring.
@@ -72,13 +83,11 @@ func (w *WebServer) Stop() error {
 
 	log.Println("[WebServer] Stopping opencode web...")
 
-	// Signal monitor to stop
-	close(w.stopCh)
-
-	// Stop health checker
-	if w.healthChecker != nil {
-		w.healthChecker.Stop()
-	}
+	// Signal monitor to stop (only once)
+	w.stopOnce.Do(func() {
+		close(w.stopCh)
+		w.cancel()
+	})
 
 	// Stop the process
 	err := w.stopProcess()
@@ -191,7 +200,6 @@ func (w *WebServer) monitor() {
 // checkAndRestartIfNeeded checks the web server health and restarts if necessary.
 func (w *WebServer) checkAndRestartIfNeeded() {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 
 	// Check if process is still running
 	if w.isProcessRunning() {
@@ -199,6 +207,7 @@ func (w *WebServer) checkAndRestartIfNeeded() {
 		if w.healthChecker != nil && w.healthChecker.Check() {
 			// Reset restart count on successful health check
 			w.restartCount = 0
+			w.mu.Unlock()
 			return
 		}
 	}
@@ -208,6 +217,7 @@ func (w *WebServer) checkAndRestartIfNeeded() {
 
 	if w.restartCount >= maxRestartAttempts {
 		log.Printf("[WebServer] Max restart attempts (%d) reached, giving up", maxRestartAttempts)
+		w.mu.Unlock()
 		return
 	}
 
@@ -217,8 +227,23 @@ func (w *WebServer) checkAndRestartIfNeeded() {
 		delay = 60 * time.Second
 	}
 
+	// Increment restart count before attempting restart
+	w.restartCount++
+	w.mu.Unlock()
+
 	log.Printf("[WebServer] Waiting %v before restart...", delay)
 	time.Sleep(delay)
+
+	// Re-acquire lock for process operations
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	// Check if we should stop (context cancelled)
+	select {
+	case <-w.ctx.Done():
+		return
+	default:
+	}
 
 	// Stop the old process if it exists
 	if w.cmd != nil && w.cmd.Process != nil {
@@ -228,11 +253,9 @@ func (w *WebServer) checkAndRestartIfNeeded() {
 	// Start new process
 	if err := w.startProcess(); err != nil {
 		log.Printf("[WebServer] Failed to restart web server: %v", err)
-		w.restartCount++
 		return
 	}
 
-	w.restartCount++
 	w.lastRestart = time.Now()
 	log.Printf("[WebServer] Web server restarted successfully (attempt %d)", w.restartCount)
 }

@@ -253,8 +253,11 @@ func runServe(debugWebSocket bool) error {
 
 	// Start opencode web UI server (non-blocking - failure is logged but not fatal)
 	fmt.Println("Starting opencode web UI...")
-	webServer := dashboard.NewWebServer(cfg.OpenCode.WebPort, dir)
-	if err := webServer.Start(); err != nil {
+	webServer, err := dashboard.NewWebServer(cfg.OpenCode.WebPort, dir)
+	if err != nil {
+		fmt.Printf("  ! warning: invalid web server configuration: %v\n", err)
+		fmt.Println("  → continuing without web UI")
+	} else if err := webServer.Start(); err != nil {
 		fmt.Printf("  ! warning: failed to start opencode web UI: %v\n", err)
 		fmt.Println("  → continuing without web UI")
 	} else {
