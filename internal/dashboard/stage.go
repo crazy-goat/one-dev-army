@@ -99,7 +99,9 @@ func NewStageManager(gh *github.Client, store *db.Store, hub *Hub, getMilestone 
 // It is the ONLY way to change stages - all code must use this function
 // It handles: GitHub update, cache save, WebSocket broadcast, and ledger logging
 func (sm *StageManager) ChangeStage(issueNumber int, toStage string, reason StageChangeReason, changedBy string) (*github.Issue, error) {
-	log.Printf("[StageManager] Changing stage of #%d to %s (reason: %s, by: %s)", issueNumber, toStage, reason.String(), changedBy)
+	// Convert stage name to label for logging
+	toLabel := getStageLabel(toStage)
+	log.Printf("[StageManager] Changing stage of #%d to %s (reason: %s, by: %s)", issueNumber, toLabel, reason.String(), changedBy)
 
 	// Get current issue to determine from_stage
 	fromStage := "Unknown"
