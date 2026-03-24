@@ -156,10 +156,11 @@ func (c *Client) SetStageLabel(issueNumber int, stage Stage) (Issue, error) {
 		return Issue{}, fmt.Errorf("getting issue #%d: %w", issueNumber, err)
 	}
 
-	// Remove all stage-related labels
+	// Remove all stage-related labels in a single batch call
 	labelsToRemove := c.getStageLabelsToRemove(issue)
-	for _, label := range labelsToRemove {
-		_ = c.RemoveLabel(issueNumber, label)
+	if len(labelsToRemove) > 0 {
+		labelsArg := strings.Join(labelsToRemove, ",")
+		_, _ = c.gh("issue", "edit", strconv.Itoa(issueNumber), "--remove-label", labelsArg)
 	}
 
 	// Add new stage label (bypass guard — this IS the correct path for stage labels)

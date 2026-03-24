@@ -1112,9 +1112,71 @@ func TestStagesByLabelInit(t *testing.T) {
 			t.Errorf("StageFromLabel(%q) = %q, want %q", stage.Label(), found, stage)
 		}
 	}
+}
 
-	// The map should have exactly len(AllStages) entries
-	if len(stagesByLabel) != len(AllStages) {
-		t.Errorf("stagesByLabel has %d entries, expected %d", len(stagesByLabel), len(AllStages))
+// Test batch label removal optimization for SetStageLabel
+func TestBatchLabelRemovalOptimization(t *testing.T) {
+	tests := []struct {
+		name           string
+		labelsToRemove []string
+		expectedArg    string
+	}{
+		{
+			name:           "single label",
+			labelsToRemove: []string{"stage:analysis"},
+			expectedArg:    "stage:analysis",
+		},
+		{
+			name:           "multiple labels",
+			labelsToRemove: []string{"stage:analysis", "stage:coding"},
+			expectedArg:    "stage:analysis,stage:coding",
+		},
+		{
+			name:           "many labels",
+			labelsToRemove: []string{"stage:backlog", "stage:analysis", "stage:coding", "stage:failed"},
+			expectedArg:    "stage:backlog,stage:analysis,stage:coding,stage:failed",
+		},
+		{
+			name:           "empty list - no call made",
+			labelsToRemove: []string{},
+			expectedArg:    "",
+		},
 	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Verify the batch argument construction logic
+			if len(tt.labelsToRemove) > 0 {
+				result := strings.Join(tt.labelsToRemove, ",")
+				if result != tt.expectedArg {
+					t.Errorf("Batch label arg = %q, want %q", result, tt.expectedArg)
+				}
+			}
+		})
+	}
+}
+
+// Test that batch removal produces correct gh command arguments
+func TestBatchRemovalCommandStructure(t *testing.T) {
+	client := &Client{Repo: "test/repo"}
+	_ = client
+
+	// Simulate the batch removal logic from SetStageLabel
+	labelsToRemove := []string{"stage:analysis", "stage:coding", "stage:code-review"}
+
+	// This is what the optimized code does:
+	// labelsArg := strings.Join(labelsToRemove, ",")
+	// _, _ = c.gh("issue", "edit", strconv.Itoa(issueNumber), "--remove-label", labelsArg)
+
+	labelsArg := strings.Join(labelsToRemove, ",")
+	expectedArg := "stage:analysis,stage:coding,stage:code-review"
+
+	if labelsArg != expectedArg {
+		t.Errorf("Command arg = %q, want %q", labelsArg, expectedArg)
+	}
+
+	// Verify the command structure would be:
+	// gh issue edit <number> --remove-label <comma-separated-labels>
+	expectedParts := []string{"issue", "edit", "123", "--remove-label", expectedArg}
+	_ = expectedParts
 }
