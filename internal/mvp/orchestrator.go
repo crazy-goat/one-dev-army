@@ -44,33 +44,31 @@ type StageBroadcaster interface {
 }
 
 type Orchestrator struct {
-	cfg           *config.Config
-	worker        *Worker
-	gh            *github.Client
-	oc            *opencode.Client
-	brMgr         *git.BranchManager
-	store         *db.Store
-	hub           StageBroadcaster
-	router        *llm.Router
-	running       bool
-	paused        bool
-	processing    bool
-	currentTask   *Task
-	mu            sync.Mutex
-	workerEventCh chan WorkerEvent // Channel for worker events
+	cfg         *config.Config
+	worker      *Worker
+	gh          *github.Client
+	oc          *opencode.Client
+	brMgr       *git.BranchManager
+	store       *db.Store
+	hub         StageBroadcaster
+	router      *llm.Router
+	running     bool
+	paused      bool
+	processing  bool
+	currentTask *Task
+	mu          sync.Mutex
 }
 
 func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client, brMgr *git.BranchManager, store *db.Store, hub StageBroadcaster, router *llm.Router) *Orchestrator {
 	o := &Orchestrator{
-		cfg:           cfg,
-		gh:            gh,
-		oc:            oc,
-		brMgr:         brMgr,
-		store:         store,
-		hub:           hub,
-		router:        router,
-		paused:        true,
-		workerEventCh: make(chan WorkerEvent, 100), // Buffered channel for worker events
+		cfg:    cfg,
+		gh:     gh,
+		oc:     oc,
+		brMgr:  brMgr,
+		store:  store,
+		hub:    hub,
+		router: router,
+		paused: true,
 	}
 	o.worker = NewWorker(1, cfg, oc, gh, brMgr, store, o, router)
 	return o
@@ -136,10 +134,6 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case event := <-o.workerEventCh:
-			// Handle worker event
-			o.HandleWorkerEvent(event)
-			continue
 		default:
 		}
 
@@ -351,16 +345,6 @@ func (o *Orchestrator) recordStep(issueNumber int, stepName, response string) {
 	_ = o.store.FinishStep(id, response)
 }
 
-func (o *Orchestrator) BroadcastStageUpdate(issueNumber int, stage github.Stage) {
-	// Run stage change asynchronously to avoid blocking worker.
-	// Delegates to ChangeStage which handles GitHub, cache, ledger, and WebSocket.
-	go func() {
-		if err := o.ChangeStage(issueNumber, stage, github.ReasonWorkerStageUpdate); err != nil {
-			log.Printf("[Orchestrator] Error in async stage update for #%d: %v", issueNumber, err)
-		}
-	}()
-}
-
 func (o *Orchestrator) BroadcastWorkerStatus(workerID, status string, taskID int, taskTitle, stage string, elapsedSeconds int) {
 	if o.hub != nil {
 		o.hub.BroadcastWorkerUpdate(workerID, status, taskID, taskTitle, stage, elapsedSeconds)
@@ -398,20 +382,6 @@ func (o *Orchestrator) HandleSyncEvent(issue github.Issue) {
 			if err := o.ChangeStage(issue.Number, github.StageMerge, github.ReasonSyncMergedPR); err != nil {
 				log.Printf("[Orchestrator] Error setting stage:merging for #%d: %v", issue.Number, err)
 			}
-		}
-	}
-}
-
-// drainWorkerEvents processes all pending worker events from the channel.
-// Must be called after worker.Process() returns and before setting the final
-// post-process stage, so the ledger records transitions in correct order.
-func (o *Orchestrator) drainWorkerEvents() {
-	for {
-		select {
-		case event := <-o.workerEventCh:
-			o.HandleWorkerEvent(event)
-		default:
-			return
 		}
 	}
 }
