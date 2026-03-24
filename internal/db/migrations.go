@@ -50,6 +50,17 @@ var migrations = []string{
 	`CREATE INDEX IF NOT EXISTS idx_issue_cache_milestone ON issue_cache(milestone)`,
 	`ALTER TABLE issue_cache ADD COLUMN pr_merged INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE issue_cache ADD COLUMN merged_at DATETIME`,
+	`CREATE TABLE IF NOT EXISTS stage_change_ledger (
+		id           INTEGER PRIMARY KEY AUTOINCREMENT,
+		issue_number INTEGER NOT NULL,
+		from_stage   TEXT,
+		to_stage     TEXT NOT NULL,
+		reason       TEXT NOT NULL,
+		changed_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+		changed_by   TEXT
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_stage_change_ledger_issue ON stage_change_ledger(issue_number)`,
+	`CREATE INDEX IF NOT EXISTS idx_stage_change_ledger_changed_at ON stage_change_ledger(changed_at)`,
 }
 
 // columnExists checks if a column exists in a table

@@ -664,3 +664,55 @@ func (s *Store) scanIssues(rows *sql.Rows) ([]github.Issue, error) {
 	}
 	return issues, nil
 }
+
+// SaveStageChange saves a stage change to the ledger
+func (s *Store) SaveStageChange(issueNumber int, fromStage, toStage, reason, changedBy string) error {
+	return s.submitWrite(func() (any, error) {
+		_, err := s.db.Exec(
+			`INSERT INTO stage_change_ledger (issue_number, from_stage, to_stage, reason, changed_by, changed_at)
+			 VALUES (?, ?, ?, ?, ?, ?)`,
+			issueNumber, fromStage, toStage, reason, changedBy, time.Now().UTC(),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("saving stage change to ledger: %w", err)
+		}
+		return nil, nil
+	})
+}
+
+// GetStageChanges returns all stage changes for an issue
+func (s *Store) GetStageChanges(issueNumber int) ([]StageChange, error) {
+	rows, err := s.db.Query(
+		`SELECT id, issue_number, from_stage, to_stage, reason, changed_by, changed_at
+		 FROM stage_change_ledger WHERE issue_number = ? ORDER BY changed_at DESC`,
+		issueNumber,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying stage changes: %w", err)
+	}
+	defer rows.Close()
+
+	var changes []StageChange
+	for rows.Next() {
+		var c StageChange
+		if err := rows.Scan(&c.ID, &c.IssueNumber, &c.FromStage, &c.ToStage, &c.Reason, &c.ChangedBy, &c.ChangedAt); err != nil {
+			return nil, fmt.Errorf("scanning stage change: %w", err)
+		}
+		changes = append(changes, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating stage changes: %w", err)
+	}
+	return changes, nil
+}
+
+// StageChange represents a single stage change record
+type StageChange struct {
+	ID          int
+	IssueNumber int
+	FromStage   string
+	ToStage     string
+	Reason      string
+	ChangedBy   string
+	ChangedAt   time.Time
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -190,13 +191,26 @@ func (p *Processor) Process(ctx context.Context, w *Worker, task *Task) error {
 			return fmt.Errorf("creating PR for task #%d: %w", task.IssueNumber, prErr)
 		}
 
-		// Always require manual approval for merge
-		_ = p.gh.AddLabel(task.IssueNumber, "stage:needs-user")
+		// Always require manual approval for merge - use NeedsUser stage
+		if _, err := p.gh.SetStageLabel(task.IssueNumber, "NeedsUser"); err != nil {
+			log.Printf("[Worker] Error setting NeedsUser stage for #%d: %v", task.IssueNumber, err)
+		} else if p.store != nil {
+			if err := p.store.SaveStageChange(task.IssueNumber, "Code", "NeedsUser", "worker_needs_user", "worker"); err != nil {
+				log.Printf("[Worker] Error saving stage change to ledger for #%d: %v", task.IssueNumber, err)
+			}
+		}
 
 		_ = p.brMgr.RemoveBranch(branch)
 
 	case pipeline.StageBlocked:
-		_ = p.gh.AddLabel(task.IssueNumber, "stage:needs-user")
+		// Set NeedsUser stage when blocked
+		if _, err := p.gh.SetStageLabel(task.IssueNumber, "NeedsUser"); err != nil {
+			log.Printf("[Worker] Error setting NeedsUser stage for #%d: %v", task.IssueNumber, err)
+		} else if p.store != nil {
+			if err := p.store.SaveStageChange(task.IssueNumber, "Code", "NeedsUser", "worker_blocked", "worker"); err != nil {
+				log.Printf("[Worker] Error saving stage change to ledger for #%d: %v", task.IssueNumber, err)
+			}
+		}
 		_ = p.gh.AddComment(task.IssueNumber, fmt.Sprintf("ODA pipeline blocked at stage. Last output:\n\n%s", result.Output))
 	}
 

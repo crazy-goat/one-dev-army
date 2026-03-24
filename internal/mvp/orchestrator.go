@@ -264,15 +264,25 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if err := o.gh.AddComment(nextIssue.Number, comment); err != nil {
 				log.Printf("[Orchestrator] Error adding comment: %v", err)
 			}
+			log.Printf("[Orchestrator] Setting Done stage for #%d (reason: worker_done)", nextIssue.Number)
 			if _, err := o.gh.SetStageLabel(nextIssue.Number, "Done"); err != nil {
 				log.Printf("[Orchestrator] Error setting Done stage for #%d: %v", nextIssue.Number, err)
+			} else if o.store != nil {
+				if err := o.store.SaveStageChange(nextIssue.Number, "Code", "Done", "worker_done", "orchestrator"); err != nil {
+					log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", nextIssue.Number, err)
+				}
 			}
 			o.recordStep(nextIssue.Number, "done", "Closed as already done")
 		} else if processErr != nil {
 			log.Printf("[Orchestrator] ✗ Failed #%d: %v", nextIssue.Number, processErr)
 			o.recordStep(nextIssue.Number, "failed", processErr.Error())
+			log.Printf("[Orchestrator] Setting Failed stage for #%d (reason: worker_failed)", nextIssue.Number)
 			if _, err := o.gh.SetStageLabel(nextIssue.Number, "Failed"); err != nil {
 				log.Printf("[Orchestrator] Error setting Failed stage for #%d: %v", nextIssue.Number, err)
+			} else if o.store != nil {
+				if err := o.store.SaveStageChange(nextIssue.Number, "Code", "Failed", "worker_failed", "orchestrator"); err != nil {
+					log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", nextIssue.Number, err)
+				}
 			}
 		} else {
 			prURL := ""
@@ -281,8 +291,13 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 			log.Printf("[Orchestrator] ✓ Completed #%d → awaiting approval: %s", nextIssue.Number, prURL)
 			o.recordStep(nextIssue.Number, "waiting-for-approval", prURL)
+			log.Printf("[Orchestrator] Setting Approve stage for #%d (reason: worker_approve)", nextIssue.Number)
 			if _, err := o.gh.SetStageLabel(nextIssue.Number, "Approve"); err != nil {
 				log.Printf("[Orchestrator] Error setting Approve stage for #%d: %v", nextIssue.Number, err)
+			} else if o.store != nil {
+				if err := o.store.SaveStageChange(nextIssue.Number, "Code", "Approve", "worker_approve", "orchestrator"); err != nil {
+					log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", nextIssue.Number, err)
+				}
 			}
 			if prURL != "" {
 				comment := fmt.Sprintf("AI review passed ✓ — awaiting manual approval.\n\nPR: %s", prURL)
@@ -382,12 +397,28 @@ func (o *Orchestrator) recordStep(issueNumber int, stepName, response string) {
 func (o *Orchestrator) BroadcastStageUpdate(issueNumber int, stage string) {
 	// Run GitHub API call asynchronously to avoid blocking worker
 	go func() {
-		log.Printf("[Orchestrator] Updating stage label %s for #%d (async)", stage, issueNumber)
+		log.Printf("[Orchestrator] Updating stage label %s for #%d (async, reason: worker_stage_update)", stage, issueNumber)
+
+		// Get current stage from cache for ledger
+		fromStage := "Unknown"
+		if o.store != nil {
+			if existing, err := o.store.GetIssueCache(issueNumber); err == nil {
+				fromStage = o.getStageFromIssue(existing)
+			}
+		}
+
 		// Set the stage label on GitHub
 		updatedIssue, err := o.gh.SetStageLabel(issueNumber, stage)
 		if err != nil {
 			log.Printf("[Orchestrator] Error setting stage label %s for #%d: %v", stage, issueNumber, err)
 			return
+		}
+
+		// Save to ledger
+		if o.store != nil {
+			if err := o.store.SaveStageChange(issueNumber, fromStage, stage, "worker_stage_update", "orchestrator"); err != nil {
+				log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", issueNumber, err)
+			}
 		}
 
 		// Broadcast the update via hub if available
@@ -426,4 +457,14 @@ func labelNames(issue github.Issue) string {
 		names = append(names, l.Name)
 	}
 	return strings.Join(names, ", ")
+}
+
+// getStageFromIssue extracts the current stage from issue labels
+func (o *Orchestrator) getStageFromIssue(issue github.Issue) string {
+	for _, label := range issue.Labels {
+		if strings.HasPrefix(label.Name, "stage:") {
+			return label.Name
+		}
+	}
+	return "Backlog"
 }

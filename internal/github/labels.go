@@ -20,6 +20,7 @@ var StageToLabels = map[string][]string{
 	"Done":      {},
 	"Failed":    {"stage:failed"},
 	"Blocked":   {"stage:blocked"},
+	"NeedsUser": {"stage:needs-user"}, // Special stage when worker needs user intervention
 }
 
 // StageLabelPrefixes contains all label prefixes that should be removed when changing stages.
