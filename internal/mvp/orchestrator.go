@@ -172,50 +172,31 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			continue
 		}
 
-		// Fetch project board columns to detect manually-blocked issues
-		// TODO: Replace with label-based detection when implementing ticket #182
-		blockedOnBoard := make(map[int]bool)
-
-		var openCount, skippedCount int
-		var inProgressIssue *github.Issue
+		// Classify issues: candidates (backlog) vs resumable (worker stages after restart)
 		var candidates []github.Issue
-		var blocking []github.Issue // issues with active branches that block new work
+		var resumeIssue *github.Issue
 		for i := range issues {
 			if !strings.EqualFold(issues[i].State, "open") {
 				continue
 			}
-			openCount++
-			if hasLabel(issues[i], "in-progress") || hasLabel(issues[i], "stage:coding") || hasLabel(issues[i], "stage:analysis") || hasLabel(issues[i], "stage:code-review") || hasLabel(issues[i], "stage:create-pr") {
-				if inProgressIssue == nil {
-					inProgressIssue = &issues[i]
-				}
-				continue
+
+			stage := getStageLabel(issues[i])
+			if stage == "" {
+				// No stage label = backlog candidate
+				candidates = append(candidates, issues[i])
+			} else if isWorkerStage(stage) && resumeIssue == nil {
+				// Worker stage (analysis/coding/review/create-pr/awaiting-approval) = resume after restart
+				resumeIssue = &issues[i]
 			}
-			// Issues with active branches — block the entire queue
-			if hasLabel(issues[i], "stage:awaiting-approval") || hasLabel(issues[i], "awaiting-approval") || hasLabel(issues[i], "stage:failed") || hasLabel(issues[i], "failed") {
-				blocking = append(blocking, issues[i])
-				log.Printf("[Orchestrator]   blocking #%d %q (%s)", issues[i].Number, issues[i].Title, labelNames(issues[i]))
-				continue
-			}
-			// Issues waiting on external input — skip but don't block others
-			if blockedOnBoard[issues[i].Number] {
-				skippedCount++
-				log.Printf("[Orchestrator]   skip #%d %q (blocked on board)", issues[i].Number, issues[i].Title)
-				continue
-			}
-			candidates = append(candidates, issues[i])
+			// Everything else (merging, failed, blocked, done, needs-user)
+			// is ignored — orchestrator doesn't pick these up.
 		}
-		log.Printf("[Orchestrator] Found %d issues (%d open, %d blocking, %d skipped, %d candidates)", len(issues), openCount, len(blocking), skippedCount, len(candidates))
+		log.Printf("[Orchestrator] Found %d candidates, resume=%v", len(candidates), resumeIssue != nil)
 
 		var nextIssue *github.Issue
-		if inProgressIssue != nil {
-			nextIssue = inProgressIssue
+		if resumeIssue != nil {
+			nextIssue = resumeIssue
 			log.Printf("[Orchestrator] Resuming in-progress #%d: %s", nextIssue.Number, nextIssue.Title)
-		} else if len(blocking) > 0 {
-			// Single-branch mode: don't start new work while any issue is unresolved.
-			// Unmerged PRs, failed tasks, or blocked tasks leave branches that would
-			// conflict with new work based on master.
-			log.Printf("[Orchestrator] ⏳ Waiting — %d issue(s) need attention before starting new work", len(blocking))
 		} else if len(candidates) > 0 {
 			picked, err := o.pickNextTicket(ctx, candidates, nil)
 			if err != nil {
@@ -255,24 +236,13 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		processErr := o.worker.Process(ctx, task)
 
-		// Drain pending worker events before setting final stage.
-		// Worker events carry intermediate stage transitions (analysis→coding→…)
-		// that must be recorded in the ledger before the final post-process stage.
-		o.drainWorkerEvents()
-
-		// Explicit cleanup: ensure branch is deleted after worker finishes (success or failure)
-		if task.Branch != "" {
-			log.Printf("[Orchestrator] Cleaning up branch %q for issue #%d", task.Branch, task.Issue.Number)
-			if err := o.brMgr.RemoveBranch(task.Branch); err != nil {
-				log.Printf("[Orchestrator] Warning: failed to remove branch %q: %v", task.Branch, err)
-			}
-		}
-
 		o.mu.Lock()
 		o.processing = false
 		o.currentTask = nil
 		o.mu.Unlock()
 
+		// Worker.Process() returns nil only after successful merge (done).
+		// Any error means failed or already-done.
 		if processErr != nil && errors.Is(processErr, ErrAlreadyDone) {
 			log.Printf("[Orchestrator] ✓ Already done #%d: %v", nextIssue.Number, processErr)
 			o.recordStep(nextIssue.Number, "already-done", processErr.Error())
@@ -280,35 +250,18 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if err := o.gh.AddComment(nextIssue.Number, comment); err != nil {
 				log.Printf("[Orchestrator] Error adding comment: %v", err)
 			}
-			log.Printf("[Orchestrator] Setting stage:done for #%d (reason: %s)", nextIssue.Number, github.ReasonWorkerAlreadyDone)
 			if err := o.ChangeStage(nextIssue.Number, github.StageDone, github.ReasonWorkerAlreadyDone); err != nil {
 				log.Printf("[Orchestrator] Error setting stage:done for #%d: %v", nextIssue.Number, err)
 			}
-			o.recordStep(nextIssue.Number, "done", "Closed as already done")
 		} else if processErr != nil {
 			log.Printf("[Orchestrator] ✗ Failed #%d: %v", nextIssue.Number, processErr)
 			o.recordStep(nextIssue.Number, "failed", processErr.Error())
-			log.Printf("[Orchestrator] Setting stage:failed for #%d (reason: %s)", nextIssue.Number, github.ReasonWorkerFailed)
 			if err := o.ChangeStage(nextIssue.Number, github.StageFailed, github.ReasonWorkerFailed); err != nil {
 				log.Printf("[Orchestrator] Error setting stage:failed for #%d: %v", nextIssue.Number, err)
 			}
 		} else {
-			prURL := ""
-			if task.Result != nil {
-				prURL = task.Result.PRURL
-			}
-			log.Printf("[Orchestrator] ✓ Completed #%d → awaiting approval: %s", nextIssue.Number, prURL)
-			o.recordStep(nextIssue.Number, "waiting-for-approval", prURL)
-			log.Printf("[Orchestrator] Setting stage:awaiting-approval for #%d (reason: %s)", nextIssue.Number, github.ReasonWorkerApprove)
-			if err := o.ChangeStage(nextIssue.Number, github.StageApprove, github.ReasonWorkerApprove); err != nil {
-				log.Printf("[Orchestrator] Error setting stage:awaiting-approval for #%d: %v", nextIssue.Number, err)
-			}
-			if prURL != "" {
-				comment := fmt.Sprintf("AI review passed ✓ — awaiting manual approval.\n\nPR: %s", prURL)
-				if err := o.gh.AddComment(nextIssue.Number, comment); err != nil {
-					log.Printf("[Orchestrator] Error adding comment: %v", err)
-				}
-			}
+			log.Printf("[Orchestrator] ✓ Completed #%d (merged)", nextIssue.Number)
+			o.recordStep(nextIssue.Number, "done", "Ticket completed and merged")
 		}
 
 		o.sleep(ctx, 5*time.Second)
@@ -470,6 +423,27 @@ func (o *Orchestrator) sleep(ctx context.Context, d time.Duration) {
 	}
 }
 
+// getStageLabel returns the stage:* label from an issue, or "" if none.
+func getStageLabel(issue github.Issue) string {
+	for _, l := range issue.Labels {
+		if strings.HasPrefix(l.Name, "stage:") {
+			return l.Name
+		}
+	}
+	return ""
+}
+
+// isWorkerStage returns true if the stage is one the worker actively processes.
+// These stages indicate the worker was interrupted (e.g. ODA restart) and should resume.
+func isWorkerStage(stage string) bool {
+	switch stage {
+	case "stage:analysis", "stage:coding", "stage:code-review", "stage:create-pr", "stage:awaiting-approval":
+		return true
+	default:
+		return false
+	}
+}
+
 func hasLabel(issue github.Issue, name string) bool {
 	for _, l := range issue.Labels {
 		if l.Name == name {
@@ -606,6 +580,26 @@ func (o *Orchestrator) ChangeStage(issueNumber int, toStage github.Stage, reason
 
 	log.Printf("[Orchestrator] Successfully changed stage of #%d from %s to %s", issueNumber, fromStage, toLabel)
 	return nil
+}
+
+// SendDecision sends a user decision (approve/decline) to the worker processing the given issue.
+// Returns an error if no worker is currently processing that issue.
+func (o *Orchestrator) SendDecision(issueNumber int, decision UserDecision) error {
+	o.mu.Lock()
+	task := o.currentTask
+	o.mu.Unlock()
+
+	if task == nil || task.Issue.Number != issueNumber {
+		return fmt.Errorf("worker is not processing issue #%d", issueNumber)
+	}
+
+	select {
+	case o.worker.decisionCh <- decision:
+		log.Printf("[Orchestrator] Sent %s decision to worker for #%d", decision.Action, issueNumber)
+		return nil
+	default:
+		return fmt.Errorf("decision channel full for issue #%d (worker may not be waiting)", issueNumber)
+	}
 }
 
 // activeMilestone returns the current active milestone title
