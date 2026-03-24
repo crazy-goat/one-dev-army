@@ -4412,10 +4412,13 @@ func TestHandleTaskDetail_YoloMode(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", rec.Code)
 	}
 
-	// Verify the response does NOT contain the YOLO mode indicator when disabled
+	// Verify the response shows SAFE MODE toggle when disabled (toggle is always visible)
 	body = rec.Body.String()
-	if strings.Contains(body, "YOLO MODE") {
-		t.Error("task detail page should NOT contain YOLO MODE indicator when yolo_mode is disabled")
+	if !strings.Contains(body, "SAFE MODE") {
+		t.Error("task detail page should show 'SAFE MODE' toggle when yolo_mode is disabled")
+	}
+	if !strings.Contains(body, `id="yolo-mode-container"`) {
+		t.Error("task detail page should always contain yolo-mode-container element")
 	}
 }
 
@@ -4479,13 +4482,15 @@ func TestHandleBoard_YoloModeIndicator(t *testing.T) {
 
 	body = rec.Body.String()
 
-	// Verify YOLO mode indicator is NOT present when disabled
-	// Check for the actual element id, not just the CSS class name which appears in styles
-	if strings.Contains(body, `id="yolo-mode-container"`) {
-		t.Error("board page should NOT contain yolo-mode-container element when yolo_mode is disabled")
+	// Verify YOLO mode toggle is always present (now in SAFE MODE state when disabled)
+	if !strings.Contains(body, `id="yolo-mode-container"`) {
+		t.Error("board page should always contain yolo-mode-container element")
 	}
-	if strings.Contains(body, ">YOLO MODE<") {
-		t.Error("board page should NOT contain YOLO MODE text when yolo_mode is disabled")
+	if !strings.Contains(body, "SAFE MODE") {
+		t.Error("board page should show 'SAFE MODE' when yolo_mode is disabled")
+	}
+	if !strings.Contains(body, "yolo-disabled") {
+		t.Error("board page should contain yolo-disabled class when yolo_mode is disabled")
 	}
 }
 
@@ -4535,5 +4540,128 @@ func TestSettingsForm_HTMXTargetBody(t *testing.T) {
 	// Verify the form does NOT use hx-target=".settings-container" (old incorrect value)
 	if strings.Contains(body, `hx-target=".settings-container"`) {
 		t.Error("settings form should NOT use hx-target=\".settings-container\" (causes layout duplication)")
+	}
+}
+
+// TestHandleYoloToggle_EnablesWhenDisabled tests that YOLO toggle enables YOLO mode when it's disabled
+func TestHandleYoloToggle_EnablesWhenDisabled(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create config with yolo_mode: false
+	configContent := `yolo_mode: false
+`
+	if err := os.WriteFile(filepath.Join(tempDir, ".oda", "config.yaml"), []byte(configContent), 0644); err != nil {
+		// Try creating the directory first
+		if err := os.MkdirAll(filepath.Join(tempDir, ".oda"), 0755); err != nil {
+			t.Fatalf("failed to create .oda directory: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(tempDir, ".oda", "config.yaml"), []byte(configContent), 0644); err != nil {
+			t.Fatalf("failed to write config file: %v", err)
+		}
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tempDir
+	defer srv.wizardStore.Stop()
+
+	// POST to toggle endpoint
+	req := httptest.NewRequest(http.MethodPost, "/api/yolo/toggle", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleYoloToggle(rec, req)
+
+	// Should return 200 OK
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify response contains enabled state
+	body := rec.Body.String()
+	if !strings.Contains(body, "yolo-enabled") {
+		t.Error("response should contain yolo-enabled class when enabling YOLO mode")
+	}
+	if !strings.Contains(body, "YOLO MODE") {
+		t.Error("response should contain 'YOLO MODE' text when enabling")
+	}
+	if !strings.Contains(body, "⚡") {
+		t.Error("response should contain lightning bolt icon when enabling")
+	}
+
+	// Verify config file now has yolo_mode: true
+	cfg, err := config.Load(tempDir)
+	if err != nil {
+		t.Fatalf("failed to load config after toggle: %v", err)
+	}
+	if !cfg.YoloMode {
+		t.Error("expected config to have yolo_mode: true after toggle")
+	}
+}
+
+// TestHandleYoloToggle_DisablesWhenEnabled tests that YOLO toggle disables YOLO mode when it's enabled
+func TestHandleYoloToggle_DisablesWhenEnabled(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create config with yolo_mode: true
+	configContent := `yolo_mode: true
+`
+	if err := os.MkdirAll(filepath.Join(tempDir, ".oda"), 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, ".oda", "config.yaml"), []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tempDir
+	defer srv.wizardStore.Stop()
+
+	// POST to toggle endpoint
+	req := httptest.NewRequest(http.MethodPost, "/api/yolo/toggle", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleYoloToggle(rec, req)
+
+	// Should return 200 OK
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify response contains disabled state
+	body := rec.Body.String()
+	if !strings.Contains(body, "yolo-disabled") {
+		t.Error("response should contain yolo-disabled class when disabling YOLO mode")
+	}
+	if !strings.Contains(body, "SAFE MODE") {
+		t.Error("response should contain 'SAFE MODE' text when disabling")
+	}
+	if !strings.Contains(body, "🔒") {
+		t.Error("response should contain lock icon when disabling")
+	}
+
+	// Verify config file now has yolo_mode: false
+	cfg, err := config.Load(tempDir)
+	if err != nil {
+		t.Fatalf("failed to load config after toggle: %v", err)
+	}
+	if cfg.YoloMode {
+		t.Error("expected config to have yolo_mode: false after toggle")
+	}
+}
+
+// TestHandleYoloToggle_NoRootDir tests that YOLO toggle returns 500 when rootDir is empty
+func TestHandleYoloToggle_NoRootDir(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = "" // Empty rootDir
+	defer srv.wizardStore.Stop()
+
+	// POST to toggle endpoint
+	req := httptest.NewRequest(http.MethodPost, "/api/yolo/toggle", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleYoloToggle(rec, req)
+
+	// Should return 500
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 500 when rootDir is empty, got %d", rec.Code)
 	}
 }

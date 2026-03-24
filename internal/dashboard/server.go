@@ -241,6 +241,9 @@ func (s *Server) routes() {
 	// Settings endpoints
 	s.mux.HandleFunc("GET /settings", s.handleSettings)
 	s.mux.HandleFunc("POST /settings", s.handleSaveSettings)
+
+	// YOLO mode toggle endpoint
+	s.mux.HandleFunc("POST /api/yolo/toggle", s.handleYoloToggle)
 }
 
 func (s *Server) Start() error {
