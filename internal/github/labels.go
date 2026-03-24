@@ -130,6 +130,8 @@ var RequiredLabels = []Label{
 	{Name: "epic", Color: "5319E7"},
 	{Name: "wizard", Color: "7C3AED"},
 	{Name: "merge-failed", Color: "D93F0B"},
+	{Name: "bug", Color: "D73A4A"},
+	{Name: "feature", Color: "A2EEEF"},
 }
 
 // SetStageLabel sets the stage label for an issue, removing all previous stage labels.
@@ -365,4 +367,24 @@ func parseIssueNumber(output []byte) (int, error) {
 		return 0, fmt.Errorf("parsing issue number from %q: %w", url, err)
 	}
 	return num, nil
+}
+
+// BuildLabels constructs a slice of label names from priority, size, and type parameters
+// Returns an empty slice if no valid labels are provided
+func BuildLabels(priority, size, issueType string) []string {
+	var labels []string
+
+	if priority != "" {
+		labels = append(labels, "priority:"+priority)
+	}
+
+	if size != "" {
+		labels = append(labels, "size:"+size)
+	}
+
+	if issueType != "" {
+		labels = append(labels, issueType)
+	}
+
+	return labels
 }
