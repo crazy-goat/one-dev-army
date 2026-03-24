@@ -35,7 +35,8 @@ type Workers struct {
 }
 
 type OpenCode struct {
-	URL string `yaml:"url"`
+	URL     string `yaml:"url"`
+	WebPort int    `yaml:"web_port,omitempty"`
 }
 
 type Tools struct {
