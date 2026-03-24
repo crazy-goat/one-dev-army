@@ -1682,8 +1682,9 @@ type settingsData struct {
 
 // handleSettings renders the LLM configuration settings page
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
-	// Load current config
-	cfg, err := config.Load(s.rootDir)
+	// Load current config with model validation and fallback
+	availableModels := s.GetAvailableModelIDs()
+	cfg, err := config.Load(s.rootDir, availableModels...)
 	if err != nil {
 		log.Printf("[Dashboard] Error loading config: %v", err)
 		// Use default config if load fails
@@ -1721,6 +1722,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	// Parse and validate form data
 	var errors []string
+	var warnings []string
 
 	// Parse model selections for each mode (5 independent dropdowns)
 	cfg.LLM.Setup.Model = r.FormValue("setup_model")
@@ -1749,22 +1751,25 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Validate model selections against available models
-	if len(s.modelsCache) > 0 {
-		modelValidations := []struct {
-			name  string
-			model string
-		}{
-			{"Setup", cfg.LLM.Setup.Model},
-			{"Planning", cfg.LLM.Planning.Model},
-			{"Orchestration", cfg.LLM.Orchestration.Model},
-			{"Code", cfg.LLM.Code.Model},
-			{"Code Heavy", cfg.LLM.CodeHeavy.Model},
-		}
+	// If there are format errors, stop here
+	if len(errors) > 0 {
+		s.renderSettingsWithErrors(w, r, errors)
+		return
+	}
 
-		for _, mv := range modelValidations {
-			if mv.model != "" && !s.validateModelSelection(mv.model) {
-				errors = append(errors, fmt.Sprintf("%s: Invalid model '%s' - not found in available models", mv.name, mv.model))
+	// Validate and fallback models against available models
+	availableModels := s.GetAvailableModelIDs()
+	if len(availableModels) > 0 {
+		validationResult := cfg.LLM.ValidateAndFallbackModels(availableModels)
+
+		// Add warnings for replaced models instead of errors
+		if validationResult.HasReplacements {
+			for modeName, replacement := range validationResult.ReplacedModels {
+				if replacement.OldModel == "(empty)" {
+					warnings = append(warnings, fmt.Sprintf("%s: No model was selected, defaulted to '%s'", modeName, replacement.NewModel))
+				} else {
+					warnings = append(warnings, fmt.Sprintf("%s: Model '%s' is not available, fell back to '%s'", modeName, replacement.OldModel, replacement.NewModel))
+				}
 			}
 		}
 	}
@@ -1822,7 +1827,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[Dashboard] LLM configuration saved successfully")
 
-	// Re-render with success message
+	// Re-render with success message and any warnings
 	forceStrongStages := strings.Join(cfg.LLM.RoutingRules.ForceStrongForStages, ", ")
 	data := settingsData{
 		Active:            "settings",
@@ -1830,6 +1835,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		Config:            cfg.LLM,
 		ForceStrongStages: forceStrongStages,
 		Success:           true,
+		Errors:            warnings, // Show warnings as info messages
 		AvailableModels:   s.modelsCache,
 	}
 
