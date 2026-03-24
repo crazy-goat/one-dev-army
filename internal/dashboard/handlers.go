@@ -1735,9 +1735,8 @@ type settingsData struct {
 
 // handleSettings renders the LLM configuration settings page
 func (s *Server) handleSettings(w http.ResponseWriter, _ *http.Request) {
-	// Load current config with model validation and fallback
-	availableModels := s.GetAvailableModelIDs()
-	cfg, err := config.Load(s.rootDir, availableModels...)
+	// Load current config WITHOUT model validation - display exact values from config file
+	cfg, err := config.Load(s.rootDir)
 	if err != nil {
 		log.Printf("[Dashboard] Error loading config: %v", err)
 		// Use default config if load fails
@@ -1777,7 +1776,6 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	// Parse and validate form data
 	var errors []string
-	var warnings []string
 
 	// Parse model selections for each mode (5 independent dropdowns)
 	cfg.LLM.Setup.Model = r.FormValue("setup_model")
@@ -1812,25 +1810,12 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate and fallback models against available models
-	availableModels := s.GetAvailableModelIDs()
-	if len(availableModels) > 0 {
-		validationResult := cfg.LLM.ValidateAndFallbackModels(availableModels)
-
-		// Add warnings for replaced models instead of errors
-		if validationResult.HasReplacements {
-			for modeName, replacement := range validationResult.ReplacedModels {
-				if replacement.OldModel == "(empty)" {
-					warnings = append(warnings, fmt.Sprintf("%s: No model was selected, defaulted to '%s'", modeName, replacement.NewModel))
-				} else {
-					warnings = append(warnings, fmt.Sprintf("%s: Model '%s' is not available, fell back to '%s'", modeName, replacement.OldModel, replacement.NewModel))
-				}
-			}
-		}
-	}
-
 	// Parse yolo_mode checkbox (checkbox returns "on" when checked, empty when unchecked)
 	cfg.YoloMode = r.FormValue("yolo_mode") == "on"
+
+	// Note: We intentionally do NOT call ValidateAndFallbackModels here.
+	// The user's exact selections are saved to config. Runtime fallback
+	// happens in the LLM router when models are actually used.
 
 	// If there are validation errors, re-render the form with errors
 	if len(errors) > 0 {
@@ -1847,7 +1832,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[Dashboard] LLM configuration saved successfully")
 
-	// Re-render with success message and any warnings
+	// Re-render with success message
 	workerCount := 0
 	if s.pool != nil {
 		workerCount = len(s.pool())
@@ -1859,7 +1844,6 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		Config:          cfg.LLM,
 		YoloMode:        cfg.YoloMode,
 		Success:         true,
-		Errors:          warnings, // Show warnings as info messages
 		AvailableModels: s.modelsCache,
 	}
 

@@ -71,11 +71,6 @@ func Load(rootDir string, availableModels ...string) (*Config, error) {
 	// Apply default LLM config if not fully specified
 	cfg.applyLLMDefaults()
 
-	// Validate and fallback models if available list provided
-	if len(availableModels) > 0 {
-		cfg.LLM.ValidateAndFallbackModels(availableModels)
-	}
-
 	return &cfg, nil
 }
 
