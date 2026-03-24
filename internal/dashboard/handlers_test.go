@@ -48,6 +48,62 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 			}
 			return string(b)
 		},
+		"labelIcon": func(label string) string {
+			switch label {
+			case "type:feature":
+				return "✨"
+			case "type:bug":
+				return "🐛"
+			case "type:docs":
+				return "📚"
+			case "type:refactor":
+				return "🔧"
+			case "size:S":
+				return "🟢"
+			case "size:M":
+				return "🟡"
+			case "size:L":
+				return "🟠"
+			case "size:XL":
+				return "🔴"
+			case "priority:high":
+				return "🔥"
+			case "priority:medium":
+				return "⚡"
+			case "priority:low":
+				return "🌱"
+			default:
+				return ""
+			}
+		},
+		"labelTooltip": func(label string) string {
+			switch label {
+			case "type:feature":
+				return "Feature"
+			case "type:bug":
+				return "Bug"
+			case "type:docs":
+				return "Documentation"
+			case "type:refactor":
+				return "Refactor"
+			case "size:S":
+				return "Size: Small"
+			case "size:M":
+				return "Size: Medium"
+			case "size:L":
+				return "Size: Large"
+			case "size:XL":
+				return "Size: Extra Large"
+			case "priority:high":
+				return "Priority: High"
+			case "priority:medium":
+				return "Priority: Medium"
+			case "priority:low":
+				return "Priority: Low"
+			default:
+				return ""
+			}
+		},
 	}
 
 	pages := []string{"board.html", "task.html"}
@@ -4663,5 +4719,222 @@ func TestHandleYoloToggle_NoRootDir(t *testing.T) {
 	// Should return 500
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("expected status 500 when rootDir is empty, got %d", rec.Code)
+	}
+}
+
+// TestLabelIcon tests the labelIcon template function
+func TestLabelIcon(t *testing.T) {
+	tests := []struct {
+		name     string
+		label    string
+		expected string
+	}{
+		{"type:feature", "type:feature", "✨"},
+		{"type:bug", "type:bug", "🐛"},
+		{"type:docs", "type:docs", "📚"},
+		{"type:refactor", "type:refactor", "🔧"},
+		{"size:S", "size:S", "🟢"},
+		{"size:M", "size:M", "🟡"},
+		{"size:L", "size:L", "🟠"},
+		{"size:XL", "size:XL", "🔴"},
+		{"priority:high", "priority:high", "🔥"},
+		{"priority:medium", "priority:medium", "⚡"},
+		{"priority:low", "priority:low", "🌱"},
+		{"unknown label", "unknown:label", ""},
+		{"stage label", "stage:analysis", ""},
+		{"empty label", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a minimal template to test the function
+			funcMap := template.FuncMap{
+				"labelIcon": func(label string) string {
+					switch label {
+					case "type:feature":
+						return "✨"
+					case "type:bug":
+						return "🐛"
+					case "type:docs":
+						return "📚"
+					case "type:refactor":
+						return "🔧"
+					case "size:S":
+						return "🟢"
+					case "size:M":
+						return "🟡"
+					case "size:L":
+						return "🟠"
+					case "size:XL":
+						return "🔴"
+					case "priority:high":
+						return "🔥"
+					case "priority:medium":
+						return "⚡"
+					case "priority:low":
+						return "🌱"
+					default:
+						return ""
+					}
+				},
+			}
+
+			tmpl, err := template.New("test").Funcs(funcMap).Parse("{{labelIcon .}}")
+			if err != nil {
+				t.Fatalf("failed to parse template: %v", err)
+			}
+
+			var buf strings.Builder
+			if err := tmpl.Execute(&buf, tt.label); err != nil {
+				t.Fatalf("failed to execute template: %v", err)
+			}
+
+			if buf.String() != tt.expected {
+				t.Errorf("labelIcon(%q) = %q, want %q", tt.label, buf.String(), tt.expected)
+			}
+		})
+	}
+}
+
+// TestLabelTooltip tests the labelTooltip template function
+func TestLabelTooltip(t *testing.T) {
+	tests := []struct {
+		name     string
+		label    string
+		expected string
+	}{
+		{"type:feature", "type:feature", "Feature"},
+		{"type:bug", "type:bug", "Bug"},
+		{"type:docs", "type:docs", "Documentation"},
+		{"type:refactor", "type:refactor", "Refactor"},
+		{"size:S", "size:S", "Size: Small"},
+		{"size:M", "size:M", "Size: Medium"},
+		{"size:L", "size:L", "Size: Large"},
+		{"size:XL", "size:XL", "Size: Extra Large"},
+		{"priority:high", "priority:high", "Priority: High"},
+		{"priority:medium", "priority:medium", "Priority: Medium"},
+		{"priority:low", "priority:low", "Priority: Low"},
+		{"unknown label", "unknown:label", ""},
+		{"stage label", "stage:analysis", ""},
+		{"empty label", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a minimal template to test the function
+			funcMap := template.FuncMap{
+				"labelTooltip": func(label string) string {
+					switch label {
+					case "type:feature":
+						return "Feature"
+					case "type:bug":
+						return "Bug"
+					case "type:docs":
+						return "Documentation"
+					case "type:refactor":
+						return "Refactor"
+					case "size:S":
+						return "Size: Small"
+					case "size:M":
+						return "Size: Medium"
+					case "size:L":
+						return "Size: Large"
+					case "size:XL":
+						return "Size: Extra Large"
+					case "priority:high":
+						return "Priority: High"
+					case "priority:medium":
+						return "Priority: Medium"
+					case "priority:low":
+						return "Priority: Low"
+					default:
+						return ""
+					}
+				},
+			}
+
+			tmpl, err := template.New("test").Funcs(funcMap).Parse("{{labelTooltip .}}")
+			if err != nil {
+				t.Fatalf("failed to parse template: %v", err)
+			}
+
+			var buf strings.Builder
+			if err := tmpl.Execute(&buf, tt.label); err != nil {
+				t.Fatalf("failed to execute template: %v", err)
+			}
+
+			if buf.String() != tt.expected {
+				t.Errorf("labelTooltip(%q) = %q, want %q", tt.label, buf.String(), tt.expected)
+			}
+		})
+	}
+}
+
+// TestBoardTemplate_LabelIcons verifies that label icons are rendered correctly in the board template
+func TestBoardTemplate_LabelIcons(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Create test data with mixed icon and text labels
+	data := boardData{
+		Active: "board",
+		Plan: []taskCard{
+			{
+				ID:     1,
+				Title:  "Test Feature",
+				Status: "Plan",
+				Labels: []string{"type:feature", "size:M", "priority:high", "stage:analysis"},
+			},
+		},
+	}
+
+	// Execute the board-columns template
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "board-columns", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify icon labels are rendered with icon class and tooltip
+	if !strings.Contains(output, `class="label-icon"`) {
+		t.Error("template should render icon labels with label-icon class")
+	}
+
+	// Verify text labels are still rendered for unknown labels
+	if !strings.Contains(output, `class="label"`) {
+		t.Error("template should render text labels with label class")
+	}
+
+	// Verify specific icons are present
+	if !strings.Contains(output, "✨") {
+		t.Error("template should contain feature icon (✨)")
+	}
+	if !strings.Contains(output, "🟡") {
+		t.Error("template should contain size M icon (🟡)")
+	}
+	if !strings.Contains(output, "🔥") {
+		t.Error("template should contain high priority icon (🔥)")
+	}
+
+	// Verify stage label is rendered as text (not icon)
+	if !strings.Contains(output, "stage:analysis") {
+		t.Error("template should render stage:analysis as text label")
+	}
+
+	// Verify tooltips are present
+	if !strings.Contains(output, `title="Feature"`) {
+		t.Error("template should contain tooltip for feature label")
+	}
+	if !strings.Contains(output, `title="Size: Medium"`) {
+		t.Error("template should contain tooltip for size M label")
+	}
+	if !strings.Contains(output, `title="Priority: High"`) {
+		t.Error("template should contain tooltip for priority high label")
 	}
 }

@@ -17,6 +17,7 @@
 .card .card-assignee{color:var(--accent);font-size:.75rem}
 .card .card-labels{display:flex;gap:.25rem;flex-wrap:wrap}
 .card .label{font-size:.65rem;padding:.1rem .4rem;border-radius:4px;background:var(--surface);border:1px solid var(--border)}
+.card .label-icon{font-size:1rem;line-height:1;cursor:help}
 .card .card-worker{color:var(--accent);font-size:.75rem;margin-top:.3rem}
 .card-actions{display:flex;gap:.3rem;margin-top:.4rem}
 .card-actions .btn{padding:.2rem .5rem;font-size:.75rem}
@@ -150,7 +151,7 @@ function triggerSync() {
     <div class="card">
       <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
-      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
+      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{else}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
       <div class="card-actions">
         <form method="post" action="/unblock/{{.ID}}"><button type="submit" class="btn btn-success">Unblock</button></form>
@@ -167,7 +168,7 @@ function triggerSync() {
     <div class="card">
       <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
-      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
+      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{else}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
       <div class="card-actions">
         <form method="post" action="/block/{{.ID}}"><button type="submit" class="btn" title="Block this ticket">Block</button></form>
@@ -184,7 +185,7 @@ function triggerSync() {
     <div class="card">
       <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
-      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
+      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{else}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
       {{if .Worker}}<div class="card-worker">{{.Worker}}</div>{{end}}
     </div>
@@ -199,7 +200,7 @@ function triggerSync() {
     <div class="card">
       <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
-      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
+      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{else}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
       {{if .Worker}}<div class="card-worker">{{.Worker}}</div>{{end}}
     </div>
@@ -214,7 +215,7 @@ function triggerSync() {
     <div class="card">
       <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
-      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
+      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{else}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
     </div>
     {{else}}
@@ -229,7 +230,7 @@ function triggerSync() {
       <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
       {{if .PRURL}}<div class="card-pr"><a href="{{.PRURL}}" target="_blank">View PR →</a></div>{{end}}
-      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
+      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{else}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
       <div class="card-actions">
         <form method="post" action="/approve-merge/{{.ID}}"><button type="submit" class="btn btn-success">Approve & Merge</button></form>
@@ -247,7 +248,7 @@ function triggerSync() {
     <div class="card">
       <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
-      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
+      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{else}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
     </div>
     {{else}}
@@ -268,7 +269,7 @@ function triggerSync() {
         <span class="badge-closed">✕ Closed</span>
         {{end}}
       </div>
-      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
+      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{else}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
       {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
     </div>
     {{else}}
@@ -282,7 +283,7 @@ function triggerSync() {
     <div class="card">
       <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
       <div class="card-title">{{.Title}}</div>
-      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
+      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{else}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
       <div class="card-actions">
         <form method="post" action="/retry/{{.ID}}"><button type="submit" class="btn btn-success">Retry</button></form>
         <form method="post" action="/retry-fresh/{{.ID}}"><button type="submit" class="btn btn-primary">Retry Fresh</button></form>
