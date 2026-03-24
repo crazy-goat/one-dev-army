@@ -231,6 +231,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/rate-limit", s.handleRateLimit)
 	s.mux.HandleFunc("POST /api/rate-limit/refresh", s.handleRateLimitRefresh)
 
+	// Worker status endpoint
+	s.mux.HandleFunc("GET /api/worker-status", s.handleWorkerStatus)
+
 	// Settings endpoints
 	s.mux.HandleFunc("GET /settings", s.handleSettings)
 	s.mux.HandleFunc("POST /settings", s.handleSaveSettings)

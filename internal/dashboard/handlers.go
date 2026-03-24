@@ -1889,3 +1889,44 @@ func (s *Server) validateModelSelection(model string) bool {
 	}
 	return false
 }
+
+// handleWorkerStatus returns the current worker status as JSON
+func (s *Server) handleWorkerStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if s.orchestrator == nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"active":      false,
+			"paused":      true,
+			"step":        "",
+			"elapsed":     0,
+			"issue_id":    0,
+			"issue_title": "",
+		}); err != nil {
+			log.Printf("[Dashboard] Error encoding JSON: %v", err)
+		}
+		return
+	}
+
+	resp := map[string]any{
+		"active":      s.orchestrator.IsProcessing(),
+		"paused":      s.orchestrator.IsPaused(),
+		"step":        "",
+		"elapsed":     0,
+		"issue_id":    0,
+		"issue_title": "",
+	}
+
+	if task := s.orchestrator.CurrentTask(); task != nil {
+		resp["issue_id"] = task.Issue.Number
+		resp["issue_title"] = task.Issue.Title
+		resp["step"] = string(task.Status)
+		// Calculate elapsed time since task started
+		// Note: This is a simplified version - in production you'd track actual start time
+		resp["elapsed"] = 0
+	}
+
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("[Dashboard] Error encoding JSON: %v", err)
+	}
+}
