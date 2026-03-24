@@ -292,7 +292,7 @@ func (o *Orchestrator) pickNextTicket(_ context.Context, candidates []github.Iss
 	}()
 
 	// Use router to select model for orchestration category
-	llmModel := o.cfg.Planning.LLM
+	llmModel := o.cfg.LLM.Orchestration.Model
 	if o.router != nil {
 		llmModel = o.router.SelectModel(config.CategoryOrchestration, config.ComplexityMedium, nil)
 	}

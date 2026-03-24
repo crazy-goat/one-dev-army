@@ -142,7 +142,9 @@ func TestEpicAnalyzer_ParseResponse(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{
-		EpicAnalysis: config.EpicAnalysis{LLM: "test-model"},
+		LLM: config.LLMConfig{
+			Planning: config.CategoryModels{Model: "test-model"},
+		},
 	}
 	oc := opencode.NewClient(srv.URL)
 	router := llm.NewRouter(&cfg.LLM)

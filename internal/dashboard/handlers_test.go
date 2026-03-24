@@ -3789,10 +3789,6 @@ func TestHandleSaveSettings(t *testing.T) {
 	form.Set("orchestration_model", "orch-provider/orch-model")
 	form.Set("code_model", "code-provider/code-model")
 	form.Set("code_heavy_model", "code-heavy-provider/code-heavy-model")
-	form.Set("routing_code_size_threshold", "150")
-	form.Set("routing_high_complexity_threshold", "600")
-	form.Set("routing_file_count_threshold", "10")
-	form.Set("routing_force_strong_stages", "plan-review, code-review")
 
 	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -3820,9 +3816,6 @@ func TestHandleSaveSettings(t *testing.T) {
 	savedContent := string(savedData)
 	if !strings.Contains(savedContent, "code-provider/code-model") {
 		t.Error("saved config should contain new model")
-	}
-	if !strings.Contains(savedContent, "150") {
-		t.Error("saved config should contain new code size threshold")
 	}
 }
 
@@ -3884,64 +3877,6 @@ func TestHandleSaveSettingsValidation(t *testing.T) {
 	}
 }
 
-// TestHandleSaveSettingsValidationNegativeThresholds tests validation for negative thresholds
-func TestHandleSaveSettingsValidationNegativeThresholds(t *testing.T) {
-	// Create a temporary directory for config
-	tmpDir := t.TempDir()
-
-	// Create .oda directory
-	odaDir := filepath.Join(tmpDir, ".oda")
-	if err := os.MkdirAll(odaDir, 0755); err != nil {
-		t.Fatalf("failed to create .oda directory: %v", err)
-	}
-
-	// Create a minimal config file
-	configPath := filepath.Join(odaDir, "config.yaml")
-	configContent := `llm:
-  development:
-    strong:
-      model: test-provider/test-model
-    weak:
-      model: test-provider/test-model-weak
-`
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		t.Fatalf("failed to write config file: %v", err)
-	}
-
-	// Create server with templates
-	srv := createTestServerWithTemplates(t)
-	srv.rootDir = tmpDir
-	defer srv.wizardStore.Stop()
-
-	// Test POST /settings with negative threshold
-	form := url.Values{}
-	form.Set("setup_model", "setup-provider/setup-model")
-	form.Set("planning_model", "planning-provider/planning-model")
-	form.Set("orchestration_model", "orch-provider/orch-model")
-	form.Set("code_model", "code-provider/code-model")
-	form.Set("code_heavy_model", "code-heavy-provider/code-heavy-model")
-	form.Set("routing_code_size_threshold", "-1") // Negative - should fail validation
-	form.Set("routing_high_complexity_threshold", "600")
-	form.Set("routing_file_count_threshold", "10")
-
-	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-
-	srv.handleSaveSettings(rec, req)
-
-	// Should return 200 OK but with error message
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", rec.Code)
-	}
-
-	// Verify error message
-	body := rec.Body.String()
-	if !strings.Contains(body, "positive integer") {
-		t.Error("response should contain validation error for negative threshold")
-	}
-}
-
 // TestSettingsPersistence verifies that saved config can be reloaded correctly
 func TestSettingsPersistence(t *testing.T) {
 	// Create a temporary directory for config
@@ -3999,12 +3934,6 @@ func TestSettingsPersistence(t *testing.T) {
 	// Verify the values were persisted
 	if reloadedCfg.LLM.Code.Model != "persisted-provider/persisted-model" {
 		t.Errorf("expected model to be 'persisted-provider/persisted-model', got %q", reloadedCfg.LLM.Code.Model)
-	}
-	if reloadedCfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold != 200 { //nolint:staticcheck // deprecated but kept for backward compatibility
-		t.Errorf("expected code size threshold to be 200, got %d", reloadedCfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold) //nolint:staticcheck // deprecated but kept for backward compatibility
-	}
-	if len(reloadedCfg.LLM.RoutingRules.ForceStrongForStages) != 1 || reloadedCfg.LLM.RoutingRules.ForceStrongForStages[0] != "test-stage" { //nolint:staticcheck // deprecated but kept for backward compatibility
-		t.Errorf("expected force strong stages to be ['test-stage'], got %v", reloadedCfg.LLM.RoutingRules.ForceStrongForStages) //nolint:staticcheck // deprecated but kept for backward compatibility
 	}
 }
 
@@ -4321,18 +4250,18 @@ func TestHandleSettingsTemplateData(t *testing.T) {
 		t.Fatalf("failed to create .oda directory: %v", err)
 	}
 
-	// Create a config file with force strong stages
+	// Create a config file with model settings
 	configContent := `llm:
-  development:
-    strong:
-      model: test-provider/test-model
-    weak:
-      model: test-provider/test-model-weak
-  routing_rules:
-    force_strong_for_stages:
-      - stage1
-      - stage2
-      - stage3
+  setup:
+    model: test-provider/test-model
+  planning:
+    model: test-provider/test-model
+  orchestration:
+    model: test-provider/test-model
+  code:
+    model: test-provider/test-model
+  code-heavy:
+    model: test-provider/test-model
 `
 	configPath := filepath.Join(odaDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
@@ -4355,10 +4284,10 @@ func TestHandleSettingsTemplateData(t *testing.T) {
 		t.Errorf("expected status 200, got %d", rec.Code)
 	}
 
-	// Verify force strong stages are displayed as comma-separated
+	// Verify model settings are displayed
 	body := rec.Body.String()
-	if !strings.Contains(body, "stage1, stage2, stage3") && !strings.Contains(body, "stage1,stage2,stage3") {
-		t.Error("response should contain comma-separated force strong stages")
+	if !strings.Contains(body, "test-provider/test-model") {
+		t.Error("response should contain model settings")
 	}
 }
 

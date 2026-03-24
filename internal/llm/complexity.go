@@ -46,14 +46,41 @@ func countComplexityIndicators(text string) int {
 }
 
 // ComplexityAnalyzer provides detailed complexity analysis for tasks
+//
+// Deprecated: Complexity-based routing is being phased out
 type ComplexityAnalyzer struct {
-	thresholds config.ComplexityThresholds //nolint:staticcheck // deprecated but kept for backward compatibility
+	thresholds ComplexityThresholds
+}
+
+// ComplexityThresholds defines thresholds for complexity detection
+//
+// Deprecated: Being phased out in favor of explicit per-mode model selection
+type ComplexityThresholds struct {
+	// CodeSizeThreshold is the number of lines that triggers medium complexity
+	CodeSizeThreshold int
+
+	// HighComplexityThreshold is the number of lines that triggers high complexity
+	HighComplexityThreshold int
+
+	// FileCountThreshold is the number of files that triggers higher complexity
+	FileCountThreshold int
+}
+
+// defaultThresholds returns the default complexity thresholds
+func defaultThresholds() ComplexityThresholds {
+	return ComplexityThresholds{
+		CodeSizeThreshold:       100,
+		HighComplexityThreshold: 500,
+		FileCountThreshold:      5,
+	}
 }
 
 // NewComplexityAnalyzer creates a new complexity analyzer
-func NewComplexityAnalyzer(thresholds config.ComplexityThresholds) *ComplexityAnalyzer { //nolint:staticcheck // deprecated but kept for backward compatibility
+//
+// Deprecated: Complexity-based routing is being phased out
+func NewComplexityAnalyzer(thresholds ComplexityThresholds) *ComplexityAnalyzer {
 	if thresholds.CodeSizeThreshold == 0 {
-		thresholds = config.DefaultLLMConfig().RoutingRules.ComplexityThresholds //nolint:staticcheck // deprecated but kept for backward compatibility
+		thresholds = defaultThresholds()
 	}
 
 	return &ComplexityAnalyzer{
@@ -259,7 +286,7 @@ func EstimateFromKeywords(text string, keywords TaskKeywords) config.ComplexityL
 //
 // Deprecated: Complexity-based routing is being phased out
 func DetectComplexity(context string) config.ComplexityLevel {
-	thresholds := config.DefaultLLMConfig().RoutingRules.ComplexityThresholds
+	thresholds := defaultThresholds()
 	analyzer := NewComplexityAnalyzer(thresholds)
 	report := analyzer.AnalyzeTask(context, []string{}, nil)
 	return report.Complexity

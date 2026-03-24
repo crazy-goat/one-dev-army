@@ -1723,15 +1723,14 @@ func (s *Server) handleRateLimitRefresh(w http.ResponseWriter, r *http.Request) 
 
 // settingsData holds the data for the settings template
 type settingsData struct {
-	Active            string
-	OpenCodePort      int
-	WorkerCount       int
-	Config            config.LLMConfig
-	YoloMode          bool
-	ForceStrongStages string
-	Success           bool
-	Errors            []string
-	AvailableModels   []opencode.ProviderModel
+	Active          string
+	OpenCodePort    int
+	WorkerCount     int
+	Config          config.LLMConfig
+	YoloMode        bool
+	Success         bool
+	Errors          []string
+	AvailableModels []opencode.ProviderModel
 }
 
 // handleSettings renders the LLM configuration settings page
@@ -1746,21 +1745,17 @@ func (s *Server) handleSettings(w http.ResponseWriter, _ *http.Request) {
 		cfg = &config.Config{LLM: defaultCfg}
 	}
 
-	// Build comma-separated list of forced strong stages
-	forceStrongStages := strings.Join(cfg.LLM.RoutingRules.ForceStrongForStages, ", ") //nolint:staticcheck // deprecated but kept for backward compatibility
-
 	workerCount := 0
 	if s.pool != nil {
 		workerCount = len(s.pool())
 	}
 	data := settingsData{
-		Active:            "settings",
-		OpenCodePort:      s.webPort,
-		WorkerCount:       workerCount,
-		Config:            cfg.LLM,
-		YoloMode:          cfg.YoloMode,
-		ForceStrongStages: forceStrongStages,
-		AvailableModels:   s.modelsCache,
+		Active:          "settings",
+		OpenCodePort:    s.webPort,
+		WorkerCount:     workerCount,
+		Config:          cfg.LLM,
+		YoloMode:        cfg.YoloMode,
+		AvailableModels: s.modelsCache,
 	}
 
 	s.render(w, "llm-config.html", data)
@@ -1834,44 +1829,6 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Parse routing thresholds
-	codeSizeThreshold, err := strconv.Atoi(r.FormValue("routing_code_size_threshold"))
-	if err != nil || codeSizeThreshold < 1 {
-		errors = append(errors, "Code Size Threshold must be a positive integer")
-	} else {
-		cfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold = codeSizeThreshold //nolint:staticcheck // deprecated but kept for backward compatibility
-	}
-
-	highComplexityThreshold, err := strconv.Atoi(r.FormValue("routing_high_complexity_threshold"))
-	if err != nil || highComplexityThreshold < 1 {
-		errors = append(errors, "High Complexity Threshold must be a positive integer")
-	} else {
-		cfg.LLM.RoutingRules.ComplexityThresholds.HighComplexityThreshold = highComplexityThreshold //nolint:staticcheck // deprecated but kept for backward compatibility
-	}
-
-	fileCountThreshold, err := strconv.Atoi(r.FormValue("routing_file_count_threshold"))
-	if err != nil || fileCountThreshold < 1 {
-		errors = append(errors, "File Count Threshold must be a positive integer")
-	} else {
-		cfg.LLM.RoutingRules.ComplexityThresholds.FileCountThreshold = fileCountThreshold //nolint:staticcheck // deprecated but kept for backward compatibility
-	}
-
-	// Parse forced strong stages
-	forceStrongStagesStr := r.FormValue("routing_force_strong_stages")
-	if forceStrongStagesStr != "" {
-		// Split by comma and trim whitespace
-		stages := strings.Split(forceStrongStagesStr, ",")
-		cfg.LLM.RoutingRules.ForceStrongForStages = make([]string, 0, len(stages)) //nolint:staticcheck // deprecated but kept for backward compatibility
-		for _, stage := range stages {
-			stage = strings.TrimSpace(stage)
-			if stage != "" {
-				cfg.LLM.RoutingRules.ForceStrongForStages = append(cfg.LLM.RoutingRules.ForceStrongForStages, stage) //nolint:staticcheck // deprecated but kept for backward compatibility
-			}
-		}
-	} else {
-		cfg.LLM.RoutingRules.ForceStrongForStages = []string{} //nolint:staticcheck // deprecated but kept for backward compatibility
-	}
-
 	// Parse yolo_mode checkbox (checkbox returns "on" when checked, empty when unchecked)
 	cfg.YoloMode = r.FormValue("yolo_mode") == "on"
 
@@ -1891,21 +1848,19 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[Dashboard] LLM configuration saved successfully")
 
 	// Re-render with success message and any warnings
-	forceStrongStages := strings.Join(cfg.LLM.RoutingRules.ForceStrongForStages, ", ") //nolint:staticcheck // deprecated but kept for backward compatibility
 	workerCount := 0
 	if s.pool != nil {
 		workerCount = len(s.pool())
 	}
 	data := settingsData{
-		Active:            "settings",
-		OpenCodePort:      s.webPort,
-		WorkerCount:       workerCount,
-		Config:            cfg.LLM,
-		YoloMode:          cfg.YoloMode,
-		ForceStrongStages: forceStrongStages,
-		Success:           true,
-		Errors:            warnings, // Show warnings as info messages
-		AvailableModels:   s.modelsCache,
+		Active:          "settings",
+		OpenCodePort:    s.webPort,
+		WorkerCount:     workerCount,
+		Config:          cfg.LLM,
+		YoloMode:        cfg.YoloMode,
+		Success:         true,
+		Errors:          warnings, // Show warnings as info messages
+		AvailableModels: s.modelsCache,
 	}
 
 	s.render(w, "llm-config.html", data)
@@ -1920,35 +1875,26 @@ func (s *Server) renderSettingsWithErrors(w http.ResponseWriter, r *http.Request
 		cfg = &config.Config{LLM: config.DefaultLLMConfig()}
 	}
 
-	// Override with form values to preserve user input
-	// This is a simplified approach - in production, you'd want to preserve all form values
-	forceStrongStages := r.FormValue("routing_force_strong_stages")
-
 	workerCount := 0
 	if s.pool != nil {
 		workerCount = len(s.pool())
 	}
 	data := settingsData{
-		Active:            "settings",
-		OpenCodePort:      s.webPort,
-		WorkerCount:       workerCount,
-		Config:            cfg.LLM,
-		YoloMode:          cfg.YoloMode,
-		ForceStrongStages: forceStrongStages,
-		Errors:            errors,
-		AvailableModels:   s.modelsCache,
+		Active:          "settings",
+		OpenCodePort:    s.webPort,
+		WorkerCount:     workerCount,
+		Config:          cfg.LLM,
+		YoloMode:        cfg.YoloMode,
+		Errors:          errors,
+		AvailableModels: s.modelsCache,
 	}
 
 	s.render(w, "llm-config.html", data)
 }
 
-// validateModelFormat checks if the model string is in the correct "provider/model" format
+// validateModelFormat checks if the model string is valid (any non-empty string is accepted)
 func validateModelFormat(model string) bool {
-	if model == "" {
-		return false
-	}
-	parts := strings.Split(model, "/")
-	return len(parts) == 2 && parts[0] != "" && parts[1] != ""
+	return model != ""
 }
 
 // validateModelSelection checks if a model selection is valid against the cached models

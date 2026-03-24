@@ -202,8 +202,10 @@ func TestPlanSprint_Integration(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{
-		Planning: config.Planning{LLM: "test-planner"},
-		Sprint:   config.Sprint{TasksPerSprint: 5},
+		LLM: config.LLMConfig{
+			Planning: config.CategoryModels{Model: "test-planner"},
+		},
+		Sprint: config.Sprint{TasksPerSprint: 5},
 	}
 	oc := opencode.NewClient(srv.URL)
 
@@ -223,7 +225,7 @@ func TestPlanSprint_Integration(t *testing.T) {
 		{Number: 5, Title: "Task B", Labels: []label{{Name: "size:M"}}},
 	}, cfg.Sprint.TasksPerSprint)
 
-	msg, err := planner.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(cfg.Planning.LLM), nil)
+	msg, err := planner.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(cfg.LLM.Planning.Model), nil)
 	if err != nil {
 		t.Fatalf("sending message: %v", err)
 	}
