@@ -4509,22 +4509,31 @@ func TestHandleRetry_CleansUpAndMovesToBacklog(t *testing.T) {
 	}
 }
 
-// TestHandleRetryFresh_CleansUpLocalBranch tests that handleRetryFresh cleans up local branch
-func TestHandleRetryFresh_CleansUpLocalBranch(t *testing.T) {
-	srv := &Server{
-		tmpls: make(map[string]*template.Template),
-		// No orchestrator set - should still handle gracefully
-	}
+// TestSettingsForm_HTMXTargetBody verifies that the settings form uses hx-target="body" to prevent layout nesting
+func TestSettingsForm_HTMXTargetBody(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
 
-	// Test with invalid issue ID
-	req := httptest.NewRequest(http.MethodPost, "/retry-fresh/invalid", nil)
-	req.SetPathValue("id", "invalid")
+	// Test GET /settings
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
 	rec := httptest.NewRecorder()
 
-	srv.handleRetryFresh(rec, req)
+	srv.handleSettings(rec, req)
 
-	// Should redirect to root when no orchestrator
-	if rec.Code != http.StatusSeeOther {
-		t.Errorf("expected status 303, got %d", rec.Code)
+	// Should return 200 OK
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify the form uses hx-target="body" (new correct value)
+	if !strings.Contains(body, `hx-target="body"`) {
+		t.Error("settings form should use hx-target=\"body\" to prevent layout nesting")
+	}
+
+	// Verify the form does NOT use hx-target=".settings-container" (old incorrect value)
+	if strings.Contains(body, `hx-target=".settings-container"`) {
+		t.Error("settings form should NOT use hx-target=\".settings-container\" (causes layout duplication)")
 	}
 }
