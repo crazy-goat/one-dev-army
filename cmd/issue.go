@@ -4,7 +4,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/crazy-goat/one-dev-army/internal/github"
 )
@@ -20,7 +23,7 @@ type IssueCreateFlags struct {
 }
 
 // IssueCommand handles the 'issue' subcommand and its children
-func IssueCommand(args []string, client *github.Client) error {
+func IssueCommand(args []string, client *github.Client, dashboardPort int) error {
 	if len(args) < 1 {
 		return errors.New("issue command requires a subcommand: create")
 	}
@@ -30,14 +33,14 @@ func IssueCommand(args []string, client *github.Client) error {
 
 	switch subcommand {
 	case "create":
-		return IssueCreateCommand(subArgs, client)
+		return IssueCreateCommand(subArgs, client, dashboardPort)
 	default:
 		return fmt.Errorf("unknown issue subcommand: %s", subcommand)
 	}
 }
 
 // IssueCreateCommand handles the 'issue create' subcommand
-func IssueCreateCommand(args []string, client *github.Client) error {
+func IssueCreateCommand(args []string, client *github.Client, dashboardPort int) error {
 	flags := IssueCreateFlags{}
 
 	// Create a new flag set for this subcommand
@@ -95,6 +98,11 @@ func IssueCreateCommand(args []string, client *github.Client) error {
 	}
 	if len(labels) > 0 {
 		fmt.Printf("Labels: %s\n", strings.Join(labels, ", "))
+	}
+
+	// Trigger dashboard sync if port is configured
+	if dashboardPort > 0 {
+		triggerDashboardSync(dashboardPort)
 	}
 
 	return nil
@@ -158,4 +166,26 @@ func PrintIssueUsage() {
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  oda issue create --title \"Fix login bug\" --text \"Users cannot login\" --priority high --type bug --current-sprint")
+}
+
+// triggerDashboardSync sends an HTTP POST request to the dashboard sync endpoint
+func triggerDashboardSync(port int) {
+	url := fmt.Sprintf("http://localhost:%d/api/sync", port)
+
+	client := &http.Client{
+		Timeout: 2 * time.Second,
+	}
+
+	resp, err := client.Post(url, "application/json", nil)
+	if err != nil {
+		log.Printf("Warning: dashboard sync failed (dashboard may not be running): %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		fmt.Println("Dashboard synced")
+	} else {
+		log.Printf("Warning: dashboard sync returned status %d", resp.StatusCode)
+	}
 }

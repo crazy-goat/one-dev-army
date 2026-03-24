@@ -136,7 +136,7 @@ func runIssue(args []string, dir string) error {
 	}
 
 	gh := github.NewClient(cfg.GitHub.Repo)
-	return cmd.IssueCommand(args, gh)
+	return cmd.IssueCommand(args, gh, cfg.Dashboard.Port)
 }
 
 func runServe(dir string, debugWebSocket bool) error {
