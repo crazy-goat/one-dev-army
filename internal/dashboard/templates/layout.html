@@ -82,6 +82,17 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
 .worker-status-value{font-weight:500;flex:1}
 .worker-status-tooltip::after{content:'';position:absolute;top:100%;right:1rem;border:6px solid transparent;border-top-color:var(--surface)}
 .worker-status-tooltip::before{content:'';position:absolute;top:100%;right:calc(1rem - 1px);border:7px solid transparent;border-top-color:var(--border)}
+
+/* YOLO mode indicator */
+.yolo-mode-container{position:relative;display:inline-flex;align-items:center;gap:.5rem;padding:.25rem .5rem;border-radius:4px;background:var(--red);border:1px solid var(--red);color:#fff;font-weight:600;font-size:.75rem;margin-right:.75rem;animation:yolo-pulse 2s ease-in-out infinite}
+@keyframes yolo-pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(248,81,73,.4)}50%{opacity:.9;box-shadow:0 0 0 4px rgba(248,81,73,.2)}}
+.yolo-mode-container:hover .yolo-mode-tooltip{display:block}
+.yolo-mode-icon{font-size:.9rem}
+.yolo-mode-tooltip{display:none;position:absolute;bottom:100%;right:0;margin-bottom:.5rem;padding:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.3);min-width:220px;z-index:1000;color:var(--text);font-weight:400}
+.yolo-mode-tooltip-header{font-weight:600;font-size:.9rem;margin-bottom:.5rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);color:var(--red)}
+.yolo-mode-tooltip-content{font-size:.8rem;line-height:1.4;color:var(--muted)}
+.yolo-mode-tooltip::after{content:'';position:absolute;top:100%;right:1rem;border:6px solid transparent;border-top-color:var(--surface)}
+.yolo-mode-tooltip::before{content:'';position:absolute;top:100%;right:calc(1rem - 1px);border:7px solid transparent;border-top-color:var(--border)}
 </style>
 </head>
 <body>
@@ -117,6 +128,18 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
       </div>
     </div>
   </div>
+  {{if .YoloMode}}
+  <div class="yolo-mode-container" id="yolo-mode-container">
+    <span class="yolo-mode-icon">⚡</span>
+    <span>YOLO MODE</span>
+    <div class="yolo-mode-tooltip">
+      <div class="yolo-mode-tooltip-header">YOLO Mode Enabled</div>
+      <div class="yolo-mode-tooltip-content">
+        AI will auto-approve all changes without human review. Use with caution!
+      </div>
+    </div>
+  </div>
+  {{end}}
   <div hx-get="/api/rate-limit" hx-trigger="load, every 30s" hx-swap="innerHTML">
     <span class="rate-limit-unknown">GitHub API: Loading...</span>
   </div>
