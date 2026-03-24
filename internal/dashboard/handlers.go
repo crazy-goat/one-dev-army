@@ -341,15 +341,41 @@ func (s *Server) handleRetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set stage label to coding (removes failed label and adds coding label) via orchestrator
-	err := s.orchestrator.ChangeStage(issueNum, github.StageCode, github.ReasonManualRetry)
+	// Close any open PR
+	if branch, err := s.gh.FindPRBranch(issueNum); err == nil {
+		log.Printf("[Dashboard] Closing PR for #%d (branch: %s)", issueNum, branch)
+		if closeErr := s.gh.ClosePR(branch); closeErr != nil {
+			log.Printf("[Dashboard] Error closing PR for #%d: %v", issueNum, closeErr)
+		}
+	}
+
+	// Delete local branch if it exists
+	if s.brMgr != nil {
+		branchPrefix := fmt.Sprintf("oda-%d-", issueNum)
+		if localBranch := s.brMgr.FindBranchByPrefix(branchPrefix); localBranch != "" {
+			log.Printf("[Dashboard] Deleting local branch %q for #%d", localBranch, issueNum)
+			if err := s.brMgr.RemoveBranch(localBranch); err != nil {
+				log.Printf("[Dashboard] Error deleting local branch %q for #%d: %v", localBranch, issueNum, err)
+			}
+		}
+	}
+
+	// Clear DB steps
+	if s.store != nil {
+		if err := s.store.DeleteSteps(issueNum); err != nil {
+			log.Printf("[Dashboard] Error deleting steps for #%d: %v", issueNum, err)
+		}
+	}
+
+	// Set stage label to backlog (removes all stage labels) via orchestrator
+	err := s.orchestrator.ChangeStage(issueNum, github.StageBacklog, github.ReasonManualRetry)
 	if err != nil {
-		log.Printf("[Dashboard] Error setting Code stage on #%d: %v", issueNum, err)
+		log.Printf("[Dashboard] Error setting Backlog stage on #%d: %v", issueNum, err)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 
-	log.Printf("[Dashboard] Retry #%d — moved to Code column", issueNum)
+	log.Printf("[Dashboard] Retry #%d — PR closed, local branch deleted, steps cleared, moved to Backlog", issueNum)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -372,6 +398,17 @@ func (s *Server) handleRetryFresh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Delete local branch if it exists
+	if s.brMgr != nil {
+		branchPrefix := fmt.Sprintf("oda-%d-", issueNum)
+		if localBranch := s.brMgr.FindBranchByPrefix(branchPrefix); localBranch != "" {
+			log.Printf("[Dashboard] Deleting local branch %q for #%d", localBranch, issueNum)
+			if err := s.brMgr.RemoveBranch(localBranch); err != nil {
+				log.Printf("[Dashboard] Error deleting local branch %q for #%d: %v", localBranch, issueNum, err)
+			}
+		}
+	}
+
 	// Set stage label to backlog (removes all stage labels) via orchestrator
 	err := s.orchestrator.ChangeStage(issueNum, github.StageBacklog, github.ReasonManualRetryFresh)
 	if err != nil {
@@ -387,7 +424,7 @@ func (s *Server) handleRetryFresh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	log.Printf("[Dashboard] Retry fresh #%d — PR closed, steps cleared, moved to Backlog", issueNum)
+	log.Printf("[Dashboard] Retry fresh #%d — PR closed, local branch deleted, steps cleared, moved to Backlog", issueNum)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

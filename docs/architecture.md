@@ -16,7 +16,7 @@ Tickets flow through stages tracked by GitHub labels with the `stage:` prefix:
 ```
 Backlog -> Plan -> Code -> AI Review -> Create PR -> Approve -> Merge -> Done
                                                                   |
-Any State -----> Failed -----> [Retry] -----> Code
+Any State -----> Failed -----> [Retry] -----> Backlog
 ```
 
 All stage transitions go through `github.Client.SetStageLabel()` which atomically removes old `stage:*` labels and adds the new one. See [state-machine.md](state-machine.md) for the full specification.
