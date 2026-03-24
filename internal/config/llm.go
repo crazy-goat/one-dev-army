@@ -127,16 +127,20 @@ type ModelValidationResult struct {
 		NewModel string
 	}
 	HasReplacements bool
+	ValidatedConfig LLMConfig // New: returns a copy with fallbacks applied, original unchanged
 }
 
-// ValidateAndFallbackModels validates all models against available models and falls back to first available if invalid
-// Returns a result indicating which models were replaced
+// ValidateAndFallbackModels validates all models against available models and returns a result
+// with fallback models applied. The original config is NOT mutated - instead, the result
+// contains a validated copy that can be used when needed.
+// Returns a result indicating which models would be replaced and a validated config copy
 func (cfg *LLMConfig) ValidateAndFallbackModels(availableModels []string) ModelValidationResult {
 	result := ModelValidationResult{
 		ReplacedModels: make(map[string]struct {
 			OldModel string
 			NewModel string
 		}),
+		ValidatedConfig: *cfg, // Copy the original config
 	}
 
 	// If no available models, skip validation (API might be unavailable)
@@ -153,17 +157,17 @@ func (cfg *LLMConfig) ValidateAndFallbackModels(availableModels []string) ModelV
 	// Get first available model as fallback
 	fallbackModel := availableModels[0]
 
-	// Validate and fallback each model
+	// Validate and fallback each model (modifying the copy, not the original)
 	modes := []struct {
 		name      string
 		model     *string
 		defaultTo string
 	}{
-		{"Setup", &cfg.Setup.Model, fallbackModel},
-		{"Planning", &cfg.Planning.Model, fallbackModel},
-		{"Orchestration", &cfg.Orchestration.Model, fallbackModel},
-		{"Code", &cfg.Code.Model, fallbackModel},
-		{"CodeHeavy", &cfg.CodeHeavy.Model, fallbackModel},
+		{"Setup", &result.ValidatedConfig.Setup.Model, fallbackModel},
+		{"Planning", &result.ValidatedConfig.Planning.Model, fallbackModel},
+		{"Orchestration", &result.ValidatedConfig.Orchestration.Model, fallbackModel},
+		{"Code", &result.ValidatedConfig.Code.Model, fallbackModel},
+		{"CodeHeavy", &result.ValidatedConfig.CodeHeavy.Model, fallbackModel},
 	}
 
 	for _, mode := range modes {

@@ -105,6 +105,87 @@ func TestRouter_SelectModelForStage(t *testing.T) {
 	}
 }
 
+func TestRouter_SelectModel_WithFallback(t *testing.T) {
+	tests := []struct {
+		name            string
+		configuredModel string
+		availableModels []string
+		wantModel       string
+	}{
+		{
+			name:            "configured model is available",
+			configuredModel: "provider/model1",
+			availableModels: []string{"provider/model1", "provider/model2"},
+			wantModel:       "provider/model1",
+		},
+		{
+			name:            "configured model not available falls back",
+			configuredModel: "provider/unavailable",
+			availableModels: []string{"provider/model1", "provider/model2"},
+			wantModel:       "provider/model1",
+		},
+		{
+			name:            "no available models returns configured",
+			configuredModel: "provider/model1",
+			availableModels: []string{},
+			wantModel:       "provider/model1",
+		},
+		{
+			name:            "empty configured model falls back",
+			configuredModel: "",
+			availableModels: []string{"provider/model1", "provider/model2"},
+			wantModel:       "provider/model1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := config.LLMConfig{
+				Code: config.CategoryModels{Model: tt.configuredModel},
+			}
+			router := llm.NewRouter(&cfg)
+			router.SetAvailableModels(tt.availableModels)
+
+			got := router.SelectModel(config.CategoryCode, config.ComplexityMedium, nil)
+			if got != tt.wantModel {
+				t.Errorf("SelectModel() = %q, want %q", got, tt.wantModel)
+			}
+		})
+	}
+}
+
+func TestRouter_SetAvailableModels(t *testing.T) {
+	cfg := config.DefaultLLMConfig()
+	router := llm.NewRouter(&cfg)
+
+	models := []string{"provider/model1", "provider/model2"}
+	router.SetAvailableModels(models)
+
+	got := router.GetAvailableModels()
+	if len(got) != len(models) {
+		t.Errorf("GetAvailableModels() returned %d models, want %d", len(got), len(models))
+	}
+	for i, m := range models {
+		if got[i] != m {
+			t.Errorf("GetAvailableModels()[%d] = %q, want %q", i, got[i], m)
+		}
+	}
+}
+
+func TestRouter_SelectModelForStage_WithFallback(t *testing.T) {
+	cfg := config.LLMConfig{
+		Planning: config.CategoryModels{Model: "provider/unavailable"},
+	}
+	router := llm.NewRouter(&cfg)
+	router.SetAvailableModels([]string{"provider/available1", "provider/available2"})
+
+	// Planning stage should use planning model with fallback
+	got := router.SelectModelForStage("analysis", "test context")
+	if got != "provider/available1" {
+		t.Errorf("SelectModelForStage() = %q, want %q", got, "provider/available1")
+	}
+}
+
 func TestRouter_UpdateConfig(t *testing.T) {
 	cfg := config.DefaultLLMConfig()
 	router := llm.NewRouter(&cfg)

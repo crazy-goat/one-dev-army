@@ -11,17 +11,55 @@ import (
 
 // Router provides intelligent model selection based on task category
 type Router struct {
-	cfg      *config.LLMConfig
-	mu       sync.RWMutex
-	onReload []func()
+	cfg             *config.LLMConfig
+	availableModels []string
+	mu              sync.RWMutex
+	onReload        []func()
 }
 
 // NewRouter creates a new LLM router with the given configuration
 func NewRouter(cfg *config.LLMConfig) *Router {
 	return &Router{
-		cfg:      cfg,
-		onReload: make([]func(), 0),
+		cfg:             cfg,
+		availableModels: make([]string, 0),
+		onReload:        make([]func(), 0),
 	}
+}
+
+// SetAvailableModels updates the list of available models for runtime fallback
+func (r *Router) SetAvailableModels(models []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.availableModels = models
+}
+
+// GetAvailableModels returns the current list of available models
+func (r *Router) GetAvailableModels() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.availableModels
+}
+
+// selectModelWithFallback returns the model if available, otherwise returns the first available model
+func (r *Router) selectModelWithFallback(model string) string {
+	// If no available models tracked, return the configured model as-is
+	if len(r.availableModels) == 0 {
+		return model
+	}
+
+	// Build set for O(1) lookup
+	availableSet := make(map[string]bool)
+	for _, m := range r.availableModels {
+		availableSet[m] = true
+	}
+
+	// If model is available, use it
+	if availableSet[model] {
+		return model
+	}
+
+	// Otherwise fallback to first available
+	return r.availableModels[0]
 }
 
 // SelectModel returns the appropriate model reference for a task
@@ -33,7 +71,10 @@ func (r *Router) SelectModel(category config.TaskCategory, _ config.ComplexityLe
 
 	// Get model for category (each mode has a single model now)
 	modelCfg := r.cfg.GetModelForCategory(category, config.ComplexityMedium)
-	return modelCfg.ToModelRef()
+	configuredModel := modelCfg.ToModelRef()
+
+	// Apply runtime fallback if model is not available
+	return r.selectModelWithFallback(configuredModel)
 }
 
 // SelectModelForStage returns the appropriate model for a pipeline stage

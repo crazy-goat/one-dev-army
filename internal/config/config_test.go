@@ -155,14 +155,12 @@ func TestLoad_InvalidYAML(t *testing.T) {
 	}
 }
 
-func TestLoad_WithModelValidation(t *testing.T) {
+func TestLoad_DoesNotValidateModels(t *testing.T) {
 	configWithModels := `llm:
   setup:
     model: "nexos-ai/Invalid-Model"
   planning:
     model: "nexos-ai/Kimi K2.5"
-  orchestration:
-    model: ""
   code:
     model: "nexos-ai/Another-Invalid"
   code-heavy:
@@ -177,24 +175,23 @@ func TestLoad_WithModelValidation(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Invalid models should fallback to first available
-	if cfg.LLM.Setup.Model != "nexos-ai/Kimi K2.5" {
-		t.Errorf("setup model should fallback to first available, got %q", cfg.LLM.Setup.Model)
+	// Config should NOT be mutated during load - exact values from file should be preserved
+	// (except empty models which get defaults via applyLLMDefaults)
+	if cfg.LLM.Setup.Model != "nexos-ai/Invalid-Model" {
+		t.Errorf("setup model should remain as configured, got %q", cfg.LLM.Setup.Model)
 	}
 
-	// Valid model should remain unchanged
 	if cfg.LLM.Planning.Model != "nexos-ai/Kimi K2.5" {
 		t.Errorf("planning model should remain unchanged, got %q", cfg.LLM.Planning.Model)
 	}
 
-	// Empty model should fallback to first available
+	// Empty orchestration model gets default via applyLLMDefaults
 	if cfg.LLM.Orchestration.Model != "nexos-ai/Kimi K2.5" {
-		t.Errorf("orchestration model should fallback to first available, got %q", cfg.LLM.Orchestration.Model)
+		t.Errorf("orchestration model should have default applied, got %q", cfg.LLM.Orchestration.Model)
 	}
 
-	// Another invalid model should fallback
-	if cfg.LLM.Code.Model != "nexos-ai/Kimi K2.5" {
-		t.Errorf("code model should fallback to first available, got %q", cfg.LLM.Code.Model)
+	if cfg.LLM.Code.Model != "nexos-ai/Another-Invalid" {
+		t.Errorf("code model should remain as configured, got %q", cfg.LLM.Code.Model)
 	}
 }
 
@@ -279,11 +276,20 @@ func TestValidateAndFallbackModels(t *testing.T) {
 
 			result := cfg.ValidateAndFallbackModels(tt.availableModels)
 
-			if cfg.Setup.Model != tt.wantSetup {
-				t.Errorf("setup model = %q, want %q", cfg.Setup.Model, tt.wantSetup)
+			// Original config should NOT be mutated
+			if cfg.Setup.Model != tt.setupModel {
+				t.Errorf("original setup model was mutated = %q, want %q", cfg.Setup.Model, tt.setupModel)
 			}
-			if cfg.Planning.Model != tt.wantPlanning {
-				t.Errorf("planning model = %q, want %q", cfg.Planning.Model, tt.wantPlanning)
+			if cfg.Planning.Model != tt.planningModel {
+				t.Errorf("original planning model was mutated = %q, want %q", cfg.Planning.Model, tt.planningModel)
+			}
+
+			// Validated config copy should have fallbacks applied
+			if result.ValidatedConfig.Setup.Model != tt.wantSetup {
+				t.Errorf("validated setup model = %q, want %q", result.ValidatedConfig.Setup.Model, tt.wantSetup)
+			}
+			if result.ValidatedConfig.Planning.Model != tt.wantPlanning {
+				t.Errorf("validated planning model = %q, want %q", result.ValidatedConfig.Planning.Model, tt.wantPlanning)
 			}
 			if result.HasReplacements != tt.wantReplaced {
 				t.Errorf("HasReplacements = %v, want %v", result.HasReplacements, tt.wantReplaced)

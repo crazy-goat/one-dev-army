@@ -3988,19 +3988,19 @@ func TestHandleSettings_WithModels(t *testing.T) {
 	}
 }
 
-// TestHandleSaveSettings_InvalidModel verifies that invalid models are replaced with fallback
+// TestHandleSaveSettings_InvalidModel verifies that invalid models are saved as-is (fallback happens at runtime)
 func TestHandleSaveSettings_InvalidModel(t *testing.T) {
 	// Create a temporary directory for config
 	tmpDir := t.TempDir()
 
 	// Create .oda directory
-	odaDir := filepath.Join(tmpDir, ".oda")
-	if err := os.MkdirAll(odaDir, 0755); err != nil {
+	tmpOdaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(tmpOdaDir, 0755); err != nil {
 		t.Fatalf("failed to create .oda directory: %v", err)
 	}
 
 	// Create a minimal config file
-	configPath := filepath.Join(odaDir, "config.yaml")
+	configPath := filepath.Join(tmpOdaDir, "config.yaml")
 	configContent := `llm:
   code:
     model: test-provider/test-model
@@ -4035,7 +4035,7 @@ func TestHandleSaveSettings_InvalidModel(t *testing.T) {
 
 	srv.handleSaveSettings(rec, req)
 
-	// Should return 200 OK (success with fallback)
+	// Should return 200 OK (success - model is saved as-is)
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", rec.Code)
 	}
@@ -4046,9 +4046,14 @@ func TestHandleSaveSettings_InvalidModel(t *testing.T) {
 		t.Errorf("response should contain success message, got: %s", body)
 	}
 
-	// Verify warning about model fallback
-	if !strings.Contains(body, "not available") && !strings.Contains(body, "fell back") {
-		t.Error("response should contain warning about model fallback")
+	// Verify the invalid model was saved as-is (no fallback at save time)
+	// Runtime fallback happens in the router when models are actually used
+	loadedCfg, err := config.Load(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to load saved config: %v", err)
+	}
+	if loadedCfg.LLM.Code.Model != "openai/invalid-model" {
+		t.Errorf("invalid model should be saved as-is, got %q", loadedCfg.LLM.Code.Model)
 	}
 }
 
