@@ -14,11 +14,17 @@ ODA is a Go CLI tool (`oda`) that orchestrates AI coding agents to automate the 
 - **CLI**: GitHub CLI (`gh`) for all GitHub API interactions
 - **Config**: YAML (`.oda/config.yaml`)
 
+## Critical Rules
+
+1. **Every change must have tests.** No code gets merged without corresponding test coverage.
+2. **Every change must pass lint and tests locally before committing.** Run `golangci-lint run ./...` and `go test -race ./...` — both must exit with zero errors.
+3. **Always commit and push to a feature branch.** Never push directly to `master`. After finishing work, commit all changes and push the branch.
+
 ## Documentation
 
-- **[Architecture](docs/architecture.md)** — Orchestrator loop, state machine, worker pool, LLM routing, dashboard
-- **[Configuration](docs/configuration.md)** — CLI commands and `.oda/config.yaml` reference
-- **[Development](docs/development.md)** — Build, pre-commit checklist, CI/linting, testing & code conventions
-- **[Repository Structure](docs/structure.md)** — Full directory layout with detailed package descriptions
-- **[Workflow](docs/workflow.md)** — Ticket lifecycle flowchart (Mermaid)
-- **[State Machine](docs/state-machine.md)** — Full state machine specification with all transitions
+- **[Architecture](docs/architecture.md)** — Orchestrator loop, state machine, worker pool, LLM routing, dashboard. Covers how tickets flow through stages, how workers are managed, and how LLM models are selected per task category.
+- **[Configuration](docs/configuration.md)** — CLI commands and `.oda/config.yaml` reference. Describes all config sections: GitHub repo, worker count, opencode URL, LLM model routing, pipeline retries.
+- **[Development](docs/development.md)** — Build, pre-commit checklist, CI/linting, testing & code conventions. Contains the exact commands to run before every commit and the full list of 29 enabled linters.
+- **[Repository Structure](docs/structure.md)** — Full directory layout with detailed package descriptions. Explains every package in `internal/`, what files it contains, and how they interact.
+- **[Workflow](docs/workflow.md)** — Ticket lifecycle flowchart (Mermaid). Shows the full path from issue creation through analysis, coding, review, PR, approval, to merge.
+- **[State Machine](docs/state-machine.md)** — Full state machine specification with all transitions. Defines every valid stage, the labels used, retry targets, and terminal states.
