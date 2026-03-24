@@ -8,6 +8,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
@@ -24,7 +25,7 @@ var ErrAlreadyDone = errors.New("ticket already done")
 
 type Worker struct {
 	id           int
-	cfg          *config.Config
+	cfg          atomic.Pointer[config.Config]
 	oc           *opencode.Client
 	gh           *github.Client
 	brMgr        *git.BranchManager
@@ -36,9 +37,8 @@ type Worker struct {
 }
 
 func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Client, brMgr *git.BranchManager, store *db.Store, orchestrator *Orchestrator, router *llm.Router) *Worker {
-	return &Worker{
+	w := &Worker{
 		id:           id,
-		cfg:          cfg,
 		oc:           oc,
 		gh:           gh,
 		brMgr:        brMgr,
@@ -48,6 +48,8 @@ func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Clien
 		router:       router,
 		decisionCh:   make(chan UserDecision, 1),
 	}
+	w.cfg.Store(cfg)
+	return w
 }
 
 // Processes the event synchronously so that GitHub labels, cache, ledger,
@@ -255,7 +257,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		w.reportStageComplete("create-pr", EventSuccess, "PR created, awaiting approval: "+prURL)
 
 		var decision UserDecision
-		if w.cfg.YoloMode {
+		if w.cfg.Load().YoloMode {
 			// YOLO mode: auto-approve without waiting for user
 			log.Printf("[Worker %d] YOLO mode enabled - auto-approving #%d", w.id, task.Issue.Number)
 			decision = UserDecision{Action: "approve"}
@@ -373,7 +375,7 @@ func (w *Worker) technicalPlanning(ctx context.Context, task *Task) (analysis, i
 	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPTechnicalPlanning), task.Issue.Number, task.Issue.Title, task.Issue.Body)
 
 	// Use router to select model for planning category
-	llmModel := w.cfg.LLM.Planning.Model
+	llmModel := w.cfg.Load().LLM.Planning.Model
 	if w.router != nil {
 		llmModel = w.router.SelectModel(config.CategoryPlanning, config.ComplexityMedium, nil)
 	}
@@ -471,14 +473,14 @@ func (w *Worker) implement(ctx context.Context, task *Task, planStr string) erro
 		log.Printf("[Worker %d] No technical planning comment found, using context-based plan", w.id)
 	}
 
-	testCmd := w.cfg.Tools.TestCmd
+	testCmd := w.cfg.Load().Tools.TestCmd
 	if testCmd == "" {
 		testCmd = "go test ./..."
 	}
 	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPImplementation), task.Issue.Number, task.Issue.Title, planStr, task.Worktree, testCmd)
 
 	// Use router to select model for code category with complexity detection
-	llmModel := w.cfg.LLM.Code.Model
+	llmModel := w.cfg.Load().LLM.Code.Model
 	if w.router != nil {
 		complexity := llm.DetectComplexity(planStr) //nolint:staticcheck // deprecated but still used
 		llmModel = w.router.SelectModel(config.CategoryCode, complexity, nil)
@@ -506,14 +508,14 @@ func (w *Worker) ensureCommit(task *Task) {
 func (w *Worker) fixFromReview(ctx context.Context, task *Task, review string) error {
 	w.oc.SetDirectory(task.Worktree)
 
-	testCmd := w.cfg.Tools.TestCmd
+	testCmd := w.cfg.Load().Tools.TestCmd
 	if testCmd == "" {
 		testCmd = "go test ./..."
 	}
 	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPFixFromReview), task.Issue.Number, task.Issue.Title, task.Worktree, testCmd, review)
 
 	// Use router to select model for code category
-	llmModel := w.cfg.LLM.Code.Model
+	llmModel := w.cfg.Load().LLM.Code.Model
 	if w.router != nil {
 		llmModel = w.router.SelectModel(config.CategoryCode, config.ComplexityMedium, nil)
 	}
@@ -576,7 +578,7 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (appr
 	task.AddChatMessage("user", prompt)
 
 	// Use router to select model for code category with high complexity (code review is important)
-	llmModel := w.cfg.LLM.Code.Model
+	llmModel := w.cfg.Load().LLM.Code.Model
 	if w.router != nil {
 		hints := map[string]any{"stage": "code-review"}
 		llmModel = w.router.SelectModel(config.CategoryCode, config.ComplexityHigh, hints)
@@ -748,3 +750,13 @@ func extractText(msg *opencode.Message) string {
 	}
 	return sb.String()
 }
+
+// UpdateConfig updates the worker's configuration atomically.
+// This method is called by the ConfigPropagator when config changes.
+func (w *Worker) UpdateConfig(cfg *config.Config) {
+	w.cfg.Store(cfg)
+	log.Printf("[Worker %d] Configuration updated (YoloMode=%v)", w.id, cfg.YoloMode)
+}
+
+// Compile-time interface check: ensure Worker implements ConfigAwareWorker.
+var _ config.ConfigAwareWorker = (*Worker)(nil)

@@ -349,6 +349,14 @@ func runServe(dir string, debugWebSocket bool) error {
 
 	orchestrator := mvp.NewOrchestrator(cfg, gh, oc, brMgr, store, hub, router)
 
+	// Create ConfigPropagator to propagate config changes to workers
+	configPropagator := config.NewConfigPropagator(5 * time.Second)
+	configPropagator.RegisterWorker(orchestrator.GetWorker())
+	go configPropagator.Start(func() *config.Config {
+		return cfg
+	})
+	fmt.Println("  ✓ Config propagator started (5s interval)")
+
 	// Auto-start sprint if configured
 	if cfg.Sprint.AutoStart {
 		fmt.Println("Auto-starting sprint (auto_start: true)...")
@@ -407,6 +415,7 @@ func runServe(dir string, debugWebSocket bool) error {
 		fmt.Println("\nShutting down... Press Ctrl+C again to force quit.")
 		cancel()
 		orchestrator.Stop()
+		configPropagator.Stop()
 
 		go func() {
 			<-sigCh

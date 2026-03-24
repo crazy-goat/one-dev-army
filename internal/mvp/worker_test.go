@@ -258,13 +258,13 @@ func TestWorker_YoloMode(t *testing.T) {
 
 			worker := &Worker{
 				id:         1,
-				cfg:        cfg,
 				decisionCh: make(chan UserDecision, 1),
 			}
+			worker.cfg.Store(cfg)
 
 			// Test that yolo mode correctly determines if we should auto-approve
 			var decision UserDecision
-			if worker.cfg.YoloMode {
+			if worker.cfg.Load().YoloMode {
 				decision = UserDecision{Action: "approve"}
 			}
 
@@ -273,4 +273,102 @@ func TestWorker_YoloMode(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWorker_UpdateConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		initialYolo bool
+		updatedYolo bool
+	}{
+		{
+			name:        "update yolo mode from false to true",
+			initialYolo: false,
+			updatedYolo: true,
+		},
+		{
+			name:        "update yolo mode from true to false",
+			initialYolo: true,
+			updatedYolo: false,
+		},
+		{
+			name:        "update with same yolo mode value",
+			initialYolo: false,
+			updatedYolo: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create initial config
+			initialCfg := &config.Config{
+				YoloMode: tt.initialYolo,
+			}
+
+			// Create worker
+			worker := &Worker{
+				id:         1,
+				decisionCh: make(chan UserDecision, 1),
+			}
+			worker.cfg.Store(initialCfg)
+
+			// Verify initial config
+			if worker.cfg.Load().YoloMode != tt.initialYolo {
+				t.Errorf("initial YoloMode = %v, want %v", worker.cfg.Load().YoloMode, tt.initialYolo)
+			}
+
+			// Update config
+			updatedCfg := &config.Config{
+				YoloMode: tt.updatedYolo,
+			}
+			worker.UpdateConfig(updatedCfg)
+
+			// Verify updated config
+			if worker.cfg.Load().YoloMode != tt.updatedYolo {
+				t.Errorf("updated YoloMode = %v, want %v", worker.cfg.Load().YoloMode, tt.updatedYolo)
+			}
+		})
+	}
+}
+
+func TestWorker_ImplementsConfigAwareWorker(t *testing.T) {
+	// This test verifies at compile time that Worker implements ConfigAwareWorker
+	var _ config.ConfigAwareWorker = (*Worker)(nil)
+}
+
+func TestWorker_UpdateConfig_Atomicity(t *testing.T) {
+	// Test that config updates are atomic and don't race
+	worker := &Worker{
+		id:         1,
+		decisionCh: make(chan UserDecision, 1),
+	}
+
+	initialCfg := &config.Config{YoloMode: false}
+	worker.cfg.Store(initialCfg)
+
+	// Simulate concurrent config updates
+	done := make(chan bool, 2)
+
+	go func() {
+		for i := 0; i < 100; i++ {
+			cfg := &config.Config{YoloMode: i%2 == 0}
+			worker.UpdateConfig(cfg)
+		}
+		done <- true
+	}()
+
+	go func() {
+		for i := 0; i < 100; i++ {
+			_ = worker.cfg.Load().YoloMode
+		}
+		done <- true
+	}()
+
+	// Wait for both goroutines
+	<-done
+	<-done
+
+	// If we get here without panic or race detector errors, atomicity is working
+	// The final value could be either true or false depending on timing
+	_ = worker.cfg.Load().YoloMode
 }
