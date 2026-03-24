@@ -136,6 +136,8 @@ func TestLabelStructure(t *testing.T) {
 		{"stage:create-pr exists", "stage:create-pr", "1D76DB", true},
 		{"stage:merging exists", "stage:merging", "0E8A16", true},
 		{"stage:backlog exists", "stage:backlog", "EEEEEE", true},
+		{"stage:done exists", "stage:done", "0E8A16", true},
+		{"stage:needs-user exists", "stage:needs-user", "FBCA04", true},
 		{"non-existent label", "nonexistent", "FFFFFF", false},
 	}
 
@@ -226,11 +228,12 @@ func TestRequiredLabelsCount(t *testing.T) {
 	// sprint, insight (2)
 	// size:S, size:M, size:L, size:XL (4)
 	// stage:backlog, stage:analysis, stage:coding, stage:code-review, stage:create-pr,
-	// stage:awaiting-approval, stage:merging, stage:failed, stage:blocked (9)
+	// stage:awaiting-approval, stage:merging, stage:done, stage:failed, stage:blocked,
+	// stage:needs-user (11)
 	// priority:high, priority:medium, priority:low (3)
 	// epic, wizard, merge-failed (3)
-	// Total: 21
-	expectedCount := 21
+	// Total: 23
+	expectedCount := 23
 	if len(RequiredLabels) != expectedCount {
 		t.Errorf("Expected %d labels, got %d", expectedCount, len(RequiredLabels))
 	}
@@ -321,39 +324,81 @@ func mockGhError(msg string) error {
 	return errors.New(msg)
 }
 
-// Test StageToLabels mapping
-func TestStageToLabelsMapping(t *testing.T) {
+// Test Stage type: Label() and StageFromLabel() round-trip
+func TestStageLabelRoundTrip(t *testing.T) {
 	tests := []struct {
-		stage        string
-		expectedLen  int
-		expectedVals []string
+		stage         Stage
+		expectedLabel string
 	}{
-		{"Backlog", 0, []string{}},
-		{"Plan", 1, []string{"stage:analysis"}},
-		{"Code", 1, []string{"stage:coding"}},
-		{"AI Review", 1, []string{"stage:code-review"}},
-		{"Create PR", 1, []string{"stage:create-pr"}},
-		{"Approve", 1, []string{"stage:awaiting-approval"}},
-		{"Merge", 1, []string{"stage:merging"}},
-		{"Done", 0, []string{}},
-		{"Failed", 1, []string{"stage:failed"}},
-		{"Blocked", 1, []string{"stage:blocked"}},
+		{StageBacklog, "stage:backlog"},
+		{StagePlan, "stage:analysis"},
+		{StageCode, "stage:coding"},
+		{StageReview, "stage:code-review"},
+		{StageCreatePR, "stage:create-pr"},
+		{StageApprove, "stage:awaiting-approval"},
+		{StageMerge, "stage:merging"},
+		{StageDone, "stage:done"},
+		{StageFailed, "stage:failed"},
+		{StageBlocked, "stage:blocked"},
+		{StageNeedsUser, "stage:needs-user"},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.stage, func(t *testing.T) {
-			labels, ok := StageToLabels[tt.stage]
+		t.Run(tt.expectedLabel, func(t *testing.T) {
+			// Stage.Label() returns the correct label string
+			if tt.stage.Label() != tt.expectedLabel {
+				t.Errorf("Stage(%q).Label() = %q, want %q", tt.stage, tt.stage.Label(), tt.expectedLabel)
+			}
+
+			// StageFromLabel() round-trips back to the same Stage
+			got, ok := StageFromLabel(tt.expectedLabel)
 			if !ok {
-				t.Errorf("Stage %s not found in StageToLabels", tt.stage)
+				t.Errorf("StageFromLabel(%q) returned false", tt.expectedLabel)
 				return
 			}
-			if len(labels) != tt.expectedLen {
-				t.Errorf("Stage %s: expected %d labels, got %d", tt.stage, tt.expectedLen, len(labels))
+			if got != tt.stage {
+				t.Errorf("StageFromLabel(%q) = %q, want %q", tt.expectedLabel, got, tt.stage)
 			}
-			for i, expected := range tt.expectedVals {
-				if i >= len(labels) || labels[i] != expected {
-					t.Errorf("Stage %s: expected label %s at position %d", tt.stage, expected, i)
-				}
+		})
+	}
+}
+
+// Test Stage.Column() mapping
+func TestStageColumn(t *testing.T) {
+	tests := []struct {
+		stage    Stage
+		expected string
+	}{
+		{StageBacklog, "Backlog"},
+		{StagePlan, "Plan"},
+		{StageCode, "Code"},
+		{StageReview, "AI Review"},
+		{StageCreatePR, "AI Review"},
+		{StageApprove, "Approve"},
+		{StageMerge, "Merge"},
+		{StageDone, "Done"},
+		{StageFailed, "Failed"},
+		{StageBlocked, "Blocked"},
+		{StageNeedsUser, "Blocked"},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.stage), func(t *testing.T) {
+			if tt.stage.Column() != tt.expected {
+				t.Errorf("Stage(%q).Column() = %q, want %q", tt.stage, tt.stage.Column(), tt.expected)
+			}
+		})
+	}
+}
+
+// Test StageFromLabel with unknown labels
+func TestStageFromLabelUnknown(t *testing.T) {
+	unknowns := []string{"stage:unknown", "invalid", "priority:high", "sprint", ""}
+	for _, label := range unknowns {
+		t.Run(label, func(t *testing.T) {
+			_, ok := StageFromLabel(label)
+			if ok {
+				t.Errorf("StageFromLabel(%q) should return false for unknown label", label)
 			}
 		})
 	}
@@ -374,6 +419,8 @@ func TestIsStageLabel(t *testing.T) {
 		{"stage:failed", true},
 		{"stage:blocked", true},
 		{"stage:backlog", true},
+		{"stage:done", true},
+		{"stage:needs-user", true},
 		// Legacy bare labels are still caught by StageLabelPrefixes for cleanup
 		{"awaiting-approval", true},
 		{"failed", true},
@@ -400,18 +447,20 @@ func TestGetStageFromLabels(t *testing.T) {
 	tests := []struct {
 		name     string
 		labels   []string
-		expected string
+		expected Stage
 	}{
-		{"empty labels", []string{}, "Backlog"},
-		{"no stage labels", []string{"sprint", "priority:high"}, "Backlog"},
-		{"Plan stage", []string{"stage:analysis", "sprint"}, "Plan"},
-		{"Code stage", []string{"stage:coding"}, "Code"},
-		{"AI Review stage", []string{"stage:code-review"}, "AI Review"},
-		{"Create PR stage", []string{"stage:create-pr"}, "Create PR"},
-		{"Approve stage", []string{"stage:awaiting-approval"}, "Approve"},
-		{"Merge stage", []string{"stage:merging"}, "Merge"},
-		{"Failed stage", []string{"stage:failed"}, "Failed"},
-		{"Blocked stage", []string{"stage:blocked"}, "Blocked"},
+		{"empty labels", []string{}, StageBacklog},
+		{"no stage labels", []string{"sprint", "priority:high"}, StageBacklog},
+		{"Plan stage", []string{"stage:analysis", "sprint"}, StagePlan},
+		{"Code stage", []string{"stage:coding"}, StageCode},
+		{"AI Review stage", []string{"stage:code-review"}, StageReview},
+		{"Create PR stage", []string{"stage:create-pr"}, StageCreatePR},
+		{"Approve stage", []string{"stage:awaiting-approval"}, StageApprove},
+		{"Merge stage", []string{"stage:merging"}, StageMerge},
+		{"Done stage", []string{"stage:done"}, StageDone},
+		{"Failed stage", []string{"stage:failed"}, StageFailed},
+		{"Blocked stage", []string{"stage:blocked"}, StageBlocked},
+		{"NeedsUser stage", []string{"stage:needs-user"}, StageNeedsUser},
 	}
 
 	for _, tt := range tests {
@@ -434,9 +483,10 @@ func TestSetStageLabel(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid stage", func(t *testing.T) {
-		if _, ok := StageToLabels["InvalidStage"]; ok {
-			t.Error("InvalidStage should not be in StageToLabels mapping")
+	t.Run("invalid stage label not in AllStages", func(t *testing.T) {
+		_, ok := StageFromLabel("stage:invalid")
+		if ok {
+			t.Error("stage:invalid should not be a valid stage")
 		}
 	})
 }
@@ -491,85 +541,85 @@ func TestStageLabelPrefixes(t *testing.T) {
 	}
 }
 
-// Integration-style test for SetStageLabel workflow
+// Integration-style test for SetStageLabel workflow using Stage constants
 func TestSetStageLabelWorkflow(t *testing.T) {
 	testCases := []struct {
 		name            string
-		stage           string
+		stage           Stage
 		initialLabels   []string
-		expectedAdds    []string
+		expectedLabel   string
 		expectedRemoves []string
 		shouldClose     bool
 	}{
 		{
-			name:            "Backlog - removes all stage labels",
-			stage:           "Backlog",
+			name:            "Backlog - removes all stage labels and adds stage:backlog",
+			stage:           StageBacklog,
 			initialLabels:   []string{"stage:analysis", "sprint"},
-			expectedAdds:    []string{},
+			expectedLabel:   "stage:backlog",
 			expectedRemoves: []string{"stage:analysis"},
 			shouldClose:     false,
 		},
 		{
 			name:            "Plan - adds analysis",
-			stage:           "Plan",
+			stage:           StagePlan,
 			initialLabels:   []string{"sprint"},
-			expectedAdds:    []string{"stage:analysis"},
+			expectedLabel:   "stage:analysis",
 			expectedRemoves: []string{},
 			shouldClose:     false,
 		},
 		{
 			name:            "Code - replaces Plan label",
-			stage:           "Code",
+			stage:           StageCode,
 			initialLabels:   []string{"stage:analysis", "sprint"},
-			expectedAdds:    []string{"stage:coding"},
+			expectedLabel:   "stage:coding",
 			expectedRemoves: []string{"stage:analysis"},
 			shouldClose:     false,
 		},
 		{
 			name:            "Create PR - replaces code-review label",
-			stage:           "Create PR",
+			stage:           StageCreatePR,
 			initialLabels:   []string{"stage:code-review", "sprint"},
-			expectedAdds:    []string{"stage:create-pr"},
+			expectedLabel:   "stage:create-pr",
 			expectedRemoves: []string{"stage:code-review"},
 			shouldClose:     false,
 		},
 		{
 			name:            "Approve - replaces create-pr label",
-			stage:           "Approve",
+			stage:           StageApprove,
 			initialLabels:   []string{"stage:create-pr", "sprint"},
-			expectedAdds:    []string{"stage:awaiting-approval"},
+			expectedLabel:   "stage:awaiting-approval",
 			expectedRemoves: []string{"stage:create-pr"},
 			shouldClose:     false,
 		},
 		{
 			name:            "Merge - replaces awaiting-approval label",
-			stage:           "Merge",
+			stage:           StageMerge,
 			initialLabels:   []string{"stage:awaiting-approval", "sprint"},
-			expectedAdds:    []string{"stage:merging"},
+			expectedLabel:   "stage:merging",
 			expectedRemoves: []string{"stage:awaiting-approval"},
 			shouldClose:     false,
 		},
 		{
-			name:            "Done - closes issue",
-			stage:           "Done",
+			name:            "Done - adds stage:done and closes issue",
+			stage:           StageDone,
 			initialLabels:   []string{"stage:merging", "sprint"},
-			expectedAdds:    []string{},
+			expectedLabel:   "stage:done",
 			expectedRemoves: []string{"stage:merging"},
 			shouldClose:     true,
 		},
 		{
 			name:            "Failed - adds stage:failed label",
-			stage:           "Failed",
+			stage:           StageFailed,
 			initialLabels:   []string{"stage:coding"},
-			expectedAdds:    []string{"stage:failed"},
+			expectedLabel:   "stage:failed",
 			expectedRemoves: []string{"stage:coding"},
 			shouldClose:     false,
 		},
 		{
 			name:            "Blocked - adds stage:blocked label",
-			stage:           "Blocked",
+			stage:           StageBlocked,
 			initialLabels:   []string{"stage:analysis"},
-			expectedAdds:    []string{"stage:blocked"},
+			expectedLabel:   "stage:blocked",
 			expectedRemoves: []string{"stage:analysis"},
 			shouldClose:     false,
 		},
@@ -577,36 +627,21 @@ func TestSetStageLabelWorkflow(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			labels, ok := StageToLabels[tc.stage]
-			if !ok {
-				t.Fatalf("Stage %s not found in StageToLabels", tc.stage)
+			// Verify the stage label matches expected
+			if tc.stage.Label() != tc.expectedLabel {
+				t.Errorf("Stage %s: expected label %s, got %s",
+					tc.stage, tc.expectedLabel, tc.stage.Label())
 			}
 
-			if len(labels) != len(tc.expectedAdds) {
-				t.Errorf("Stage %s: expected %d labels to add, mapping has %d",
-					tc.stage, len(tc.expectedAdds), len(labels))
-			}
-
-			for _, expected := range tc.expectedAdds {
-				found := false
-				for _, mapped := range labels {
-					if mapped == expected {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("Expected label %s not found in StageToLabels[%s]", expected, tc.stage)
-				}
-			}
-
+			// Verify removes are stage labels
 			for _, remove := range tc.expectedRemoves {
 				if !IsStageLabel(remove) {
 					t.Errorf("Expected remove label %s is not a stage label", remove)
 				}
 			}
 
-			if tc.stage == "Done" && !tc.shouldClose {
+			// Verify Done stage should close
+			if tc.stage == StageDone && !tc.shouldClose {
 				t.Error("Done stage should set shouldClose to true")
 			}
 		})
@@ -615,9 +650,10 @@ func TestSetStageLabelWorkflow(t *testing.T) {
 
 // Test error handling in SetStageLabel
 func TestSetStageLabelErrorHandling(t *testing.T) {
-	t.Run("invalid stage returns error", func(t *testing.T) {
-		if _, ok := StageToLabels["InvalidStage"]; ok {
-			t.Error("InvalidStage should not be in StageToLabels mapping")
+	t.Run("invalid stage label not recognized", func(t *testing.T) {
+		_, ok := StageFromLabel("stage:invalid")
+		if ok {
+			t.Error("stage:invalid should not be recognized")
 		}
 	})
 }
@@ -729,19 +765,17 @@ func TestConcurrentLabelOperations(t *testing.T) {
 	})
 }
 
-// Test edge cases
-func TestSetStageLabelEdgeCases(t *testing.T) {
-	t.Run("empty stage mapping", func(t *testing.T) {
-		backlogLabels := StageToLabels["Backlog"]
-		if len(backlogLabels) != 0 {
-			t.Errorf("Backlog should have 0 labels, got %d", len(backlogLabels))
+// Test that all stages have exactly one label via Label()
+func TestAllStagesHaveLabels(t *testing.T) {
+	for _, stage := range AllStages {
+		label := stage.Label()
+		if label == "" {
+			t.Errorf("Stage %q has empty label", stage)
 		}
-
-		doneLabels := StageToLabels["Done"]
-		if len(doneLabels) != 0 {
-			t.Errorf("Done should have 0 labels, got %d", len(doneLabels))
+		if !strings.HasPrefix(label, "stage:") {
+			t.Errorf("Stage %q label %q does not have stage: prefix", stage, label)
 		}
-	})
+	}
 }
 
 // Benchmark tests
@@ -771,16 +805,8 @@ func BenchmarkGetStageFromLabels(b *testing.B) {
 	}
 }
 
-// Test that all required stage labels exist in RequiredLabels
+// Test that all stage labels in AllStages exist in RequiredLabels
 func TestStageLabelsExistInRequiredLabels(t *testing.T) {
-	// Collect all stage labels from StageToLabels
-	stageLabelSet := make(map[string]bool)
-	for _, labels := range StageToLabels {
-		for _, label := range labels {
-			stageLabelSet[label] = true
-		}
-	}
-
 	// Create set of required labels
 	requiredSet := make(map[string]bool)
 	for _, l := range RequiredLabels {
@@ -788,9 +814,10 @@ func TestStageLabelsExistInRequiredLabels(t *testing.T) {
 	}
 
 	// Verify all stage labels exist in RequiredLabels
-	for stageLabel := range stageLabelSet {
-		if !requiredSet[stageLabel] {
-			t.Errorf("Stage label %s is not in RequiredLabels", stageLabel)
+	for _, stage := range AllStages {
+		label := stage.Label()
+		if !requiredSet[label] {
+			t.Errorf("Stage label %s (from stage %q) is not in RequiredLabels", label, stage)
 		}
 	}
 }
@@ -798,46 +825,29 @@ func TestStageLabelsExistInRequiredLabels(t *testing.T) {
 // Test comprehensive stage transition scenarios
 func TestStageTransitions(t *testing.T) {
 	transitions := []struct {
-		from    string
-		to      string
-		adds    []string
+		from    Stage
+		to      Stage
+		adds    string
 		removes []string
 	}{
-		{"Backlog", "Plan", []string{"stage:analysis"}, []string{}},
-		{"Plan", "Code", []string{"stage:coding"}, []string{"stage:analysis"}},
-		{"Code", "AI Review", []string{"stage:code-review"}, []string{"stage:coding"}},
-		{"AI Review", "Create PR", []string{"stage:create-pr"}, []string{"stage:code-review"}},
-		{"Create PR", "Approve", []string{"stage:awaiting-approval"}, []string{"stage:create-pr"}},
-		{"Approve", "Merge", []string{"stage:merging"}, []string{"stage:awaiting-approval"}},
-		{"Merge", "Done", []string{}, []string{"stage:merging"}},
-		{"Code", "Failed", []string{"stage:failed"}, []string{"stage:coding"}},
-		{"Plan", "Blocked", []string{"stage:blocked"}, []string{"stage:analysis"}},
-		{"Failed", "Code", []string{"stage:coding"}, []string{"stage:failed"}},
-		{"Blocked", "Backlog", []string{}, []string{"stage:blocked"}},
+		{StageBacklog, StagePlan, "stage:analysis", []string{}},
+		{StagePlan, StageCode, "stage:coding", []string{"stage:analysis"}},
+		{StageCode, StageReview, "stage:code-review", []string{"stage:coding"}},
+		{StageReview, StageCreatePR, "stage:create-pr", []string{"stage:code-review"}},
+		{StageCreatePR, StageApprove, "stage:awaiting-approval", []string{"stage:create-pr"}},
+		{StageApprove, StageMerge, "stage:merging", []string{"stage:awaiting-approval"}},
+		{StageMerge, StageDone, "stage:done", []string{"stage:merging"}},
+		{StageCode, StageFailed, "stage:failed", []string{"stage:coding"}},
+		{StagePlan, StageBlocked, "stage:blocked", []string{"stage:analysis"}},
+		{StageFailed, StageCode, "stage:coding", []string{"stage:failed"}},
+		{StageBlocked, StageBacklog, "stage:backlog", []string{"stage:blocked"}},
 	}
 
 	for _, tc := range transitions {
 		t.Run(fmt.Sprintf("%s to %s", tc.from, tc.to), func(t *testing.T) {
-			targetLabels, ok := StageToLabels[tc.to]
-			if !ok {
-				t.Fatalf("Stage %s not found", tc.to)
-			}
-
-			if len(targetLabels) != len(tc.adds) {
-				t.Errorf("Expected %d labels to add, got %d", len(tc.adds), len(targetLabels))
-			}
-
-			for _, expected := range tc.adds {
-				found := false
-				for _, label := range targetLabels {
-					if label == expected {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("Expected label %s not in StageToLabels[%s]", expected, tc.to)
-				}
+			targetLabel := tc.to.Label()
+			if targetLabel != tc.adds {
+				t.Errorf("Expected label %s, got %s", tc.adds, targetLabel)
 			}
 
 			for _, remove := range tc.removes {
@@ -849,36 +859,42 @@ func TestStageTransitions(t *testing.T) {
 	}
 }
 
-// Test that StageToLabels contains all expected stages
-func TestStageToLabelsCompleteness(t *testing.T) {
-	expectedStages := []string{
-		"Backlog",
-		"Plan",
-		"Code",
-		"AI Review",
-		"Create PR",
-		"Approve",
-		"Merge",
-		"Done",
-		"Failed",
-		"Blocked",
+// Test that AllStages contains all expected stages
+func TestAllStagesCompleteness(t *testing.T) {
+	expectedStages := []Stage{
+		StageBacklog,
+		StagePlan,
+		StageCode,
+		StageReview,
+		StageCreatePR,
+		StageApprove,
+		StageMerge,
+		StageDone,
+		StageFailed,
+		StageBlocked,
+		StageNeedsUser,
 	}
 
-	for _, stage := range expectedStages {
-		if _, ok := StageToLabels[stage]; !ok {
-			t.Errorf("Expected stage %s not found in StageToLabels", stage)
+	if len(AllStages) != len(expectedStages) {
+		t.Errorf("Expected %d stages in AllStages, got %d", len(expectedStages), len(AllStages))
+	}
+
+	stageSet := make(map[Stage]bool)
+	for _, s := range AllStages {
+		stageSet[s] = true
+	}
+
+	for _, expected := range expectedStages {
+		if !stageSet[expected] {
+			t.Errorf("Expected stage %q not found in AllStages", expected)
 		}
-	}
-
-	if len(StageToLabels) != len(expectedStages) {
-		t.Errorf("Expected %d stages, got %d", len(expectedStages), len(StageToLabels))
 	}
 }
 
-// Test SetStageLabel method signature
+// Test SetStageLabel method signature accepts Stage type
 func TestSetStageLabelSignature(t *testing.T) {
 	client := &Client{Repo: "test/repo"}
-	var _ func(int, string) (Issue, error) = client.SetStageLabel
+	var _ func(int, Stage) (Issue, error) = client.SetStageLabel
 }
 
 // Test that the client has all necessary methods for SetStageLabel
@@ -907,10 +923,9 @@ func TestSetStageLabelIntegration(t *testing.T) {
 			t.Errorf("Expected %d labels to remove, got %d", len(expectedRemoves), len(toRemove))
 		}
 
-		labelsToAdd := StageToLabels["Code"]
-		expectedAdds := []string{"stage:coding"}
-		if len(labelsToAdd) != len(expectedAdds) {
-			t.Errorf("Expected %d labels to add, got %d", len(expectedAdds), len(labelsToAdd))
+		expectedAdd := StageCode.Label()
+		if expectedAdd != "stage:coding" {
+			t.Errorf("Expected stage:coding, got %s", expectedAdd)
 		}
 	})
 
@@ -929,9 +944,10 @@ func TestSetStageLabelIntegration(t *testing.T) {
 			t.Errorf("Expected %d labels to remove, got %d", len(expectedRemoves), len(toRemove))
 		}
 
-		labelsToAdd := StageToLabels["Done"]
-		if len(labelsToAdd) != 0 {
-			t.Errorf("Done stage should have 0 labels to add, got %d", len(labelsToAdd))
+		// Done stage adds stage:done label
+		expectedAdd := StageDone.Label()
+		if expectedAdd != "stage:done" {
+			t.Errorf("Expected stage:done, got %s", expectedAdd)
 		}
 	})
 }
@@ -985,18 +1001,17 @@ func TestErrorMessageFormatting(t *testing.T) {
 	}
 }
 
-// Test that all stage mappings use valid labels
+// Test that all stage labels in AllStages use valid labels from RequiredLabels
 func TestStageMappingsUseValidLabels(t *testing.T) {
 	requiredSet := make(map[string]bool)
 	for _, l := range RequiredLabels {
 		requiredSet[l.Name] = true
 	}
 
-	for stage, labels := range StageToLabels {
-		for _, label := range labels {
-			if !requiredSet[label] {
-				t.Errorf("Stage %s uses label %s which is not in RequiredLabels", stage, label)
-			}
+	for _, stage := range AllStages {
+		label := stage.Label()
+		if !requiredSet[label] {
+			t.Errorf("Stage %q uses label %s which is not in RequiredLabels", stage, label)
 		}
 	}
 }
@@ -1076,30 +1091,16 @@ func TestMockClientCommandKey(t *testing.T) {
 	}
 }
 
-// Test that SetStageLabel handles all stages defined in the mapping
+// Test that SetStageLabel handles all stages defined in AllStages
 func TestSetStageLabelAllStages(t *testing.T) {
-	for stage := range StageToLabels {
-		t.Run(stage, func(t *testing.T) {
-			labels, ok := StageToLabels[stage]
-			if !ok {
-				t.Fatalf("Stage %s not found in mapping", stage)
+	for _, stage := range AllStages {
+		t.Run(string(stage), func(t *testing.T) {
+			label := stage.Label()
+			if label == "" {
+				t.Error("Empty label for stage")
 			}
-
-			for _, label := range labels {
-				if label == "" {
-					t.Error("Empty label in stage mapping")
-				}
-			}
-
-			switch stage {
-			case "Backlog":
-				if len(labels) != 0 {
-					t.Error("Backlog should have no labels")
-				}
-			case "Done":
-				if len(labels) != 0 {
-					t.Error("Done should have no labels")
-				}
+			if !strings.HasPrefix(label, "stage:") {
+				t.Errorf("Label %q does not have stage: prefix", label)
 			}
 		})
 	}
@@ -1131,5 +1132,25 @@ func TestStrconvUsage(t *testing.T) {
 				t.Errorf("strconv.Atoi(%q) = %d, want %d", tt.input, result, tt.expected)
 			}
 		})
+	}
+}
+
+// Test stagesByLabel init map is populated correctly
+func TestStagesByLabelInit(t *testing.T) {
+	// Every stage in AllStages should be findable via StageFromLabel
+	for _, stage := range AllStages {
+		found, ok := StageFromLabel(stage.Label())
+		if !ok {
+			t.Errorf("StageFromLabel(%q) returned false", stage.Label())
+			continue
+		}
+		if found != stage {
+			t.Errorf("StageFromLabel(%q) = %q, want %q", stage.Label(), found, stage)
+		}
+	}
+
+	// The map should have exactly len(AllStages) entries
+	if len(stagesByLabel) != len(AllStages) {
+		t.Errorf("stagesByLabel has %d entries, expected %d", len(stagesByLabel), len(AllStages))
 	}
 }

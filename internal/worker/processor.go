@@ -132,23 +132,32 @@ func BranchName(issueNumber int, title string) string {
 	return fmt.Sprintf("task/%d-%s", issueNumber, Slugify(title))
 }
 
-type Processor struct {
-	cfg    *config.Config
-	oc     *opencode.Client
-	gh     *github.Client
-	store  *db.Store
-	brMgr  *git.BranchManager
-	router *llm.Router
+// StageChanger is the single entry point for all stage transitions.
+// Orchestrator implements this interface. Worker and other components
+// must use it instead of calling GitHub API or ledger directly.
+type StageChanger interface {
+	ChangeStage(issueNumber int, stage github.Stage, reason github.StageChangeReason) error
 }
 
-func NewProcessor(cfg *config.Config, oc *opencode.Client, gh *github.Client, store *db.Store, brMgr *git.BranchManager, router *llm.Router) *Processor {
+type Processor struct {
+	cfg          *config.Config
+	oc           *opencode.Client
+	gh           *github.Client
+	store        *db.Store
+	brMgr        *git.BranchManager
+	router       *llm.Router
+	stageChanger StageChanger
+}
+
+func NewProcessor(cfg *config.Config, oc *opencode.Client, gh *github.Client, store *db.Store, brMgr *git.BranchManager, router *llm.Router, stageChanger StageChanger) *Processor {
 	return &Processor{
-		cfg:    cfg,
-		oc:     oc,
-		gh:     gh,
-		store:  store,
-		brMgr:  brMgr,
-		router: router,
+		cfg:          cfg,
+		oc:           oc,
+		gh:           gh,
+		store:        store,
+		brMgr:        brMgr,
+		router:       router,
+		stageChanger: stageChanger,
 	}
 }
 
@@ -192,11 +201,9 @@ func (p *Processor) Process(ctx context.Context, w *Worker, task *Task) error {
 		}
 
 		// Always require manual approval for merge - use NeedsUser stage
-		if _, err := p.gh.SetStageLabel(task.IssueNumber, "NeedsUser"); err != nil {
-			log.Printf("[Worker] Error setting NeedsUser stage for #%d: %v", task.IssueNumber, err)
-		} else if p.store != nil {
-			if err := p.store.SaveStageChange(task.IssueNumber, "stage:coding", "stage:needs-user", "worker_needs_user", "worker"); err != nil {
-				log.Printf("[Worker] Error saving stage change to ledger for #%d: %v", task.IssueNumber, err)
+		if p.stageChanger != nil {
+			if err := p.stageChanger.ChangeStage(task.IssueNumber, github.StageNeedsUser, github.ReasonWorkerNeedsUser); err != nil {
+				log.Printf("[Worker] Error setting NeedsUser stage for #%d: %v", task.IssueNumber, err)
 			}
 		}
 
@@ -204,11 +211,9 @@ func (p *Processor) Process(ctx context.Context, w *Worker, task *Task) error {
 
 	case pipeline.StageBlocked:
 		// Set NeedsUser stage when blocked
-		if _, err := p.gh.SetStageLabel(task.IssueNumber, "NeedsUser"); err != nil {
-			log.Printf("[Worker] Error setting NeedsUser stage for #%d: %v", task.IssueNumber, err)
-		} else if p.store != nil {
-			if err := p.store.SaveStageChange(task.IssueNumber, "stage:coding", "stage:needs-user", "worker_blocked", "worker"); err != nil {
-				log.Printf("[Worker] Error saving stage change to ledger for #%d: %v", task.IssueNumber, err)
+		if p.stageChanger != nil {
+			if err := p.stageChanger.ChangeStage(task.IssueNumber, github.StageNeedsUser, github.ReasonWorkerBlocked); err != nil {
+				log.Printf("[Worker] Error setting NeedsUser stage for #%d: %v", task.IssueNumber, err)
 			}
 		}
 		_ = p.gh.AddComment(task.IssueNumber, fmt.Sprintf("ODA pipeline blocked at stage. Last output:\n\n%s", result.Output))

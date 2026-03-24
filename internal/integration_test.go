@@ -279,7 +279,7 @@ func TestFullPipelineWithMockOpencode(t *testing.T) {
 
 	ghClient := &github.Client{Repo: "owner/repo"}
 	router := llm.NewRouter(&cfg.LLM)
-	proc := worker.NewProcessor(cfg, oc, ghClient, store, brMgr, router)
+	proc := worker.NewProcessor(cfg, oc, ghClient, store, brMgr, router, nil)
 
 	task := &worker.Task{
 		ID:          1,

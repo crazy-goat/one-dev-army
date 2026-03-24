@@ -291,8 +291,8 @@ func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set stage label to "Approve" using stage manager
-	_, err := s.stageManager.ChangeStage(issueNum, "Approve", ReasonManualApprove, "dashboard")
+	// Set stage label via orchestrator
+	err := s.orchestrator.ChangeStage(issueNum, github.StageApprove, github.ReasonManualApprove)
 	if err != nil {
 		log.Printf("[Dashboard] Error setting Approve label on #%d: %v", issueNum, err)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -312,8 +312,8 @@ func (s *Server) handleReject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set stage label to "Backlog" (removes all stage labels) using stage manager
-	_, err := s.stageManager.ChangeStage(issueNum, "Backlog", ReasonManualReject, "dashboard")
+	// Set stage label to backlog (removes all stage labels) via orchestrator
+	err := s.orchestrator.ChangeStage(issueNum, github.StageBacklog, github.ReasonManualReject)
 	if err != nil {
 		log.Printf("[Dashboard] Error setting Backlog stage on #%d: %v", issueNum, err)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -333,8 +333,8 @@ func (s *Server) handleRetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set stage label to "Code" (removes failed label and adds coding label) using stage manager
-	_, err := s.stageManager.ChangeStage(issueNum, "Code", ReasonManualRetry, "dashboard")
+	// Set stage label to coding (removes failed label and adds coding label) via orchestrator
+	err := s.orchestrator.ChangeStage(issueNum, github.StageCode, github.ReasonManualRetry)
 	if err != nil {
 		log.Printf("[Dashboard] Error setting Code stage on #%d: %v", issueNum, err)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -362,8 +362,8 @@ func (s *Server) handleRetryFresh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Set stage label to "Backlog" (removes all stage labels) using stage manager
-	_, err := s.stageManager.ChangeStage(issueNum, "Backlog", ReasonManualRetry, "dashboard")
+	// Set stage label to backlog (removes all stage labels) via orchestrator
+	err := s.orchestrator.ChangeStage(issueNum, github.StageBacklog, github.ReasonManualRetryFresh)
 	if err != nil {
 		log.Printf("[Dashboard] Error setting Backlog stage on #%d: %v", issueNum, err)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -402,7 +402,7 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := s.stageManager.ChangeStage(issueNum, "Blocked", ReasonManualBlock, "dashboard")
+	err := s.orchestrator.ChangeStage(issueNum, github.StageBlocked, github.ReasonManualBlock)
 	if err != nil {
 		log.Printf("[Dashboard] Error setting Blocked stage on #%d: %v", issueNum, err)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -422,7 +422,7 @@ func (s *Server) handleUnblock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := s.stageManager.ChangeStage(issueNum, "Backlog", ReasonManualUnblock, "dashboard")
+	err := s.orchestrator.ChangeStage(issueNum, github.StageBacklog, github.ReasonManualUnblock)
 	if err != nil {
 		log.Printf("[Dashboard] Error setting Backlog stage on #%d: %v", issueNum, err)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -446,8 +446,8 @@ func (s *Server) handleDecline(w http.ResponseWriter, r *http.Request) {
 
 	s.recordStep(issueNum, "declined", reason)
 
-	// Set stage label to "Code" (removes awaiting-approval and adds coding label)
-	_, err := s.stageManager.ChangeStage(issueNum, "Code", ReasonManualDecline, "dashboard")
+	// Set stage label to coding (removes awaiting-approval and adds coding label)
+	err := s.orchestrator.ChangeStage(issueNum, github.StageCode, github.ReasonManualDecline)
 	if err != nil {
 		log.Printf("[Dashboard] Error setting Code stage on #%d: %v", issueNum, err)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -490,7 +490,7 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 	s.recordStep(issueNum, "approved", "Manual approval granted")
 
 	// Transition to Merge stage before attempting merge
-	_, mergeStageErr := s.stageManager.ChangeStage(issueNum, "Merge", ReasonManualMergeApproved, "dashboard")
+	mergeStageErr := s.orchestrator.ChangeStage(issueNum, github.StageMerge, github.ReasonManualMerge)
 	if mergeStageErr != nil {
 		log.Printf("[Dashboard] Error setting Merge stage on #%d: %v", issueNum, mergeStageErr)
 	}
@@ -504,8 +504,8 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[Dashboard] Error closing PR for #%d: %v", issueNum, closeErr)
 		}
 
-		// Set stage label to "Failed" on merge failure
-		_, labelErr := s.stageManager.ChangeStage(issueNum, "Failed", ReasonManualMergeApproved, "dashboard")
+		// Set stage label to failed on merge failure
+		labelErr := s.orchestrator.ChangeStage(issueNum, github.StageFailed, github.ReasonManualMergeFailed)
 		if labelErr != nil {
 			log.Printf("[Dashboard] Error setting Failed stage on #%d: %v", issueNum, labelErr)
 		}
@@ -528,8 +528,8 @@ func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 
 	s.recordStep(issueNum, "merged", "PR merged successfully")
 
-	// Set stage label to "Done" on successful merge
-	_, err = s.stageManager.ChangeStage(issueNum, "Done", ReasonManualMergeApproved, "dashboard")
+	// Set stage label to done on successful merge
+	err = s.orchestrator.ChangeStage(issueNum, github.StageDone, github.ReasonManualMerge)
 	if err != nil {
 		log.Printf("[Dashboard] Error setting Done stage on #%d: %v", issueNum, err)
 		http.Redirect(w, r, "/", http.StatusSeeOther)

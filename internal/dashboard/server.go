@@ -36,7 +36,6 @@ type Server struct {
 	syncService      *SyncService
 	rateLimitService *RateLimitService
 	rootDir          string
-	stageManager     *StageManager
 	modelsCache      []opencode.ProviderModel
 }
 
@@ -67,9 +66,6 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 		syncService: syncService,
 		rootDir:     rootDir,
 	}
-
-	// Initialize stage manager for handling stage changes
-	s.stageManager = NewStageManager(gh, store, hub, s.activeSprintName)
 
 	if s.wizardLLM == "" {
 		s.wizardLLM = DefaultLLMModel

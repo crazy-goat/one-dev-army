@@ -8,20 +8,87 @@ import (
 	"sync"
 )
 
-// StageToLabels maps stage names to their corresponding GitHub labels.
-// All stage labels use the "stage:" prefix for consistency.
-var StageToLabels = map[string][]string{
-	"Backlog":   {},
-	"Plan":      {"stage:analysis"},
-	"Code":      {"stage:coding"},
-	"AI Review": {"stage:code-review"},
-	"Create PR": {"stage:create-pr"},
-	"Approve":   {"stage:awaiting-approval"},
-	"Merge":     {"stage:merging"},
-	"Done":      {},
-	"Failed":    {"stage:failed"},
-	"Blocked":   {"stage:blocked"},
-	"NeedsUser": {"stage:needs-user"}, // Special stage when worker needs user intervention
+// Stage represents a workflow stage with a type-safe enum.
+// Every stage maps to exactly one GitHub label with the "stage:" prefix.
+type Stage string
+
+const (
+	StageBacklog   Stage = "stage:backlog"
+	StagePlan      Stage = "stage:analysis"
+	StageCode      Stage = "stage:coding"
+	StageReview    Stage = "stage:code-review"
+	StageCreatePR  Stage = "stage:create-pr"
+	StageApprove   Stage = "stage:awaiting-approval"
+	StageMerge     Stage = "stage:merging"
+	StageDone      Stage = "stage:done"
+	StageFailed    Stage = "stage:failed"
+	StageBlocked   Stage = "stage:blocked"
+	StageNeedsUser Stage = "stage:needs-user"
+)
+
+// AllStages lists every valid Stage value.
+var AllStages = []Stage{
+	StageBacklog,
+	StagePlan,
+	StageCode,
+	StageReview,
+	StageCreatePR,
+	StageApprove,
+	StageMerge,
+	StageDone,
+	StageFailed,
+	StageBlocked,
+	StageNeedsUser,
+}
+
+// Label returns the GitHub label string for this stage (e.g. "stage:backlog").
+func (s Stage) Label() string {
+	return string(s)
+}
+
+// Column returns the dashboard column name for this stage.
+func (s Stage) Column() string {
+	switch s {
+	case StageBacklog:
+		return "Backlog"
+	case StagePlan:
+		return "Plan"
+	case StageCode:
+		return "Code"
+	case StageReview, StageCreatePR:
+		return "AI Review"
+	case StageApprove:
+		return "Approve"
+	case StageMerge:
+		return "Merge"
+	case StageDone:
+		return "Done"
+	case StageFailed:
+		return "Failed"
+	case StageBlocked:
+		return "Blocked"
+	case StageNeedsUser:
+		return "Blocked"
+	default:
+		return "Backlog"
+	}
+}
+
+// stagesByLabel allows O(1) lookup from label string to Stage.
+var stagesByLabel map[string]Stage
+
+func init() {
+	stagesByLabel = make(map[string]Stage, len(AllStages))
+	for _, s := range AllStages {
+		stagesByLabel[s.Label()] = s
+	}
+}
+
+// StageFromLabel converts a GitHub label string to a Stage.
+// Returns the stage and true if found, or StageBacklog and false if not.
+func StageFromLabel(label string) (Stage, bool) {
+	s, ok := stagesByLabel[label]
+	return s, ok
 }
 
 // StageLabelPrefixes contains all label prefixes that should be removed when changing stages.
@@ -53,8 +120,10 @@ var RequiredLabels = []Label{
 	{Name: "stage:create-pr", Color: "1D76DB"},
 	{Name: "stage:awaiting-approval", Color: "0E8A16"},
 	{Name: "stage:merging", Color: "0E8A16"},
+	{Name: "stage:done", Color: "0E8A16"},
 	{Name: "stage:failed", Color: "D93F0B"},
 	{Name: "stage:blocked", Color: "B60205"},
+	{Name: "stage:needs-user", Color: "FBCA04"},
 	{Name: "priority:high", Color: "B60205"},
 	{Name: "priority:medium", Color: "FBCA04"},
 	{Name: "priority:low", Color: "0E8A16"},
@@ -65,17 +134,9 @@ var RequiredLabels = []Label{
 
 // SetStageLabel sets the stage label for an issue, removing all previous stage labels.
 // It returns the updated issue with fresh data from GitHub.
-// Special cases:
-//   - "Done": closes the issue
-//   - "Backlog": removes all stage labels without adding new ones
-func (c *Client) SetStageLabel(issueNumber int, stage string) (Issue, error) {
-	log.Printf("[GitHub] Setting stage %s for issue #%d", stage, issueNumber)
-
-	// Validate stage
-	labels, ok := StageToLabels[stage]
-	if !ok {
-		return Issue{}, fmt.Errorf("invalid stage: %s", stage)
-	}
+// Special case: StageDone also closes the issue.
+func (c *Client) SetStageLabel(issueNumber int, stage Stage) (Issue, error) {
+	log.Printf("[GitHub] Setting stage %s for issue #%d", stage.Label(), issueNumber)
 
 	// Get current issue to check existing labels
 	issue, err := c.GetIssue(issueNumber)
@@ -86,30 +147,24 @@ func (c *Client) SetStageLabel(issueNumber int, stage string) (Issue, error) {
 	// Remove all stage-related labels
 	labelsToRemove := c.getStageLabelsToRemove(issue)
 	for _, label := range labelsToRemove {
-		// Continue on error - label might not exist (idempotent)
 		_ = c.RemoveLabel(issueNumber, label)
 	}
 
-	// Add new labels (if not Backlog stage)
-	if stage != "Backlog" {
-		for _, label := range labels {
-			if err := c.AddLabel(issueNumber, label); err != nil {
-				return Issue{}, fmt.Errorf("adding label %s to issue #%d: %w", label, issueNumber, err)
-			}
-		}
+	// Add new stage label
+	if err := c.AddLabel(issueNumber, stage.Label()); err != nil {
+		return Issue{}, fmt.Errorf("adding label %s to issue #%d: %w", stage.Label(), issueNumber, err)
 	}
 
 	// Handle special case: Done stage closes the issue
-	if stage == "Done" {
+	if stage == StageDone {
 		if err := c.CloseIssue(issueNumber); err != nil {
 			return Issue{}, fmt.Errorf("closing issue #%d: %w", issueNumber, err)
 		}
 	}
 
-	log.Printf("[GitHub] ✓ Set stage %s for issue #%d", stage, issueNumber)
+	log.Printf("[GitHub] ✓ Set stage %s for issue #%d", stage.Label(), issueNumber)
 
 	// Build updated issue locally instead of fetching from GitHub
-	// This prevents sync from overwriting our local changes
 	updatedIssue := Issue{
 		Number:    issue.Number,
 		Title:     issue.Title,
@@ -119,32 +174,17 @@ func (c *Client) SetStageLabel(issueNumber int, stage string) (Issue, error) {
 		UpdatedAt: issue.UpdatedAt,
 	}
 
-	// Rebuild labels: remove stage labels, add new ones
+	// Rebuild labels: remove stage labels, add new one
 	for _, label := range issue.Labels {
-		labelName := label.Name
-		isStageLabel := false
-		for _, prefix := range StageLabelPrefixes {
-			if strings.HasPrefix(labelName, prefix) || labelName == prefix {
-				isStageLabel = true
-				break
-			}
-		}
-		if !isStageLabel {
+		if !IsStageLabel(label.Name) {
 			updatedIssue.Labels = append(updatedIssue.Labels, label)
 		}
 	}
+	updatedIssue.Labels = append(updatedIssue.Labels, struct {
+		Name string `json:"name"`
+	}{Name: stage.Label()})
 
-	// Add new stage labels
-	if stage != "Backlog" {
-		for _, label := range labels {
-			updatedIssue.Labels = append(updatedIssue.Labels, struct {
-				Name string `json:"name"`
-			}{Name: label})
-		}
-	}
-
-	// Handle special case: Done stage closes the issue
-	if stage == "Done" {
+	if stage == StageDone {
 		updatedIssue.State = "closed"
 	}
 
@@ -231,30 +271,15 @@ func IsStageLabel(label string) bool {
 	return false
 }
 
-// GetStageFromLabels returns the stage name based on the labels present on an issue
-func GetStageFromLabels(labels []string) string {
-	labelSet := make(map[string]bool)
+// GetStageFromLabels returns the Stage based on the labels present on an issue.
+// Returns StageBacklog if no stage label is found.
+func GetStageFromLabels(labels []string) Stage {
 	for _, l := range labels {
-		labelSet[l] = true
-	}
-
-	// Check each stage mapping
-	for stage, stageLabels := range StageToLabels {
-		if stage == "Backlog" || stage == "Done" {
-			continue
-		}
-		matches := 0
-		for _, sl := range stageLabels {
-			if labelSet[sl] {
-				matches++
-			}
-		}
-		if matches > 0 {
-			return stage
+		if s, ok := StageFromLabel(l); ok {
+			return s
 		}
 	}
-
-	return "Backlog"
+	return StageBacklog
 }
 
 func (c *Client) EnsureLabels() error {

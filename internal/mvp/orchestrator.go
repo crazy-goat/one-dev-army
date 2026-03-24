@@ -275,16 +275,16 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if err := o.gh.AddComment(nextIssue.Number, comment); err != nil {
 				log.Printf("[Orchestrator] Error adding comment: %v", err)
 			}
-			log.Printf("[Orchestrator] Setting stage:done for #%d (reason: worker_done)", nextIssue.Number)
-			if err := o.changeStage(nextIssue.Number, "Done", "worker_done"); err != nil {
+			log.Printf("[Orchestrator] Setting stage:done for #%d (reason: %s)", nextIssue.Number, github.ReasonWorkerAlreadyDone)
+			if err := o.ChangeStage(nextIssue.Number, github.StageDone, github.ReasonWorkerAlreadyDone); err != nil {
 				log.Printf("[Orchestrator] Error setting stage:done for #%d: %v", nextIssue.Number, err)
 			}
 			o.recordStep(nextIssue.Number, "done", "Closed as already done")
 		} else if processErr != nil {
 			log.Printf("[Orchestrator] ✗ Failed #%d: %v", nextIssue.Number, processErr)
 			o.recordStep(nextIssue.Number, "failed", processErr.Error())
-			log.Printf("[Orchestrator] Setting stage:failed for #%d (reason: worker_failed)", nextIssue.Number)
-			if err := o.changeStage(nextIssue.Number, "Failed", "worker_failed"); err != nil {
+			log.Printf("[Orchestrator] Setting stage:failed for #%d (reason: %s)", nextIssue.Number, github.ReasonWorkerFailed)
+			if err := o.ChangeStage(nextIssue.Number, github.StageFailed, github.ReasonWorkerFailed); err != nil {
 				log.Printf("[Orchestrator] Error setting stage:failed for #%d: %v", nextIssue.Number, err)
 			}
 		} else {
@@ -294,8 +294,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 			log.Printf("[Orchestrator] ✓ Completed #%d → awaiting approval: %s", nextIssue.Number, prURL)
 			o.recordStep(nextIssue.Number, "waiting-for-approval", prURL)
-			log.Printf("[Orchestrator] Setting stage:awaiting-approval for #%d (reason: worker_approve)", nextIssue.Number)
-			if err := o.changeStage(nextIssue.Number, "Approve", "worker_approve"); err != nil {
+			log.Printf("[Orchestrator] Setting stage:awaiting-approval for #%d (reason: %s)", nextIssue.Number, github.ReasonWorkerApprove)
+			if err := o.ChangeStage(nextIssue.Number, github.StageApprove, github.ReasonWorkerApprove); err != nil {
 				log.Printf("[Orchestrator] Error setting stage:awaiting-approval for #%d: %v", nextIssue.Number, err)
 			}
 			if prURL != "" {
@@ -393,43 +393,12 @@ func (o *Orchestrator) recordStep(issueNumber int, stepName, response string) {
 	_ = o.store.FinishStep(id, response)
 }
 
-func (o *Orchestrator) BroadcastStageUpdate(issueNumber int, stage string) {
-	// Run GitHub API call asynchronously to avoid blocking worker
+func (o *Orchestrator) BroadcastStageUpdate(issueNumber int, stage github.Stage) {
+	// Run stage change asynchronously to avoid blocking worker.
+	// Delegates to ChangeStage which handles GitHub, cache, ledger, and WebSocket.
 	go func() {
-		// Convert stage name to label for logging
-		toLabel := stage
-		if labels, ok := github.StageToLabels[stage]; ok && len(labels) > 0 {
-			toLabel = labels[0]
-		}
-
-		log.Printf("[Orchestrator] Updating %s for #%d (async, reason: worker_stage_update)", toLabel, issueNumber)
-
-		// Get current stage from cache for ledger
-		fromStage := "Unknown"
-		if o.store != nil {
-			if existing, err := o.store.GetIssueCache(issueNumber); err == nil {
-				fromStage = o.getStageFromIssue(existing)
-			}
-		}
-
-		// Set the stage label on GitHub
-		updatedIssue, err := o.gh.SetStageLabel(issueNumber, stage)
-		if err != nil {
-			log.Printf("[Orchestrator] Error setting %s for #%d: %v", toLabel, issueNumber, err)
-			return
-		}
-
-		// Save to ledger
-		if o.store != nil {
-			if err := o.store.SaveStageChange(issueNumber, fromStage, toLabel, "worker_stage_update", "orchestrator"); err != nil {
-				log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", issueNumber, err)
-			}
-		}
-
-		// Broadcast the update via hub if available
-		if o.hub != nil {
-			log.Printf("[Orchestrator] Broadcasting %s update for #%d to WebSocket clients", toLabel, issueNumber)
-			o.hub.BroadcastIssueUpdate(updatedIssue)
+		if err := o.ChangeStage(issueNumber, stage, github.ReasonWorkerStageUpdate); err != nil {
+			log.Printf("[Orchestrator] Error in async stage update for #%d: %v", issueNumber, err)
 		}
 	}()
 }
@@ -510,14 +479,14 @@ func labelNames(issue github.Issue) string {
 	return strings.Join(names, ", ")
 }
 
-// getStageFromIssue extracts the current stage from issue labels
-func (o *Orchestrator) getStageFromIssue(issue github.Issue) string {
+// getStageFromIssue extracts the current stage label from issue labels
+func (o *Orchestrator) getStageFromIssue(issue github.Issue) (string, error) {
 	for _, label := range issue.Labels {
 		if strings.HasPrefix(label.Name, "stage:") {
-			return label.Name
+			return label.Name, nil
 		}
 	}
-	return "Backlog"
+	return "", fmt.Errorf("issue #%d has no stage label", issue.Number)
 }
 
 // HandleWorkerEvent processes events from worker
@@ -526,66 +495,74 @@ func (o *Orchestrator) HandleWorkerEvent(event WorkerEvent) {
 		event.IssueNumber, event.Stage, event.Status)
 
 	// Decide next stage based on state machine
-	nextStage := o.decideNextStage(event)
+	nextStage, reason, ok := o.decideNextStage(event)
+	if !ok {
+		return
+	}
 
 	// Update stage
-	if nextStage != "" {
-		if err := o.changeStage(event.IssueNumber, nextStage, "worker_completed_"+event.Stage); err != nil {
-			log.Printf("[Orchestrator] Error changing stage for #%d: %v", event.IssueNumber, err)
-		}
+	if err := o.ChangeStage(event.IssueNumber, nextStage, reason); err != nil {
+		log.Printf("[Orchestrator] Error changing stage for #%d: %v", event.IssueNumber, err)
 	}
 }
 
-// decideNextStage determines the next stage based on current state and event
-func (o *Orchestrator) decideNextStage(event WorkerEvent) string {
+// decideNextStage determines the next stage based on current state and event.
+// Returns the next Stage, the reason for the transition, and true if a transition should happen.
+func (o *Orchestrator) decideNextStage(event WorkerEvent) (github.Stage, github.StageChangeReason, bool) {
 	// State machine logic
 	switch event.Stage {
 	case "analysis":
 		if event.Status == EventSuccess {
-			return "Code"
+			return github.StageCode, github.ReasonWorkerCompletedAnalysis, true
 		}
 	case "coding":
 		if event.Status == EventSuccess {
-			return "AI Review"
+			return github.StageReview, github.ReasonWorkerCompletedCoding, true
 		}
 	case "code-review":
 		if event.Status == EventSuccess {
-			return "Create PR"
+			return github.StageCreatePR, github.ReasonWorkerCompletedCodeReview, true
 		}
 	case "create-pr":
 		if event.Status == EventSuccess {
-			return "Approve"
+			return github.StageApprove, github.ReasonWorkerCompletedCreatePR, true
 		}
 	}
 
 	if event.Status == EventFailed {
-		return "Failed"
+		return github.StageFailed, github.ReasonWorkerFailed, true
 	}
 
 	if event.Status == EventBlocked {
-		return "NeedsUser"
+		return github.StageNeedsUser, github.ReasonWorkerBlocked, true
 	}
 
-	return ""
+	return "", "", false
 }
 
-// changeStage is the ONLY way to change stages
-// It updates: GitHub, cache, ledger, WebSocket
-func (o *Orchestrator) changeStage(issueNumber int, toStage, reason string) error {
-	log.Printf("[Orchestrator] Changing stage of #%d to %s (reason: %s)", issueNumber, toStage, reason)
+// ChangeStage is the ONLY way to change stages in the entire system.
+// Dashboard, worker, and any other component must call this method.
+// It updates: GitHub labels, local cache, WebSocket broadcast, and ledger.
+func (o *Orchestrator) ChangeStage(issueNumber int, toStage github.Stage, reason github.StageChangeReason) error {
+	toLabel := toStage.Label()
+	log.Printf("[Orchestrator] Changing stage of #%d to %s (reason: %s)", issueNumber, toLabel, reason.String())
 
 	// Get current stage from cache
-	fromStage := "Unknown"
+	fromStage := "unknown"
 	if o.store != nil {
 		if existing, err := o.store.GetIssueCache(issueNumber); err == nil {
-			fromStage = o.getStageFromIssue(existing)
+			if s, err := o.getStageFromIssue(existing); err == nil {
+				fromStage = s
+			} else {
+				log.Printf("[Orchestrator] Warning: %v", err)
+			}
 		}
 	}
 
 	// Update GitHub
 	updatedIssue, err := o.gh.SetStageLabel(issueNumber, toStage)
 	if err != nil {
-		return fmt.Errorf("setting stage %s on #%d: %w", toStage, issueNumber, err)
+		return fmt.Errorf("setting stage %s on #%d: %w", toLabel, issueNumber, err)
 	}
 
 	// Update cache
@@ -604,15 +581,9 @@ func (o *Orchestrator) changeStage(issueNumber int, toStage, reason string) erro
 		o.hub.BroadcastIssueUpdate(updatedIssue)
 	}
 
-	// Prepare label for ledger and logging
-	toLabel := toStage
-	if labels, ok := github.StageToLabels[toStage]; ok && len(labels) > 0 {
-		toLabel = labels[0]
-	}
-
 	// Save to ledger (last)
 	if o.store != nil {
-		if err := o.store.SaveStageChange(issueNumber, fromStage, toLabel, reason, "orchestrator"); err != nil {
+		if err := o.store.SaveStageChange(issueNumber, fromStage, toLabel, reason.Label(), "orchestrator"); err != nil {
 			log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", issueNumber, err)
 		}
 	}

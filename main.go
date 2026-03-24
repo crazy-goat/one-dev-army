@@ -293,9 +293,9 @@ func runServe(dir string, debugWebSocket bool) error {
 
 	brMgr := git.NewBranchManager(dir)
 
-	processor := worker.NewProcessor(cfg, oc, gh, store, brMgr, router)
-
 	orchestrator := mvp.NewOrchestrator(cfg, gh, oc, brMgr, store, hub, router)
+
+	processor := worker.NewProcessor(cfg, oc, gh, store, brMgr, router, orchestrator)
 
 	// Set orchestrator in sync service
 	syncService.SetOrchestrator(orchestrator)
