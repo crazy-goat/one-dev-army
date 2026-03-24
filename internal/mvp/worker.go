@@ -632,6 +632,11 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (appr
 		}
 	}()
 
+	// Initialize chat history if not already present
+	if task.ChatHistory == nil {
+		task.ChatHistory = NewChatHistory(1000)
+	}
+
 	var stepID int64
 	if w.store != nil {
 		id, sErr := w.store.InsertStep(task.Issue.Number, "code-review", prompt, session.ID)
@@ -641,6 +646,9 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (appr
 			stepID = id
 		}
 	}
+
+	// Capture user prompt in chat history
+	task.ChatHistory.AddMessage("user", prompt)
 
 	// Use router to select model for code category with high complexity (code review is important)
 	llmModel := w.cfg.Planning.LLM
@@ -660,6 +668,9 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (appr
 
 	reviewJSON, _ := json.Marshal(result)
 	review = string(reviewJSON)
+
+	// Capture assistant response in chat history
+	task.ChatHistory.AddMessage("assistant", review)
 
 	if w.store != nil && stepID > 0 {
 		_ = w.store.FinishStep(stepID, review)
@@ -736,6 +747,11 @@ func (w *Worker) llmStep(ctx context.Context, task *Task, stepName, prompt, llm 
 		}
 	}()
 
+	// Initialize chat history if not already present
+	if task.ChatHistory == nil {
+		task.ChatHistory = NewChatHistory(1000)
+	}
+
 	var stepID int64
 	if w.store != nil {
 		id, sErr := w.store.InsertStep(task.Issue.Number, stepName, prompt, session.ID)
@@ -745,6 +761,9 @@ func (w *Worker) llmStep(ctx context.Context, task *Task, stepName, prompt, llm 
 			stepID = id
 		}
 	}
+
+	// Capture user prompt in chat history
+	task.ChatHistory.AddMessage("user", prompt)
 
 	model := opencode.ParseModelRef(llm)
 	msg, err := w.oc.SendMessage(session.ID, prompt, model, nil)
@@ -756,6 +775,10 @@ func (w *Worker) llmStep(ctx context.Context, task *Task, stepName, prompt, llm 
 	}
 
 	response := extractText(msg)
+
+	// Capture assistant response in chat history
+	task.ChatHistory.AddMessage("assistant", response)
+
 	if w.store != nil && stepID > 0 {
 		_ = w.store.FinishStep(stepID, response)
 	}
