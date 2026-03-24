@@ -150,8 +150,8 @@ func (c *Client) SetStageLabel(issueNumber int, stage Stage) (Issue, error) {
 		_ = c.RemoveLabel(issueNumber, label)
 	}
 
-	// Add new stage label
-	if err := c.AddLabel(issueNumber, stage.Label()); err != nil {
+	// Add new stage label (bypass guard — this IS the correct path for stage labels)
+	if err := c.addLabelRaw(issueNumber, stage.Label()); err != nil {
 		return Issue{}, fmt.Errorf("adding label %s to issue #%d: %w", stage.Label(), issueNumber, err)
 	}
 

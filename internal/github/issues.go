@@ -104,10 +104,17 @@ func (c *Client) CreateMilestone(title string) error {
 	return nil
 }
 
+// AddLabel adds a non-stage label to an issue.
+// Stage labels (stage:*) are rejected — use SetStageLabel instead.
 func (c *Client) AddLabel(issueNum int, label string) error {
 	if IsStageLabel(label) {
 		return fmt.Errorf("cannot add stage label %q via AddLabel — use SetStageLabel instead", label)
 	}
+	return c.addLabelRaw(issueNum, label)
+}
+
+// addLabelRaw adds any label without restrictions. Internal use only.
+func (c *Client) addLabelRaw(issueNum int, label string) error {
 	_, err := c.gh("issue", "edit", strconv.Itoa(issueNum), "--add-label", label)
 	if err != nil {
 		return fmt.Errorf("adding label %s to #%d: %w", label, issueNum, err)
