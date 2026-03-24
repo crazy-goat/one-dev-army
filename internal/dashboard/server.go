@@ -150,6 +150,62 @@ func parseTemplates() (map[string]*template.Template, error) {
 			}
 			return string(b)
 		},
+		"labelIcon": func(label string) string {
+			switch label {
+			case "type:feature":
+				return "✨"
+			case "type:bug":
+				return "🐛"
+			case "type:docs":
+				return "📚"
+			case "type:refactor":
+				return "🔧"
+			case "size:S":
+				return "🟢"
+			case "size:M":
+				return "🟡"
+			case "size:L":
+				return "🟠"
+			case "size:XL":
+				return "🔴"
+			case "priority:high":
+				return "🔥"
+			case "priority:medium":
+				return "⚡"
+			case "priority:low":
+				return "🌱"
+			default:
+				return ""
+			}
+		},
+		"labelTooltip": func(label string) string {
+			switch label {
+			case "type:feature":
+				return "Feature"
+			case "type:bug":
+				return "Bug"
+			case "type:docs":
+				return "Documentation"
+			case "type:refactor":
+				return "Refactor"
+			case "size:S":
+				return "Size: Small"
+			case "size:M":
+				return "Size: Medium"
+			case "size:L":
+				return "Size: Large"
+			case "size:XL":
+				return "Size: Extra Large"
+			case "priority:high":
+				return "Priority: High"
+			case "priority:medium":
+				return "Priority: Medium"
+			case "priority:low":
+				return "Priority: Low"
+			default:
+				return ""
+			}
+		},
 	}
 
 	pages := []string{"board.html", "task.html"}
