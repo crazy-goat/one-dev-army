@@ -13,11 +13,8 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/llm"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
+	"github.com/crazy-goat/one-dev-army/internal/prompts"
 )
-
-const automatedPipelineNotice = "CRITICAL: You are running in a fully automated pipeline with NO human operator. " +
-	"NEVER ask questions, request clarification, or wait for input - nobody will answer and the pipeline will hang forever. " +
-	"Make your best judgment and produce output immediately.\n\n"
 
 type Sprint struct {
 	ID        int
@@ -53,7 +50,7 @@ func (p *Planner) PlanSprint() (*Sprint, error) {
 		return nil, fmt.Errorf("creating planning session: %w", err)
 	}
 
-	prompt := automatedPipelineNotice + buildSprintPrompt(issues, p.cfg.Sprint.TasksPerSprint)
+	prompt := prompts.MustGet(prompts.WorkerAutomatedPipeline) + buildSprintPrompt(issues, p.cfg.Sprint.TasksPerSprint)
 
 	// Use router to select model for planning category
 	llmModel := p.cfg.Planning.LLM
@@ -195,9 +192,6 @@ type sprintPlanResponse struct {
 
 func buildSprintPrompt(issues []github.Issue, maxTasks int) string {
 	var b strings.Builder
-	b.WriteString("You are a sprint planner. Select tasks from the backlog for the next sprint.\n\n")
-	b.WriteString("## Backlog\n\n")
-
 	for _, issue := range issues {
 		sizeLabel := ""
 		for _, l := range issue.Labels {
@@ -208,17 +202,7 @@ func buildSprintPrompt(issues []github.Issue, maxTasks int) string {
 		}
 		fmt.Fprintf(&b, "- #%d: %s [%s]\n", issue.Number, issue.Title, sizeLabel)
 	}
-
-	if maxTasks > 0 {
-		fmt.Fprintf(&b, "\nSelect up to %d tasks for this sprint.\n", maxTasks)
-	}
-
-	b.WriteString("\nConsider task dependencies and sizes when selecting.\n")
-	b.WriteString("Do NOT ask any questions - just produce the output.\n")
-	b.WriteString("Respond with JSON: {\"task_ids\": [1, 2, 3]}\n")
-	b.WriteString("Respond ONLY with the JSON object, no other text.")
-
-	return b.String()
+	return prompts.SprintPlanningPrompt(b.String(), maxTasks)
 }
 
 func parseSprintPlan(content string) ([]int, error) {
@@ -245,21 +229,12 @@ type insightAnalysis struct {
 
 func buildInsightPrompt(insights []string) string {
 	var b strings.Builder
-	b.WriteString("Analyze the following insights collected during a sprint.\n\n")
-	b.WriteString("Categorize each into either:\n")
-	b.WriteString("1. Concrete ideas that should become new GitHub issues\n")
-	b.WriteString("2. General observations worth noting\n\n")
-	b.WriteString("## Insights\n\n")
 	for _, insight := range insights {
 		b.WriteString("- ")
 		b.WriteString(insight)
 		b.WriteString("\n")
 	}
-	b.WriteString("\nDo NOT ask any questions - just produce the output.\n")
-	b.WriteString("Respond with JSON:\n")
-	b.WriteString(`{"concrete_ideas": [{"title": "...", "description": "..."}], "observations": ["..."]}`)
-	b.WriteString("\nRespond ONLY with the JSON object, no other text.")
-	return b.String()
+	return prompts.InsightAnalysisPrompt(b.String())
 }
 
 func parseInsightAnalysis(content string) (*insightAnalysis, error) {

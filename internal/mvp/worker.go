@@ -17,95 +17,10 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/llm"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"github.com/crazy-goat/one-dev-army/internal/plan"
+	"github.com/crazy-goat/one-dev-army/internal/prompts"
 )
 
 var ErrAlreadyDone = errors.New("ticket already done")
-
-const technicalPlanningPrompt = `Analyze and create an implementation plan for GitHub issue #%d: %s
-
-Issue body:
-%s
-
-Provide a comprehensive technical analysis and implementation plan with the following structure:
-
-## Analysis
-
-1. Core requirements — what exactly needs to be done
-2. Files that likely need changes
-3. Implementation approach — high-level strategy
-4. Testing strategy — what tests to write or update
-
-## Implementation Plan
-
-IMPORTANT: First check if this feature/fix is ALREADY IMPLEMENTED in the codebase.
-Read the relevant source files and verify. If and ONLY if the existing code already fully satisfies
-all issue requirements with no changes needed, respond with a single line starting with the
-exact prefix ALREADY_DONE: followed by your concrete evidence (e.g. "method Foo already exists in bar.go:42").
-Do NOT use this if the feature is only partially implemented or needs any modifications.
-
-If changes ARE needed (which is the expected case), create a concrete, actionable plan covering:
-1. Which files to create or modify (exact paths)
-2. What code changes to make in each file
-3. What tests to add or update
-4. Order of operations
-
-Be specific and actionable. Do NOT ask questions. Output both sections directly.`
-
-const codeReviewPrompt = `You are reviewing code changes for GitHub issue #%d: %s
-
-The changes are in PR %s in repository %s.
-Fetch the PR diff yourself using available tools, then review.
-
-Check for:
-1. Correctness — does the code do what the issue requires?
-2. Code quality — clean, readable, well-structured?
-3. Error handling — are errors handled properly?
-4. Tests — adequate test coverage?
-5. Security — any vulnerabilities introduced?
-6. Performance — any obvious performance issues?
-
-Set "approved" to true if the code is acceptable, false if changes are required.
-Set "already_done" to true ONLY if the issue was already fully implemented before this PR (extremely rare).`
-
-const fixFromReviewPrompt = `Fix the issues found during code review for GitHub issue #%d: %s
-
-Working directory: %s
-Test command: %s
-
-Code review feedback:
-%s
-
-Instructions:
-- Read the files mentioned in the review
-- Fix ALL issues raised by the reviewer
-- Run the test command and ensure all tests pass
-- Commit your fixes with a descriptive message
-- You are in a fully automated pipeline. NEVER ask questions or wait for input.
-- Make your best judgment and proceed immediately.
-- CRITICAL: Do NOT use git worktrees. Work directly in the provided working directory. Do NOT run "git worktree" commands.`
-
-const implementationPrompt = `Implement the following plan for GitHub issue #%d: %s
-
-Implementation plan:
-%s
-
-Working directory: %s
-
-Test command: %s
-
-Instructions:
-- Read existing files before modifying them
-- Make all necessary code changes
-- Create new files as needed
-- After implementing, run the test command and fix any failures until all tests pass
-- Do NOT proceed until tests pass — iterate on the code until they do
-- Run the lint command for this project and fix ALL lint errors before finishing (see AGENTS.md in the working directory for the exact lint command)
-- Commit ALL your changes with a descriptive message
-- After committing, push the branch: git push
-- Before finishing, run "git status" and verify the working tree is clean — if there are any uncommitted changes, commit and push them
-- You are in a fully automated pipeline. NEVER ask questions or wait for input.
-- Make your best judgment and proceed immediately.
-- CRITICAL: Do NOT use git worktrees. Work directly in the provided working directory. Do NOT run "git worktree" commands.`
 
 type Worker struct {
 	id           int
@@ -444,7 +359,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 }
 
 func (w *Worker) technicalPlanning(ctx context.Context, task *Task) (analysis, implPlan string, err error) {
-	prompt := fmt.Sprintf(technicalPlanningPrompt, task.Issue.Number, task.Issue.Title, task.Issue.Body)
+	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPTechnicalPlanning), task.Issue.Number, task.Issue.Title, task.Issue.Body)
 
 	// Use router to select model for planning category
 	llmModel := w.cfg.Planning.LLM
@@ -549,7 +464,7 @@ func (w *Worker) implement(ctx context.Context, task *Task, planStr string) erro
 	if testCmd == "" {
 		testCmd = "go test ./..."
 	}
-	prompt := fmt.Sprintf(implementationPrompt, task.Issue.Number, task.Issue.Title, planStr, task.Worktree, testCmd)
+	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPImplementation), task.Issue.Number, task.Issue.Title, planStr, task.Worktree, testCmd)
 
 	// Use router to select model for code category with complexity detection
 	llmModel := w.cfg.EpicAnalysis.LLM
@@ -584,7 +499,7 @@ func (w *Worker) fixFromReview(ctx context.Context, task *Task, review string) e
 	if testCmd == "" {
 		testCmd = "go test ./..."
 	}
-	prompt := fmt.Sprintf(fixFromReviewPrompt, task.Issue.Number, task.Issue.Title, task.Worktree, testCmd, review)
+	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPFixFromReview), task.Issue.Number, task.Issue.Title, task.Worktree, testCmd, review)
 
 	// Use router to select model for code category
 	llmModel := w.cfg.EpicAnalysis.LLM
@@ -621,7 +536,7 @@ type crResult struct {
 }
 
 func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (approved bool, review string, err error) {
-	prompt := fmt.Sprintf(codeReviewPrompt, task.Issue.Number, task.Issue.Title, prURL, w.gh.Repo)
+	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPCodeReview), task.Issue.Number, task.Issue.Title, prURL, w.gh.Repo)
 
 	sessionTitle := fmt.Sprintf("code-review-%d", task.Issue.Number)
 	session, err := w.oc.CreateSession(sessionTitle)

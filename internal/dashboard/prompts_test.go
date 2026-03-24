@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/crazy-goat/one-dev-army/internal/prompts"
 )
 
 // TestRefinementPrompt_EnglishOnlyConstraint verifies prompt requires English output
 func TestRefinementPrompt_EnglishOnlyConstraint(t *testing.T) {
-	if !strings.Contains(RefinementPromptTemplate, "ALL output MUST be in English") {
+	refinementPrompt := prompts.MustGet(prompts.DashboardRefinement)
+	if !strings.Contains(refinementPrompt, "ALL output MUST be in English") {
 		t.Error("RefinementPromptTemplate must enforce English-only output")
 	}
 }

@@ -17,26 +17,8 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/llm"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
+	"github.com/crazy-goat/one-dev-army/internal/prompts"
 )
-
-const pickTicketPrompt = `You are a sprint planner for repository %s.
-
-Here are the open tickets in the current sprint milestone. Each ticket has a number and title.
-Use the gh CLI tool to read ticket details: gh issue view <number> -R %s
-
-Tickets:
-%s
-
-Your task:
-1. Read each ticket using gh issue view to understand what it does
-2. Analyze dependencies between tickets — which tickets must be done before others
-3. Pick the ONE ticket that should be done NEXT based on these criteria:
-   - First priority: the ticket that has the MOST other tickets depending on it (i.e. it unblocks the most work)
-   - Second priority: highest priority label (priority:high > priority:medium > priority:low > no label)
-   - Do NOT pick tickets labeled "epic" — those are tracking issues, not implementation tasks
-
-Respond with ONLY this format on the last line:
-NEXT: #<number>`
 
 type StageBroadcaster interface {
 	BroadcastIssueUpdate(issue github.Issue)
@@ -285,7 +267,7 @@ func (o *Orchestrator) pickNextTicket(_ context.Context, candidates []github.Iss
 		pendingInfo = "\n\nTickets awaiting approval (PR created, AI review passed, but NOT yet merged — treat as NOT DONE, do NOT pick tickets that depend on these):\n" + strings.Join(pendingLines, "\n")
 	}
 
-	prompt := fmt.Sprintf(pickTicketPrompt, o.gh.Repo, o.gh.Repo, ticketList) + pendingInfo
+	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPPickTicket), o.gh.Repo, o.gh.Repo, ticketList) + pendingInfo
 
 	log.Printf("[Orchestrator] Asking LLM to pick next ticket from %d candidates...", len(candidates))
 

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/crazy-goat/one-dev-army/internal/prompts"
 )
 
 // GeneratedIssue is the JSON structure returned by the LLM for issue generation.
@@ -75,120 +77,7 @@ var GeneratedIssueSchema = json.RawMessage(`{
 
 // Prompt templates for the Feature/Bug Creation Wizard
 // These prompts are designed to work with LLMs to refine ideas and break them down into tasks
-
-// RefinementPromptTemplate is the base template for idea refinement
-// It instructs the LLM to analyze the idea in the context of the existing codebase
-const RefinementPromptTemplate = `You are a GitHub issue writer. Your ONLY output is a markdown issue body. You NEVER explain, narrate, or think out loud.
-
-RULES:
-- Output ONLY the issue body in markdown. Nothing else.
-- Do NOT start with "Now I", "Let me", "Here's", "Based on", "I'll", "After analyzing", or ANY preamble.
-- Do NOT include phrases like "comprehensive understanding", "I have analyzed", "Let me create".
-- First character of your response MUST be "#" (a markdown heading) or "-" (a list item).
-- ALL output MUST be in English. Even if the user's input is in another language, translate and write everything in English. No exceptions.
-
-Codebase context (for your reference only, do NOT discuss it):
-%s
-
-Original %s:
-%s
-
-Write a professional GitHub issue body for this %s that covers:
-1. %s
-2. %s
-3. %s
-4. %s
-5. %s
-6. How it fits with existing codebase patterns
-
-Format as a well-structured markdown %s suitable for a GitHub issue.`
-
-// BreakdownPromptTemplate is the base template for task breakdown
-// It instructs the LLM to break down a technical description into actionable tasks
-const BreakdownPromptTemplate = `You are a technical project manager breaking down work into GitHub issues.
-
-%s description:
-%s
-
-Break this down into 3-7 specific, actionable tasks. For each task provide:
-- title: concise task title (max 80 chars)
-- description: detailed description that MUST include clear acceptance criteria (what "done" looks like)
-- priority: one of [low, medium, high, critical]
-- complexity: one of [S, M, L, XL] (S=1-2 hours, M=half day, L=1-2 days, XL=3+ days)
-
-CRITICAL CONSTRAINTS:
-1. DO NOT include implementation details, code snippets, or specific technical solutions in the description
-2. Focus on WHAT needs to be done and the acceptance criteria, NOT HOW to do it
-3. The description should be understandable by any team member, not just developers
-4. Each task description MUST end with a "Acceptance Criteria:" section listing 2-4 specific, verifiable criteria
-
-Return ONLY a JSON array in this exact format:
-[
-  {
-    "title": "Task title",
-    "description": "Task description with clear acceptance criteria at the end.\n\nAcceptance Criteria:\n- Criterion 1\n- Criterion 2\n- Criterion 3",
-    "priority": "high",
-    "complexity": "M"
-  }
-]
-
-No markdown, no explanation, just the JSON array.`
-
-// IssueGenerationPromptTemplate is the unified template for generating a complete GitHub issue
-// with both title and description in a single LLM call using structured JSON output.
-// NOTE: The language parameter is accepted but ignored — output is ALWAYS English.
-// This is critical because GitHub issues must be in English for consistency.
-const IssueGenerationPromptTemplate = `You are a GitHub issue generator. You produce a JSON object with "title" and "description" fields.
-
-CRITICAL LANGUAGE RULE: ALL output MUST be in English. The title and description MUST be written entirely in English. Even if the user's request is in Polish, German, Chinese, or any other language — you MUST translate it and write the issue in English. No exceptions.
-
-The "title" field:
-- 5-10 words, maximum 80 characters
-- Must start with [Feature] or [Bug] prefix based on issue type
-- Written in English
-- Scannable and descriptive
-
-The "priority" field — assess based on business impact and urgency:
-- "high" — critical functionality, blocking other work, security issue, or data loss risk
-- "medium" — important improvement, affects users but has workarounds
-- "low" — nice-to-have, cosmetic, minor improvement
-
-The "complexity" field — estimate implementation effort:
-- "S" — 1-2 hours, small change, single file, well-defined scope
-- "M" — half day, a few files, moderate logic changes
-- "L" — 1-2 days, multiple files/components, requires careful design
-- "XL" — 3+ days, cross-cutting changes, significant new functionality
-
-The "description" field is a markdown document with exactly these sections:
-
-## Description
-[1-3 sentences in English: what needs to be done and why]
-
-## Tasks
-[Numbered list of concrete implementation steps in English. Each step is one action a developer can complete in 2-15 minutes. Be specific about file paths.]
-
-## Files to Modify
-[List of file paths that need changes, with a brief note in English on what changes]
-
-## Acceptance Criteria
-[2-5 specific, verifiable criteria for completion, in English]
-
-CRITICAL RULES:
-- ALL text MUST be in English — title, description, tasks, criteria, everything
-- NO implementation code, algorithms, or design patterns
-- NO architecture overviews or component dependency analysis
-- Focus on WHAT to do, not HOW
-- Be specific about file paths
-- Tasks should be actionable steps, not abstract descriptions
-- Keep it concise — a developer should read this in under 2 minutes
-
-Codebase context (for reference only):
-%s
-
-Issue type: %s
-
-Original request:
-%s`
+// The actual templates are stored in internal/prompts/dashboard/
 
 // BuildRefinementPrompt creates the prompt for idea refinement with codebase context
 // wizardType: the type of wizard (feature or bug)
@@ -201,7 +90,7 @@ func BuildRefinementPrompt(wizardType WizardType, idea string, codebaseContext s
 	}
 
 	if wizardType == WizardTypeBug {
-		return fmt.Sprintf(RefinementPromptTemplate,
+		return fmt.Sprintf(prompts.MustGet(prompts.DashboardRefinement),
 			codebaseContext,               // %s - codebase context
 			"bug description",             // %s - original type
 			idea,                          // %s - original content
@@ -215,7 +104,7 @@ func BuildRefinementPrompt(wizardType WizardType, idea string, codebaseContext s
 		)
 	}
 
-	return fmt.Sprintf(RefinementPromptTemplate,
+	return fmt.Sprintf(prompts.MustGet(prompts.DashboardRefinement),
 		codebaseContext,              // %s - codebase context
 		"idea",                       // %s - original type
 		idea,                         // %s - original content
@@ -240,7 +129,7 @@ func BuildBreakdownPrompt(wizardType WizardType, description string) string {
 		typeLabel = "Feature"
 	}
 
-	return fmt.Sprintf(BreakdownPromptTemplate, typeLabel, description)
+	return fmt.Sprintf(prompts.MustGet(prompts.DashboardBreakdown), typeLabel, description)
 }
 
 // BuildIssueGenerationPrompt creates the unified prompt for issue generation.
@@ -258,7 +147,7 @@ func BuildIssueGenerationPrompt(wizardType WizardType, idea string, codebaseCont
 		typeLabel = "Feature"
 	}
 
-	return fmt.Sprintf(IssueGenerationPromptTemplate,
+	return fmt.Sprintf(prompts.MustGet(prompts.DashboardIssueGeneration),
 		codebaseContext,
 		typeLabel,
 		idea,

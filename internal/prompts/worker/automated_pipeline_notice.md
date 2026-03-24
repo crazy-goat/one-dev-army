@@ -1,0 +1,1 @@
+CRITICAL: You are running in a fully automated pipeline with NO human operator. NEVER ask questions, request clarification, or wait for input - nobody will answer and the pipeline will hang forever. Make your best judgment and produce output immediately.

@@ -18,99 +18,10 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/llm"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"github.com/crazy-goat/one-dev-army/internal/pipeline"
+	"github.com/crazy-goat/one-dev-army/internal/prompts"
 )
 
 const maxSlugLen = 50
-
-const automatedPipelineNotice = "CRITICAL: You are running in a fully automated pipeline with NO human operator. " +
-	"NEVER ask questions, request clarification, or wait for input - nobody will answer and the pipeline will hang forever. " +
-	"Make your best judgment and produce output immediately.\n\n"
-
-const promptAnalysis = `You are analyzing a GitHub issue for implementation.
-
-## Issue #%d: %s
-
-%s
-
-## Instructions
-
-Analyze this issue and produce a structured analysis. Consider:
-1. What are the core requirements?
-2. What files/packages might need changes?
-3. What are the edge cases and potential risks?
-4. What dependencies exist?
-
-Do NOT ask any questions - just produce the output.
-
-Respond with a JSON object:
-{
-  "summary": "brief summary of what needs to be done",
-  "requirements": ["list of concrete requirements"],
-  "affected_files": ["list of likely affected files/packages"],
-  "risks": ["potential risks or edge cases"],
-  "complexity": "low|medium|high"
-}
-`
-
-const promptCoding = `You are implementing code changes for a GitHub issue.
-
-## Issue #%d: %s
-
-%s
-
-## Implementation Plan
-
-%s
-
-## Tools
-
-- Lint command: %s
-- Test command: %s
-
-## Instructions
-
-Do NOT ask any questions - just implement the solution.
-
-Implement all changes according to the plan. Make sure to:
-1. Follow existing code style and patterns
-2. Write comprehensive tests
-3. Run the lint and test commands to verify your changes
-4. Handle errors properly
-5. Keep changes minimal and focused
-
-Implement the complete solution now.
-`
-
-const promptCodeReview = `You are reviewing code changes for a GitHub issue.
-
-## Issue #%d: %s
-
-%s
-
-## Diff
-
-%s
-
-## Instructions
-
-Review these code changes. Check for:
-1. Correctness - does the code do what the issue requires?
-2. Code quality - clean, readable, well-structured?
-3. Error handling - are errors handled properly?
-4. Tests - adequate test coverage?
-5. Security - any vulnerabilities introduced?
-6. Performance - any obvious performance issues?
-
-Do NOT ask any questions - just produce the output.
-
-Respond with a JSON object:
-{
-  "approved": true/false,
-  "issues": ["list of issues found, if any"],
-  "suggestions": ["list of improvements, if any"],
-  "verdict": "brief summary of review"
-}
-`
 
 var nonAlphanumeric = regexp.MustCompile(`[^a-z0-9-]+`)
 var multiDash = regexp.MustCompile(`-{2,}`)
@@ -245,11 +156,11 @@ func NewStageExecutor(cfg *config.Config, oc *opencode.Client, store *db.Store, 
 func (e *StageExecutor) Execute(taskID int, stage pipeline.Stage, context string) (*pipeline.StageResult, error) {
 	switch stage {
 	case pipeline.StageAnalysis:
-		return e.executeSession(taskID, stage, context, promptAnalysis)
+		return e.executeSession(taskID, stage, context, prompts.MustGet(prompts.WorkerAnalysis))
 	case pipeline.StageCoding:
 		return e.executeCoding(taskID, stage, context)
 	case pipeline.StageCodeReview:
-		return e.executeReview(taskID, stage, context, promptCodeReview)
+		return e.executeReview(taskID, stage, context, prompts.MustGet(prompts.WorkerCodeReview))
 	case pipeline.StageCreatePR:
 		return &pipeline.StageResult{Stage: stage, Success: true, Output: "ready to create PR"}, nil
 	case pipeline.StageApprove:
@@ -272,7 +183,7 @@ func (e *StageExecutor) executeSession(taskID int, stage pipeline.Stage, stageCo
 		return nil, fmt.Errorf("creating session for %s: %w", stage, err)
 	}
 
-	prompt := automatedPipelineNotice + fmt.Sprintf(promptTpl, e.task.IssueNumber, e.task.Title, e.task.Body, stageContext)
+	prompt := prompts.MustGet(prompts.WorkerAutomatedPipeline) + fmt.Sprintf(promptTpl, e.task.IssueNumber, e.task.Title, e.task.Body, stageContext)
 	msg, err := e.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(llm), os.Stdout)
 	if err != nil {
 		return nil, fmt.Errorf("sending message for %s: %w", stage, err)
@@ -301,7 +212,7 @@ func (e *StageExecutor) executeReview(taskID int, stage pipeline.Stage, stageCon
 		return nil, fmt.Errorf("creating session for %s: %w", stage, err)
 	}
 
-	prompt := automatedPipelineNotice + fmt.Sprintf(promptTpl, e.task.IssueNumber, e.task.Title, e.task.Body, stageContext)
+	prompt := prompts.MustGet(prompts.WorkerAutomatedPipeline) + fmt.Sprintf(promptTpl, e.task.IssueNumber, e.task.Title, e.task.Body, stageContext)
 	msg, err := e.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(llm), os.Stdout)
 	if err != nil {
 		return nil, fmt.Errorf("sending message for %s: %w", stage, err)
@@ -332,7 +243,7 @@ func (e *StageExecutor) executeCoding(taskID int, stage pipeline.Stage, stageCon
 		return nil, fmt.Errorf("creating session for %s: %w", stage, err)
 	}
 
-	prompt := automatedPipelineNotice + fmt.Sprintf(promptCoding,
+	prompt := prompts.MustGet(prompts.WorkerAutomatedPipeline) + fmt.Sprintf(prompts.MustGet(prompts.WorkerCoding),
 		e.task.IssueNumber, e.task.Title, e.task.Body,
 		stageContext,
 		e.cfg.Tools.LintCmd, e.cfg.Tools.TestCmd,
