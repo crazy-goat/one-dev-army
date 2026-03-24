@@ -67,8 +67,6 @@ Check for:
 Set "approved" to true if the code is acceptable, false if changes are required.
 Set "already_done" to true ONLY if the issue was already fully implemented before this PR (extremely rare).`
 
-const maxCRRetries = 10
-
 const fixFromReviewPrompt = `Fix the issues found during code review for GitHub issue #%d: %s
 
 Working directory: %s
@@ -132,17 +130,6 @@ func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Clien
 	}
 }
 
-func (w *Worker) broadcastWorkerStatus(stage string) {
-	if w.orchestrator == nil || w.orchestrator.currentTask == nil {
-		return
-	}
-	task := w.orchestrator.currentTask
-	elapsed := int(time.Since(task.StartTime).Seconds())
-	workerID := fmt.Sprintf("worker-%d", w.id)
-	w.orchestrator.BroadcastWorkerStatus(workerID, string(task.Status), task.Issue.Number, task.Issue.Title, stage, elapsed)
-}
-
-// reportStageComplete reports stage completion to orchestrator.
 // Processes the event synchronously so that GitHub labels, cache, ledger,
 // and WebSocket are updated immediately — not deferred until after Process().
 func (w *Worker) reportStageComplete(stage string, status EventStatus, output string) {
@@ -234,10 +221,10 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			// Try to get combined response from new step name
 			response, _ := w.store.GetStepResponse(task.Issue.Number, "technical-planning")
 			if response != "" {
-				analysis, implPlan = parseTechnicalPlanningResponse(response)
+				_, implPlan = parseTechnicalPlanningResponse(response)
 			} else {
 				// Fallback: try to get from old step names for backward compatibility
-				analysis, _ = w.store.GetStepResponse(task.Issue.Number, "analyze")
+				_, _ = w.store.GetStepResponse(task.Issue.Number, "analyze")
 				implPlan, _ = w.store.GetStepResponse(task.Issue.Number, "plan")
 			}
 		}
@@ -466,11 +453,11 @@ func (w *Worker) implement(ctx context.Context, task *Task, planStr string) erro
 }
 
 func (w *Worker) ensureCommit(task *Task) {
-	git.RunInWorktree(task.Worktree, "git", "add", "-A")
+	_, _ = git.RunInWorktree(task.Worktree, "git", "add", "-A")
 	out, err := git.RunInWorktree(task.Worktree, "git", "diff", "--cached", "--quiet")
 	if err != nil {
 		msg := fmt.Sprintf("feat: implement #%d %s", task.Issue.Number, task.Issue.Title)
-		git.RunInWorktree(task.Worktree, "git", "commit", "-m", msg)
+		_, _ = git.RunInWorktree(task.Worktree, "git", "commit", "-m", msg)
 		log.Printf("[Worker %d] Auto-committed uncommitted changes", w.id)
 	}
 	_ = out

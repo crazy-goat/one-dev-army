@@ -86,7 +86,8 @@ func (s *SyncService) Start() {
 	s.ticker = time.NewTicker(30 * time.Second)
 
 	// Perform initial sync immediately
-	go s.syncNow()
+	s.wg.Add(1)
+	go s.syncNowFromStart()
 
 	// Start the ticker loop
 	go s.run()
@@ -134,10 +135,21 @@ func (s *SyncService) run() {
 	}
 }
 
+// syncNowFromStart is called from Start() where wg.Add(1) is already done
+func (s *SyncService) syncNowFromStart() {
+	defer s.wg.Done()
+	s.doSync()
+}
+
 // syncNow performs a single synchronization operation
 func (s *SyncService) syncNow() {
 	s.wg.Add(1)
 	defer s.wg.Done()
+	s.doSync()
+}
+
+// doSync performs the actual synchronization work
+func (s *SyncService) doSync() {
 
 	milestone := s.GetActiveMilestone()
 	if milestone == "" {
@@ -195,6 +207,7 @@ func (s *SyncService) SyncNow() error {
 		return fmt.Errorf("sync service is not running")
 	}
 
-	go s.syncNow()
+	s.wg.Add(1)
+	go s.syncNowFromStart()
 	return nil
 }

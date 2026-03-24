@@ -317,11 +317,11 @@ func formatTechnicalPlanComment(p *Plan) string {
 	if len(p.ImplementationSteps) > 0 {
 		sb.WriteString("### Implementation Steps\n\n")
 		for _, step := range p.ImplementationSteps {
-			sb.WriteString(fmt.Sprintf("**Step %d: %s**\n\n", step.Order, step.Description))
+			fmt.Fprintf(&sb, "**Step %d: %s**\n\n", step.Order, step.Description)
 			if len(step.Files) > 0 {
 				sb.WriteString("**Files to modify:**\n")
 				for _, file := range step.Files {
-					sb.WriteString(fmt.Sprintf("- `%s`\n", file))
+					fmt.Fprintf(&sb, "- `%s`\n", file)
 				}
 				sb.WriteString("\n")
 			}

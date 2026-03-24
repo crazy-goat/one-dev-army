@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
@@ -130,7 +131,7 @@ func TestPlanSprint_Integration(t *testing.T) {
 	planResponse := sprintPlanResponse{TaskIDs: []int{1, 5}}
 	planJSON, _ := json.Marshal(planResponse)
 
-	callCount := 0
+	var callCount atomic.Int32
 
 	type planSSEClient struct {
 		w       http.ResponseWriter
@@ -138,12 +139,13 @@ func TestPlanSprint_Integration(t *testing.T) {
 	}
 	var sseMu sync.Mutex
 	var sseClients []*planSSEClient
+	var broadcastWg sync.WaitGroup
 
 	broadcast := func(data string) {
 		sseMu.Lock()
 		defer sseMu.Unlock()
 		for _, c := range sseClients {
-			fmt.Fprintf(c.w, "data: %s\n\n", data)
+			_, _ = fmt.Fprintf(c.w, "data: %s\n\n", data)
 			c.flusher.Flush()
 		}
 	}
@@ -158,7 +160,7 @@ func TestPlanSprint_Integration(t *testing.T) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.Header().Set("Cache-Control", "no-cache")
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
 			flusher.Flush()
 
 			c := &planSSEClient{w: w, flusher: flusher}
@@ -167,6 +169,9 @@ func TestPlanSprint_Integration(t *testing.T) {
 			sseMu.Unlock()
 
 			<-r.Context().Done()
+			// Wait for any in-flight broadcast goroutines to complete
+			// before the handler returns and the server finalizes the response.
+			broadcastWg.Wait()
 			return
 		}
 
@@ -174,17 +179,23 @@ func TestPlanSprint_Integration(t *testing.T) {
 
 		switch {
 		case r.URL.Path == "/session" && r.Method == http.MethodPost:
-			json.NewEncoder(w).Encode(opencode.Session{ID: "sess-plan", Title: "sprint-planning"})
+			_ = json.NewEncoder(w).Encode(opencode.Session{ID: "sess-plan", Title: "sprint-planning"})
 
 		case strings.HasSuffix(r.URL.Path, "/prompt_async") && r.Method == http.MethodPost:
-			callCount++
+			callCount.Add(1)
 			escapedJSON := strings.ReplaceAll(string(planJSON), `"`, `\"`)
-			w.WriteHeader(http.StatusNoContent)
+
+			// Broadcast SSE events in a goroutine, but track it so the SSE
+			// handler can wait for completion before returning.
+			broadcastWg.Add(1)
 			go func() {
+				defer broadcastWg.Done()
 				broadcast(`{"type":"message.updated","properties":{"info":{"id":"msg-1","sessionID":"sess-plan","role":"assistant"}}}`)
 				broadcast(fmt.Sprintf(`{"type":"message.part.delta","properties":{"sessionID":"sess-plan","messageID":"msg-1","partID":"prt-1","field":"text","delta":"%s"}}`, escapedJSON))
 				broadcast(`{"type":"session.status","properties":{"sessionID":"sess-plan","status":{"type":"idle"}}}`)
 			}()
+
+			w.WriteHeader(http.StatusNoContent)
 
 		default:
 			w.WriteHeader(http.StatusNotFound)

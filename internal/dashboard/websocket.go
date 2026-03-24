@@ -176,7 +176,7 @@ func (h *Hub) Run() {
 				h.mu.Unlock()
 				h.logf("Connection limit reached (%d), rejecting client", h.maxClients)
 				close(client.send)
-				client.conn.Close()
+				_ = client.conn.Close()
 				continue
 			}
 			h.clients[client] = true
@@ -230,7 +230,7 @@ func (h *Hub) Stop() {
 	// Close all client connections
 	for client := range h.clients {
 		close(client.send)
-		client.conn.Close()
+		_ = client.conn.Close()
 		delete(h.clients, client)
 	}
 
@@ -348,13 +348,13 @@ func (h *Hub) BroadcastWorkerUpdate(workerID, status string, taskID int, taskTit
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
-		c.conn.Close()
+		_ = c.conn.Close()
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
-	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	_ = c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		_ = c.conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
 	})
 
@@ -390,23 +390,23 @@ func (c *Client) writePump() {
 	defer func() {
 		ticker.Stop()
 		c.hub.unregister <- c
-		c.conn.Close()
+		_ = c.conn.Close()
 	}()
 
 	for {
 		select {
 		case message, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				// Hub closed the channel
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
-			c.conn.WriteMessage(websocket.TextMessage, message)
+			_ = c.conn.WriteMessage(websocket.TextMessage, message)
 
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}

@@ -47,32 +47,6 @@ type boardData struct {
 	Failed         []taskCard
 }
 
-func placeholderBoard() boardData {
-	return boardData{
-		Active: "board",
-		Backlog: []taskCard{
-			{ID: 1, Title: "Set up CI pipeline", Status: "backlog"},
-			{ID: 2, Title: "Add logging middleware", Status: "backlog"},
-		},
-		Plan: []taskCard{
-			{ID: 3, Title: "Design auth service architecture", Status: "plan", Worker: "worker-1"},
-		},
-		Code: []taskCard{
-			{ID: 4, Title: "Implement auth service", Status: "code", Worker: "worker-2"},
-		},
-		AIReview: []taskCard{
-			{ID: 5, Title: "Database migrations", Status: "ai_review"},
-		},
-		Approve: []taskCard{},
-		Done: []taskCard{
-			{ID: 6, Title: "Project skeleton", Status: "done"},
-		},
-		Blocked: []taskCard{
-			{ID: 7, Title: "Deploy to staging", Status: "blocked"},
-		},
-	}
-}
-
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 	data := s.buildBoardData(r)
 	s.render(w, "board.html", data)
@@ -241,7 +215,9 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 			s.gh.SetActiveMilestone(m)
 			if s.syncService != nil {
 				s.syncService.SetActiveMilestone(m.Title)
-				s.syncService.SyncNow()
+				if err := s.syncService.SyncNow(); err != nil {
+					log.Printf("[Dashboard] Sync error: %v", err)
+				}
 			}
 			if m != nil {
 				log.Printf("[Dashboard] Synced active milestone: %s", m.Title)
@@ -287,7 +263,9 @@ func (s *Server) handlePlanSprint(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	issueNum := 0
-	fmt.Sscanf(id, "%d", &issueNum)
+	if _, err := fmt.Sscanf(id, "%d", &issueNum); err != nil {
+		log.Printf("[Dashboard] Error parsing issue ID %q: %v", id, err)
+	}
 	if issueNum == 0 || s.gh == nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
@@ -308,7 +286,9 @@ func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleReject(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	issueNum := 0
-	fmt.Sscanf(id, "%d", &issueNum)
+	if _, err := fmt.Sscanf(id, "%d", &issueNum); err != nil {
+		log.Printf("[Dashboard] Error parsing issue ID %q: %v", id, err)
+	}
 	if issueNum == 0 || s.gh == nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
@@ -329,7 +309,9 @@ func (s *Server) handleReject(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRetry(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	issueNum := 0
-	fmt.Sscanf(id, "%d", &issueNum)
+	if _, err := fmt.Sscanf(id, "%d", &issueNum); err != nil {
+		log.Printf("[Dashboard] Error parsing issue ID %q: %v", id, err)
+	}
 	if issueNum == 0 || s.gh == nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
@@ -350,7 +332,9 @@ func (s *Server) handleRetry(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRetryFresh(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	issueNum := 0
-	fmt.Sscanf(id, "%d", &issueNum)
+	if _, err := fmt.Sscanf(id, "%d", &issueNum); err != nil {
+		log.Printf("[Dashboard] Error parsing issue ID %q: %v", id, err)
+	}
 	if issueNum == 0 || s.gh == nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
@@ -398,7 +382,9 @@ func (s *Server) recordStep(issueNum int, stepName, response string) {
 func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	issueNum := 0
-	fmt.Sscanf(id, "%d", &issueNum)
+	if _, err := fmt.Sscanf(id, "%d", &issueNum); err != nil {
+		log.Printf("[Dashboard] Error parsing issue ID %q: %v", id, err)
+	}
 	if issueNum == 0 || s.gh == nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
@@ -418,7 +404,9 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUnblock(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	issueNum := 0
-	fmt.Sscanf(id, "%d", &issueNum)
+	if _, err := fmt.Sscanf(id, "%d", &issueNum); err != nil {
+		log.Printf("[Dashboard] Error parsing issue ID %q: %v", id, err)
+	}
 	if issueNum == 0 || s.gh == nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
@@ -438,7 +426,9 @@ func (s *Server) handleUnblock(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDecline(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	issueNum := 0
-	fmt.Sscanf(id, "%d", &issueNum)
+	if _, err := fmt.Sscanf(id, "%d", &issueNum); err != nil {
+		log.Printf("[Dashboard] Error parsing issue ID %q: %v", id, err)
+	}
 	if issueNum == 0 || s.gh == nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
@@ -476,7 +466,9 @@ func (s *Server) handleDecline(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleApproveMerge(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	issueNum := 0
-	fmt.Sscanf(id, "%d", &issueNum)
+	if _, err := fmt.Sscanf(id, "%d", &issueNum); err != nil {
+		log.Printf("[Dashboard] Error parsing issue ID %q: %v", id, err)
+	}
 	if issueNum == 0 || s.gh == nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
@@ -578,20 +570,6 @@ func (s *Server) renderTemplateBlock(w http.ResponseWriter, name string, block s
 	}
 }
 
-func formatDuration(d time.Duration) string {
-	if d == 0 {
-		return "-"
-	}
-	d = d.Round(time.Second)
-	m := int(d.Minutes())
-	s := int(d.Seconds()) % 60
-	if m > 0 {
-		return fmt.Sprintf("%dm %ds", m, s)
-	}
-	return fmt.Sprintf("%ds", s)
-}
-
-// LLMRequestTimeout is the timeout for LLM API requests
 const LLMRequestTimeout = 3 * time.Minute
 
 func (s *Server) handleCurrentTask(w http.ResponseWriter, r *http.Request) {
@@ -832,7 +810,7 @@ func (s *Server) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to connect to opencode", http.StatusBadGateway)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -876,7 +854,7 @@ func (s *Server) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			deltaJSON, _ := json.Marshal(map[string]string{"delta": props.Delta})
-			fmt.Fprintf(w, "data: %s\n\n", deltaJSON)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", deltaJSON)
 			flusher.Flush()
 
 		case "session.status":
@@ -890,7 +868,7 @@ func (s *Server) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if props.SessionID == sessionID && props.Status.Type == "idle" {
-				fmt.Fprintf(w, "data: {\"done\":true}\n\n")
+				_, _ = fmt.Fprintf(w, "data: {\"done\":true}\n\n")
 				flusher.Flush()
 				return
 			}
@@ -1283,9 +1261,10 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 
 	// Build labels for single issue
 	labels := []string{"wizard"}
-	if session.Type == WizardTypeFeature {
+	switch session.Type {
+	case WizardTypeFeature:
 		labels = append(labels, "enhancement")
-	} else if session.Type == WizardTypeBug {
+	case WizardTypeBug:
 		labels = append(labels, "bug")
 	}
 
@@ -1594,13 +1573,13 @@ func (s *Server) handleRateLimit(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	if s.rateLimitService == nil {
-		w.Write([]byte(`<span class="rate-limit-unknown">GitHub API: Not configured</span>`))
+		_, _ = w.Write([]byte(`<span class="rate-limit-unknown">GitHub API: Not configured</span>`))
 		return
 	}
 
 	summary := s.rateLimitService.GetSummary()
 	if summary == nil {
-		w.Write([]byte(`<span class="rate-limit-unknown">GitHub API: Loading...</span>`))
+		_, _ = w.Write([]byte(`<span class="rate-limit-unknown">GitHub API: Loading...</span>`))
 		return
 	}
 
@@ -1619,15 +1598,15 @@ func (s *Server) handleRateLimit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Compressed indicator showing worst percentage
-	html.WriteString(fmt.Sprintf(
+	fmt.Fprintf(&html,
 		`<div class="rate-limit-compressed" style="color: %s;" title="Click to refresh" hx-post="/api/rate-limit/refresh" hx-swap="outerHTML">`,
 		color,
-	))
-	html.WriteString(fmt.Sprintf(
+	)
+	fmt.Fprintf(&html,
 		`<span class="rate-limit-percentage">GitHub API usage: %.0f%%%s</span>`,
 		worstPercentage,
 		warningIcon,
-	))
+	)
 
 	// Add tooltip panel with detailed breakdown
 	html.WriteString(`<div class="rate-limit-tooltip">`)
@@ -1638,59 +1617,59 @@ func (s *Server) handleRateLimit(w http.ResponseWriter, r *http.Request) {
 	if summary.Core != nil {
 		corePercentage := summary.Core.GetUsagePercentage()
 		coreColor := GetColorCSSByPercentage(corePercentage)
-		html.WriteString(fmt.Sprintf(
+		fmt.Fprintf(&html,
 			`<div class="rate-limit-row"><span class="rate-limit-label">REST API:</span><span class="rate-limit-value" style="color: %s">%d/%d (%.0f%%)</span><span class="rate-limit-reset">%s</span></div>`,
 			coreColor,
 			summary.Core.Remaining,
 			summary.Core.Limit,
 			corePercentage,
 			summary.Core.GetResetTimeFormatted(),
-		))
+		)
 	}
 
 	// GraphQL API
 	if summary.GraphQL != nil {
 		graphqlPercentage := summary.GraphQL.GetUsagePercentage()
 		graphqlColor := GetColorCSSByPercentage(graphqlPercentage)
-		html.WriteString(fmt.Sprintf(
+		fmt.Fprintf(&html,
 			`<div class="rate-limit-row"><span class="rate-limit-label">GraphQL:</span><span class="rate-limit-value" style="color: %s">%d/%d (%.0f%%)</span><span class="rate-limit-reset">%s</span></div>`,
 			graphqlColor,
 			summary.GraphQL.Remaining,
 			summary.GraphQL.Limit,
 			graphqlPercentage,
 			summary.GraphQL.GetResetTimeFormatted(),
-		))
+		)
 	}
 
 	// Search API
 	if summary.Search != nil {
 		searchPercentage := summary.Search.GetUsagePercentage()
 		searchColor := GetColorCSSByPercentage(searchPercentage)
-		html.WriteString(fmt.Sprintf(
+		fmt.Fprintf(&html,
 			`<div class="rate-limit-row"><span class="rate-limit-label">Search:</span><span class="rate-limit-value" style="color: %s">%d/%d (%.0f%%)</span><span class="rate-limit-reset">%s</span></div>`,
 			searchColor,
 			summary.Search.Remaining,
 			summary.Search.Limit,
 			searchPercentage,
 			summary.Search.GetResetTimeFormatted(),
-		))
+		)
 	}
 
 	html.WriteString(`</div>`) // Close tooltip-content
 
 	// Show which limit is the worst
 	if worstLimit != nil {
-		html.WriteString(fmt.Sprintf(
+		fmt.Fprintf(&html,
 			`<div class="rate-limit-tooltip-footer">Worst: %s (%.0f%%)</div>`,
 			worstLimit.Name,
 			worstPercentage,
-		))
+		)
 	}
 
 	html.WriteString(`</div>`) // Close tooltip
 	html.WriteString(`</div>`) // Close rate-limit-compressed
 
-	w.Write([]byte(html.String()))
+	_, _ = w.Write([]byte(html.String()))
 }
 
 // handleRateLimitRefresh triggers a manual refresh of the rate limit data

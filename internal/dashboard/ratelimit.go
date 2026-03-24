@@ -290,7 +290,7 @@ func (s *RateLimitService) fetch() {
 		s.updateWithError(fmt.Sprintf("API error: %v", err))
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		s.updateWithError(fmt.Sprintf("HTTP %d: %s", resp.StatusCode, resp.Status))

@@ -114,14 +114,14 @@ func TestWebServer_Start_AlreadyRunning(t *testing.T) {
 
 	// First start should fail because opencode is not installed
 	// But we can test the "already running" logic
-	err := ws.Start()
+	_ = ws.Start()
 	// This will fail because opencode command doesn't exist in test environment
 	// But that's expected
 
 	// Try to start again - should return "already running" error
 	// Note: Since the first start failed, cmd might be nil, so this might not trigger the error
 	// This test is mainly for coverage
-	err = ws.Start()
+	err := ws.Start()
 	if err == nil {
 		t.Log("Start() on already running server should return error")
 	}
@@ -175,7 +175,7 @@ func TestWebServer_ThreadSafety(t *testing.T) {
 	}()
 
 	go func() {
-		ws.Stop()
+		_ = ws.Stop()
 		done <- true
 	}()
 

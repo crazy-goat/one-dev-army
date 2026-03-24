@@ -830,7 +830,7 @@ func TestConcurrentSessionAccess(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			srv.wizardStore.Create("feature")
+			_, _ = srv.wizardStore.Create("feature")
 		}()
 	}
 	wg.Wait()
@@ -1337,9 +1337,10 @@ func TestHandleWizardCreate_EpicLabels(t *testing.T) {
 			// Verify epic label logic
 			var epicLabels []string
 			epicLabels = append(epicLabels, "epic")
-			if tc.wizardType == "feature" {
+			switch tc.wizardType {
+			case "feature":
 				epicLabels = append(epicLabels, "enhancement")
-			} else if tc.wizardType == "bug" {
+			case "bug":
 				epicLabels = append(epicLabels, "bug")
 			}
 

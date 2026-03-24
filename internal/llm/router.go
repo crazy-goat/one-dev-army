@@ -66,23 +66,17 @@ func (r *Router) categoryForStage(stage string) config.TaskCategory {
 	}
 }
 
-// getModelForCategory returns the model for a specific category
-// This replaces the old getStrongModel function
-func (r *Router) getModelForCategory(category config.TaskCategory) string {
-	modelCfg := r.cfg.GetModelForCategory(category, config.ComplexityMedium)
-	return modelCfg.ToModelRef()
-}
-
-// UpdateConfig updates the router configuration dynamically
 func (r *Router) UpdateConfig(cfg *config.LLMConfig) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	r.cfg = cfg
 
-	// Notify listeners
+	// Notify listeners synchronously
+	// Callbacks should be lightweight; callers needing async behavior
+	// can spawn their own goroutines inside the callback.
 	for _, fn := range r.onReload {
-		go fn()
+		fn()
 	}
 }
 

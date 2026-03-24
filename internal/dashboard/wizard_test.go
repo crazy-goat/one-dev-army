@@ -428,7 +428,7 @@ func TestWizardSessionStore_ConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			store.Create("feature")
+			_, _ = store.Create("feature")
 		}()
 	}
 	wg.Wait()

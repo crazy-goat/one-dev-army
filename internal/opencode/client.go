@@ -140,12 +140,16 @@ func (c *Client) SetDirectory(dir string) {
 	c.directory = dir
 }
 
-func (c *Client) HealthCheck() error {
+func (c *Client) HealthCheck() (err error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/global/health")
 	if err != nil {
 		return fmt.Errorf("health check request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing response body: %w", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("health check: unexpected status %d", resp.StatusCode)
@@ -165,7 +169,7 @@ func (c *Client) HealthCheck() error {
 	return nil
 }
 
-func (c *Client) CreateSession(title string) (*Session, error) {
+func (c *Client) CreateSession(title string) (session *Session, err error) {
 	body, err := json.Marshal(map[string]any{
 		"title":      title,
 		"permission": allowAllPermissions,
@@ -183,22 +187,25 @@ func (c *Client) CreateSession(title string) (*Session, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create session request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing response body: %w", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		respBody, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("create session: status %d: %s", resp.StatusCode, formatAPIError(respBody))
 	}
 
-	var session Session
 	if err := json.NewDecoder(resp.Body).Decode(&session); err != nil {
 		return nil, fmt.Errorf("create session: decoding response: %w", err)
 	}
 
-	return &session, nil
+	return session, nil
 }
 
-func (c *Client) InitSession(sessionID string, model ModelRef) error {
+func (c *Client) InitSession(sessionID string, model ModelRef) (err error) {
 	reqBody := map[string]string{
 		"providerID": model.ProviderID,
 		"modelID":    model.ModelID,
@@ -219,7 +226,11 @@ func (c *Client) InitSession(sessionID string, model ModelRef) error {
 	if err != nil {
 		return fmt.Errorf("init session request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing response body: %w", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -233,7 +244,7 @@ func (c *Client) SendMessage(sessionID, prompt string, model ModelRef, output io
 	return c.SendMessageStream(context.Background(), sessionID, prompt, model, output)
 }
 
-func (c *Client) SendMessageStructured(ctx context.Context, sessionID, prompt string, model ModelRef, schema json.RawMessage, result any) error {
+func (c *Client) SendMessageStructured(ctx context.Context, sessionID, prompt string, model ModelRef, schema json.RawMessage, result any) (err error) {
 	reqBody := SendMessageRequest{
 		Parts:  []Part{{Type: "text", Text: prompt}},
 		Model:  &model,
@@ -260,7 +271,11 @@ func (c *Client) SendMessageStructured(ctx context.Context, sessionID, prompt st
 	if err != nil {
 		return fmt.Errorf("structured message request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing response body: %w", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -283,7 +298,7 @@ func (c *Client) SendMessageStructured(ctx context.Context, sessionID, prompt st
 	return nil
 }
 
-func (c *Client) SendMessageAsync(sessionID, prompt string, model ModelRef) error {
+func (c *Client) SendMessageAsync(sessionID, prompt string, model ModelRef) (err error) {
 	reqBody := SendMessageRequest{
 		Parts:  []Part{{Type: "text", Text: prompt}},
 		Model:  &model,
@@ -303,7 +318,11 @@ func (c *Client) SendMessageAsync(sessionID, prompt string, model ModelRef) erro
 	if err != nil {
 		return fmt.Errorf("send message async request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing response body: %w", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusNoContent {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -324,16 +343,6 @@ type deltaProperties struct {
 	PartID    string `json:"partID"`
 	Field     string `json:"field"`
 	Delta     string `json:"delta"`
-}
-
-type partUpdatedProperties struct {
-	Part struct {
-		ID        string `json:"id"`
-		SessionID string `json:"sessionID"`
-		MessageID string `json:"messageID"`
-		Type      string `json:"type"`
-		Text      string `json:"text"`
-	} `json:"part"`
 }
 
 type messageUpdatedProperties struct {
@@ -410,7 +419,7 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 
 	go func() {
 		defer close(done)
-		defer sseResp.Body.Close()
+		defer func() { _ = sseResp.Body.Close() }()
 
 		scanner := bufio.NewScanner(sseResp.Body)
 		scanner.Buffer(make([]byte, 0, 4*1024*1024), 4*1024*1024)
@@ -450,7 +459,7 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 				}
 				sb.WriteString(props.Delta)
 				if output != nil && (msgRoles[props.MessageID] == "assistant" || assistantMsgID == "" || props.MessageID == assistantMsgID) {
-					fmt.Fprint(output, props.Delta)
+					_, _ = fmt.Fprint(output, props.Delta)
 				}
 
 			case "message.updated":
@@ -531,7 +540,7 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 				}
 				if props.SessionID == sessionID {
 					if output != nil {
-						fmt.Fprintln(output)
+						_, _ = fmt.Fprintln(output)
 					}
 					return
 				}
@@ -543,7 +552,7 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 				}
 				if props.SessionID == sessionID && props.Status.Type == "idle" {
 					if output != nil {
-						fmt.Fprintln(output)
+						_, _ = fmt.Fprintln(output)
 					}
 					return
 				}
@@ -557,22 +566,22 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 	select {
 	case <-connected:
 	case <-time.After(5 * time.Second):
-		sseResp.Body.Close()
+		_ = sseResp.Body.Close()
 		return nil, fmt.Errorf("timeout waiting for SSE connection")
 	case <-ctx.Done():
-		sseResp.Body.Close()
+		_ = sseResp.Body.Close()
 		return nil, ctx.Err()
 	}
 
 	if err := c.SendMessageAsync(sessionID, prompt, model); err != nil {
-		sseResp.Body.Close()
+		_ = sseResp.Body.Close()
 		return nil, err
 	}
 
 	select {
 	case <-done:
 	case <-ctx.Done():
-		sseResp.Body.Close()
+		_ = sseResp.Body.Close()
 		<-done
 		return nil, ctx.Err()
 	}
@@ -641,7 +650,7 @@ func formatAPIError(body []byte) string {
 	return string(body)
 }
 
-func (c *Client) AbortSession(sessionID string) error {
+func (c *Client) AbortSession(sessionID string) (err error) {
 	resp, err := c.httpClient.Post(
 		c.baseURL+"/session/"+sessionID+"/abort",
 		"application/json",
@@ -650,7 +659,11 @@ func (c *Client) AbortSession(sessionID string) error {
 	if err != nil {
 		return fmt.Errorf("abort session request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing response body: %w", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -660,7 +673,7 @@ func (c *Client) AbortSession(sessionID string) error {
 	return nil
 }
 
-func (c *Client) DeleteSession(sessionID string) error {
+func (c *Client) DeleteSession(sessionID string) (err error) {
 	req, err := http.NewRequest(http.MethodDelete, c.baseURL+"/session/"+sessionID, nil)
 	if err != nil {
 		return fmt.Errorf("delete session: creating request: %w", err)
@@ -670,7 +683,11 @@ func (c *Client) DeleteSession(sessionID string) error {
 	if err != nil {
 		return fmt.Errorf("delete session request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing response body: %w", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -680,19 +697,22 @@ func (c *Client) DeleteSession(sessionID string) error {
 	return nil
 }
 
-func (c *Client) GetMessages(sessionID string) ([]Message, error) {
+func (c *Client) GetMessages(sessionID string) (messages []Message, err error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/session/" + sessionID + "/message")
 	if err != nil {
 		return nil, fmt.Errorf("get messages request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing response body: %w", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("get messages: status %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	var messages []Message
 	if err := json.NewDecoder(resp.Body).Decode(&messages); err != nil {
 		return nil, fmt.Errorf("get messages: decoding response: %w", err)
 	}
@@ -717,24 +737,27 @@ type ProvidersResponse struct {
 	Connected []string   `json:"connected"`
 }
 
-func (c *Client) ListProviders() (*ProvidersResponse, error) {
+func (c *Client) ListProviders() (result *ProvidersResponse, err error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/provider")
 	if err != nil {
 		return nil, fmt.Errorf("list providers request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing response body: %w", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("list providers: status %d: %s", resp.StatusCode, formatAPIError(respBody))
 	}
 
-	var result ProvidersResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("list providers: decoding response: %w", err)
 	}
 
-	return &result, nil
+	return result, nil
 }
 
 func (c *Client) ValidateModels(models []ModelRef) error {

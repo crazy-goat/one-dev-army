@@ -131,17 +131,12 @@ func TestRouter_OnReload(t *testing.T) {
 		reloadCalled = true
 	})
 
-	// Update config to trigger reload
+	// Update config to trigger reload callbacks synchronously
 	newCfg := config.DefaultLLMConfig()
 	router.UpdateConfig(&newCfg)
 
-	// Give the goroutine time to execute
-	// Note: In real tests, you might want to use a sync.WaitGroup or channel
-	// For simplicity, we just check that the callback was registered
 	if !reloadCalled {
-		// This is expected since the callback runs in a goroutine
-		// In a real scenario, you'd wait for it
-		t.Log("Reload callback registered (may not have executed yet due to goroutine)")
+		t.Error("OnReload callback was not invoked after UpdateConfig")
 	}
 }
 
@@ -224,13 +219,4 @@ func TestEstimateFromKeywords(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Helper function to generate a large context for testing
-func generateLargeContext(lines int) string {
-	var result string
-	for i := 0; i < lines; i++ {
-		result += "Line of code content here\n"
-	}
-	return result
 }
