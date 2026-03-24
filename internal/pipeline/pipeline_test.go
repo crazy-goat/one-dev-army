@@ -223,6 +223,41 @@ func TestPipelineRetryThenSucceed(t *testing.T) {
 	}
 }
 
+func TestPipelineContextPropagation(t *testing.T) {
+	contexts := make(map[pipeline.Stage]string)
+	exec := &mockExecutor{
+		fn: func(_ int, stage pipeline.Stage, ctx string) (*pipeline.StageResult, error) {
+			contexts[stage] = ctx
+			return &pipeline.StageResult{
+				Stage:   stage,
+				Success: true,
+				Output:  "output-from-" + string(stage),
+			}, nil
+		},
+	}
+
+	p := pipeline.New(3, exec, nil)
+	_, err := p.Run(1, pipeline.StageAnalysis, "initial-context")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Analysis should receive the initial context
+	if contexts[pipeline.StageAnalysis] != "initial-context" {
+		t.Errorf("analysis context = %q, want %q", contexts[pipeline.StageAnalysis], "initial-context")
+	}
+
+	// Coding should receive the output from analysis
+	if contexts[pipeline.StageCoding] != "output-from-analysis" {
+		t.Errorf("coding context = %q, want %q", contexts[pipeline.StageCoding], "output-from-analysis")
+	}
+
+	// Code review should receive the output from coding
+	if contexts[pipeline.StageCodeReview] != "output-from-coding" {
+		t.Errorf("code-review context = %q, want %q", contexts[pipeline.StageCodeReview], "output-from-coding")
+	}
+}
+
 func TestPipelineExecutorError(t *testing.T) {
 	exec := &mockExecutor{
 		fn: func(_ int, _ pipeline.Stage, _ string) (*pipeline.StageResult, error) {

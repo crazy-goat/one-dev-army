@@ -43,6 +43,13 @@ func (p *Pipeline) Run(taskID int, startStage Stage, context string) (*StageResu
 		}
 
 		if result.Success {
+			// Pass output from this stage as context to the next stage,
+			// so each stage builds on the previous one's work
+			// (e.g., analysis plan feeds into coding stage).
+			if result.Output != "" {
+				context = result.Output
+			}
+
 			next := stage.Next()
 			if next == stage || stage == StageDone {
 				result.Stage = StageDone

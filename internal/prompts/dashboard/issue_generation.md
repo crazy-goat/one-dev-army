@@ -7,6 +7,7 @@ The "title" field:
 - Must start with [Feature] or [Bug] prefix based on issue type
 - Written in English
 - Scannable and descriptive
+- Use imperative mood: "Add X", "Fix Y", "Implement Z", "Update W" — NOT "Adding", "Fixing", "Implementation of"
 
 The "priority" field — assess based on business impact and urgency:
 - "high" — critical functionality, blocking other work, security issue, or data loss risk
@@ -25,21 +26,22 @@ The "description" field is a markdown document with exactly these sections:
 [1-3 sentences in English: what needs to be done and why]
 
 ## Tasks
-[Numbered list of concrete implementation steps in English. Each step is one action a developer can complete in 2-15 minutes. Be specific about file paths.]
+[Numbered list of concrete implementation steps in English. Each step is one action a developer can complete in 2-15 minutes. Be specific about file paths. Infer relevant file paths from the codebase context provided below. Each task must be independently verifiable — a developer should be able to complete and test each task on its own.]
 
 ## Files to Modify
-[List of file paths that need changes, with a brief note in English on what changes]
+[List of file paths that need changes, with a brief note in English on what changes. Infer these from the codebase context.]
 
 ## Acceptance Criteria
-[2-5 specific, verifiable criteria for completion, in English]
+[2-5 specific, verifiable criteria for completion, in English. Include edge cases and error scenarios where applicable — what should happen with invalid inputs, empty states, or error conditions.]
 
 CRITICAL RULES:
 - ALL text MUST be in English — title, description, tasks, criteria, everything
 - NO implementation code, algorithms, or design patterns
 - NO architecture overviews or component dependency analysis
 - Focus on WHAT to do, not HOW
-- Be specific about file paths
+- Be specific about file paths — infer them from the codebase context
 - Tasks should be actionable steps, not abstract descriptions
+- Each task must be independently verifiable (can be completed and tested separately)
 - Keep it concise — a developer should read this in under 2 minutes
 
 Codebase context (for reference only):
