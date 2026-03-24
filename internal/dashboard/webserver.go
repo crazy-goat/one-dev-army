@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -131,8 +132,19 @@ func (w *WebServer) URL() string {
 func (w *WebServer) startProcess() error {
 	w.cmd = exec.Command("opencode", "web", "--port", fmt.Sprintf("%d", w.port))
 	w.cmd.Dir = w.dir
-	// Prevent opencode from opening a browser window on startup
-	w.cmd.Env = append(w.cmd.Environ(), "BROWSER=false")
+	// Prevent opencode from opening a browser window on startup.
+	// The open npm package spawns xdg-open which, on systems with a desktop
+	// environment (GNOME, KDE, etc.), ignores $BROWSER and uses the DE's
+	// native opener. Unsetting DISPLAY makes xdg-open fall back to the
+	// generic path where $BROWSER=false suppresses the launch entirely.
+	env := w.cmd.Environ()
+	filtered := env[:0]
+	for _, e := range env {
+		if !strings.HasPrefix(e, "DISPLAY=") {
+			filtered = append(filtered, e)
+		}
+	}
+	w.cmd.Env = append(filtered, "BROWSER=false")
 
 	if err := w.cmd.Start(); err != nil {
 		return fmt.Errorf("starting process: %w", err)
