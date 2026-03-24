@@ -2,6 +2,7 @@ package github
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -68,6 +69,8 @@ var RequiredLabels = []Label{
 //   - "Done": closes the issue
 //   - "Backlog": removes all stage labels without adding new ones
 func (c *Client) SetStageLabel(issueNumber int, stage string) (Issue, error) {
+	log.Printf("[GitHub] Setting stage %s for issue #%d", stage, issueNumber)
+
 	// Validate stage
 	labels, ok := StageToLabels[stage]
 	if !ok {
@@ -102,6 +105,8 @@ func (c *Client) SetStageLabel(issueNumber int, stage string) (Issue, error) {
 			return Issue{}, fmt.Errorf("closing issue #%d: %w", issueNumber, err)
 		}
 	}
+
+	log.Printf("[GitHub] ✓ Set stage %s for issue #%d", stage, issueNumber)
 
 	// Build updated issue locally instead of fetching from GitHub
 	// This prevents sync from overwriting our local changes
