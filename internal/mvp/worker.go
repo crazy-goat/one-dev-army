@@ -150,7 +150,7 @@ func (w *Worker) reportStageComplete(stage string, status EventStatus, output st
 	w.orchestrator.HandleWorkerEvent(event)
 }
 
-var stepOrder = []string{"technical-planning", "implement", "code-review", "create-pr"}
+var stepOrder = []string{"technical-planning", "implement", "code-review", "create-pr", "awaiting-approval", "merge"}
 
 func stepIndex(name string) int {
 	for i, s := range stepOrder {
@@ -192,10 +192,11 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	task.Worktree = w.repoDir
 	log.Printf("[Worker %d] Branch %s ready, working in %s", w.id, branch, w.repoDir)
 
-	// Deferred cleanup: delete branch after PR workflow completes (success or failure)
+	// Deferred cleanup: delete branch if task did not complete successfully.
+	// On successful merge, gh pr merge --delete-branch handles branch deletion.
 	defer func() {
-		if task.Branch != "" {
-			log.Printf("[Worker %d] Cleaning up branch %q", w.id, task.Branch)
+		if task.Branch != "" && task.Status != StatusDone {
+			log.Printf("[Worker %d] Cleaning up branch %q (task not done)", w.id, task.Branch)
 			if err := w.brMgr.RemoveBranch(task.Branch); err != nil {
 				log.Printf("[Worker %d] Warning: failed to remove branch %q: %v", w.id, task.Branch, err)
 			}
@@ -322,13 +323,121 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		}
 	}
 
-	task.Status = StatusDone
-	task.Result = &TaskResult{
-		PRURL:   prURL,
-		Summary: fmt.Sprintf("Implemented #%d: %s — awaiting manual approval", task.Issue.Number, task.Issue.Title),
+	// If resuming from awaiting-approval or later, recover prURL from store
+	if resumeFrom >= 4 && prURL == "" && w.store != nil {
+		prURL, _ = w.store.GetStepResponse(task.Issue.Number, "create-pr")
 	}
-	log.Printf("[Worker %d] ✓ DONE #%d in %s → %s (awaiting approval)", w.id, task.Issue.Number, time.Since(start).Round(time.Second), prURL)
-	return nil
+
+	// === APPROVAL + MERGE LOOP ===
+	// Worker stays alive until ticket reaches terminal state.
+	// User approve → merge → done. User decline → fix → re-review → wait again.
+	for {
+		task.Status = StatusAwaitingApproval
+		log.Printf("[Worker %d] [5/6] Awaiting user approval for #%d (PR: %s)", w.id, task.Issue.Number, prURL)
+		w.reportStageComplete("create-pr", EventSuccess, "PR created, awaiting approval: "+prURL)
+
+		// Block until user sends decision or context cancelled
+		var decision UserDecision
+		select {
+		case decision = <-w.decisionCh:
+			log.Printf("[Worker %d] Received decision for #%d: %s", w.id, task.Issue.Number, decision.Action)
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+
+		if decision.Action == "approve" {
+			// Proceed to merge
+			task.Status = StatusMerging
+			log.Printf("[Worker %d] [6/6] Merging PR for #%d (branch: %s)", w.id, task.Issue.Number, task.Branch)
+			w.reportStageComplete("awaiting-approval", EventSuccess, "user approved")
+
+			if err := w.gh.MergePR(task.Branch); err != nil {
+				log.Printf("[Worker %d] ✗ Merge failed for #%d: %v", w.id, task.Issue.Number, err)
+
+				// Close PR on merge failure
+				if closeErr := w.gh.ClosePR(task.Branch); closeErr != nil {
+					log.Printf("[Worker %d] Error closing PR for #%d: %v", w.id, task.Issue.Number, closeErr)
+				}
+
+				task.Status = StatusFailed
+				task.Result = &TaskResult{Error: fmt.Errorf("merge failed: %w", err)}
+
+				comment := fmt.Sprintf("Merge failed (likely conflict). PR closed, task moved to Failed.\n\nError: %s", err.Error())
+				if cmtErr := w.gh.AddComment(task.Issue.Number, comment); cmtErr != nil {
+					log.Printf("[Worker %d] Error adding comment to #%d: %v", w.id, task.Issue.Number, cmtErr)
+				}
+
+				return task.Result.Error
+			}
+
+			w.reportStageComplete("merge", EventSuccess, "PR merged successfully")
+
+			task.Status = StatusDone
+			task.Result = &TaskResult{
+				PRURL:   prURL,
+				Summary: fmt.Sprintf("Implemented and merged #%d: %s", task.Issue.Number, task.Issue.Title),
+			}
+			log.Printf("[Worker %d] ✓ DONE #%d in %s → merged", w.id, task.Issue.Number, time.Since(start).Round(time.Second))
+			return nil
+		}
+
+		// Decline — fix and retry
+		log.Printf("[Worker %d] PR declined for #%d, fixing: %s", w.id, task.Issue.Number, decision.Reason)
+		task.Status = StatusCoding
+
+		if decision.Reason != "" {
+			comment := fmt.Sprintf("**Declined** — sent back for fixes.\n\n%s", decision.Reason)
+			if cmtErr := w.gh.AddComment(task.Issue.Number, comment); cmtErr != nil {
+				log.Printf("[Worker %d] Error adding decline comment to #%d: %v", w.id, task.Issue.Number, cmtErr)
+			}
+		}
+
+		w.reportStageComplete("awaiting-approval", EventFailed, "user declined: "+decision.Reason)
+
+		// Fix from decline feedback
+		if fixErr := w.fixFromReview(ctx, task, decision.Reason); fixErr != nil {
+			task.Status = StatusFailed
+			task.Result = &TaskResult{Error: fmt.Errorf("fixing from decline: %w", fixErr)}
+			log.Printf("[Worker %d] ✗ FAILED fixing from decline: %v", w.id, fixErr)
+			return task.Result.Error
+		}
+
+		// Push fixes
+		if pushErr := w.brMgr.PushBranch(task.Branch); pushErr != nil {
+			task.Status = StatusFailed
+			task.Result = &TaskResult{Error: fmt.Errorf("pushing fixes after decline: %w", pushErr)}
+			return task.Result.Error
+		}
+
+		// Re-run code review
+		task.Status = StatusReviewing
+		w.reportStageComplete("coding", EventSuccess, "fixes applied after decline")
+
+		approved, review, crErr := w.codeReview(ctx, task, prURL)
+		if crErr != nil {
+			task.Status = StatusFailed
+			task.Result = &TaskResult{Error: fmt.Errorf("code review after decline: %w", crErr)}
+			return task.Result.Error
+		}
+
+		if !approved {
+			// One more fix attempt
+			task.Status = StatusCoding
+			if fixErr := w.fixFromReview(ctx, task, review); fixErr != nil {
+				task.Status = StatusFailed
+				task.Result = &TaskResult{Error: fmt.Errorf("fixing from re-review: %w", fixErr)}
+				return task.Result.Error
+			}
+			if pushErr := w.brMgr.PushBranch(task.Branch); pushErr != nil {
+				task.Status = StatusFailed
+				task.Result = &TaskResult{Error: fmt.Errorf("pushing re-review fixes: %w", pushErr)}
+				return task.Result.Error
+			}
+		}
+
+		w.reportStageComplete("code-review", EventSuccess, "code review passed after decline")
+		// Loop back to await approval again
+	}
 }
 
 func (w *Worker) technicalPlanning(ctx context.Context, task *Task) (analysis, implPlan string, err error) {
