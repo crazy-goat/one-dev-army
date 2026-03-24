@@ -268,7 +268,12 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if _, err := o.gh.SetStageLabel(nextIssue.Number, "Done"); err != nil {
 				log.Printf("[Orchestrator] Error setting Done stage for #%d: %v", nextIssue.Number, err)
 			} else if o.store != nil {
-				if err := o.store.SaveStageChange(nextIssue.Number, "stage:coding", "stage:done", "worker_done", "orchestrator"); err != nil {
+				// Get actual current stage from cache
+				fromStage := "stage:coding"
+				if existing, err := o.store.GetIssueCache(nextIssue.Number); err == nil {
+					fromStage = o.getStageFromIssue(existing)
+				}
+				if err := o.store.SaveStageChange(nextIssue.Number, fromStage, "stage:done", "worker_done", "orchestrator"); err != nil {
 					log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", nextIssue.Number, err)
 				}
 			}
@@ -280,7 +285,12 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if _, err := o.gh.SetStageLabel(nextIssue.Number, "Failed"); err != nil {
 				log.Printf("[Orchestrator] Error setting Failed stage for #%d: %v", nextIssue.Number, err)
 			} else if o.store != nil {
-				if err := o.store.SaveStageChange(nextIssue.Number, "stage:coding", "stage:failed", "worker_failed", "orchestrator"); err != nil {
+				// Get actual current stage from cache
+				fromStage := "stage:coding"
+				if existing, err := o.store.GetIssueCache(nextIssue.Number); err == nil {
+					fromStage = o.getStageFromIssue(existing)
+				}
+				if err := o.store.SaveStageChange(nextIssue.Number, fromStage, "stage:failed", "worker_failed", "orchestrator"); err != nil {
 					log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", nextIssue.Number, err)
 				}
 			}
@@ -295,7 +305,12 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if _, err := o.gh.SetStageLabel(nextIssue.Number, "Approve"); err != nil {
 				log.Printf("[Orchestrator] Error setting Approve stage for #%d: %v", nextIssue.Number, err)
 			} else if o.store != nil {
-				if err := o.store.SaveStageChange(nextIssue.Number, "stage:coding", "stage:awaiting-approval", "worker_approve", "orchestrator"); err != nil {
+				// Get actual current stage from cache
+				fromStage := "stage:coding"
+				if existing, err := o.store.GetIssueCache(nextIssue.Number); err == nil {
+					fromStage = o.getStageFromIssue(existing)
+				}
+				if err := o.store.SaveStageChange(nextIssue.Number, fromStage, "stage:awaiting-approval", "worker_approve", "orchestrator"); err != nil {
 					log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", nextIssue.Number, err)
 				}
 			}
