@@ -295,7 +295,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if _, err := o.gh.SetStageLabel(nextIssue.Number, "Approve"); err != nil {
 				log.Printf("[Orchestrator] Error setting Approve stage for #%d: %v", nextIssue.Number, err)
 			} else if o.store != nil {
-				if err := o.store.SaveStageChange(nextIssue.Number, "Code", "Approve", "worker_approve", "orchestrator"); err != nil {
+				if err := o.store.SaveStageChange(nextIssue.Number, "stage:coding", "stage:awaiting-approval", "worker_approve", "orchestrator"); err != nil {
 					log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", nextIssue.Number, err)
 				}
 			}

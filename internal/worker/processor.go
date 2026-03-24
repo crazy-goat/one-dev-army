@@ -195,7 +195,7 @@ func (p *Processor) Process(ctx context.Context, w *Worker, task *Task) error {
 		if _, err := p.gh.SetStageLabel(task.IssueNumber, "NeedsUser"); err != nil {
 			log.Printf("[Worker] Error setting NeedsUser stage for #%d: %v", task.IssueNumber, err)
 		} else if p.store != nil {
-			if err := p.store.SaveStageChange(task.IssueNumber, "Code", "NeedsUser", "worker_needs_user", "worker"); err != nil {
+			if err := p.store.SaveStageChange(task.IssueNumber, "stage:coding", "stage:needs-user", "worker_needs_user", "worker"); err != nil {
 				log.Printf("[Worker] Error saving stage change to ledger for #%d: %v", task.IssueNumber, err)
 			}
 		}
@@ -207,7 +207,7 @@ func (p *Processor) Process(ctx context.Context, w *Worker, task *Task) error {
 		if _, err := p.gh.SetStageLabel(task.IssueNumber, "NeedsUser"); err != nil {
 			log.Printf("[Worker] Error setting NeedsUser stage for #%d: %v", task.IssueNumber, err)
 		} else if p.store != nil {
-			if err := p.store.SaveStageChange(task.IssueNumber, "Code", "NeedsUser", "worker_blocked", "worker"); err != nil {
+			if err := p.store.SaveStageChange(task.IssueNumber, "stage:coding", "stage:needs-user", "worker_blocked", "worker"); err != nil {
 				log.Printf("[Worker] Error saving stage change to ledger for #%d: %v", task.IssueNumber, err)
 			}
 		}
