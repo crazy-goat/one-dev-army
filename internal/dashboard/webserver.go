@@ -130,20 +130,27 @@ func (w *WebServer) URL() string {
 	return fmt.Sprintf("http://localhost:%d", w.port)
 }
 
-// xdgOpenShimDir returns the path to the directory containing the no-op xdg-open shim.
-func (w *WebServer) xdgOpenShimDir() string {
+// browserShimDir returns the path to the directory containing no-op browser shims.
+func (w *WebServer) browserShimDir() string {
 	return filepath.Join(os.TempDir(), "oda-shims")
 }
 
-// ensureXdgOpenShim creates a no-op xdg-open script that exits immediately.
-// This prevents the opencode `open` npm package from launching a browser.
-func (w *WebServer) ensureXdgOpenShim() error {
-	dir := w.xdgOpenShimDir()
+// ensureBrowserShims creates no-op scripts for commands that the `open` npm
+// package uses to launch a browser. This covers Linux (xdg-open) and
+// macOS (open). On macOS the real `open` is at /usr/bin/open so prepending
+// our shim dir to PATH shadows it only for this child process.
+func (w *WebServer) ensureBrowserShims() error {
+	dir := w.browserShimDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("creating shim dir: %w", err)
 	}
-	shimPath := filepath.Join(dir, "xdg-open")
-	return os.WriteFile(shimPath, []byte("#!/bin/sh\nexit 0\n"), 0o755)
+	script := []byte("#!/bin/sh\nexit 0\n")
+	for _, name := range []string{"xdg-open", "open"} {
+		if err := os.WriteFile(filepath.Join(dir, name), script, 0o755); err != nil {
+			return fmt.Errorf("creating %s shim: %w", name, err)
+		}
+	}
+	return nil
 }
 
 // startProcess starts the opencode web process.
@@ -152,13 +159,14 @@ func (w *WebServer) startProcess() error {
 	w.cmd.Dir = w.dir
 
 	// Prevent opencode from opening a browser window on startup.
-	// The bundled `open` npm package calls xdg-open as a detached subprocess.
-	// We prepend a directory with a no-op xdg-open shim to PATH so the
-	// package finds our shim instead of the real xdg-open.
-	if err := w.ensureXdgOpenShim(); err != nil {
-		log.Printf("[WebServer] Warning: could not create xdg-open shim: %v", err)
+	// The bundled `open` npm package spawns platform-specific commands
+	// (xdg-open on Linux, open on macOS) as detached subprocesses.
+	// We prepend a directory with no-op shims to PATH so the package
+	// finds our shims instead of the real commands.
+	if err := w.ensureBrowserShims(); err != nil {
+		log.Printf("[WebServer] Warning: could not create browser shims: %v", err)
 	} else {
-		shimDir := w.xdgOpenShimDir()
+		shimDir := w.browserShimDir()
 		env := w.cmd.Environ()
 		for i, e := range env {
 			if strings.HasPrefix(e, "PATH=") {
