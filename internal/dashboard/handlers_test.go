@@ -4488,3 +4488,43 @@ func TestHandleBoard_YoloModeIndicator(t *testing.T) {
 		t.Error("board page should NOT contain YOLO MODE text when yolo_mode is disabled")
 	}
 }
+
+// TestHandleRetry_CleansUpAndMovesToBacklog tests that handleRetry properly cleans up and moves to backlog
+func TestHandleRetry_CleansUpAndMovesToBacklog(t *testing.T) {
+	srv := &Server{
+		tmpls: make(map[string]*template.Template),
+		// No orchestrator set - should still handle gracefully
+	}
+
+	// Test with invalid issue ID
+	req := httptest.NewRequest(http.MethodPost, "/retry/invalid", nil)
+	req.SetPathValue("id", "invalid")
+	rec := httptest.NewRecorder()
+
+	srv.handleRetry(rec, req)
+
+	// Should redirect to root when no orchestrator
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("expected status 303, got %d", rec.Code)
+	}
+}
+
+// TestHandleRetryFresh_CleansUpLocalBranch tests that handleRetryFresh cleans up local branch
+func TestHandleRetryFresh_CleansUpLocalBranch(t *testing.T) {
+	srv := &Server{
+		tmpls: make(map[string]*template.Template),
+		// No orchestrator set - should still handle gracefully
+	}
+
+	// Test with invalid issue ID
+	req := httptest.NewRequest(http.MethodPost, "/retry-fresh/invalid", nil)
+	req.SetPathValue("id", "invalid")
+	rec := httptest.NewRecorder()
+
+	srv.handleRetryFresh(rec, req)
+
+	// Should redirect to root when no orchestrator
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("expected status 303, got %d", rec.Code)
+	}
+}

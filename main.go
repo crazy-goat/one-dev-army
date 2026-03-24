@@ -399,7 +399,7 @@ func runServe(dir string, debugWebSocket bool) error {
 		}
 	}()
 
-	srv, err := dashboard.NewServer(cfg.Dashboard.Port, cfg.OpenCode.WebPort, store, pool.Workers, gh, orchestrator, oc, cfg.LLM.Planning.Model, hub, syncService, dir)
+	srv, err := dashboard.NewServer(cfg.Dashboard.Port, cfg.OpenCode.WebPort, store, pool.Workers, gh, orchestrator, oc, cfg.LLM.Planning.Model, hub, syncService, dir, brMgr)
 	if err != nil {
 		return fmt.Errorf("creating dashboard server: %w", err)
 	}

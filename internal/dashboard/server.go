@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/crazy-goat/one-dev-army/internal/db"
+	"github.com/crazy-goat/one-dev-army/internal/git"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/mvp"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
@@ -39,9 +40,10 @@ type Server struct {
 	rateLimitService *RateLimitService
 	rootDir          string
 	modelsCache      []opencode.ProviderModel
+	brMgr            *git.BranchManager
 }
 
-func NewServer(port int, webPort int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string) (*Server, error) {
+func NewServer(port int, webPort int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string, brMgr *git.BranchManager) (*Server, error) {
 	tmpls, err := parseTemplates()
 	if err != nil {
 		return nil, err
@@ -68,6 +70,7 @@ func NewServer(port int, webPort int, store *db.Store, pool func() []worker.Work
 		hub:         hub,
 		syncService: syncService,
 		rootDir:     rootDir,
+		brMgr:       brMgr,
 	}
 
 	if s.wizardLLM == "" {

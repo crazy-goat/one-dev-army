@@ -31,10 +31,10 @@ Backlog → Plan → Code → AI Review → Create PR → Approve → Merge → 
 
 ### Error Flow
 
-All errors lead to **Failed** state, and retry always goes back to **Code**:
+All errors lead to **Failed** state. Retry goes to **Backlog** for proper queue management:
 
 ```
-Any State → Failed → [Retry] → Code
+Any State → Failed → [Retry] → Backlog
 ```
 
 ### Manual Actions
@@ -146,10 +146,8 @@ Failed → [User: Cancel] → Backlog
 
 | To | Trigger | Actions |
 |----|---------|---------|
-| **Code** | User clicks "Retry" | `SetStageLabel("Code")` → adds `stage:coding` |
-| **Backlog** | User clicks "Cancel" | `SetStageLabel("Backlog")` → removes all stage labels |
-
-**Note:** Retry always goes back to **Code** state, regardless of which stage originally failed.
+| **Backlog** | User clicks "Retry" | `SetStageLabel("Backlog")` → removes all stage labels, closes PR, deletes local branch, clears DB steps |
+| **Backlog** | User clicks "Retry Fresh" | `SetStageLabel("Backlog")` → removes all stage labels, closes PR, deletes local branch, clears DB steps |
 
 ### Blocked
 
@@ -196,8 +194,8 @@ Dashboard columns are determined by the current label with the following priorit
 | **Blocked** | Unblock | → Backlog |
 | **Approve** | Approve & Merge | → Merge → Done (or → Failed on conflict) |
 | **Approve** | Decline | → Code |
-| **Failed** | Retry | → Code |
-| **Failed** | Cancel | → Backlog |
+| **Failed** | Retry | → Backlog |
+| **Failed** | Retry Fresh | → Backlog |
 
 ## Special Cases
 
@@ -210,9 +208,12 @@ During the **Plan** phase, the AI may detect that the ticket is already implemen
 ### Retry Behavior
 
 When retrying from **Failed** state:
-- Always transition to **Code** state
-- `SetStageLabel("Code")` removes `stage:failed` and adds `stage:coding`
-- Worker restarts implementation from scratch
+- Both "Retry" and "Retry Fresh" transition to **Backlog** state
+- `SetStageLabel("Backlog")` removes all stage labels including `stage:failed`
+- Any open PR is closed and the remote branch is deleted
+- Local branch matching `oda-{issueNum}-*` pattern is deleted
+- DB steps are cleared
+- Ticket returns to Backlog for re-queueing and prevents concurrent work
 
 ### Block/Unblock
 

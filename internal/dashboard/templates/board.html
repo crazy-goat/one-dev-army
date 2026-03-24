@@ -285,7 +285,7 @@ function triggerSync() {
       {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}<span class="label">{{.}}</span>{{end}}</div></div>{{end}}
       <div class="card-actions">
         <form method="post" action="/retry/{{.ID}}"><button type="submit" class="btn btn-success">Retry</button></form>
-        <form method="post" action="/retry-fresh/{{.ID}}"><button type="submit" class="btn btn-primary">Cancel</button></form>
+        <form method="post" action="/retry-fresh/{{.ID}}"><button type="submit" class="btn btn-primary">Retry Fresh</button></form>
       </div>
     </div>
     {{else}}

@@ -406,3 +406,96 @@ func TestCheckoutDefaultWithMainBranch(t *testing.T) {
 		t.Errorf("current branch = %q, want %q", got, "main")
 	}
 }
+
+func TestFindBranchByPrefix(t *testing.T) {
+	repoDir := setupRepo(t)
+	mgr := git.NewBranchManager(repoDir)
+
+	// Create several branches with different prefixes
+	branches := []string{
+		"oda-123-fix-bug",
+		"oda-456-add-feature",
+		"oda-123-another-fix",
+		"feature-789",
+	}
+
+	for _, branch := range branches {
+		cmd := exec.Command("git", "branch", branch)
+		cmd.Dir = repoDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git branch %s: %v\n%s", branch, err, out)
+		}
+	}
+
+	// Test finding branches by prefix
+	tests := []struct {
+		name         string
+		prefix       string
+		wantBranch   string
+		wantNotEmpty bool
+	}{
+		{
+			name:         "find oda-123 prefix",
+			prefix:       "oda-123-",
+			wantNotEmpty: true,
+		},
+		{
+			name:         "find oda-456 prefix",
+			prefix:       "oda-456-",
+			wantNotEmpty: true,
+		},
+		{
+			name:         "find feature prefix",
+			prefix:       "feature-",
+			wantNotEmpty: true,
+		},
+		{
+			name:         "non-existent prefix",
+			prefix:       "oda-999-",
+			wantNotEmpty: false,
+		},
+		{
+			name:         "empty prefix should match first branch",
+			prefix:       "",
+			wantNotEmpty: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mgr.FindBranchByPrefix(tt.prefix)
+			if tt.wantNotEmpty && got == "" {
+				t.Errorf("FindBranchByPrefix(%q) = empty, want non-empty", tt.prefix)
+			}
+			if !tt.wantNotEmpty && got != "" {
+				t.Errorf("FindBranchByPrefix(%q) = %q, want empty", tt.prefix, got)
+			}
+			if tt.prefix == "oda-123-" && got != "" && !strings.HasPrefix(got, tt.prefix) {
+				t.Errorf("FindBranchByPrefix(%q) = %q, should have prefix %q", tt.prefix, got, tt.prefix)
+			}
+		})
+	}
+}
+
+func TestFindBranchByPrefix_NoBranches(t *testing.T) {
+	repoDir := setupRepo(t)
+	mgr := git.NewBranchManager(repoDir)
+
+	// Should return empty string when no branches match
+	got := mgr.FindBranchByPrefix("oda-999-")
+	if got != "" {
+		t.Errorf("FindBranchByPrefix(oda-999-) = %q, want empty", got)
+	}
+}
+
+func TestFindBranchByPrefix_EmptyRepo(t *testing.T) {
+	// Create a temp directory without git repo
+	tempDir := t.TempDir()
+	mgr := git.NewBranchManager(tempDir)
+
+	// Should return empty string and not panic
+	got := mgr.FindBranchByPrefix("oda-")
+	if got != "" {
+		t.Errorf("FindBranchByPrefix(oda-) in non-repo = %q, want empty", got)
+	}
+}

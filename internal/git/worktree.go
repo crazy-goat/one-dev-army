@@ -225,6 +225,28 @@ func (m *BranchManager) cleanupLegacyWorktrees() {
 	}
 }
 
+// FindBranchByPrefix finds a local branch matching the given prefix.
+// Returns the full branch name if found, or empty string if no match.
+// This is used to find branches like "oda-{num}-*" when we don't know the slug.
+func (m *BranchManager) FindBranchByPrefix(prefix string) string {
+	cmd := exec.Command("git", "branch", "--list", "--format=%(refname:short)")
+	cmd.Dir = m.repoDir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("[BranchManager] Error listing branches: %v", err)
+		return ""
+	}
+
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		branch := strings.TrimSpace(line)
+		if strings.HasPrefix(branch, prefix) {
+			return branch
+		}
+	}
+
+	return ""
+}
+
 // Legacy aliases for backward compatibility during migration
 
 // WorktreeManager is an alias for BranchManager (legacy compatibility).
