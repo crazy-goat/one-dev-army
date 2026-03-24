@@ -416,7 +416,12 @@ func (o *Orchestrator) BroadcastStageUpdate(issueNumber int, stage string) {
 
 		// Save to ledger
 		if o.store != nil {
-			if err := o.store.SaveStageChange(issueNumber, fromStage, stage, "worker_stage_update", "orchestrator"); err != nil {
+			// Convert stage name to label for consistency
+			toLabel := stage
+			if labels, ok := github.StageToLabels[stage]; ok && len(labels) > 0 {
+				toLabel = labels[0]
+			}
+			if err := o.store.SaveStageChange(issueNumber, fromStage, toLabel, "worker_stage_update", "orchestrator"); err != nil {
 				log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", issueNumber, err)
 			}
 		}
