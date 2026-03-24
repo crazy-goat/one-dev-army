@@ -56,6 +56,23 @@ func (m *BranchManager) CreateBranch(branch string) error {
 			if out2, err2 := cmd.CombinedOutput(); err2 != nil {
 				return fmt.Errorf("git checkout %s: %w\n%s", branch, err2, out2)
 			}
+
+			// Rebase existing branch onto the latest remote default branch
+			// to prevent merge conflicts when the PR is eventually merged.
+			if startPoint != "HEAD" {
+				log.Printf("[BranchManager] Rebasing existing branch %q onto %s", branch, startPoint)
+				rebaseCmd := exec.Command("git", "rebase", startPoint)
+				rebaseCmd.Dir = m.repoDir
+				if rbOut, rbErr := rebaseCmd.CombinedOutput(); rbErr != nil {
+					// Abort the failed rebase so the worktree stays clean
+					abortCmd := exec.Command("git", "rebase", "--abort")
+					abortCmd.Dir = m.repoDir
+					_ = abortCmd.Run()
+					log.Printf("[BranchManager] Rebase of %q onto %s failed, continuing without rebase: %s",
+						branch, startPoint, strings.TrimSpace(string(rbOut)))
+				}
+			}
+
 			return nil
 		}
 		return fmt.Errorf("git checkout -b %s: %w\n%s", branch, err, out)

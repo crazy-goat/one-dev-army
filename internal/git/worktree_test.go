@@ -3,6 +3,7 @@ package git_test
 import (
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/crazy-goat/one-dev-army/internal/git"
@@ -219,6 +220,95 @@ func TestCreateBranchFromLatestOrigin(t *testing.T) {
 	newCommit := localHead()
 	if newCommit == oldCommit {
 		t.Errorf("branch was created from stale local master (%s); expected latest origin commit", oldCommit)
+	}
+}
+
+// TestCreateBranchExistingRebasesOntoOrigin verifies that when a branch already
+// exists and origin has advanced, CreateBranch rebases the branch onto the latest
+// origin/master to prevent merge conflicts.
+func TestCreateBranchExistingRebasesOntoOrigin(t *testing.T) {
+	repoDir := setupRepo(t)
+
+	env := []string{
+		"GIT_AUTHOR_NAME=test",
+		"GIT_AUTHOR_EMAIL=test@test.com",
+		"GIT_COMMITTER_NAME=test",
+		"GIT_COMMITTER_EMAIL=test@test.com",
+	}
+
+	runGit := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), env...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	gitOutput := func(dir string, args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), env...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+
+	mgr := git.NewBranchManager(repoDir)
+
+	// Create a feature branch with a commit
+	if err := mgr.CreateBranch("feature-rebase"); err != nil {
+		t.Fatalf("CreateBranch: %v", err)
+	}
+
+	// Add a file and commit on the feature branch
+	if err := os.WriteFile(repoDir+"/feature.txt", []byte("feature work"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	runGit(repoDir, "add", "feature.txt")
+	runGit(repoDir, "commit", "-m", "feature commit")
+
+	// Switch back to master
+	runGit(repoDir, "checkout", "master")
+
+	// Simulate origin advancing: push a new commit via a second clone
+	originURL := gitOutput(repoDir, "remote", "get-url", "origin")
+	otherClone := t.TempDir()
+	for _, args := range [][]string{
+		{"clone", originURL, "."},
+		{"commit", "--allow-empty", "-m", "origin advanced"},
+		{"push", "origin", "master"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = otherClone
+		cmd.Env = append(os.Environ(), env...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("other clone git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Now CreateBranch again — should checkout existing branch AND rebase onto origin/master
+	if err := mgr.CreateBranch("feature-rebase"); err != nil {
+		t.Fatalf("second CreateBranch: %v", err)
+	}
+
+	if got := currentBranch(t, repoDir); got != "feature-rebase" {
+		t.Errorf("current branch = %q, want %q", got, "feature-rebase")
+	}
+
+	// Verify the feature commit is still present (rebase preserved it)
+	logOutput := gitOutput(repoDir, "log", "--oneline")
+	if !strings.Contains(logOutput, "feature commit") {
+		t.Errorf("feature commit lost after rebase; log:\n%s", logOutput)
+	}
+
+	// Verify origin's "origin advanced" commit is in the history (rebase applied it)
+	if !strings.Contains(logOutput, "origin advanced") {
+		t.Errorf("origin advance commit not in history after rebase; log:\n%s", logOutput)
 	}
 }
 

@@ -170,8 +170,10 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		log.Printf("[Orchestrator] Found %d candidates, resume=%v", len(candidates), resumeIssue != nil)
 
 		var nextIssue *github.Issue
+		isResume := false
 		if resumeIssue != nil {
 			nextIssue = resumeIssue
+			isResume = true
 			log.Printf("[Orchestrator] Resuming in-progress #%d: %s", nextIssue.Number, nextIssue.Title)
 		} else if len(candidates) > 0 {
 			picked, err := o.pickNextTicket(ctx, candidates, nil)
@@ -194,9 +196,17 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			log.Printf("[Orchestrator] Error removing merge-failed label: %v", err)
 		}
 
-		// Set initial stage so dashboard/cache/ledger reflect that work has started
-		if err := o.ChangeStage(nextIssue.Number, github.StagePlan, github.ReasonWorkerPickedUp); err != nil {
-			log.Printf("[Orchestrator] Error setting initial stage for #%d: %v", nextIssue.Number, err)
+		// Only set stage:analysis for NEW issues (backlog candidates).
+		// Resume issues already have a valid stage label — resetting them
+		// to analysis would cause an infinite loop: the worker resumes from
+		// the stored step, but the label says analysis, so on next restart
+		// the orchestrator picks it up again and resets the label again.
+		if !isResume {
+			if err := o.ChangeStage(nextIssue.Number, github.StagePlan, github.ReasonWorkerPickedUp); err != nil {
+				log.Printf("[Orchestrator] Error setting initial stage for #%d: %v", nextIssue.Number, err)
+			}
+		} else {
+			log.Printf("[Orchestrator] Keeping existing stage for resumed issue #%d", nextIssue.Number)
 		}
 
 		task := &Task{

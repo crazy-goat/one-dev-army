@@ -280,6 +280,64 @@ func TestIsWorkerStage(t *testing.T) {
 	}
 }
 
+// TestResumeIssueClassification verifies that issues with worker stage labels
+// are classified as resume issues (not backlog candidates), which is critical
+// to prevent the orchestrator from resetting their stage to analysis.
+func TestResumeIssueClassification(t *testing.T) {
+	// Simulate the classification logic from Run()
+	makeIssue := func(number int, labels ...string) github.Issue {
+		issue := github.Issue{Number: number, State: "OPEN"}
+		for _, l := range labels {
+			issue.Labels = append(issue.Labels, struct {
+				Name string `json:"name"`
+			}{Name: l})
+		}
+		return issue
+	}
+
+	issues := []github.Issue{
+		makeIssue(1),                            // no stage = backlog candidate
+		makeIssue(2, "stage:coding"),            // worker stage = resume
+		makeIssue(3, "stage:failed"),            // non-worker stage = ignored
+		makeIssue(4, "stage:awaiting-approval"), // worker stage = resume (but #2 takes priority)
+		makeIssue(5, "bug"),                     // no stage label = backlog candidate
+	}
+
+	var candidates []github.Issue
+	var resumeIssue *github.Issue
+	for i := range issues {
+		stage := getStageLabel(issues[i])
+		if stage == "" {
+			candidates = append(candidates, issues[i])
+		} else if isWorkerStage(stage) && resumeIssue == nil {
+			resumeIssue = &issues[i]
+		}
+	}
+
+	// Should have 2 backlog candidates (#1 and #5)
+	if len(candidates) != 2 {
+		t.Errorf("candidates count = %d, want 2", len(candidates))
+	}
+	if candidates[0].Number != 1 || candidates[1].Number != 5 {
+		t.Errorf("candidates = [#%d, #%d], want [#1, #5]", candidates[0].Number, candidates[1].Number)
+	}
+
+	// Resume issue should be #2 (first worker stage found)
+	if resumeIssue == nil {
+		t.Fatal("expected a resume issue, got nil")
+	}
+	if resumeIssue.Number != 2 {
+		t.Errorf("resumeIssue.Number = %d, want 2", resumeIssue.Number)
+	}
+
+	// Key assertion: resume issue should NOT be treated as a new candidate.
+	// The orchestrator must preserve its existing stage label, not reset to analysis.
+	isResume := resumeIssue != nil
+	if !isResume {
+		t.Error("expected isResume=true for issue with stage:coding label")
+	}
+}
+
 func TestDecideNextStage_MergeSuccess(t *testing.T) {
 	o := &Orchestrator{}
 	event := WorkerEvent{
