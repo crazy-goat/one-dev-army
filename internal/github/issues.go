@@ -76,6 +76,33 @@ func (c *Client) CreateIssue(title, body string, labels []string) (int, error) {
 	return num, nil
 }
 
+// CreateIssueWithMilestone creates a new issue with labels and assigns it to a milestone
+func (c *Client) CreateIssueWithMilestone(title, body string, labels []string, milestone string) (int, error) {
+	args := []string{"issue", "create", "--title", title, "--body", body}
+
+	for _, l := range labels {
+		args = append(args, "--label", l)
+	}
+
+	if milestone != "" {
+		args = append(args, "--milestone", milestone)
+	}
+
+	out, err := c.gh(args...)
+	if err != nil {
+		return 0, fmt.Errorf("creating issue with milestone: %w", err)
+	}
+
+	url := strings.TrimSpace(string(out))
+	parts := strings.Split(url, "/")
+	numStr := parts[len(parts)-1]
+	num, err := strconv.Atoi(numStr)
+	if err != nil {
+		return 0, fmt.Errorf("parsing issue number from %q: %w", url, err)
+	}
+	return num, nil
+}
+
 func (c *Client) ListIssues(milestone string) ([]Issue, error) {
 	args := []string{"issue", "list", "--state", "all", "--json", "number,title,body,state,labels,updatedAt"}
 	if milestone != "" {

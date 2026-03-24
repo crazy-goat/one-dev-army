@@ -202,8 +202,9 @@ func TestRequiredLabelsCount(t *testing.T) {
 	// stage:needs-user (11)
 	// priority:high, priority:medium, priority:low (3)
 	// epic, wizard, merge-failed (3)
-	// Total: 23
-	expectedCount := 23
+	// bug, feature (2)
+	// Total: 25
+	expectedCount := 25
 	if len(RequiredLabels) != expectedCount {
 		t.Errorf("Expected %d labels, got %d", expectedCount, len(RequiredLabels))
 	}

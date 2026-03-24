@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/crazy-goat/one-dev-army/cmd"
 	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/dashboard"
 	"github.com/crazy-goat/one-dev-army/internal/db"
@@ -70,6 +71,12 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		case "issue":
+			if err := runIssue(args[1:], absDir); err != nil {
+				fmt.Fprintf(os.Stderr, "error: %v\n", err)
+				os.Exit(1)
+			}
+			return
 		case "--help", "-h", "help":
 			printUsage()
 			return
@@ -93,6 +100,7 @@ func printUsage() {
 	fmt.Println("Commands:")
 	fmt.Println("  (none)    Start the ODA agent and dashboard")
 	fmt.Println("  init      Initialize a new ODA project in the current directory")
+	fmt.Println("  issue     Manage GitHub issues (create, list, etc.)")
 	fmt.Println("  help      Show this help message")
 	fmt.Println()
 	fmt.Println("Options:")
@@ -107,6 +115,21 @@ func runInit(dir string) error {
 
 	i := initialize.New(dir, nil)
 	return i.Run()
+}
+
+func runIssue(args []string, dir string) error {
+	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
+		cmd.PrintIssueUsage()
+		return nil
+	}
+
+	cfg, err := config.Load(dir)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	gh := github.NewClient(cfg.GitHub.Repo)
+	return cmd.IssueCommand(args, gh)
 }
 
 func runServe(dir string, debugWebSocket bool) error {
