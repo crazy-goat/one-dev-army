@@ -1704,6 +1704,7 @@ type settingsData struct {
 	ForceStrongStages string
 	Success           bool
 	Errors            []string
+	AvailableModels   []opencode.ProviderModel
 }
 
 // handleSettings renders the LLM configuration settings page
@@ -1724,6 +1725,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		Active:            "settings",
 		Config:            cfg.LLM,
 		ForceStrongStages: forceStrongStages,
+		AvailableModels:   s.modelsCache,
 	}
 
 	s.render(w, "llm-config.html", data)
@@ -1817,6 +1819,30 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Validate model selections against available models
+	if len(s.modelsCache) > 0 {
+		modelValidations := []struct {
+			name     string
+			provider string
+			model    string
+		}{
+			{"Development Strong", cfg.LLM.Development.Strong.Provider, cfg.LLM.Development.Strong.Model},
+			{"Development Weak", cfg.LLM.Development.Weak.Provider, cfg.LLM.Development.Weak.Model},
+			{"Planning Strong", cfg.LLM.Planning.Strong.Provider, cfg.LLM.Planning.Strong.Model},
+			{"Planning Weak", cfg.LLM.Planning.Weak.Provider, cfg.LLM.Planning.Weak.Model},
+			{"Orchestration Strong", cfg.LLM.Orchestration.Strong.Provider, cfg.LLM.Orchestration.Strong.Model},
+			{"Orchestration Weak", cfg.LLM.Orchestration.Weak.Provider, cfg.LLM.Orchestration.Weak.Model},
+			{"Setup Strong", cfg.LLM.Setup.Strong.Provider, cfg.LLM.Setup.Strong.Model},
+			{"Setup Weak", cfg.LLM.Setup.Weak.Provider, cfg.LLM.Setup.Weak.Model},
+		}
+
+		for _, mv := range modelValidations {
+			if mv.provider != "" && mv.model != "" && !s.validateModelSelection(mv.provider, mv.model) {
+				errors = append(errors, fmt.Sprintf("%s: Invalid model '%s/%s' - not found in available models", mv.name, mv.provider, mv.model))
+			}
+		}
+	}
+
 	// Parse routing thresholds
 	codeSizeThreshold, err := strconv.Atoi(r.FormValue("routing_code_size_threshold"))
 	if err != nil || codeSizeThreshold < 1 {
@@ -1877,6 +1903,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		Config:            cfg.LLM,
 		ForceStrongStages: forceStrongStages,
 		Success:           true,
+		AvailableModels:   s.modelsCache,
 	}
 
 	s.render(w, "llm-config.html", data)
@@ -1900,7 +1927,22 @@ func (s *Server) renderSettingsWithErrors(w http.ResponseWriter, r *http.Request
 		Config:            cfg.LLM,
 		ForceStrongStages: forceStrongStages,
 		Errors:            errors,
+		AvailableModels:   s.modelsCache,
 	}
 
 	s.render(w, "llm-config.html", data)
+}
+
+// validateModelSelection checks if a model selection is valid against the cached models
+func (s *Server) validateModelSelection(provider, model string) bool {
+	if len(s.modelsCache) == 0 {
+		return true // Skip validation if cache is empty (API unavailable)
+	}
+
+	for _, m := range s.modelsCache {
+		if m.ProviderID == provider && m.ID == model {
+			return true
+		}
+	}
+	return false
 }

@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
 // parseTemplatesFromDisk parses templates from disk for testing
@@ -38,6 +40,13 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 				return s
 			}
 			return s[:n] + "\n... (truncated)"
+		},
+		"json": func(v interface{}) string {
+			b, err := json.Marshal(v)
+			if err != nil {
+				return ""
+			}
+			return string(b)
 		},
 	}
 
@@ -3933,6 +3942,368 @@ func TestSettingsPersistence(t *testing.T) {
 	}
 	if len(reloadedCfg.LLM.RoutingRules.ForceStrongForStages) != 1 || reloadedCfg.LLM.RoutingRules.ForceStrongForStages[0] != "test-stage" {
 		t.Errorf("expected force strong stages to be ['test-stage'], got %v", reloadedCfg.LLM.RoutingRules.ForceStrongForStages)
+	}
+}
+
+// TestHandleSettings_WithModels verifies that available models are passed to the template
+func TestHandleSettings_WithModels(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	odaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(odaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a minimal config file
+	configContent := `llm:
+  development:
+    strong:
+      provider: test-provider
+      model: test-model
+    weak:
+      provider: test-provider
+      model: test-model-weak
+`
+	configPath := filepath.Join(odaDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates and mock models cache
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	srv.modelsCache = []opencode.ProviderModel{
+		{ID: "gpt-4", ProviderID: "openai", Name: "GPT-4"},
+		{ID: "claude-3", ProviderID: "anthropic", Name: "Claude 3"},
+	}
+	defer srv.wizardStore.Stop()
+
+	// Test GET /settings
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleSettings(rec, req)
+
+	// Should return 200 OK
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify response contains model data (as JSON in the script)
+	body := rec.Body.String()
+	if !strings.Contains(body, "gpt-4") {
+		t.Error("response should contain model data (gpt-4)")
+	}
+	if !strings.Contains(body, "claude-3") {
+		t.Error("response should contain model data (claude-3)")
+	}
+}
+
+// TestHandleSaveSettings_InvalidModel verifies that validation rejects invalid models
+func TestHandleSaveSettings_InvalidModel(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	odaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(odaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a minimal config file
+	configPath := filepath.Join(odaDir, "config.yaml")
+	configContent := `llm:
+  development:
+    strong:
+      provider: test-provider
+      model: test-model
+    weak:
+      provider: test-provider
+      model: test-model-weak
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates and mock models cache
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	srv.modelsCache = []opencode.ProviderModel{
+		{ID: "gpt-4", ProviderID: "openai", Name: "GPT-4"},
+		{ID: "claude-3", ProviderID: "anthropic", Name: "Claude 3"},
+	}
+	defer srv.wizardStore.Stop()
+
+	// Test POST /settings with invalid model
+	form := url.Values{}
+	form.Set("development_strong_provider", "openai")
+	form.Set("development_strong_model", "invalid-model") // Invalid model
+	form.Set("development_weak_provider", "openai")
+	form.Set("development_weak_model", "gpt-4") // Valid model
+	form.Set("planning_strong_provider", "openai")
+	form.Set("planning_strong_model", "gpt-4")
+	form.Set("planning_weak_provider", "openai")
+	form.Set("planning_weak_model", "gpt-4")
+	form.Set("orchestration_strong_provider", "openai")
+	form.Set("orchestration_strong_model", "gpt-4")
+	form.Set("orchestration_weak_provider", "openai")
+	form.Set("orchestration_weak_model", "gpt-4")
+	form.Set("setup_strong_provider", "openai")
+	form.Set("setup_strong_model", "gpt-4")
+	form.Set("setup_weak_provider", "openai")
+	form.Set("setup_weak_model", "gpt-4")
+	form.Set("routing_code_size_threshold", "150")
+	form.Set("routing_high_complexity_threshold", "600")
+	form.Set("routing_file_count_threshold", "10")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	// Should return 200 OK but with error message
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify error message about invalid model
+	body := rec.Body.String()
+	if !strings.Contains(body, "Invalid model") {
+		t.Error("response should contain validation error for invalid model")
+	}
+	if !strings.Contains(body, "invalid-model") {
+		t.Error("response should mention the invalid model name")
+	}
+}
+
+// TestHandleSaveSettings_ValidModel verifies that validation accepts valid models
+func TestHandleSaveSettings_ValidModel(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	odaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(odaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a minimal config file
+	configPath := filepath.Join(odaDir, "config.yaml")
+	configContent := `llm:
+  development:
+    strong:
+      provider: test-provider
+      model: test-model
+    weak:
+      provider: test-provider
+      model: test-model-weak
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates and mock models cache
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	srv.modelsCache = []opencode.ProviderModel{
+		{ID: "gpt-4", ProviderID: "openai", Name: "GPT-4"},
+		{ID: "claude-3", ProviderID: "anthropic", Name: "Claude 3"},
+	}
+	defer srv.wizardStore.Stop()
+
+	// Test POST /settings with valid models
+	form := url.Values{}
+	form.Set("development_strong_provider", "openai")
+	form.Set("development_strong_model", "gpt-4")
+	form.Set("development_weak_provider", "anthropic")
+	form.Set("development_weak_model", "claude-3")
+	form.Set("planning_strong_provider", "openai")
+	form.Set("planning_strong_model", "gpt-4")
+	form.Set("planning_weak_provider", "openai")
+	form.Set("planning_weak_model", "gpt-4")
+	form.Set("orchestration_strong_provider", "openai")
+	form.Set("orchestration_strong_model", "gpt-4")
+	form.Set("orchestration_weak_provider", "openai")
+	form.Set("orchestration_weak_model", "gpt-4")
+	form.Set("setup_strong_provider", "openai")
+	form.Set("setup_strong_model", "gpt-4")
+	form.Set("setup_weak_provider", "openai")
+	form.Set("setup_weak_model", "gpt-4")
+	form.Set("routing_code_size_threshold", "150")
+	form.Set("routing_high_complexity_threshold", "600")
+	form.Set("routing_file_count_threshold", "10")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	// Should return 200 OK with success message
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify success message
+	body := rec.Body.String()
+	if !strings.Contains(body, "Settings saved successfully") {
+		t.Error("response should contain success message")
+	}
+
+	// Verify no error about invalid models
+	if strings.Contains(body, "Invalid model") {
+		t.Error("response should NOT contain invalid model error for valid models")
+	}
+}
+
+// TestValidateModelSelection tests the validateModelSelection helper method
+func TestValidateModelSelection(t *testing.T) {
+	srv := &Server{
+		modelsCache: []opencode.ProviderModel{
+			{ID: "gpt-4", ProviderID: "openai", Name: "GPT-4"},
+			{ID: "claude-3", ProviderID: "anthropic", Name: "Claude 3"},
+			{ID: "gpt-3.5", ProviderID: "openai", Name: "GPT-3.5"},
+		},
+	}
+
+	tests := []struct {
+		name     string
+		provider string
+		model    string
+		want     bool
+	}{
+		{
+			name:     "valid model - openai/gpt-4",
+			provider: "openai",
+			model:    "gpt-4",
+			want:     true,
+		},
+		{
+			name:     "valid model - anthropic/claude-3",
+			provider: "anthropic",
+			model:    "claude-3",
+			want:     true,
+		},
+		{
+			name:     "invalid model - wrong provider",
+			provider: "anthropic",
+			model:    "gpt-4",
+			want:     false,
+		},
+		{
+			name:     "invalid model - nonexistent",
+			provider: "openai",
+			model:    "nonexistent-model",
+			want:     false,
+		},
+		{
+			name:     "invalid model - wrong provider for claude",
+			provider: "openai",
+			model:    "claude-3",
+			want:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := srv.validateModelSelection(tt.provider, tt.model)
+			if got != tt.want {
+				t.Errorf("validateModelSelection(%q, %q) = %v, want %v", tt.provider, tt.model, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestValidateModelSelection_EmptyCache tests that validation passes when cache is empty
+func TestValidateModelSelection_EmptyCache(t *testing.T) {
+	srv := &Server{
+		modelsCache: []opencode.ProviderModel{}, // Empty cache
+	}
+
+	// Should return true (skip validation) when cache is empty
+	got := srv.validateModelSelection("any-provider", "any-model")
+	if !got {
+		t.Error("validateModelSelection should return true when cache is empty (skip validation)")
+	}
+}
+
+// TestHandleSaveSettings_EmptyCache allows any model when cache is empty
+func TestHandleSaveSettings_EmptyCache(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	odaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(odaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a minimal config file
+	configPath := filepath.Join(odaDir, "config.yaml")
+	configContent := `llm:
+  development:
+    strong:
+      provider: test-provider
+      model: test-model
+    weak:
+      provider: test-provider
+      model: test-model-weak
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates but EMPTY models cache
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	srv.modelsCache = []opencode.ProviderModel{} // Empty cache
+	defer srv.wizardStore.Stop()
+
+	// Test POST /settings with any model (should be allowed when cache is empty)
+	form := url.Values{}
+	form.Set("development_strong_provider", "custom-provider")
+	form.Set("development_strong_model", "custom-model")
+	form.Set("development_weak_provider", "custom-provider")
+	form.Set("development_weak_model", "another-custom-model")
+	form.Set("planning_strong_provider", "custom-provider")
+	form.Set("planning_strong_model", "custom-model")
+	form.Set("planning_weak_provider", "custom-provider")
+	form.Set("planning_weak_model", "custom-model")
+	form.Set("orchestration_strong_provider", "custom-provider")
+	form.Set("orchestration_strong_model", "custom-model")
+	form.Set("orchestration_weak_provider", "custom-provider")
+	form.Set("orchestration_weak_model", "custom-model")
+	form.Set("setup_strong_provider", "custom-provider")
+	form.Set("setup_strong_model", "custom-model")
+	form.Set("setup_weak_provider", "custom-provider")
+	form.Set("setup_weak_model", "custom-model")
+	form.Set("routing_code_size_threshold", "150")
+	form.Set("routing_high_complexity_threshold", "600")
+	form.Set("routing_file_count_threshold", "10")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	// Should return 200 OK with success message (no validation errors)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify success message
+	body := rec.Body.String()
+	if !strings.Contains(body, "Settings saved successfully") {
+		t.Error("response should contain success message when cache is empty")
+	}
+
+	// Verify no validation errors about invalid models
+	if strings.Contains(body, "Invalid model") {
+		t.Error("response should NOT contain invalid model error when cache is empty")
 	}
 }
 
