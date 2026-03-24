@@ -289,7 +289,7 @@ func TestHandleRateLimit_WithService(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-	// Should contain compressed format with percentage (10% used for core)
+	// Should contain compressed format with percentage (GitHub API usage: 10% for core)
 	if !strings.Contains(body, "rate-limit-compressed") {
 		t.Errorf("expected 'rate-limit-compressed' class, got: %s", body)
 	}

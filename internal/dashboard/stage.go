@@ -126,20 +126,23 @@ func (sm *StageManager) ChangeStage(issueNumber int, toStage string, reason Stag
 			log.Printf("[StageManager] Error saving issue cache for #%d: %v", issueNumber, err)
 			// Don't fail the operation if cache update fails
 		}
+	}
 
-		// Save to ledger
-		if err := sm.store.SaveStageChange(issueNumber, fromStage, toStage, string(reason), changedBy); err != nil {
+	// Broadcast update via WebSocket (after cache, before ledger)
+	if sm.hub != nil {
+		sm.hub.BroadcastIssueUpdate(updatedIssue)
+	}
+
+	// Save to ledger with full label names (last)
+	if sm.store != nil {
+		toLabel := getStageLabel(toStage)
+		if err := sm.store.SaveStageChange(issueNumber, fromStage, toLabel, string(reason), changedBy); err != nil {
 			log.Printf("[StageManager] Error saving stage change to ledger for #%d: %v", issueNumber, err)
 			// Don't fail the operation if ledger save fails
 		}
 	}
 
-	// Broadcast update via WebSocket
-	if sm.hub != nil {
-		sm.hub.BroadcastIssueUpdate(updatedIssue)
-	}
-
-	log.Printf("[StageManager] Successfully changed stage of #%d from %s to %s", issueNumber, fromStage, toStage)
+	log.Printf("[StageManager] Successfully changed stage of #%d from %s to %s", issueNumber, fromStage, getStageLabel(toStage))
 	return &updatedIssue, nil
 }
 
@@ -151,4 +154,13 @@ func (sm *StageManager) getStageFromIssue(issue github.Issue) string {
 		}
 	}
 	return "Backlog"
+}
+
+// getStageLabel returns the full label name for a stage
+func getStageLabel(stage string) string {
+	if labels, ok := github.StageToLabels[stage]; ok && len(labels) > 0 {
+		return labels[0]
+	}
+	// For stages without labels (Backlog, Done), return stage name
+	return stage
 }

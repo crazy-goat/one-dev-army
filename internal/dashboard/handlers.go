@@ -1617,7 +1617,7 @@ func (s *Server) handleRateLimit(w http.ResponseWriter, r *http.Request) {
 		color,
 	))
 	html.WriteString(fmt.Sprintf(
-		`<span class="rate-limit-percentage">%.0f%% used%s</span>`,
+		`<span class="rate-limit-percentage">GitHub API usage: %.0f%%%s</span>`,
 		worstPercentage,
 		warningIcon,
 	))
@@ -1674,7 +1674,7 @@ func (s *Server) handleRateLimit(w http.ResponseWriter, r *http.Request) {
 	// Show which limit is the worst
 	if worstLimit != nil {
 		html.WriteString(fmt.Sprintf(
-			`<div class="rate-limit-tooltip-footer">Worst: %s (%.0f%% used)</div>`,
+			`<div class="rate-limit-tooltip-footer">Worst: %s (%.0f%%)</div>`,
 			worstLimit.Name,
 			worstPercentage,
 		))
