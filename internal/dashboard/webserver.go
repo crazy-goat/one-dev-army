@@ -131,6 +131,8 @@ func (w *WebServer) URL() string {
 func (w *WebServer) startProcess() error {
 	w.cmd = exec.Command("opencode", "web", "--port", fmt.Sprintf("%d", w.port))
 	w.cmd.Dir = w.dir
+	// Prevent opencode from opening a browser window on startup
+	w.cmd.Env = append(w.cmd.Environ(), "BROWSER=false")
 
 	if err := w.cmd.Start(); err != nil {
 		return fmt.Errorf("starting process: %w", err)
