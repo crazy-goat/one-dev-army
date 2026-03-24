@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -164,7 +167,57 @@ func TestIssueCreateCommand_Help(t *testing.T) {
 		t.Run(tt.name, func(_ *testing.T) {
 			// Just verify it doesn't panic - help prints to stdout
 			// We can't easily capture stdout in this test structure
-			_ = tt.args
+			_ = IssueCreateCommand(tt.args, nil, 0)
 		})
 	}
+}
+
+func TestTriggerDashboardSync(t *testing.T) {
+	tests := []struct {
+		name             string
+		serverResponse   int
+		expectSyncCalled bool
+	}{
+		{
+			name:             "successful sync",
+			serverResponse:   http.StatusOK,
+			expectSyncCalled: true,
+		},
+		{
+			name:             "sync with non-200 status",
+			serverResponse:   http.StatusInternalServerError,
+			expectSyncCalled: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			syncCalled := false
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/sync" && r.Method == "POST" {
+					syncCalled = true
+				}
+				w.WriteHeader(tt.serverResponse)
+			}))
+			defer server.Close()
+
+			// Extract port from server URL (format: http://127.0.0.1:PORT)
+			portStr := strings.TrimPrefix(server.URL, "http://127.0.0.1:")
+			portStr = strings.TrimPrefix(portStr, "http://[::]:")
+			port := 0
+			fmt.Sscanf(portStr, "%d", &port)
+
+			triggerDashboardSync(port)
+
+			if syncCalled != tt.expectSyncCalled {
+				t.Errorf("sync endpoint called = %v, want %v", syncCalled, tt.expectSyncCalled)
+			}
+		})
+	}
+}
+
+func TestTriggerDashboardSync_DashboardNotRunning(t *testing.T) {
+	// Use an unused port to simulate dashboard not running
+	triggerDashboardSync(59999)
+	// Should not panic or return error - function should return gracefully
 }
