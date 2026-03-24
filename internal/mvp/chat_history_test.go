@@ -1,8 +1,12 @@
 package mvp
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/crazy-goat/one-dev-army/internal/github"
 )
 
 func TestNewChatHistory(t *testing.T) {
@@ -218,5 +222,122 @@ func TestChatMessage_Timestamp(t *testing.T) {
 	msg := messages[0]
 	if msg.Timestamp.Before(before) || msg.Timestamp.After(after) {
 		t.Error("message timestamp should be between before and after")
+	}
+}
+
+// TestTaskChatHistory_Integration tests the complete chat history flow on Task struct
+func TestTaskChatHistory_Integration(t *testing.T) {
+	task := &Task{
+		Issue: github.Issue{
+			Number: 123,
+			Title:  "Test Issue",
+		},
+		Status: StatusCoding,
+	}
+
+	// Add some chat messages to the task
+	task.AddChatMessage("user", "Implement feature X")
+	task.AddChatMessage("assistant", "I'll help you implement feature X")
+	task.AddChatMessage("user", "Make sure to add tests")
+	task.SetSessionID("test-session-123")
+
+	// Test that GetChatMessages returns the stored messages
+	messages := task.GetChatMessages()
+	if len(messages) != 3 {
+		t.Errorf("expected 3 chat messages, got %d", len(messages))
+	}
+
+	// Verify message content
+	if messages[0].Role != "user" || messages[0].Content != "Implement feature X" {
+		t.Errorf("first message mismatch: got role=%s, content=%s", messages[0].Role, messages[0].Content)
+	}
+
+	if messages[1].Role != "assistant" || messages[1].Content != "I'll help you implement feature X" {
+		t.Errorf("second message mismatch: got role=%s, content=%s", messages[1].Role, messages[1].Content)
+	}
+
+	// Test that chat history is cleared when session ends
+	task.SetSessionID("")
+	messagesAfterClear := task.GetChatMessages()
+	if len(messagesAfterClear) != 0 {
+		t.Errorf("expected 0 messages after session clear, got %d", len(messagesAfterClear))
+	}
+}
+
+// TestTaskChatHistory_ConcurrentAccess tests thread-safe concurrent access to chat history
+func TestTaskChatHistory_ConcurrentAccess(t *testing.T) {
+	task := &Task{
+		Issue: github.Issue{
+			Number: 456,
+			Title:  "Concurrent Test Issue",
+		},
+		Status: StatusCoding,
+	}
+
+	// Add messages concurrently
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			for j := 0; j < 10; j++ {
+				role := "user"
+				if j%2 == 0 {
+					role = "assistant"
+				}
+				task.AddChatMessage(role, fmt.Sprintf("Message %d-%d", idx, j))
+			}
+		}(i)
+	}
+
+	// Read messages concurrently
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 20; j++ {
+				_ = task.GetChatMessages()
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// Verify we have all messages (100 total, but capped at 1000 max)
+	messages := task.GetChatMessages()
+	if len(messages) != 100 {
+		t.Errorf("expected 100 messages after concurrent writes, got %d", len(messages))
+	}
+}
+
+// TestTaskChatHistory_MaxSize tests that chat history respects max size limit
+func TestTaskChatHistory_MaxSize(t *testing.T) {
+	task := &Task{
+		Issue: github.Issue{
+			Number: 789,
+			Title:  "Max Size Test Issue",
+		},
+		Status: StatusCoding,
+	}
+
+	// Add more than 1000 messages (the default max)
+	for i := 0; i < 1100; i++ {
+		task.AddChatMessage("user", fmt.Sprintf("Message %d", i))
+	}
+
+	messages := task.GetChatMessages()
+	if len(messages) != 1000 {
+		t.Errorf("expected 1000 messages (max capacity), got %d", len(messages))
+	}
+
+	// Verify oldest messages were evicted (ring buffer behavior)
+	// First message should be Message 100 (Message 0-99 were evicted)
+	if messages[0].Content != "Message 100" {
+		t.Errorf("expected first message to be 'Message 100' (oldest evicted), got '%s'", messages[0].Content)
+	}
+
+	// Last message should be Message 1099
+	if messages[999].Content != "Message 1099" {
+		t.Errorf("expected last message to be 'Message 1099', got '%s'", messages[999].Content)
 	}
 }
