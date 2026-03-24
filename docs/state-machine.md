@@ -115,25 +115,27 @@ Failed → [User: Cancel] → Backlog
 
 **Entry Conditions:**
 - Label: `stage:awaiting-approval`
+- Worker is blocked waiting on `decisionCh` for user input
 
 **Exit Transitions:**
 
 | To | Trigger | Actions |
 |----|---------|---------|
-| **Merge** | User clicks "Approve & Merge" | `SetStageLabel("Merge")` → adds `stage:merging` |
-| **Code** | User has comments/rejects PR | `SetStageLabel("Code")` → adds `stage:coding` (retry) |
+| **Merge** | User clicks "Approve & Merge" on dashboard | Dashboard sends approve decision → Worker merges PR |
+| **Code** | User clicks "Decline" on dashboard | Dashboard sends decline decision → Worker fixes and retries |
 
 ### Merge
 
 **Entry Conditions:**
 - Label: `stage:merging`
+- Worker is actively merging the PR
 
 **Exit Transitions:**
 
 | To | Trigger | Actions |
 |----|---------|---------|
-| **Done** | Merge successful | `SetStageLabel("Done")` → removes all labels, closes issue |
-| **Failed** | Merge conflict | `SetStageLabel("Failed")` → adds `stage:failed` |
+| **Done** | Merge successful | Worker reports merge complete, `SetStageLabel("Done")` → closes issue |
+| **Failed** | Merge conflict | Worker reports failure, orchestrator sets `stage:failed` |
 
 ### Failed
 
@@ -269,9 +271,31 @@ All errors during processing result in Failed state:
 - PR creation errors: Failed state
 - Merge errors: Failed state
 
+### Worker Lifecycle
+
+The worker owns the full ticket lifecycle from pickup to terminal state:
+
+- `Worker.Process()` is a blocking call that spans analysis → coding → review → PR → approval → merge
+- The orchestrator cannot pick a new ticket while `Process()` is running
+- User decisions (approve/decline) are sent to the worker via a `decisionCh` channel
+- `Process()` returns only when the ticket reaches done, failed, or context cancelled
+- On decline, the worker fixes code, re-reviews, and loops back to awaiting approval
+- On approve, the worker merges the PR and returns nil (done)
+- The orchestrator loop is simple: pick ticket → Process() → handle result → repeat
+
+### Issue Filtering (Orchestrator)
+
+The orchestrator uses a whitelist approach to find candidates:
+- **Candidate**: Open issue with NO `stage:*` label (= backlog)
+- **Resume**: Open issue with worker stage label (`stage:analysis`, `stage:coding`, `stage:code-review`, `stage:create-pr`, `stage:awaiting-approval`) — resumed after ODA restart
+- **Ignored**: Everything else (`stage:merging`, `stage:failed`, `stage:blocked`, `stage:done`, `stage:needs-user`)
+
+This prevents race conditions where issues in transitional states (e.g. `stage:merging`) could be picked up as new work.
+
 ## Version History
 
 - **2026-03-23**: Initial state machine definition
 - **2026-03-23**: Added Merge state between Approve and Done
 - **2026-03-23**: Simplified error handling - all errors go to Failed, all retries go to Code
 - **2026-03-23**: Aligned all labels to use `stage:` prefix, added Create PR stage, added Block/Unblock actions, documented `SetStageLabel` as universal transition method
+- **2026-03-24**: Worker full lifecycle — worker owns approval/merge, orchestrator waits until terminal state
