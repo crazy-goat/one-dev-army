@@ -296,6 +296,11 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 
 			w.reportStageComplete("merge", EventSuccess, "PR merged successfully")
 
+			// Checkout default branch to prepare for next ticket
+			if err := w.brMgr.CheckoutDefault(); err != nil {
+				log.Printf("[Worker %d] Warning: failed to checkout default branch after merge: %v", w.id, err)
+			}
+
 			task.Status = StatusDone
 			task.Result = &TaskResult{
 				PRURL:   prURL,

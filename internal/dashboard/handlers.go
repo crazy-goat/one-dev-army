@@ -541,6 +541,10 @@ func (s *Server) handleDirectMerge(w http.ResponseWriter, r *http.Request, issue
 	}
 
 	_ = s.orchestrator.ChangeStage(issueNum, github.StageDone, github.ReasonManualMerge)
+
+	// Checkout default branch to prepare for next ticket (non-critical)
+	s.orchestrator.CheckoutDefault()
+
 	log.Printf("[Dashboard] ✓ Direct merged #%d (fallback)", issueNum)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

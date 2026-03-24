@@ -328,3 +328,81 @@ func TestRemoveBranchNonExistent(t *testing.T) {
 		t.Errorf("current branch = %q, want master or main", got)
 	}
 }
+
+// TestCheckoutDefault verifies that CheckoutDefault switches to the default branch.
+func TestCheckoutDefault(t *testing.T) {
+	repoDir := setupRepo(t)
+	mgr := git.NewBranchManager(repoDir)
+
+	// Create and switch to a feature branch
+	if err := mgr.CreateBranch("feature-test"); err != nil {
+		t.Fatalf("CreateBranch: %v", err)
+	}
+
+	if got := currentBranch(t, repoDir); got != "feature-test" {
+		t.Errorf("current branch = %q, want %q", got, "feature-test")
+	}
+
+	// CheckoutDefault should switch back to master
+	if err := mgr.CheckoutDefault(); err != nil {
+		t.Fatalf("CheckoutDefault: %v", err)
+	}
+
+	got := currentBranch(t, repoDir)
+	if got != "master" && got != "main" {
+		t.Errorf("current branch = %q, want master or main", got)
+	}
+}
+
+// TestCheckoutDefaultWithMainBranch verifies CheckoutDefault works when default is main.
+func TestCheckoutDefaultWithMainBranch(t *testing.T) {
+	env := []string{
+		"GIT_AUTHOR_NAME=test",
+		"GIT_AUTHOR_EMAIL=test@test.com",
+		"GIT_COMMITTER_NAME=test",
+		"GIT_COMMITTER_EMAIL=test@test.com",
+	}
+
+	runGit := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), env...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Create a bare repo to act as "origin"
+	bareDir := t.TempDir()
+	runGit(bareDir, "init", "--bare")
+
+	// Clone it to get a working repo with origin configured
+	cloneDir := t.TempDir()
+	runGit(cloneDir, "clone", bareDir, ".")
+
+	// Create an initial commit and push to origin on main branch
+	runGit(cloneDir, "commit", "--allow-empty", "-m", "init")
+	runGit(cloneDir, "branch", "-m", "main")
+	runGit(cloneDir, "push", "origin", "main")
+
+	mgr := git.NewBranchManager(cloneDir)
+
+	// Create and switch to a feature branch
+	if err := mgr.CreateBranch("feature-test"); err != nil {
+		t.Fatalf("CreateBranch: %v", err)
+	}
+
+	if got := currentBranch(t, cloneDir); got != "feature-test" {
+		t.Errorf("current branch = %q, want %q", got, "feature-test")
+	}
+
+	// CheckoutDefault should switch back to main
+	if err := mgr.CheckoutDefault(); err != nil {
+		t.Fatalf("CheckoutDefault: %v", err)
+	}
+
+	if got := currentBranch(t, cloneDir); got != "main" {
+		t.Errorf("current branch = %q, want %q", got, "main")
+	}
+}

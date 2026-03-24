@@ -156,6 +156,20 @@ func (m *BranchManager) detectDefaultBranch() string {
 	return "master"
 }
 
+// CheckoutDefault switches to the default branch (main or master).
+// This is called after a successful merge to prepare the repository
+// for the next ticket. Errors are logged but not returned as this
+// is a non-critical cleanup operation.
+func (m *BranchManager) CheckoutDefault() error {
+	defaultBranch := m.detectDefaultBranch()
+	cmd := exec.Command("git", "checkout", defaultBranch)
+	cmd.Dir = m.repoDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git checkout %s: %w\n%s", defaultBranch, err, out)
+	}
+	return nil
+}
+
 // detectRemoteDefaultBranch returns the default branch name on origin
 // (e.g. "main" or "master") by inspecting origin/HEAD. Returns "" if
 // the remote has no HEAD or the remote doesn't exist.
