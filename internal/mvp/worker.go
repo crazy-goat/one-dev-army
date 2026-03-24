@@ -523,7 +523,6 @@ func parseTechnicalPlanningResponse(response string) (analysis, plan string) {
 
 func (w *Worker) implement(ctx context.Context, task *Task, planStr string) error {
 	w.oc.SetDirectory(task.Worktree)
-	defer w.oc.SetDirectory("")
 
 	// Fetch all comments from GitHub issue to find technical planning
 	comments, err := w.gh.ListComments(task.Issue.Number)
@@ -576,7 +575,6 @@ func (w *Worker) ensureCommit(task *Task) {
 
 func (w *Worker) fixFromReview(ctx context.Context, task *Task, review string) error {
 	w.oc.SetDirectory(task.Worktree)
-	defer w.oc.SetDirectory("")
 
 	testCmd := w.cfg.Tools.TestCmd
 	if testCmd == "" {
