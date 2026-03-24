@@ -98,6 +98,11 @@ func (o *Orchestrator) CurrentTask() *Task {
 	return o.currentTask
 }
 
+// GetWorker returns the orchestrator's worker for config propagation.
+func (o *Orchestrator) GetWorker() *Worker {
+	return o.worker
+}
+
 func (o *Orchestrator) Run(ctx context.Context) error {
 	o.mu.Lock()
 	o.running = true
