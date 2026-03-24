@@ -3466,7 +3466,7 @@ func TestHandleWizardCreateSingle_NilSyncService(t *testing.T) {
 func TestHandleWizardCreateSingle_SyncFailureDoesNotBlockCreation(t *testing.T) {
 	// Create a sync service with nil dependencies to simulate failure
 	// The sync will fail but creation should still succeed
-	syncService := NewSyncService(nil, nil, nil)
+	syncService := NewSyncService(nil, nil, nil, nil)
 
 	srv := &Server{
 		tmpls:       make(map[string]*template.Template),

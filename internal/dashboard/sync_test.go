@@ -23,6 +23,10 @@ func (m *mockGitHubClient) ListIssuesWithPRStatus(milestone string) ([]github.Is
 	return m.issues, nil
 }
 
+func (m *mockGitHubClient) AddLabel(issueNum int, label string) error {
+	return nil
+}
+
 // mockStore is a test double for Store interface
 type mockStore struct {
 	cachedIssues []github.Issue
@@ -42,7 +46,7 @@ func TestNewSyncService(t *testing.T) {
 	store := &mockStore{}
 	hub := NewHub(false)
 
-	service := NewSyncService(gh, store, hub)
+	service := NewSyncService(gh, store, hub, nil)
 
 	if service == nil {
 		t.Fatal("NewSyncService returned nil")
@@ -62,7 +66,7 @@ func TestNewSyncService(t *testing.T) {
 }
 
 func TestSyncService_SetActiveMilestone(t *testing.T) {
-	service := NewSyncService(nil, nil, nil)
+	service := NewSyncService(nil, nil, nil, nil)
 
 	service.SetActiveMilestone("Sprint 1")
 	if got := service.GetActiveMilestone(); got != "Sprint 1" {
@@ -82,7 +86,7 @@ func TestSyncService_StartStop(t *testing.T) {
 		},
 	}
 	store := &mockStore{}
-	service := NewSyncService(gh, store, nil)
+	service := NewSyncService(gh, store, nil, nil)
 	service.SetActiveMilestone("Sprint 1")
 
 	// Start the service
@@ -109,7 +113,7 @@ func TestSyncService_StartStop(t *testing.T) {
 func TestSyncService_Start_AlreadyRunning(t *testing.T) {
 	gh := &mockGitHubClient{}
 	store := &mockStore{}
-	service := NewSyncService(gh, store, nil)
+	service := NewSyncService(gh, store, nil, nil)
 	service.SetActiveMilestone("Sprint 1")
 
 	service.Start()
@@ -124,7 +128,7 @@ func TestSyncService_Start_AlreadyRunning(t *testing.T) {
 }
 
 func TestSyncService_Stop_NotRunning(t *testing.T) {
-	service := NewSyncService(nil, nil, nil)
+	service := NewSyncService(nil, nil, nil, nil)
 
 	// Should not panic when stopping a non-running service
 	service.Stop()
@@ -137,7 +141,7 @@ func TestSyncService_Stop_NotRunning(t *testing.T) {
 func TestSyncService_syncNow_NoMilestone(t *testing.T) {
 	gh := &mockGitHubClient{}
 	store := &mockStore{}
-	service := NewSyncService(gh, store, nil)
+	service := NewSyncService(gh, store, nil, nil)
 	// No milestone set
 
 	service.syncNow()
@@ -149,7 +153,7 @@ func TestSyncService_syncNow_NoMilestone(t *testing.T) {
 
 func TestSyncService_syncNow_NoGitHubClient(t *testing.T) {
 	store := &mockStore{}
-	service := NewSyncService(nil, store, nil)
+	service := NewSyncService(nil, store, nil, nil)
 	service.SetActiveMilestone("Sprint 1")
 
 	service.syncNow()
@@ -163,7 +167,7 @@ func TestSyncService_syncNow_NoStore(t *testing.T) {
 	gh := &mockGitHubClient{
 		issues: []github.Issue{{Number: 1, Title: "Issue 1"}},
 	}
-	service := NewSyncService(gh, nil, nil)
+	service := NewSyncService(gh, nil, nil, nil)
 	service.SetActiveMilestone("Sprint 1")
 
 	service.syncNow()
@@ -175,7 +179,7 @@ func TestSyncService_syncNow_GitHubError(t *testing.T) {
 		listErr: errors.New("github error"),
 	}
 	store := &mockStore{}
-	service := NewSyncService(gh, store, nil)
+	service := NewSyncService(gh, store, nil, nil)
 	service.SetActiveMilestone("Sprint 1")
 
 	service.syncNow()
@@ -195,7 +199,7 @@ func TestSyncService_syncNow_SaveError(t *testing.T) {
 	store := &mockStore{
 		saveErr: errors.New("save error"),
 	}
-	service := NewSyncService(gh, store, nil)
+	service := NewSyncService(gh, store, nil, nil)
 	service.SetActiveMilestone("Sprint 1")
 
 	service.syncNow()
@@ -215,7 +219,7 @@ func TestSyncService_syncNow_Success(t *testing.T) {
 		},
 	}
 	store := &mockStore{}
-	service := NewSyncService(gh, store, nil)
+	service := NewSyncService(gh, store, nil, nil)
 	service.SetActiveMilestone("Sprint 1")
 
 	service.syncNow()
@@ -237,7 +241,7 @@ func TestSyncService_SyncNow_ManualTrigger(t *testing.T) {
 		},
 	}
 	store := &mockStore{}
-	service := NewSyncService(gh, store, nil)
+	service := NewSyncService(gh, store, nil, nil)
 	service.SetActiveMilestone("Sprint 1")
 
 	// Start the service first (this triggers initial sync)
@@ -271,7 +275,7 @@ func TestSyncService_ThreadSafety(t *testing.T) {
 		},
 	}
 	store := &mockStore{}
-	service := NewSyncService(gh, store, nil)
+	service := NewSyncService(gh, store, nil, nil)
 
 	// Concurrent operations
 	done := make(chan bool, 3)
@@ -311,7 +315,7 @@ func TestSyncService_syncNow_FetchesPRStatus(t *testing.T) {
 		},
 	}
 	store := &mockStore{}
-	service := NewSyncService(gh, store, nil)
+	service := NewSyncService(gh, store, nil, nil)
 	service.SetActiveMilestone("Sprint 1")
 
 	service.syncNow()
