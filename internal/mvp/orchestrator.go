@@ -545,8 +545,15 @@ func (o *Orchestrator) changeStage(issueNumber int, toStage, reason string) erro
 		if err := o.store.SaveIssueCache(updatedIssue, milestone, true); err != nil {
 			log.Printf("[Orchestrator] Error saving issue cache for #%d: %v", issueNumber, err)
 		}
+	}
 
-		// Save to ledger
+	// Broadcast via WebSocket (after cache, before ledger)
+	if o.hub != nil {
+		o.hub.BroadcastIssueUpdate(updatedIssue)
+	}
+
+	// Save to ledger (last)
+	if o.store != nil {
 		toLabel := toStage
 		if labels, ok := github.StageToLabels[toStage]; ok && len(labels) > 0 {
 			toLabel = labels[0]
@@ -554,11 +561,6 @@ func (o *Orchestrator) changeStage(issueNumber int, toStage, reason string) erro
 		if err := o.store.SaveStageChange(issueNumber, fromStage, toLabel, reason, "orchestrator"); err != nil {
 			log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", issueNumber, err)
 		}
-	}
-
-	// Broadcast
-	if o.hub != nil {
-		o.hub.BroadcastIssueUpdate(updatedIssue)
 	}
 
 	log.Printf("[Orchestrator] Successfully changed stage of #%d from %s to %s", issueNumber, fromStage, toStage)

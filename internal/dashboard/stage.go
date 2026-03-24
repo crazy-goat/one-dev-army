@@ -126,18 +126,20 @@ func (sm *StageManager) ChangeStage(issueNumber int, toStage string, reason Stag
 			log.Printf("[StageManager] Error saving issue cache for #%d: %v", issueNumber, err)
 			// Don't fail the operation if cache update fails
 		}
+	}
 
-		// Save to ledger with full label names
+	// Broadcast update via WebSocket (after cache, before ledger)
+	if sm.hub != nil {
+		sm.hub.BroadcastIssueUpdate(updatedIssue)
+	}
+
+	// Save to ledger with full label names (last)
+	if sm.store != nil {
 		toLabel := getStageLabel(toStage)
 		if err := sm.store.SaveStageChange(issueNumber, fromStage, toLabel, string(reason), changedBy); err != nil {
 			log.Printf("[StageManager] Error saving stage change to ledger for #%d: %v", issueNumber, err)
 			// Don't fail the operation if ledger save fails
 		}
-	}
-
-	// Broadcast update via WebSocket
-	if sm.hub != nil {
-		sm.hub.BroadcastIssueUpdate(updatedIssue)
 	}
 
 	log.Printf("[StageManager] Successfully changed stage of #%d from %s to %s", issueNumber, fromStage, getStageLabel(toStage))
