@@ -257,14 +257,13 @@ func runServe(debugWebSocket bool) error {
 	go hub.Run()
 	fmt.Println("  ✓ WebSocket hub started")
 
-	// Step 7 & 8: Create and start SyncService
+	// Step 7 & 8: Create sync service (will be started after orchestrator)
 	fmt.Println("Creating sync service...")
-	syncService := dashboard.NewSyncService(gh, store, hub)
+	syncService := dashboard.NewSyncService(gh, store, hub, nil) // orchestrator will be set later
 	if activeMilestone != nil {
 		syncService.SetActiveMilestone(activeMilestone.Title)
 	}
-	syncService.Start()
-	fmt.Println("  ✓ Sync service started (30s interval)")
+	fmt.Println("  ✓ Sync service created")
 
 	// Create LLM router for multi-model configuration
 	router := llm.NewRouter(&cfg.LLM)
@@ -279,6 +278,11 @@ func runServe(debugWebSocket bool) error {
 	processor := worker.NewProcessor(cfg, oc, gh, store, brMgr, router)
 
 	orchestrator := mvp.NewOrchestrator(cfg, gh, oc, brMgr, store, hub, router)
+
+	// Set orchestrator in sync service
+	syncService.SetOrchestrator(orchestrator)
+	syncService.Start()
+	fmt.Println("  ✓ Sync service started (30s interval)")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -3,7 +3,6 @@ package dashboard
 import (
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +25,7 @@ type SyncService struct {
 	gh              GitHubClient
 	store           Store
 	hub             *Hub
+	orchestrator    OrchestratorClient
 	activeMilestone string
 	ticker          *time.Ticker
 	stopCh          chan struct{}
@@ -34,13 +34,19 @@ type SyncService struct {
 	wg              sync.WaitGroup
 }
 
+// OrchestratorClient defines the interface for orchestrator operations needed by SyncService
+type OrchestratorClient interface {
+	HandleSyncEvent(issue github.Issue)
+}
+
 // NewSyncService creates a new SyncService instance
-func NewSyncService(gh GitHubClient, store Store, hub *Hub) *SyncService {
+func NewSyncService(gh GitHubClient, store Store, hub *Hub, orchestrator OrchestratorClient) *SyncService {
 	return &SyncService{
-		gh:     gh,
-		store:  store,
-		hub:    hub,
-		stopCh: make(chan struct{}),
+		gh:           gh,
+		store:        store,
+		hub:          hub,
+		orchestrator: orchestrator,
+		stopCh:       make(chan struct{}),
 	}
 }
 
@@ -49,6 +55,13 @@ func (s *SyncService) SetActiveMilestone(milestone string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.activeMilestone = milestone
+}
+
+// SetOrchestrator sets the orchestrator for sync event handling
+func (s *SyncService) SetOrchestrator(orchestrator OrchestratorClient) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.orchestrator = orchestrator
 }
 
 // GetActiveMilestone returns the currently active milestone
@@ -153,7 +166,7 @@ func (s *SyncService) syncNow() {
 
 	log.Printf("[SyncService] Fetched %d issues from GitHub (single query)", len(issues))
 
-	// Cache each issue and ensure proper labels for closed/merged issues
+	// Cache each issue and notify orchestrator
 	cachedCount := 0
 	for _, issue := range issues {
 		if err := s.store.SaveIssueCache(issue, milestone, false); err != nil {
@@ -162,38 +175,9 @@ func (s *SyncService) syncNow() {
 		}
 		cachedCount++
 
-		// Ensure closed issues have stage:done label
-		if strings.EqualFold(issue.State, "CLOSED") {
-			hasDoneLabel := false
-			for _, label := range issue.Labels {
-				if label.Name == "stage:done" {
-					hasDoneLabel = true
-					break
-				}
-			}
-			if !hasDoneLabel {
-				log.Printf("[SyncService] Adding missing stage:done label to closed issue #%d", issue.Number)
-				if err := s.gh.AddLabel(issue.Number, "stage:done"); err != nil {
-					log.Printf("[SyncService] Error adding stage:done label to #%d: %v", issue.Number, err)
-				}
-			}
-		}
-
-		// Ensure merged PRs have stage:merging label
-		if issue.PRMerged && !issue.MergedAt.IsZero() {
-			hasMergingLabel := false
-			for _, label := range issue.Labels {
-				if label.Name == "stage:merging" {
-					hasMergingLabel = true
-					break
-				}
-			}
-			if !hasMergingLabel {
-				log.Printf("[SyncService] Adding missing stage:merging label to merged issue #%d", issue.Number)
-				if err := s.gh.AddLabel(issue.Number, "stage:merging"); err != nil {
-					log.Printf("[SyncService] Error adding stage:merging label to #%d: %v", issue.Number, err)
-				}
-			}
+		// Notify orchestrator of sync event
+		if s.orchestrator != nil {
+			s.orchestrator.HandleSyncEvent(issue)
 		}
 	}
 

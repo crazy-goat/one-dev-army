@@ -435,6 +435,38 @@ func (o *Orchestrator) BroadcastWorkerStatus(workerID, status string, taskID int
 	}
 }
 
+// HandleSyncEvent processes external changes from GitHub sync
+// This is called by SyncService when it detects changes from GitHub
+func (o *Orchestrator) HandleSyncEvent(issue github.Issue) {
+	log.Printf("[Orchestrator] Processing sync event for issue #%d", issue.Number)
+
+	// Skip if this issue is currently being processed by worker
+	if o.currentTask != nil && o.currentTask.Issue.Number == issue.Number {
+		log.Printf("[Orchestrator] Issue #%d is being processed, skipping sync event", issue.Number)
+		return
+	}
+
+	// Ensure closed issues have stage:done label
+	if strings.EqualFold(issue.State, "CLOSED") {
+		if !hasLabel(issue, "stage:done") {
+			log.Printf("[Orchestrator] Adding missing stage:done label to closed issue #%d", issue.Number)
+			if err := o.gh.AddLabel(issue.Number, "stage:done"); err != nil {
+				log.Printf("[Orchestrator] Error adding stage:done label to #%d: %v", issue.Number, err)
+			}
+		}
+	}
+
+	// Ensure merged PRs have stage:merging label
+	if issue.PRMerged && !issue.MergedAt.IsZero() {
+		if !hasLabel(issue, "stage:merging") {
+			log.Printf("[Orchestrator] Adding missing stage:merging label to merged issue #%d", issue.Number)
+			if err := o.gh.AddLabel(issue.Number, "stage:merging"); err != nil {
+				log.Printf("[Orchestrator] Error adding stage:merging label to #%d: %v", issue.Number, err)
+			}
+		}
+	}
+}
+
 func (o *Orchestrator) sleep(ctx context.Context, d time.Duration) {
 	select {
 	case <-time.After(d):
