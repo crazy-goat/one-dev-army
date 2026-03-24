@@ -271,34 +271,16 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				log.Printf("[Orchestrator] Error adding comment: %v", err)
 			}
 			log.Printf("[Orchestrator] Setting Done stage for #%d (reason: worker_done)", nextIssue.Number)
-			if _, err := o.gh.SetStageLabel(nextIssue.Number, "Done"); err != nil {
+			if err := o.changeStage(nextIssue.Number, "Done", "worker_done"); err != nil {
 				log.Printf("[Orchestrator] Error setting Done stage for #%d: %v", nextIssue.Number, err)
-			} else if o.store != nil {
-				// Get actual current stage from cache
-				fromStage := "stage:coding"
-				if existing, err := o.store.GetIssueCache(nextIssue.Number); err == nil {
-					fromStage = o.getStageFromIssue(existing)
-				}
-				if err := o.store.SaveStageChange(nextIssue.Number, fromStage, "stage:done", "worker_done", "orchestrator"); err != nil {
-					log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", nextIssue.Number, err)
-				}
 			}
 			o.recordStep(nextIssue.Number, "done", "Closed as already done")
 		} else if processErr != nil {
 			log.Printf("[Orchestrator] ✗ Failed #%d: %v", nextIssue.Number, processErr)
 			o.recordStep(nextIssue.Number, "failed", processErr.Error())
 			log.Printf("[Orchestrator] Setting Failed stage for #%d (reason: worker_failed)", nextIssue.Number)
-			if _, err := o.gh.SetStageLabel(nextIssue.Number, "Failed"); err != nil {
+			if err := o.changeStage(nextIssue.Number, "Failed", "worker_failed"); err != nil {
 				log.Printf("[Orchestrator] Error setting Failed stage for #%d: %v", nextIssue.Number, err)
-			} else if o.store != nil {
-				// Get actual current stage from cache
-				fromStage := "stage:coding"
-				if existing, err := o.store.GetIssueCache(nextIssue.Number); err == nil {
-					fromStage = o.getStageFromIssue(existing)
-				}
-				if err := o.store.SaveStageChange(nextIssue.Number, fromStage, "stage:failed", "worker_failed", "orchestrator"); err != nil {
-					log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", nextIssue.Number, err)
-				}
 			}
 		} else {
 			prURL := ""
@@ -308,17 +290,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			log.Printf("[Orchestrator] ✓ Completed #%d → awaiting approval: %s", nextIssue.Number, prURL)
 			o.recordStep(nextIssue.Number, "waiting-for-approval", prURL)
 			log.Printf("[Orchestrator] Setting Approve stage for #%d (reason: worker_approve)", nextIssue.Number)
-			if _, err := o.gh.SetStageLabel(nextIssue.Number, "Approve"); err != nil {
+			if err := o.changeStage(nextIssue.Number, "Approve", "worker_approve"); err != nil {
 				log.Printf("[Orchestrator] Error setting Approve stage for #%d: %v", nextIssue.Number, err)
-			} else if o.store != nil {
-				// Get actual current stage from cache
-				fromStage := "stage:coding"
-				if existing, err := o.store.GetIssueCache(nextIssue.Number); err == nil {
-					fromStage = o.getStageFromIssue(existing)
-				}
-				if err := o.store.SaveStageChange(nextIssue.Number, fromStage, "stage:awaiting-approval", "worker_approve", "orchestrator"); err != nil {
-					log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", nextIssue.Number, err)
-				}
 			}
 			if prURL != "" {
 				comment := fmt.Sprintf("AI review passed ✓ — awaiting manual approval.\n\nPR: %s", prURL)
