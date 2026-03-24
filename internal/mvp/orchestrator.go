@@ -268,7 +268,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if _, err := o.gh.SetStageLabel(nextIssue.Number, "Done"); err != nil {
 				log.Printf("[Orchestrator] Error setting Done stage for #%d: %v", nextIssue.Number, err)
 			} else if o.store != nil {
-				if err := o.store.SaveStageChange(nextIssue.Number, "Code", "Done", "worker_done", "orchestrator"); err != nil {
+				if err := o.store.SaveStageChange(nextIssue.Number, "stage:coding", "stage:done", "worker_done", "orchestrator"); err != nil {
 					log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", nextIssue.Number, err)
 				}
 			}
@@ -280,7 +280,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if _, err := o.gh.SetStageLabel(nextIssue.Number, "Failed"); err != nil {
 				log.Printf("[Orchestrator] Error setting Failed stage for #%d: %v", nextIssue.Number, err)
 			} else if o.store != nil {
-				if err := o.store.SaveStageChange(nextIssue.Number, "Code", "Failed", "worker_failed", "orchestrator"); err != nil {
+				if err := o.store.SaveStageChange(nextIssue.Number, "stage:coding", "stage:failed", "worker_failed", "orchestrator"); err != nil {
 					log.Printf("[Orchestrator] Error saving stage change to ledger for #%d: %v", nextIssue.Number, err)
 				}
 			}
