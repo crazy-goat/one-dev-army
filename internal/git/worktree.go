@@ -23,15 +23,29 @@ func (m *BranchManager) RepoDir() string {
 	return m.repoDir
 }
 
-// CreateBranch creates a new branch and checks it out.
-// If the branch already exists, it checks it out. If a workerName-based
-// worktree exists from a previous run, it is cleaned up first.
+// CreateBranch fetches the latest remote state and creates a new branch from
+// origin/<defaultBranch>. This ensures the branch always starts from the
+// newest remote HEAD, avoiding merge conflicts caused by a stale local base.
+// If the branch already exists locally, it checks it out.
 func (m *BranchManager) CreateBranch(branch string) error {
 	// Clean up any leftover worktrees from previous runs
 	m.cleanupLegacyWorktrees()
 
-	// Try creating a new branch
-	cmd := exec.Command("git", "checkout", "-b", branch)
+	// Fetch latest remote state and determine the start point.
+	// When origin is available we branch from origin/<default>;
+	// otherwise (e.g. in tests without a remote) we fall back to HEAD.
+	startPoint := "HEAD"
+	if out, err := exec.Command("git", "-C", m.repoDir, "fetch", "origin").CombinedOutput(); err == nil {
+		if remote := m.detectRemoteDefaultBranch(); remote != "" {
+			startPoint = "origin/" + remote
+		}
+	} else {
+		log.Printf("[BranchManager] git fetch origin failed (no remote?), branching from HEAD: %s", strings.TrimSpace(string(out)))
+	}
+
+	// Create the feature branch directly from the start point — no need
+	// to checkout the default branch first.
+	cmd := exec.Command("git", "checkout", "-b", branch, startPoint)
 	cmd.Dir = m.repoDir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -115,7 +129,7 @@ func RunInDir(dir, name string, args ...string) ([]byte, error) {
 	return out, nil
 }
 
-// detectDefaultBranch returns "main" or "master" depending on what exists.
+// detectDefaultBranch returns "main" or "master" depending on what exists locally.
 func (m *BranchManager) detectDefaultBranch() string {
 	cmd := exec.Command("git", "rev-parse", "--verify", "main")
 	cmd.Dir = m.repoDir
@@ -123,6 +137,34 @@ func (m *BranchManager) detectDefaultBranch() string {
 		return "main"
 	}
 	return "master"
+}
+
+// detectRemoteDefaultBranch returns the default branch name on origin
+// (e.g. "main" or "master") by inspecting origin/HEAD. Returns "" if
+// the remote has no HEAD or the remote doesn't exist.
+func (m *BranchManager) detectRemoteDefaultBranch() string {
+	// git symbolic-ref refs/remotes/origin/HEAD → refs/remotes/origin/master
+	cmd := exec.Command("git", "symbolic-ref", "refs/remotes/origin/HEAD")
+	cmd.Dir = m.repoDir
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		// "refs/remotes/origin/master\n" → "master"
+		ref := strings.TrimSpace(string(out))
+		if after, ok := strings.CutPrefix(ref, "refs/remotes/origin/"); ok {
+			return after
+		}
+	}
+
+	// Fallback: check which remote tracking branches exist
+	for _, name := range []string{"main", "master"} {
+		cmd = exec.Command("git", "rev-parse", "--verify", "origin/"+name)
+		cmd.Dir = m.repoDir
+		if cmd.Run() == nil {
+			return name
+		}
+	}
+
+	return ""
 }
 
 // cleanupLegacyWorktrees removes any leftover git worktrees from previous runs.

@@ -8,9 +8,10 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/git"
 )
 
+// setupRepo creates a bare "origin" repo and a local clone so that
+// git fetch origin / git reset --hard origin/master work in tests.
 func setupRepo(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
 
 	env := []string{
 		"GIT_AUTHOR_NAME=test",
@@ -19,10 +20,8 @@ func setupRepo(t *testing.T) string {
 		"GIT_COMMITTER_EMAIL=test@test.com",
 	}
 
-	for _, args := range [][]string{
-		{"init"},
-		{"commit", "--allow-empty", "-m", "init"},
-	} {
+	runGit := func(dir string, args ...string) {
+		t.Helper()
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(), env...)
@@ -31,7 +30,19 @@ func setupRepo(t *testing.T) string {
 		}
 	}
 
-	return dir
+	// Create a bare repo to act as "origin"
+	bareDir := t.TempDir()
+	runGit(bareDir, "init", "--bare")
+
+	// Clone it to get a working repo with origin configured
+	cloneDir := t.TempDir()
+	runGit(cloneDir, "clone", bareDir, ".")
+
+	// Create an initial commit and push to origin
+	runGit(cloneDir, "commit", "--allow-empty", "-m", "init")
+	runGit(cloneDir, "push", "origin", "master")
+
+	return cloneDir
 }
 
 func currentBranch(t *testing.T, dir string) string {
@@ -137,6 +148,77 @@ func TestLegacyAliases(t *testing.T) {
 	}
 	if len(out) == 0 {
 		t.Error("expected non-empty output")
+	}
+}
+
+// TestCreateBranchFromLatestOrigin verifies that CreateBranch bases the new
+// branch on the latest origin/master, even when the local repo is behind.
+func TestCreateBranchFromLatestOrigin(t *testing.T) {
+	repoDir := setupRepo(t)
+
+	env := []string{
+		"GIT_AUTHOR_NAME=test",
+		"GIT_AUTHOR_EMAIL=test@test.com",
+		"GIT_COMMITTER_NAME=test",
+		"GIT_COMMITTER_EMAIL=test@test.com",
+	}
+
+	// Record the current local master commit
+	localHead := func() string {
+		t.Helper()
+		cmd := exec.Command("git", "rev-parse", "HEAD")
+		cmd.Dir = repoDir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("rev-parse HEAD: %v\n%s", err, out)
+		}
+		return string(out[:len(out)-1])
+	}
+
+	oldCommit := localHead()
+
+	// Simulate another developer pushing a new commit to origin.
+	// We do this by cloning origin into a second working copy, committing,
+	// and pushing — so origin advances but our local repo doesn't know yet.
+	originURL := func() string {
+		t.Helper()
+		cmd := exec.Command("git", "remote", "get-url", "origin")
+		cmd.Dir = repoDir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("get-url origin: %v\n%s", err, out)
+		}
+		return string(out[:len(out)-1])
+	}()
+
+	otherClone := t.TempDir()
+	for _, args := range [][]string{
+		{"clone", originURL, "."},
+		{"commit", "--allow-empty", "-m", "remote advance"},
+		{"push", "origin", "master"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = otherClone
+		cmd.Env = append(os.Environ(), env...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("other clone git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Now CreateBranch in our original repo — it should fetch and base
+	// the new branch on the advanced origin/master, not the stale local one.
+	mgr := git.NewBranchManager(repoDir)
+	if err := mgr.CreateBranch("feature-fresh"); err != nil {
+		t.Fatalf("CreateBranch: %v", err)
+	}
+
+	if got := currentBranch(t, repoDir); got != "feature-fresh" {
+		t.Errorf("current branch = %q, want %q", got, "feature-fresh")
+	}
+
+	newCommit := localHead()
+	if newCommit == oldCommit {
+		t.Errorf("branch was created from stale local master (%s); expected latest origin commit", oldCommit)
 	}
 }
 
