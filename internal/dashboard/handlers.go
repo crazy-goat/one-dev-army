@@ -796,6 +796,26 @@ func (s *Server) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	// First, send all historical chat messages
+	chatMessages := task.GetChatMessages()
+	if len(chatMessages) > 0 {
+		historyJSON, _ := json.Marshal(map[string]any{
+			"history": chatMessages,
+		})
+		_, _ = fmt.Fprintf(w, "data: %s\n\n", historyJSON)
+		flusher.Flush()
+	}
+
 	opencodeURL := s.orchestrator.OpenCodeURL() + "/event"
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, opencodeURL, nil)
 	if err != nil {
@@ -811,16 +831,6 @@ func (s *Server) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "streaming not supported", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
 
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 256*1024), 256*1024)

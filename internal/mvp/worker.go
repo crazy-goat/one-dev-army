@@ -642,6 +642,9 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (appr
 		}
 	}
 
+	// Capture the prompt in chat history
+	task.AddChatMessage("user", prompt)
+
 	// Use router to select model for code category with high complexity (code review is important)
 	llmModel := w.cfg.Planning.LLM
 	if w.router != nil {
@@ -660,6 +663,9 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (appr
 
 	reviewJSON, _ := json.Marshal(result)
 	review = string(reviewJSON)
+
+	// Capture the response in chat history
+	task.AddChatMessage("assistant", review)
 
 	if w.store != nil && stepID > 0 {
 		_ = w.store.FinishStep(stepID, review)
@@ -746,6 +752,9 @@ func (w *Worker) llmStep(ctx context.Context, task *Task, stepName, prompt, llm 
 		}
 	}
 
+	// Capture the prompt in chat history
+	task.AddChatMessage("user", prompt)
+
 	model := opencode.ParseModelRef(llm)
 	msg, err := w.oc.SendMessage(session.ID, prompt, model, nil)
 	if err != nil {
@@ -756,6 +765,10 @@ func (w *Worker) llmStep(ctx context.Context, task *Task, stepName, prompt, llm 
 	}
 
 	response := extractText(msg)
+
+	// Capture the response in chat history
+	task.AddChatMessage("assistant", response)
+
 	if w.store != nil && stepID > 0 {
 		_ = w.store.FinishStep(stepID, response)
 	}

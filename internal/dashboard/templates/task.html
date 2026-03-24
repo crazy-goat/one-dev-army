@@ -85,23 +85,101 @@
   if (streamBoxes.length === 0) return;
   var box = streamBoxes[streamBoxes.length - 1];
   var es = new EventSource('/api/task/{{.IssueNumber}}/stream');
+  
+  // Track if we've received history to avoid duplicate rendering
+  var historyReceived = false;
+  
   es.onmessage = function(e) {
     var data = JSON.parse(e.data);
+    
+    // Handle completion
     if (data.done) {
       es.close();
       setTimeout(function(){ location.reload(); }, 1000);
       return;
     }
+    
+    // Handle historical messages (sent first)
+    if (data.history && Array.isArray(data.history)) {
+      if (!historyReceived) {
+        historyReceived = true;
+        // Clear any existing content first
+        box.innerHTML = '';
+        
+        // Render each historical message
+        data.history.forEach(function(msg) {
+          var roleClass = msg.role === 'user' ? 'user-message' : 'assistant-message';
+          var roleLabel = msg.role === 'user' ? 'User' : 'Assistant';
+          
+          var msgDiv = document.createElement('div');
+          msgDiv.className = 'chat-message ' + roleClass;
+          msgDiv.style.marginBottom = '0.5rem';
+          msgDiv.style.padding = '0.5rem';
+          msgDiv.style.borderRadius = '4px';
+          msgDiv.style.background = msg.role === 'user' ? 'rgba(52, 152, 219, 0.2)' : 'rgba(46, 204, 113, 0.2)';
+          msgDiv.style.borderLeft = '3px solid ' + (msg.role === 'user' ? '#3498db' : '#2ecc71');
+          
+          var label = document.createElement('div');
+          label.style.fontSize = '0.75rem';
+          label.style.fontWeight = 'bold';
+          label.style.color = msg.role === 'user' ? '#3498db' : '#2ecc71';
+          label.style.marginBottom = '0.25rem';
+          label.textContent = roleLabel;
+          msgDiv.appendChild(label);
+          
+          var content = document.createElement('div');
+          content.style.whiteSpace = 'pre-wrap';
+          content.style.wordBreak = 'break-word';
+          content.textContent = msg.content;
+          msgDiv.appendChild(content);
+          
+          box.appendChild(msgDiv);
+        });
+        
+        // Add a separator for new messages
+        var separator = document.createElement('div');
+        separator.style.textAlign = 'center';
+        separator.style.color = 'var(--muted)';
+        separator.style.fontSize = '0.75rem';
+        separator.style.margin = '0.5rem 0';
+        separator.style.borderTop = '1px solid var(--border)';
+        separator.style.paddingTop = '0.5rem';
+        separator.textContent = '--- Live ---';
+        box.appendChild(separator);
+        
+        box.scrollTop = box.scrollHeight;
+      }
+      return;
+    }
+    
+    // Handle live streaming delta
     if (data.delta) {
+      // Check if we already have a live content container
+      var liveContent = box.querySelector('.live-content');
+      if (!liveContent) {
+        liveContent = document.createElement('div');
+        liveContent.className = 'live-content';
+        liveContent.style.whiteSpace = 'pre-wrap';
+        liveContent.style.wordBreak = 'break-word';
+        box.appendChild(liveContent);
+      }
+      
+      // Remove cursor if present
       var cursor = box.querySelector('.stream-cursor');
       if (cursor) cursor.remove();
-      box.appendChild(document.createTextNode(data.delta));
-      box.scrollTop = box.scrollHeight;
+      
+      // Append the delta
+      liveContent.textContent += data.delta;
+      
+      // Re-add cursor
       var c = document.createElement('span');
       c.className = 'stream-cursor';
       box.appendChild(c);
+      
+      box.scrollTop = box.scrollHeight;
     }
   };
+  
   es.onerror = function() {
     es.close();
     setTimeout(function(){ location.reload(); }, 3000);
