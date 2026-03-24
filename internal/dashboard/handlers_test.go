@@ -1043,10 +1043,12 @@ func TestLayoutNavigationButtons(t *testing.T) {
 		Active       string
 		OpenCodePort int
 		WorkerCount  int
+		YoloMode     bool
 	}{
 		Active:       "board",
 		OpenCodePort: 8081,
 		WorkerCount:  1,
+		YoloMode:     false,
 	}
 
 	// We need to define a content template for the layout to work
@@ -4357,5 +4359,198 @@ func TestHandleSettingsTemplateData(t *testing.T) {
 	body := rec.Body.String()
 	if !strings.Contains(body, "stage1, stage2, stage3") && !strings.Contains(body, "stage1,stage2,stage3") {
 		t.Error("response should contain comma-separated force strong stages")
+	}
+}
+
+// TestBuildBoardData_YoloMode tests that YoloMode is correctly loaded from config
+func TestBuildBoardData_YoloMode(t *testing.T) {
+	// Create a temporary directory with config
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+
+	// Test with yolo_mode enabled
+	configContent := `yolo_mode: true
+`
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	srv := &Server{
+		tmpls:   make(map[string]*template.Template),
+		rootDir: tmpDir,
+	}
+
+	data := srv.buildBoardData(nil)
+
+	if !data.YoloMode {
+		t.Error("expected YoloMode to be true when enabled in config")
+	}
+
+	// Test with yolo_mode disabled
+	configContent = `yolo_mode: false
+`
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	data = srv.buildBoardData(nil)
+
+	if data.YoloMode {
+		t.Error("expected YoloMode to be false when disabled in config")
+	}
+
+	// Test with no config file (should default to false)
+	os.Remove(filepath.Join(configDir, "config.yaml"))
+	data = srv.buildBoardData(nil)
+
+	if data.YoloMode {
+		t.Error("expected YoloMode to be false when config file missing")
+	}
+}
+
+// TestBuildBoardData_YoloMode_NoRootDir tests that YoloMode defaults to false when rootDir is empty
+func TestBuildBoardData_YoloMode_NoRootDir(t *testing.T) {
+	srv := &Server{
+		tmpls: make(map[string]*template.Template),
+		// rootDir is empty
+	}
+
+	data := srv.buildBoardData(nil)
+
+	if data.YoloMode {
+		t.Error("expected YoloMode to be false when rootDir is empty")
+	}
+}
+
+// TestHandleTaskDetail_YoloMode tests that YoloMode is correctly passed to task detail template
+func TestHandleTaskDetail_YoloMode(t *testing.T) {
+	// Create a temporary directory with config
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+
+	// Test with yolo_mode enabled
+	configContent := `yolo_mode: true
+`
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/task/123", nil)
+	req.SetPathValue("id", "123")
+	rec := httptest.NewRecorder()
+
+	srv.handleTaskDetail(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify the response contains the YOLO mode indicator when enabled
+	body := rec.Body.String()
+	if !strings.Contains(body, "YOLO MODE") {
+		t.Error("task detail page should contain YOLO MODE indicator when yolo_mode is enabled")
+	}
+
+	// Test with yolo_mode disabled
+	configContent = `yolo_mode: false
+`
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/task/456", nil)
+	req.SetPathValue("id", "456")
+	rec = httptest.NewRecorder()
+
+	srv.handleTaskDetail(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify the response does NOT contain the YOLO mode indicator when disabled
+	body = rec.Body.String()
+	if strings.Contains(body, "YOLO MODE") {
+		t.Error("task detail page should NOT contain YOLO MODE indicator when yolo_mode is disabled")
+	}
+}
+
+// TestHandleBoard_YoloModeIndicator tests that YOLO mode indicator appears on board page
+func TestHandleBoard_YoloModeIndicator(t *testing.T) {
+	// Create a temporary directory with config
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+
+	// Test with yolo_mode enabled
+	configContent := `yolo_mode: true
+`
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleBoard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify YOLO mode indicator is present
+	if !strings.Contains(body, "YOLO MODE") {
+		t.Error("board page should contain YOLO MODE indicator when yolo_mode is enabled")
+	}
+	if !strings.Contains(body, "yolo-mode-container") {
+		t.Error("board page should contain yolo-mode-container CSS class")
+	}
+	if !strings.Contains(body, "⚡") {
+		t.Error("board page should contain YOLO mode icon (⚡)")
+	}
+
+	// Test with yolo_mode disabled
+	configContent = `yolo_mode: false
+`
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	rec = httptest.NewRecorder()
+
+	srv.handleBoard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body = rec.Body.String()
+
+	// Verify YOLO mode indicator is NOT present when disabled
+	// Check for the actual element id, not just the CSS class name which appears in styles
+	if strings.Contains(body, `id="yolo-mode-container"`) {
+		t.Error("board page should NOT contain yolo-mode-container element when yolo_mode is disabled")
+	}
+	if strings.Contains(body, ">YOLO MODE<") {
+		t.Error("board page should NOT contain YOLO MODE text when yolo_mode is disabled")
 	}
 }

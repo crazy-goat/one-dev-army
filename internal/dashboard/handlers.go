@@ -44,6 +44,7 @@ type boardData struct {
 	Processing     bool
 	CanCloseSprint bool
 	CurrentIssue   string
+	YoloMode       bool
 	Blocked        []taskCard
 	Backlog        []taskCard
 	Plan           []taskCard
@@ -70,11 +71,21 @@ func (s *Server) buildBoardData(_ *http.Request) boardData {
 	if s.pool != nil {
 		workerCount = len(s.pool())
 	}
+
+	// Load config to get yolo mode status
+	yoloMode := false
+	if s.rootDir != "" {
+		if cfg, err := config.Load(s.rootDir); err == nil {
+			yoloMode = cfg.YoloMode
+		}
+	}
+
 	data := boardData{
 		Active:       "board",
 		OpenCodePort: s.webPort,
 		WorkerCount:  workerCount,
 		Paused:       true,
+		YoloMode:     yoloMode,
 	}
 
 	if s.orchestrator != nil {
@@ -714,6 +725,7 @@ type taskDetailData struct {
 	Steps        []db.TaskStep
 	IsActive     bool
 	Status       string
+	YoloMode     bool
 }
 
 func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
@@ -758,6 +770,15 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 	if s.pool != nil {
 		workerCount = len(s.pool())
 	}
+
+	// Load config to get yolo mode status
+	yoloMode := false
+	if s.rootDir != "" {
+		if cfg, err := config.Load(s.rootDir); err == nil {
+			yoloMode = cfg.YoloMode
+		}
+	}
+
 	data := taskDetailData{
 		Active:       "task",
 		OpenCodePort: s.webPort,
@@ -767,6 +788,7 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 		Steps:        steps,
 		IsActive:     isActive,
 		Status:       status,
+		YoloMode:     yoloMode,
 	}
 	s.render(w, "task.html", data)
 }
