@@ -89,7 +89,6 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
   <span class="logo">ODA</span>
   <div class="links">
     <a href="/" {{if eq .Active "board"}}class="active"{{end}}>Sprint Board</a>
-    {{if gt .WorkerCount 1}}<a href="/workers" {{if eq .Active "workers"}}class="active"{{end}}>Workers</a>{{end}}
     <a href="/settings" {{if eq .Active "settings"}}class="active"{{end}}>Settings</a>
   </div>
   <div class="nav-actions">
