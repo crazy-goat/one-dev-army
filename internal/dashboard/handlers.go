@@ -1976,3 +1976,58 @@ func (s *Server) handleWorkerStatus(w http.ResponseWriter, _ *http.Request) {
 		log.Printf("[Dashboard] Error encoding JSON: %v", err)
 	}
 }
+
+// handleYoloToggle toggles the YOLO mode setting and returns an HTMX fragment
+func (s *Server) handleYoloToggle(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	if s.rootDir == "" {
+		http.Error(w, "root directory not configured", http.StatusInternalServerError)
+		return
+	}
+
+	// Load current config
+	cfg, err := config.Load(s.rootDir)
+	if err != nil {
+		log.Printf("[Dashboard] Error loading config for YOLO toggle: %v", err)
+		http.Error(w, "failed to load configuration", http.StatusInternalServerError)
+		return
+	}
+
+	// Toggle YOLO mode
+	cfg.YoloMode = !cfg.YoloMode
+
+	// Save config
+	if err := config.SaveConfig(s.rootDir, cfg); err != nil {
+		log.Printf("[Dashboard] Error saving config after YOLO toggle: %v", err)
+		http.Error(w, "failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[Dashboard] YOLO mode toggled to: %v", cfg.YoloMode)
+
+	// Return the updated toggle HTML fragment
+	if cfg.YoloMode {
+		_, _ = fmt.Fprint(w, `<div class="yolo-mode-container yolo-enabled" id="yolo-mode-container" hx-post="/api/yolo/toggle" hx-swap="outerHTML" title="Click to disable YOLO mode">
+  <span class="yolo-mode-icon">⚡</span>
+  <span>YOLO MODE</span>
+  <div class="yolo-mode-tooltip">
+    <div class="yolo-mode-tooltip-header">YOLO Mode Enabled</div>
+    <div class="yolo-mode-tooltip-content">
+      AI will auto-approve all changes without human review. Click to disable.
+    </div>
+  </div>
+</div>`)
+	} else {
+		_, _ = fmt.Fprint(w, `<div class="yolo-mode-container yolo-disabled" id="yolo-mode-container" hx-post="/api/yolo/toggle" hx-swap="outerHTML" title="Click to enable YOLO mode">
+  <span class="yolo-mode-icon">🔒</span>
+  <span>SAFE MODE</span>
+  <div class="yolo-mode-tooltip">
+    <div class="yolo-mode-tooltip-header">Safe Mode Enabled</div>
+    <div class="yolo-mode-tooltip-content">
+      All changes require manual approval. Click to enable YOLO mode (auto-approve).
+    </div>
+  </div>
+</div>`)
+	}
+}
