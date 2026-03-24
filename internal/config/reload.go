@@ -274,7 +274,14 @@ func (cp *ConfigPropagator) Propagate(cfg *Config) {
 }
 
 // Start begins periodic config propagation
+// If interval is 0, it only listens for stop signal (use with ReloadManager)
 func (cp *ConfigPropagator) Start(cfgProvider func() *Config) {
+	if cp.interval == 0 {
+		// No polling - just wait for stop signal (used with ReloadManager)
+		<-cp.stopCh
+		return
+	}
+
 	ticker := time.NewTicker(cp.interval)
 	defer ticker.Stop()
 

@@ -232,6 +232,14 @@ func runServe(dir string, debugWebSocket bool) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
+	// Create ReloadManager for dynamic config reloading
+	reloadManager := config.NewReloadManager(dir)
+	if _, err := reloadManager.LoadInitial(); err != nil {
+		return fmt.Errorf("loading initial config via reload manager: %w", err)
+	}
+	reloadManager.Start(5 * time.Second)
+	fmt.Println("  ✓ Config reload manager started (5s interval)")
+
 	dbPath := filepath.Join(dir, ".oda", "metrics.db")
 	store, err := db.Open(dbPath)
 	if err != nil {
@@ -350,12 +358,13 @@ func runServe(dir string, debugWebSocket bool) error {
 	orchestrator := mvp.NewOrchestrator(cfg, gh, oc, brMgr, store, hub, router)
 
 	// Create ConfigPropagator to propagate config changes to workers
-	configPropagator := config.NewConfigPropagator(5 * time.Second)
+	configPropagator := config.NewConfigPropagator(0) // No polling, uses ReloadManager
 	configPropagator.RegisterWorker(orchestrator.GetWorker())
-	go configPropagator.Start(func() *config.Config {
-		return cfg
+	// Register propagator with ReloadManager to only propagate when config actually changes
+	reloadManager.OnReload(func(cfg *config.Config) {
+		configPropagator.Propagate(cfg)
 	})
-	fmt.Println("  ✓ Config propagator started (5s interval)")
+	fmt.Println("  ✓ Config propagator registered (reload-triggered)")
 
 	// Auto-start sprint if configured
 	if cfg.Sprint.AutoStart {
