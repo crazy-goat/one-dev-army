@@ -1,6 +1,5 @@
 github:
     repo: crazy-goat/one-dev-army
-    use_projects: false
 dashboard:
     port: 8080
 workers:
@@ -16,17 +15,16 @@ pipeline:
     max_retries: 5
 sprint:
     tasks_per_sprint: 10
-yolo_mode: false
-
-# Multi-model LLM configuration with task-based routing
+    auto_start: false
 llm:
     setup:
-        model: nexos-ai/Kimi K2.5
+        model: '"Claude Haiku 4.5"'
     planning:
-        model: nexos-ai/Kimi K2.5
+        model: '"Claude Opus 4.6"'
     orchestration:
-        model: nexos-ai/Kimi K2.5
+        model: '"Kimi K2.5"'
     code:
         model: nexos-ai/Kimi K2.5
     code-heavy:
-        model: nexos-ai/Kimi K2.5
+        model: '"Claude Opus 4.6"'
+yolo_mode: true

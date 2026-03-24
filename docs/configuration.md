@@ -19,3 +19,4 @@ Config lives in `.oda/config.yaml`. Key sections:
 - `tools.test_cmd` — test command workers run after implementation
 - `llm.*` — per-mode model configuration with strong/weak variants
 - `pipeline.max_retries` — max retry attempts before escalating to user
+- `sprint.auto_start` — automatically start sprint on ODA startup (default: `false`)
