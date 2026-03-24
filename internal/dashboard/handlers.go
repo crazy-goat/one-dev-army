@@ -39,6 +39,7 @@ type taskCard struct {
 type boardData struct {
 	Active         string
 	OpenCodePort   int
+	WorkerCount    int
 	SprintName     string
 	Paused         bool
 	Processing     bool
@@ -66,9 +67,14 @@ func (s *Server) handleBoardData(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) buildBoardData(_ *http.Request) boardData {
+	workerCount := 0
+	if s.pool != nil {
+		workerCount = len(s.pool())
+	}
 	data := boardData{
 		Active:       "board",
 		OpenCodePort: s.webPort,
+		WorkerCount:  workerCount,
 		Paused:       true,
 	}
 
@@ -703,6 +709,7 @@ func (s *Server) handleSprintClose(w http.ResponseWriter, r *http.Request) {
 type taskDetailData struct {
 	Active       string
 	OpenCodePort int
+	WorkerCount  int
 	IssueNumber  int
 	IssueTitle   string
 	Steps        []db.TaskStep
@@ -748,9 +755,14 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 		issueTitle = fmt.Sprintf("Issue #%d", issueNum)
 	}
 
+	workerCount := 0
+	if s.pool != nil {
+		workerCount = len(s.pool())
+	}
 	data := taskDetailData{
 		Active:       "task",
 		OpenCodePort: s.webPort,
+		WorkerCount:  workerCount,
 		IssueNumber:  issueNum,
 		IssueTitle:   issueTitle,
 		Steps:        steps,
@@ -763,15 +775,20 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 type workersData struct {
 	Active       string
 	OpenCodePort int
+	WorkerCount  int
 	Workers      []worker.WorkerInfo
 }
 
 func (s *Server) handleWorkers(w http.ResponseWriter, _ *http.Request) {
-	workers := s.pool()
+	workers := []worker.WorkerInfo{}
+	if s.pool != nil {
+		workers = s.pool()
+	}
 
 	data := workersData{
 		Active:       "workers",
 		OpenCodePort: s.webPort,
+		WorkerCount:  len(workers),
 		Workers:      workers,
 	}
 	s.render(w, "workers.html", data)
@@ -1441,9 +1458,14 @@ func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	workerCount := 0
+	if s.pool != nil {
+		workerCount = len(s.pool())
+	}
 	data := struct {
 		Active             string
 		OpenCodePort       int
+		WorkerCount        int
 		Type               string
 		SessionID          string
 		CurrentStep        int
@@ -1453,6 +1475,7 @@ func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
 	}{
 		Active:             "wizard",
 		OpenCodePort:       s.webPort,
+		WorkerCount:        workerCount,
 		Type:               wizardType,
 		SessionID:          "",
 		CurrentStep:        1,
@@ -1703,6 +1726,7 @@ func (s *Server) handleRateLimitRefresh(w http.ResponseWriter, r *http.Request) 
 type settingsData struct {
 	Active            string
 	OpenCodePort      int
+	WorkerCount       int
 	Config            config.LLMConfig
 	ForceStrongStages string
 	Success           bool
@@ -1725,9 +1749,14 @@ func (s *Server) handleSettings(w http.ResponseWriter, _ *http.Request) {
 	// Build comma-separated list of forced strong stages
 	forceStrongStages := strings.Join(cfg.LLM.RoutingRules.ForceStrongForStages, ", ") //nolint:staticcheck // deprecated but kept for backward compatibility
 
+	workerCount := 0
+	if s.pool != nil {
+		workerCount = len(s.pool())
+	}
 	data := settingsData{
 		Active:            "settings",
 		OpenCodePort:      s.webPort,
+		WorkerCount:       workerCount,
 		Config:            cfg.LLM,
 		ForceStrongStages: forceStrongStages,
 		AvailableModels:   s.modelsCache,
@@ -1859,9 +1888,14 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	// Re-render with success message and any warnings
 	forceStrongStages := strings.Join(cfg.LLM.RoutingRules.ForceStrongForStages, ", ") //nolint:staticcheck // deprecated but kept for backward compatibility
+	workerCount := 0
+	if s.pool != nil {
+		workerCount = len(s.pool())
+	}
 	data := settingsData{
 		Active:            "settings",
 		OpenCodePort:      s.webPort,
+		WorkerCount:       workerCount,
 		Config:            cfg.LLM,
 		ForceStrongStages: forceStrongStages,
 		Success:           true,
@@ -1885,9 +1919,14 @@ func (s *Server) renderSettingsWithErrors(w http.ResponseWriter, r *http.Request
 	// This is a simplified approach - in production, you'd want to preserve all form values
 	forceStrongStages := r.FormValue("routing_force_strong_stages")
 
+	workerCount := 0
+	if s.pool != nil {
+		workerCount = len(s.pool())
+	}
 	data := settingsData{
 		Active:            "settings",
 		OpenCodePort:      s.webPort,
+		WorkerCount:       workerCount,
 		Config:            cfg.LLM,
 		ForceStrongStages: forceStrongStages,
 		Errors:            errors,
