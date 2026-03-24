@@ -88,7 +88,7 @@ func TestHubRegisterUnregister(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Wait for registration using polling
 	waitForClientCount(t, hub, 1, time.Second)
@@ -98,7 +98,7 @@ func TestHubRegisterUnregister(t *testing.T) {
 	}
 
 	// Close connection to trigger unregistration
-	conn.Close()
+	_ = conn.Close()
 
 	// Wait for unregistration using polling
 	waitForClientCount(t, hub, 0, time.Second)
@@ -128,7 +128,7 @@ func TestHubBroadcast(t *testing.T) {
 			t.Fatalf("Failed to connect client %d: %v", i, err)
 		}
 		conns = append(conns, conn)
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 	}
 
 	// Wait for registration using polling
@@ -143,7 +143,7 @@ func TestHubBroadcast(t *testing.T) {
 
 	// Verify all clients received the message
 	for i, conn := range conns {
-		conn.SetReadDeadline(time.Now().Add(time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(time.Second))
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
 			t.Errorf("Client %d failed to receive message: %v", i, err)
@@ -172,7 +172,7 @@ func TestHubBroadcastIssueUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Wait for registration using polling
 	waitForClientCount(t, hub, 1, time.Second)
@@ -186,7 +186,7 @@ func TestHubBroadcastIssueUpdate(t *testing.T) {
 	hub.BroadcastIssueUpdate(issue)
 
 	// Verify client received the message
-	conn.SetReadDeadline(time.Now().Add(time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(time.Second))
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatalf("Failed to receive message: %v", err)
@@ -234,7 +234,7 @@ func TestHubBroadcastSyncComplete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Wait for registration using polling
 	waitForClientCount(t, hub, 1, time.Second)
@@ -243,7 +243,7 @@ func TestHubBroadcastSyncComplete(t *testing.T) {
 	hub.BroadcastSyncComplete(10)
 
 	// Verify client received the message
-	conn.SetReadDeadline(time.Now().Add(time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(time.Second))
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatalf("Failed to receive message: %v", err)
@@ -285,7 +285,7 @@ func TestHubBroadcastWorkerUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Wait for registration using polling
 	waitForClientCount(t, hub, 1, time.Second)
@@ -294,7 +294,7 @@ func TestHubBroadcastWorkerUpdate(t *testing.T) {
 	hub.BroadcastWorkerUpdate("worker-1", "processing", 42, "Test Issue", "Code", 120)
 
 	// Verify client received the message
-	conn.SetReadDeadline(time.Now().Add(time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(time.Second))
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatalf("Failed to receive message: %v", err)
@@ -388,14 +388,12 @@ func TestHubConnectionLimit(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
 
 	// Connect clients up to the limit
-	var conns []*websocket.Conn
 	for i := 0; i < 2; i++ {
 		conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 		if err != nil {
 			t.Fatalf("Failed to connect client %d: %v", i, err)
 		}
-		conns = append(conns, conn)
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 	}
 
 	// Wait for registration using polling
@@ -409,7 +407,7 @@ func TestHubConnectionLimit(t *testing.T) {
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err == nil {
 		// If connection succeeded, it should be closed immediately
-		conn.Close()
+		_ = conn.Close()
 	}
 
 	// Wait a bit for any rejection to process using polling
@@ -470,7 +468,7 @@ func TestHubConcurrentClients(t *testing.T) {
 	// Close all connections
 	for _, conn := range conns {
 		if conn != nil {
-			conn.Close()
+			_ = conn.Close()
 		}
 	}
 
@@ -523,7 +521,7 @@ func TestHubStop(t *testing.T) {
 
 	// Verify connections are closed
 	for i, conn := range conns {
-		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		_ = conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		_, _, err := conn.ReadMessage()
 		if err == nil {
 			t.Errorf("Client %d connection should be closed", i)
@@ -620,7 +618,7 @@ func TestClientPingPong(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Wait for registration using polling
 	waitForClientCount(t, hub, 1, time.Second)
@@ -633,7 +631,7 @@ func TestClientPingPong(t *testing.T) {
 	}
 
 	// Wait for pong response
-	conn.SetReadDeadline(time.Now().Add(time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(time.Second))
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatalf("Failed to receive pong: %v", err)

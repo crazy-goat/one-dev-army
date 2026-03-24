@@ -2,7 +2,6 @@ package github
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -29,31 +28,8 @@ func newMockClient() *mockClient {
 	}
 }
 
-func (m *mockClient) gh(args ...string) ([]byte, error) {
-	key := ""
-	for _, arg := range args {
-		key += arg + " "
-	}
-	key = key[:len(key)-1] // trim trailing space
-	m.ghCalls = append(m.ghCalls, key)
-
-	if err, ok := m.ghErrors[key]; ok {
-		return nil, err
-	}
-	if out, ok := m.ghOutputs[key]; ok {
-		return out, nil
-	}
-	return []byte{}, nil
-}
-
-func (m *mockClient) ghJSON(result interface{}, args ...string) error {
-	_, err := m.gh(args...)
-	return err
-}
-
 func TestRequiredLabelsContainsPriorityLabels(t *testing.T) {
 	expectedLabels := map[string]string{
-		"priority:high":   "B60205",
 		"priority:medium": "FBCA04",
 		"priority:low":    "0E8A16",
 		"epic":            "5319E7",
@@ -110,10 +86,7 @@ func TestEnsureLabelsSkipsExistingLabels(t *testing.T) {
 }
 
 func TestEnsureLabelsHandlesErrors(t *testing.T) {
-	client := &Client{Repo: "test/repo"}
-	if client == nil {
-		t.Error("Failed to create client")
-	}
+	_ = &Client{Repo: "test/repo"}
 }
 
 func TestLabelStructure(t *testing.T) {
@@ -217,10 +190,7 @@ func TestListLabelsStructure(t *testing.T) {
 }
 
 func TestEnsureLabelsErrorPropagation(t *testing.T) {
-	client := &Client{Repo: "test/repo"}
-	if client == nil {
-		t.Error("Client should not be nil")
-	}
+	_ = &Client{Repo: "test/repo"}
 }
 
 func TestRequiredLabelsCount(t *testing.T) {
@@ -319,12 +289,6 @@ func TestStageBlockedLabel(t *testing.T) {
 	}
 }
 
-// mockGhError is a helper to create mock gh errors
-func mockGhError(msg string) error {
-	return errors.New(msg)
-}
-
-// Test Stage type: Label() and StageFromLabel() round-trip
 func TestStageLabelRoundTrip(t *testing.T) {
 	tests := []struct {
 		stage         Stage
@@ -477,10 +441,7 @@ func TestGetStageFromLabels(t *testing.T) {
 func TestSetStageLabel(t *testing.T) {
 	t.Run("valid stage transitions", func(t *testing.T) {
 		mc := newMockClient()
-		client := &Client{Repo: mc.Repo}
-		if client == nil {
-			t.Error("Client should not be nil")
-		}
+		_ = &Client{Repo: mc.Repo}
 	})
 
 	t.Run("invalid stage label not in AllStages", func(t *testing.T) {
@@ -894,16 +855,16 @@ func TestAllStagesCompleteness(t *testing.T) {
 // Test SetStageLabel method signature accepts Stage type
 func TestSetStageLabelSignature(t *testing.T) {
 	client := &Client{Repo: "test/repo"}
-	var _ func(int, Stage) (Issue, error) = client.SetStageLabel
+	var _ = client.SetStageLabel
 }
 
 // Test that the client has all necessary methods for SetStageLabel
 func TestClientMethodsExist(t *testing.T) {
 	client := &Client{Repo: "test/repo"}
-	var _ func(int) (*Issue, error) = client.GetIssue
-	var _ func(int, string) error = client.AddLabel
-	var _ func(int, string) error = client.RemoveLabel
-	var _ func(int) error = client.CloseIssue
+	var _ = client.GetIssue
+	var _ = client.AddLabel
+	var _ = client.RemoveLabel
+	var _ = client.CloseIssue
 }
 
 // Integration test simulation

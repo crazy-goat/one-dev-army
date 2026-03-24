@@ -120,11 +120,12 @@ func runServe(dir string, debugWebSocket bool) error {
 	fmt.Println("Running preflight checks...")
 	results := preflight.RunAll(dir, opencodeURL, func(name string, index, total int, status string) {
 		desc := preflight.GetCheckDescription(name)
-		if status == "running" {
+		switch status {
+		case "running":
 			fmt.Printf("  [%d/%d] → %s — %s\n", index, total, name, desc)
-		} else if status == "ok" {
+		case "ok":
 			fmt.Printf("  [%d/%d] ✓ %s\n", index, total, name)
-		} else {
+		default:
 			fmt.Printf("  [%d/%d] ✗ %s\n", index, total, name)
 		}
 	})
@@ -161,11 +162,12 @@ func runServe(dir string, debugWebSocket bool) error {
 			// Re-run preflight now that opencode is up.
 			results = preflight.RunAll(dir, opencodeURL, func(name string, index, total int, status string) {
 				desc := preflight.GetCheckDescription(name)
-				if status == "running" {
+				switch status {
+				case "running":
 					fmt.Printf("  [%d/%d] → %s — %s\n", index, total, name, desc)
-				} else if status == "ok" {
+				case "ok":
 					fmt.Printf("  [%d/%d] ✓ %s\n", index, total, name)
-				} else {
+				default:
 					fmt.Printf("  [%d/%d] ✗ %s\n", index, total, name)
 				}
 			})
@@ -196,7 +198,7 @@ func runServe(dir string, debugWebSocket bool) error {
 	if err != nil {
 		return fmt.Errorf("opening database: %w", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	oc := opencode.NewClient(cfg.OpenCode.URL)
 	oc.SetDirectory(dir)

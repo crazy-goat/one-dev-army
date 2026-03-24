@@ -88,7 +88,7 @@ func CheckOpencodeInstalled() error {
 	return nil
 }
 
-func CheckOpencode(url string) error {
+func CheckOpencode(url string) (err error) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(url + "/global/health")
 	if err != nil {
@@ -97,7 +97,11 @@ func CheckOpencode(url string) error {
 			url, opencodeInstallInstructions(),
 		)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing response body: %w", cerr)
+		}
+	}()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf(
 			"opencode health check returned status %d at %s\n\n"+
@@ -108,13 +112,17 @@ func CheckOpencode(url string) error {
 	return nil
 }
 
-func CheckOpencodeDirectory(opencodeURL, projectDir string) error {
+func CheckOpencodeDirectory(opencodeURL, projectDir string) (err error) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(opencodeURL + "/path")
 	if err != nil {
 		return nil // opencode not running, CheckOpencode will catch it
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing response body: %w", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil // endpoint might not exist in older versions

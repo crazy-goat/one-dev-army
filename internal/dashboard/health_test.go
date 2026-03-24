@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,35 +33,38 @@ func TestNewHealthChecker(t *testing.T) {
 }
 
 func TestHealthChecker_Check_Success(t *testing.T) {
-	// Create a test server that returns 200 OK
+	// Create a test server that returns 200 OK on /health
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"status":"healthy"}`))
+			_, _ = w.Write([]byte(`{"status":"healthy"}`))
 		} else {
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	defer server.Close()
 
-	// Extract port from server URL
-	port := 8080
-	hc := NewHealthChecker(port, 30*time.Second)
-
-	// Override the client to use the test server
-	hc.client = server.Client()
-
-	// This will fail because we're not actually listening on port 8080
-	// But we can test the logic by checking IsHealthy is updated
-	result := hc.Check()
-
-	// Should be false since no server is running on port 8080
-	if result {
-		t.Error("expected Check to return false when server is not running")
+	// Extract the actual port from the test server URL
+	// server.URL is like "http://127.0.0.1:PORT"
+	var port int
+	if _, err := fmt.Sscanf(server.URL, "http://127.0.0.1:%d", &port); err != nil {
+		t.Logf("failed to parse port from URL %s: %v", server.URL, err)
+	}
+	if port == 0 {
+		t.Fatalf("failed to extract port from test server URL: %s", server.URL)
 	}
 
-	if hc.IsHealthy() {
-		t.Error("expected IsHealthy to be false after failed check")
+	hc := NewHealthChecker(port, 30*time.Second)
+
+	// Check should succeed since the test server is running
+	result := hc.Check()
+
+	if !result {
+		t.Error("expected Check to return true when server is running")
+	}
+
+	if !hc.IsHealthy() {
+		t.Error("expected IsHealthy to be true after successful check")
 	}
 }
 

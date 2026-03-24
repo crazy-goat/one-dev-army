@@ -73,8 +73,8 @@ func (c *Client) EnsureProject(name string) (Project, error) {
 func (c *Client) setupProject(projectNumber int) {
 	owner := strings.Split(c.Repo, "/")[0]
 	num := fmt.Sprintf("%d", projectNumber)
-	c.ghNoRepo("project", "link", num, "--owner", owner, "--repo", c.Repo)
-	c.ghNoRepo("project", "edit", num, "--owner", owner, "--visibility", "PUBLIC")
+	_, _ = c.ghNoRepo("project", "link", num, "--owner", owner, "--repo", c.Repo)
+	_, _ = c.ghNoRepo("project", "edit", num, "--owner", owner, "--visibility", "PUBLIC")
 }
 
 type fieldOption struct {
@@ -272,7 +272,9 @@ func (c *Client) MoveItemToColumn(projectNumber int, issueNumber int, column str
 		ID string `json:"id"`
 	}
 	if out != nil {
-		json.Unmarshal(out, &addResult)
+		if err := json.Unmarshal(out, &addResult); err != nil {
+			log.Printf("[GitHub] Error unmarshaling add result: %v", err)
+		}
 	}
 
 	itemID := addResult.ID
@@ -380,5 +382,5 @@ func (c *Client) refreshStatusOptionIDs(projectNumber int, owner string) error {
 		}
 	}
 
-	return fmt.Errorf("Status field not found after update")
+	return fmt.Errorf("status field not found after update")
 }

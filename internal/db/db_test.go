@@ -19,7 +19,7 @@ func openTestStore(t *testing.T) *db.Store {
 	if err != nil {
 		t.Fatalf("opening store: %v", err)
 	}
-	t.Cleanup(func() { store.Close() })
+	t.Cleanup(func() { _ = store.Close() })
 	return store
 }
 
@@ -29,13 +29,13 @@ func TestOpen_Migrate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first open: %v", err)
 	}
-	store.Close()
+	_ = store.Close()
 
 	store, err = db.Open(path)
 	if err != nil {
 		t.Fatalf("second open (idempotent migration): %v", err)
 	}
-	store.Close()
+	_ = store.Close()
 }
 
 func TestSaveAndGetTaskMetrics(t *testing.T) {

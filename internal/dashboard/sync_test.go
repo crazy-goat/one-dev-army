@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,17 +11,23 @@ import (
 
 // mockGitHubClient is a test double for GitHubClient interface
 type mockGitHubClient struct {
+	mu        sync.Mutex
 	issues    []github.Issue
 	listErr   error
 	milestone string
 }
 
 func (m *mockGitHubClient) ListIssuesWithPRStatus(milestone string) ([]github.Issue, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.milestone = milestone
 	if m.listErr != nil {
 		return nil, m.listErr
 	}
-	return m.issues, nil
+	// Return a copy to avoid races on the slice
+	result := make([]github.Issue, len(m.issues))
+	copy(result, m.issues)
+	return result, nil
 }
 
 func (m *mockGitHubClient) AddLabel(issueNum int, label string) error {
@@ -29,16 +36,35 @@ func (m *mockGitHubClient) AddLabel(issueNum int, label string) error {
 
 // mockStore is a test double for Store interface
 type mockStore struct {
+	mu           sync.Mutex
 	cachedIssues []github.Issue
 	saveErr      error
 }
 
 func (m *mockStore) SaveIssueCache(issue github.Issue, milestone string, force bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.saveErr != nil {
 		return m.saveErr
 	}
 	m.cachedIssues = append(m.cachedIssues, issue)
 	return nil
+}
+
+// getCachedIssues returns a thread-safe copy of cached issues
+func (m *mockStore) getCachedIssues() []github.Issue {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([]github.Issue, len(m.cachedIssues))
+	copy(result, m.cachedIssues)
+	return result
+}
+
+// clearCachedIssues clears cached issues in a thread-safe manner
+func (m *mockStore) clearCachedIssues() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cachedIssues = nil
 }
 
 func TestNewSyncService(t *testing.T) {
@@ -95,18 +121,16 @@ func TestSyncService_StartStop(t *testing.T) {
 		t.Error("Service should be running after Start()")
 	}
 
-	// Give it time to perform initial sync
-	time.Sleep(100 * time.Millisecond)
-
-	// Stop the service
+	// Stop the service (waits for ongoing sync to complete via wg.Wait)
 	service.Stop()
 	if service.IsRunning() {
 		t.Error("Service should not be running after Stop()")
 	}
 
-	// Verify issues were cached during initial sync
-	if len(store.cachedIssues) != 1 {
-		t.Errorf("Expected 1 cached issue, got %d", len(store.cachedIssues))
+	// Verify issues were cached during initial sync (safe after Stop returns)
+	cached := store.getCachedIssues()
+	if len(cached) != 1 {
+		t.Errorf("Expected 1 cached issue, got %d", len(cached))
 	}
 }
 
@@ -248,11 +272,11 @@ func TestSyncService_SyncNow_ManualTrigger(t *testing.T) {
 	service.Start()
 	defer service.Stop()
 
-	// Give initial sync time to complete
-	time.Sleep(50 * time.Millisecond)
+	// Wait for initial sync to complete using WaitGroup
+	service.wg.Wait()
 
-	// Clear the store to test manual sync specifically
-	store.cachedIssues = nil
+	// Clear the store to test manual sync specifically (thread-safe)
+	store.clearCachedIssues()
 
 	// Trigger manual sync
 	err := service.SyncNow()
@@ -260,11 +284,12 @@ func TestSyncService_SyncNow_ManualTrigger(t *testing.T) {
 		t.Errorf("SyncNow() should not error when service is running, got: %v", err)
 	}
 
-	// Give it time to complete
-	time.Sleep(100 * time.Millisecond)
+	// Wait for the manual sync goroutine to complete
+	service.wg.Wait()
 
-	if len(store.cachedIssues) != 1 {
-		t.Errorf("Expected 1 cached issue after manual sync, got %d", len(store.cachedIssues))
+	cached := store.getCachedIssues()
+	if len(cached) != 1 {
+		t.Errorf("Expected 1 cached issue after manual sync, got %d", len(cached))
 	}
 }
 

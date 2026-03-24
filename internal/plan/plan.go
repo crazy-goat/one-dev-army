@@ -33,10 +33,10 @@ type Step struct {
 func (p *Plan) ToMarkdown() string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("# Implementation Plan for Issue #%d\n\n", p.IssueNumber))
-	sb.WriteString(fmt.Sprintf("**Created:** %s\n", p.CreatedAt.Format(time.RFC3339)))
+	fmt.Fprintf(&sb, "# Implementation Plan for Issue #%d\n\n", p.IssueNumber)
+	fmt.Fprintf(&sb, "**Created:** %s\n", p.CreatedAt.Format(time.RFC3339))
 	if !p.UpdatedAt.IsZero() && p.UpdatedAt != p.CreatedAt {
-		sb.WriteString(fmt.Sprintf("**Updated:** %s\n", p.UpdatedAt.Format(time.RFC3339)))
+		fmt.Fprintf(&sb, "**Updated:** %s\n", p.UpdatedAt.Format(time.RFC3339))
 	}
 	sb.WriteString("\n")
 
@@ -49,11 +49,11 @@ func (p *Plan) ToMarkdown() string {
 	if len(p.ImplementationSteps) > 0 {
 		sb.WriteString("## Implementation Steps\n\n")
 		for _, step := range p.ImplementationSteps {
-			sb.WriteString(fmt.Sprintf("### Step %d: %s\n\n", step.Order, step.Description))
+			fmt.Fprintf(&sb, "### Step %d: %s\n\n", step.Order, step.Description)
 			if len(step.Files) > 0 {
 				sb.WriteString("**Files:**\n")
 				for _, file := range step.Files {
-					sb.WriteString(fmt.Sprintf("- `%s`\n", file))
+					fmt.Fprintf(&sb, "- `%s`\n", file)
 				}
 				sb.WriteString("\n")
 			}
@@ -67,7 +67,7 @@ func (p *Plan) ToMarkdown() string {
 	if len(p.TestPlan) > 0 {
 		sb.WriteString("## Test Plan\n\n")
 		for _, test := range p.TestPlan {
-			sb.WriteString(fmt.Sprintf("- [ ] %s\n", test))
+			fmt.Fprintf(&sb, "- [ ] %s\n", test)
 		}
 		sb.WriteString("\n")
 	}
@@ -92,7 +92,8 @@ func ParseFromMarkdown(content string) (*Plan, error) {
 	// Extract issue number from title
 	titleRe := regexp.MustCompile(`# Implementation Plan for Issue #(\d+)`)
 	if matches := titleRe.FindStringSubmatch(content); len(matches) > 1 {
-		fmt.Sscanf(matches[1], "%d", &plan.IssueNumber)
+		// Ignore error; IssueNumber will remain 0 if parsing fails
+		_, _ = fmt.Sscanf(matches[1], "%d", &plan.IssueNumber)
 	}
 
 	// Extract created date
@@ -127,7 +128,8 @@ func ParseFromMarkdown(content string) (*Plan, error) {
 			desc := content[match[4]:match[5]]
 
 			var order int
-			fmt.Sscanf(orderStr, "%d", &order)
+			// Ignore error; order will remain 0 if parsing fails
+			_, _ = fmt.Sscanf(orderStr, "%d", &order)
 
 			step := Step{
 				Order:       order,

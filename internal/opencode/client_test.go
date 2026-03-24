@@ -23,7 +23,7 @@ func TestHealthCheck(t *testing.T) {
 			t.Errorf("method = %q, want GET", r.Method)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]bool{"healthy": true})
+		_ = json.NewEncoder(w).Encode(map[string]bool{"healthy": true})
 	}))
 	defer srv.Close()
 
@@ -36,7 +36,7 @@ func TestHealthCheck(t *testing.T) {
 func TestHealthCheckUnhealthy(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]bool{"healthy": false})
+		_ = json.NewEncoder(w).Encode(map[string]bool{"healthy": false})
 	}))
 	defer srv.Close()
 
@@ -83,7 +83,7 @@ func TestCreateSession(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(opencode.Session{
+		_ = json.NewEncoder(w).Encode(opencode.Session{
 			ID:    "sess-123",
 			Title: "test-session",
 		})
@@ -116,7 +116,7 @@ func TestSendMessage(t *testing.T) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.Header().Set("Cache-Control", "no-cache")
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
 			flusher.Flush()
 			<-r.Context().Done()
 			return
@@ -124,7 +124,7 @@ func TestSendMessage(t *testing.T) {
 
 		if r.URL.Path == "/session/sess-123/prompt_async" && r.Method == http.MethodPost {
 			body, _ := io.ReadAll(r.Body)
-			json.Unmarshal(body, &receivedReq)
+			_ = json.Unmarshal(body, &receivedReq)
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -143,7 +143,7 @@ func TestSendMessage(t *testing.T) {
 		cancel()
 	}()
 
-	client.SendMessageStream(ctx, "sess-123", "hello world", opencode.ModelRef{ProviderID: "anthropic", ModelID: "claude-sonnet-4"}, nil)
+	_, _ = client.SendMessageStream(ctx, "sess-123", "hello world", opencode.ModelRef{ProviderID: "anthropic", ModelID: "claude-sonnet-4"}, nil)
 
 	if len(receivedReq.Parts) != 1 {
 		t.Fatalf("parts length = %d, want 1", len(receivedReq.Parts))
@@ -234,7 +234,7 @@ func TestGetMessages(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]opencode.Message{
+		_ = json.NewEncoder(w).Encode([]opencode.Message{
 			{
 				Info:  opencode.MessageInfo{ID: "msg-1", SessionID: "sess-123", Role: "user"},
 				Parts: []opencode.Part{{Type: "text", Text: "hello"}},
@@ -269,7 +269,7 @@ func TestGetMessages(t *testing.T) {
 func TestSendMessageServerError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("internal error"))
+		_, _ = w.Write([]byte("internal error"))
 	}))
 	defer srv.Close()
 
@@ -283,7 +283,7 @@ func TestSendMessageServerError(t *testing.T) {
 func TestCreateSessionServerError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("bad request"))
+		_, _ = w.Write([]byte("bad request"))
 	}))
 	defer srv.Close()
 
@@ -337,27 +337,27 @@ func TestSendMessageStream_WithToolCalls(t *testing.T) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.Header().Set("Cache-Control", "no-cache")
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
 			flusher.Flush()
 
 			time.Sleep(50 * time.Millisecond)
 
-			fmt.Fprintf(w, "data: %s\n\n", `{"type":"message.updated","properties":{"info":{"id":"msg-1","sessionID":"sess-123","role":"assistant"}}}`)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"message.updated","properties":{"info":{"id":"msg-1","sessionID":"sess-123","role":"assistant"}}}`)
 			flusher.Flush()
 
-			fmt.Fprintf(w, "data: %s\n\n", `{"type":"message.part.delta","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-1","field":"text","delta":"I'll help you with that."}}`)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"message.part.delta","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-1","field":"text","delta":"I'll help you with that."}}`)
 			flusher.Flush()
 
-			fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_call.started","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-2","toolCall":{"id":"call-1","name":"Bash"}}}`)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_call.started","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-2","toolCall":{"id":"call-1","name":"Bash"}}}`)
 			flusher.Flush()
 
-			fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_call.completed","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-2","toolCall":{"id":"call-1","name":"Bash","arguments":{"command":"ls -la"}}}}`)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_call.completed","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-2","toolCall":{"id":"call-1","name":"Bash","arguments":{"command":"ls -la"}}}}`)
 			flusher.Flush()
 
-			fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_result","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-3","toolResult":{"id":"call-1","output":"total 32\ndrwxr-xr-x  5 user user 4096 Jan 1 12:00 .\n"}}}`)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_result","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-3","toolResult":{"id":"call-1","output":"total 32\ndrwxr-xr-x  5 user user 4096 Jan 1 12:00 .\n"}}}`)
 			flusher.Flush()
 
-			fmt.Fprintf(w, "data: %s\n\n", `{"type":"session.status","properties":{"sessionID":"sess-123","status":{"type":"idle"}}}`)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"session.status","properties":{"sessionID":"sess-123","status":{"type":"idle"}}}`)
 			flusher.Flush()
 
 			<-r.Context().Done()
@@ -366,7 +366,7 @@ func TestSendMessageStream_WithToolCalls(t *testing.T) {
 
 		if r.URL.Path == "/session/sess-123/prompt_async" && r.Method == http.MethodPost {
 			body, _ := io.ReadAll(r.Body)
-			json.Unmarshal(body, &receivedReq)
+			_ = json.Unmarshal(body, &receivedReq)
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}

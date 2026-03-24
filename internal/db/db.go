@@ -67,13 +67,13 @@ func Open(path string) (*Store, error) {
 	}
 	for _, p := range pragmas {
 		if _, err := db.Exec(p); err != nil {
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("setting pragma %q: %w", p, err)
 		}
 	}
 
 	if err := migrate(db); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("running migrations: %w", err)
 	}
 
@@ -195,7 +195,7 @@ func (s *Store) SaveStageMetric(m StageMetric) error {
 	})
 }
 
-func (s *Store) GetTaskMetrics(taskID int) ([]StageMetric, error) {
+func (s *Store) GetTaskMetrics(taskID int) (metrics []StageMetric, err error) {
 	rows, err := s.db.Query(
 		`SELECT id, task_id, sprint_id, stage, llm, tokens_in, tokens_out, cost_usd, duration_s, retries
 		 FROM stage_metrics WHERE task_id = ? ORDER BY id`, taskID,
@@ -203,9 +203,12 @@ func (s *Store) GetTaskMetrics(taskID int) ([]StageMetric, error) {
 	if err != nil {
 		return nil, fmt.Errorf("querying task metrics: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if cerr := rows.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing rows: %w", cerr)
+		}
+	}()
 
-	var metrics []StageMetric
 	for rows.Next() {
 		var m StageMetric
 		if err := rows.Scan(&m.ID, &m.TaskID, &m.SprintID, &m.Stage, &m.LLM, &m.TokensIn, &m.TokensOut, &m.CostUSD, &m.DurationS, &m.Retries); err != nil {
@@ -294,7 +297,7 @@ func (s *Store) FailStep(id int64, errMsg string) error {
 	})
 }
 
-func (s *Store) GetSteps(issueNumber int) ([]TaskStep, error) {
+func (s *Store) GetSteps(issueNumber int) (steps []TaskStep, err error) {
 	rows, err := s.db.Query(
 		`SELECT id, issue_number, step_name, status, prompt, response, error_msg, session_id, plan_attachment_url, started_at, finished_at
 		 FROM task_steps WHERE issue_number = ? ORDER BY id`, issueNumber,
@@ -302,9 +305,12 @@ func (s *Store) GetSteps(issueNumber int) ([]TaskStep, error) {
 	if err != nil {
 		return nil, fmt.Errorf("querying task steps: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if cerr := rows.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing rows: %w", cerr)
+		}
+	}()
 
-	var steps []TaskStep
 	for rows.Next() {
 		var st TaskStep
 		if err := rows.Scan(&st.ID, &st.IssueNumber, &st.StepName, &st.Status, &st.Prompt, &st.Response, &st.ErrorMsg, &st.SessionID, &st.PlanAttachmentURL, &st.StartedAt, &st.FinishedAt); err != nil {
@@ -566,7 +572,11 @@ func (s *Store) GetIssuesCacheByMilestone(milestone string) ([]github.Issue, err
 	if err != nil {
 		return nil, fmt.Errorf("querying issues by milestone: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if cerr := rows.Close(); cerr != nil {
+			log.Printf("[DB] Error closing rows: %v", cerr)
+		}
+	}()
 
 	return s.scanIssues(rows)
 }
@@ -581,7 +591,11 @@ func (s *Store) GetOpenIssuesCacheByMilestone(milestone string) ([]github.Issue,
 	if err != nil {
 		return nil, fmt.Errorf("querying open issues by milestone: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if cerr := rows.Close(); cerr != nil {
+			log.Printf("[DB] Error closing rows: %v", cerr)
+		}
+	}()
 
 	return s.scanIssues(rows)
 }
@@ -595,7 +609,11 @@ func (s *Store) GetAllCachedIssues() ([]github.Issue, error) {
 	if err != nil {
 		return nil, fmt.Errorf("querying all cached issues: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if cerr := rows.Close(); cerr != nil {
+			log.Printf("[DB] Error closing rows: %v", cerr)
+		}
+	}()
 
 	return s.scanIssues(rows)
 }
@@ -681,7 +699,7 @@ func (s *Store) SaveStageChange(issueNumber int, fromStage, toStage, reason, cha
 }
 
 // GetStageChanges returns all stage changes for an issue
-func (s *Store) GetStageChanges(issueNumber int) ([]StageChange, error) {
+func (s *Store) GetStageChanges(issueNumber int) (changes []StageChange, err error) {
 	rows, err := s.db.Query(
 		`SELECT id, issue_number, from_stage, to_stage, reason, changed_by, changed_at
 		 FROM stage_change_ledger WHERE issue_number = ? ORDER BY changed_at DESC`,
@@ -690,9 +708,12 @@ func (s *Store) GetStageChanges(issueNumber int) ([]StageChange, error) {
 	if err != nil {
 		return nil, fmt.Errorf("querying stage changes: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if cerr := rows.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing rows: %w", cerr)
+		}
+	}()
 
-	var changes []StageChange
 	for rows.Next() {
 		var c StageChange
 		if err := rows.Scan(&c.ID, &c.IssueNumber, &c.FromStage, &c.ToStage, &c.Reason, &c.ChangedBy, &c.ChangedAt); err != nil {

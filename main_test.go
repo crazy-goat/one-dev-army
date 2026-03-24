@@ -12,7 +12,7 @@ func TestWorkingDirFlag_ValidDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Test that a valid directory is accepted
 	absDir, err := filepath.Abs(tempDir)
@@ -77,8 +77,8 @@ func TestWorkingDirFlag_NotADirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tempFile.Name())
-	tempFile.Close()
+	defer func() { _ = os.Remove(tempFile.Name()) }()
+	_ = tempFile.Close()
 
 	// Test that the path exists but is not a directory
 	info, err := os.Stat(tempFile.Name())
@@ -97,14 +97,14 @@ func TestWorkingDirFlag_AbsolutePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Change to a different directory
 	originalDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get current directory: %v", err)
 	}
-	defer os.Chdir(originalDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 
 	// Create a subdirectory
 	subDir := filepath.Join(tempDir, "subdir")
@@ -142,7 +142,7 @@ func TestRunInit_WithDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Initialize a git repo in the temp directory
 	if err := os.Chdir(tempDir); err != nil {

@@ -136,7 +136,7 @@ func formatTaskBody(task TaskSpec) string {
 	if len(task.Dependencies) > 0 {
 		b.WriteString("\n## Dependencies\n\n")
 		for _, dep := range task.Dependencies {
-			b.WriteString(fmt.Sprintf("- Task %d\n", dep))
+			fmt.Fprintf(&b, "- Task %d\n", dep)
 		}
 	}
 

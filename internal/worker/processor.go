@@ -377,19 +377,6 @@ func (e *StageExecutor) recordMetric(taskID int, stage pipeline.Stage, llm strin
 	})
 }
 
-func extractTextContent(msg *opencode.Message) string {
-	if msg == nil {
-		return ""
-	}
-	var parts []string
-	for _, p := range msg.Parts {
-		if p.Type == "text" && p.Text != "" {
-			parts = append(parts, p.Text)
-		}
-	}
-	return strings.Join(parts, "\n")
-}
-
 func ExtractFullContent(msg *opencode.Message) string {
 	if msg == nil {
 		return ""

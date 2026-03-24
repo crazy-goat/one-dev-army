@@ -207,11 +207,11 @@ func buildSprintPrompt(issues []github.Issue, maxTasks int) string {
 				break
 			}
 		}
-		b.WriteString(fmt.Sprintf("- #%d: %s [%s]\n", issue.Number, issue.Title, sizeLabel))
+		fmt.Fprintf(&b, "- #%d: %s [%s]\n", issue.Number, issue.Title, sizeLabel)
 	}
 
 	if maxTasks > 0 {
-		b.WriteString(fmt.Sprintf("\nSelect up to %d tasks for this sprint.\n", maxTasks))
+		fmt.Fprintf(&b, "\nSelect up to %d tasks for this sprint.\n", maxTasks)
 	}
 
 	b.WriteString("\nConsider task dependencies and sizes when selecting.\n")

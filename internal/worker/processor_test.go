@@ -122,7 +122,7 @@ func (h *sseHub) broadcast(data string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for c := range h.clients {
-		fmt.Fprintf(c.w, "data: %s\n\n", data)
+		_, _ = fmt.Fprintf(c.w, "data: %s\n\n", data)
 		c.flusher.Flush()
 	}
 }
@@ -146,7 +146,7 @@ func mockOpenCodeServer(t *testing.T, log *requestLog) *httptest.Server {
 			w.Header().Set("Connection", "keep-alive")
 			w.WriteHeader(http.StatusOK)
 
-			fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
 			flusher.Flush()
 
 			client := &sseClient{w: w, flusher: flusher}
@@ -162,7 +162,7 @@ func mockOpenCodeServer(t *testing.T, log *requestLog) *httptest.Server {
 		if r.URL.Path == "/session" && r.Method == http.MethodPost {
 			body, _ := io.ReadAll(r.Body)
 			var req map[string]string
-			json.Unmarshal(body, &req)
+			_ = json.Unmarshal(body, &req)
 
 			counterMu.Lock()
 			sessionCounter++
@@ -173,7 +173,7 @@ func mockOpenCodeServer(t *testing.T, log *requestLog) *httptest.Server {
 			log.sessions = append(log.sessions, req["title"])
 			log.mu.Unlock()
 
-			json.NewEncoder(w).Encode(opencode.Session{
+			_ = json.NewEncoder(w).Encode(opencode.Session{
 				ID:    sessID,
 				Title: req["title"],
 			})
@@ -186,7 +186,7 @@ func mockOpenCodeServer(t *testing.T, log *requestLog) *httptest.Server {
 
 			body, _ := io.ReadAll(r.Body)
 			var req opencode.SendMessageRequest
-			json.Unmarshal(body, &req)
+			_ = json.Unmarshal(body, &req)
 
 			log.mu.Lock()
 			content := ""
@@ -245,7 +245,7 @@ func TestStageExecutor_Analysis(t *testing.T) {
 	if err != nil {
 		t.Fatalf("opening db: %v", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	task := &worker.Task{
 		ID:          1,
@@ -427,7 +427,7 @@ func TestProcess_FullPipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("opening db: %v", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	repoDir := t.TempDir()
 	initGitRepo(t, repoDir)

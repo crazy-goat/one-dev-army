@@ -73,7 +73,7 @@ func (h *sseHub) broadcast(data string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for c := range h.clients {
-		fmt.Fprintf(c.w, "data: %s\n\n", data)
+		_, _ = fmt.Fprintf(c.w, "data: %s\n\n", data)
 		c.flusher.Flush()
 	}
 }
@@ -103,7 +103,7 @@ func startMockOpencode(t *testing.T) (*httptest.Server, *requestLog) {
 			w.Header().Set("Connection", "keep-alive")
 			w.WriteHeader(http.StatusOK)
 
-			fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
 			flusher.Flush()
 
 			client := &sseClient{w: w, flusher: flusher}
@@ -119,7 +119,7 @@ func startMockOpencode(t *testing.T) (*httptest.Server, *requestLog) {
 		if r.URL.Path == "/session" && r.Method == http.MethodPost {
 			body, _ := io.ReadAll(r.Body)
 			var req map[string]string
-			json.Unmarshal(body, &req)
+			_ = json.Unmarshal(body, &req)
 
 			counterMu.Lock()
 			sessionCounter++
@@ -130,7 +130,7 @@ func startMockOpencode(t *testing.T) (*httptest.Server, *requestLog) {
 			log.sessions = append(log.sessions, req["title"])
 			log.mu.Unlock()
 
-			json.NewEncoder(w).Encode(opencode.Session{ID: sessID, Title: req["title"]})
+			_ = json.NewEncoder(w).Encode(opencode.Session{ID: sessID, Title: req["title"]})
 			return
 		}
 
@@ -140,7 +140,7 @@ func startMockOpencode(t *testing.T) (*httptest.Server, *requestLog) {
 
 			body, _ := io.ReadAll(r.Body)
 			var req opencode.SendMessageRequest
-			json.Unmarshal(body, &req)
+			_ = json.Unmarshal(body, &req)
 
 			content := ""
 			if len(req.Parts) > 0 {
@@ -195,7 +195,7 @@ func startMockOpencode(t *testing.T) (*httptest.Server, *requestLog) {
 				"parts": []interface{}{},
 			}
 
-			json.NewEncoder(w).Encode(response)
+			_ = json.NewEncoder(w).Encode(response)
 			return
 		}
 

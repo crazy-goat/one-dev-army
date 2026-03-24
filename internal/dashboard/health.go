@@ -40,7 +40,7 @@ func (h *HealthChecker) Check() bool {
 		log.Printf("[HealthChecker] Health check failed: %v", err)
 		return false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	isHealthy := resp.StatusCode == http.StatusOK
 	h.setHealth(isHealthy)

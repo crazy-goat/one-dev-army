@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
@@ -40,23 +41,29 @@ func TestEpicAnalyzer_ParseResponse(t *testing.T) {
 		t.Fatalf("marshaling test data: %v", err)
 	}
 
-	callCount := 0
+	var callCount atomic.Int32
 
 	type sseClient struct {
 		w       http.ResponseWriter
 		flusher http.Flusher
+		done    chan struct{} // signals when SSE connection should close
 	}
 	var sseMu sync.Mutex
 	var sseClients []*sseClient
+	var broadcastWg sync.WaitGroup
 
 	broadcast := func(data string) {
 		sseMu.Lock()
 		defer sseMu.Unlock()
 		for _, c := range sseClients {
-			fmt.Fprintf(c.w, "data: %s\n\n", data)
+			_, _ = fmt.Fprintf(c.w, "data: %s\n\n", data)
 			c.flusher.Flush()
 		}
 	}
+
+	// Collect errors from HTTP handler goroutine to check in the test goroutine
+	var handlerErrors []string
+	var handlerErrMu sync.Mutex
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/event" && r.Method == http.MethodGet {
@@ -68,15 +75,24 @@ func TestEpicAnalyzer_ParseResponse(t *testing.T) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.Header().Set("Cache-Control", "no-cache")
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
 			flusher.Flush()
 
-			c := &sseClient{w: w, flusher: flusher}
+			done := make(chan struct{})
+			c := &sseClient{w: w, flusher: flusher, done: done}
 			sseMu.Lock()
 			sseClients = append(sseClients, c)
 			sseMu.Unlock()
 
-			<-r.Context().Done()
+			// Wait for either context cancellation or explicit done signal.
+			// We must ensure all broadcast goroutines finish writing to this
+			// ResponseWriter before the handler returns.
+			select {
+			case <-r.Context().Done():
+			case <-done:
+			}
+			// Wait for any in-flight broadcast goroutines to complete
+			broadcastWg.Wait()
 			return
 		}
 
@@ -84,30 +100,42 @@ func TestEpicAnalyzer_ParseResponse(t *testing.T) {
 
 		switch {
 		case r.URL.Path == "/session" && r.Method == http.MethodPost:
-			json.NewEncoder(w).Encode(opencode.Session{ID: "sess-epic", Title: "epic-analysis"})
+			_ = json.NewEncoder(w).Encode(opencode.Session{ID: "sess-epic", Title: "epic-analysis"})
 
 		case strings.HasSuffix(r.URL.Path, "/prompt_async") && r.Method == http.MethodPost:
-			callCount++
+			callCount.Add(1)
 			body, _ := io.ReadAll(r.Body)
 			var req opencode.SendMessageRequest
 			if err := json.Unmarshal(body, &req); err != nil {
-				t.Fatalf("unmarshaling request: %v", err)
+				handlerErrMu.Lock()
+				handlerErrors = append(handlerErrors, fmt.Sprintf("unmarshaling request: %v", err))
+				handlerErrMu.Unlock()
+				return
 			}
 			if req.Model == nil || req.Model.ModelID != "test-model" {
-				t.Errorf("model = %+v, want modelID=test-model", req.Model)
+				handlerErrMu.Lock()
+				handlerErrors = append(handlerErrors, fmt.Sprintf("model = %+v, want modelID=test-model", req.Model))
+				handlerErrMu.Unlock()
 			}
 			if !strings.Contains(req.Parts[0].Text, "Build a user management system") {
-				t.Errorf("prompt should contain epic description")
+				handlerErrMu.Lock()
+				handlerErrors = append(handlerErrors, "prompt should contain epic description")
+				handlerErrMu.Unlock()
 			}
 
-			w.WriteHeader(http.StatusNoContent)
-
 			escapedJSON := strings.ReplaceAll(string(responseJSON), `"`, `\"`)
+
+			// Broadcast SSE events in a goroutine, but track it so the SSE
+			// handler can wait for completion before returning.
+			broadcastWg.Add(1)
 			go func() {
-				broadcast(fmt.Sprintf(`{"type":"message.updated","properties":{"info":{"id":"msg-1","sessionID":"sess-epic","role":"assistant"}}}`))
+				defer broadcastWg.Done()
+				broadcast(`{"type":"message.updated","properties":{"info":{"id":"msg-1","sessionID":"sess-epic","role":"assistant"}}}`)
 				broadcast(fmt.Sprintf(`{"type":"message.part.delta","properties":{"sessionID":"sess-epic","messageID":"msg-1","partID":"prt-1","field":"text","delta":"%s"}}`, escapedJSON))
 				broadcast(`{"type":"session.status","properties":{"sessionID":"sess-epic","status":{"type":"idle"}}}`)
 			}()
+
+			w.WriteHeader(http.StatusNoContent)
 
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -151,8 +179,16 @@ func TestEpicAnalyzer_ParseResponse(t *testing.T) {
 		t.Errorf("task[1].Labels = %v, want [backend auth]", result[1].Labels)
 	}
 
-	if callCount != 1 {
-		t.Errorf("expected 1 message call, got %d", callCount)
+	if got := callCount.Load(); got != 1 {
+		t.Errorf("expected 1 message call, got %d", got)
+	}
+
+	// Check for errors collected from HTTP handler goroutine
+	handlerErrMu.Lock()
+	errs := handlerErrors
+	handlerErrMu.Unlock()
+	for _, e := range errs {
+		t.Errorf("handler error: %s", e)
 	}
 }
 
