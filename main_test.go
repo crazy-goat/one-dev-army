@@ -6,6 +6,39 @@ import (
 	"testing"
 )
 
+func TestEmbeddedSkillsFS(t *testing.T) {
+	// Verify the embedded skills filesystem contains expected files
+	dirEntries, err := skillsFS.ReadDir("skills")
+	if err != nil {
+		t.Fatalf("Failed to read embedded skills directory: %v", err)
+	}
+
+	if len(dirEntries) == 0 {
+		t.Error("Expected at least one skill in embedded FS, got none")
+	}
+
+	// Check for the creating-oda-ticket skill
+	found := false
+	for _, entry := range dirEntries {
+		if entry.Name() == "creating-oda-ticket" && entry.IsDir() {
+			found = true
+			// Verify it contains SKILL.md
+			skillFile, err := skillsFS.ReadFile("skills/creating-oda-ticket/SKILL.md")
+			if err != nil {
+				t.Errorf("Failed to read creating-oda-ticket/SKILL.md: %v", err)
+			}
+			if len(skillFile) == 0 {
+				t.Error("SKILL.md is empty")
+			}
+			break
+		}
+	}
+
+	if !found {
+		t.Error("Expected 'creating-oda-ticket' skill directory in embedded FS")
+	}
+}
+
 func TestWorkingDirFlag_ValidDirectory(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "oda-test-*")

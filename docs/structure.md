@@ -174,6 +174,12 @@ The single `main.go` file handles:
 
 - `Setup.CheckAndGenerate()` runs on every ODA start. Checks for `AGENTS.md` — if missing, generates a template based on detected project language. Checks for GitHub Actions CI workflow — if missing, generates a basic CI pipeline. Uses LLM for intelligent template generation when available.
 
+### `skills/` — Embedded Skill Deployment
+
+**Files:** `skills.go`
+
+- `Deploy(dir string, skillFS fs.FS) error` — walks an embedded `fs.FS` and writes all files to `<dir>/.opencode/skills/`. Called on startup before preflight checks. Skills are embedded via `//go:embed skills/*` in `main.go` and deployed to the working directory so opencode can discover and use them. The function is idempotent (always overwrites) and creates parent directories as needed.
+
 ### `worker/` — Worker Pool & Processor
 
 **Files:** `pool.go`, `processor.go`, `worker.go`

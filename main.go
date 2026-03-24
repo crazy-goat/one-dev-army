@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
@@ -24,8 +26,12 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"github.com/crazy-goat/one-dev-army/internal/preflight"
 	"github.com/crazy-goat/one-dev-army/internal/setup"
+	"github.com/crazy-goat/one-dev-army/internal/skills"
 	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
+
+//go:embed skills/*
+var skillsFS embed.FS
 
 func main() {
 	// Define flags
@@ -139,7 +145,16 @@ func runServe(dir string, debugWebSocket bool) error {
 	var err error
 	var spawnedServer *opencode.Server
 
-	fmt.Println("Running preflight checks...")
+	// Deploy embedded skills to .opencode/skills/
+	fmt.Println("Deploying opencode skills...")
+	skillsSubFS, err := fs.Sub(skillsFS, "skills")
+	if err != nil {
+		return fmt.Errorf("creating skills sub filesystem: %w", err)
+	}
+	if err := skills.Deploy(dir, skillsSubFS); err != nil {
+		return fmt.Errorf("deploying skills: %w", err)
+	}
+	fmt.Println("  ✓ skills deployed")
 
 	fmt.Println("Running preflight checks...")
 	results := preflight.RunAll(dir, opencodeURL, func(name string, index, total int, status string) {
