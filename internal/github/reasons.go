@@ -18,6 +18,7 @@ const (
 	ReasonManualMergeFailed StageChangeReason = "manual_merge_failed"
 
 	// Worker/Orchestrator pipeline changes
+	ReasonWorkerPickedUp            StageChangeReason = "worker_picked_up"
 	ReasonWorkerAlreadyDone         StageChangeReason = "worker_already_done"
 	ReasonWorkerFailed              StageChangeReason = "worker_failed"
 	ReasonWorkerApprove             StageChangeReason = "worker_approve"
@@ -63,6 +64,8 @@ func (r StageChangeReason) String() string {
 		return "User approved and merged PR via dashboard"
 	case ReasonManualMergeFailed:
 		return "Merge failed (likely conflict), PR closed"
+	case ReasonWorkerPickedUp:
+		return "Orchestrator picked up ticket for processing"
 	case ReasonWorkerAlreadyDone:
 		return "Worker detected ticket already completed, closing"
 	case ReasonWorkerFailed:

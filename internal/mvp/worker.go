@@ -142,7 +142,9 @@ func (w *Worker) broadcastWorkerStatus(stage string) {
 	w.orchestrator.BroadcastWorkerStatus(workerID, string(task.Status), task.Issue.Number, task.Issue.Title, stage, elapsed)
 }
 
-// reportStageComplete reports stage completion to orchestrator
+// reportStageComplete reports stage completion to orchestrator.
+// Processes the event synchronously so that GitHub labels, cache, ledger,
+// and WebSocket are updated immediately — not deferred until after Process().
 func (w *Worker) reportStageComplete(stage string, status EventStatus, output string) {
 	if w.orchestrator == nil || w.orchestrator.currentTask == nil {
 		return
@@ -155,13 +157,8 @@ func (w *Worker) reportStageComplete(stage string, status EventStatus, output st
 		Output:      output,
 	}
 
-	// Send to orchestrator (non-blocking)
-	select {
-	case w.orchestrator.workerEventCh <- event:
-		log.Printf("[Worker] Reported completion of stage %s for issue #%d", stage, event.IssueNumber)
-	default:
-		log.Printf("[Worker] Failed to report stage completion - channel full")
-	}
+	log.Printf("[Worker] Reporting completion of stage %s for issue #%d", stage, event.IssueNumber)
+	w.orchestrator.HandleWorkerEvent(event)
 }
 
 var stepOrder = []string{"technical-planning", "implement", "code-review", "create-pr"}
