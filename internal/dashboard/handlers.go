@@ -1705,6 +1705,7 @@ type settingsData struct {
 	OpenCodePort      int
 	WorkerCount       int
 	Config            config.LLMConfig
+	YoloMode          bool
 	ForceStrongStages string
 	Success           bool
 	Errors            []string
@@ -1735,6 +1736,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, _ *http.Request) {
 		OpenCodePort:      s.webPort,
 		WorkerCount:       workerCount,
 		Config:            cfg.LLM,
+		YoloMode:          cfg.YoloMode,
 		ForceStrongStages: forceStrongStages,
 		AvailableModels:   s.modelsCache,
 	}
@@ -1848,6 +1850,9 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		cfg.LLM.RoutingRules.ForceStrongForStages = []string{} //nolint:staticcheck // deprecated but kept for backward compatibility
 	}
 
+	// Parse yolo_mode checkbox (checkbox returns "on" when checked, empty when unchecked)
+	cfg.YoloMode = r.FormValue("yolo_mode") == "on"
+
 	// If there are validation errors, re-render the form with errors
 	if len(errors) > 0 {
 		s.renderSettingsWithErrors(w, r, errors)
@@ -1874,6 +1879,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		OpenCodePort:      s.webPort,
 		WorkerCount:       workerCount,
 		Config:            cfg.LLM,
+		YoloMode:          cfg.YoloMode,
 		ForceStrongStages: forceStrongStages,
 		Success:           true,
 		Errors:            warnings, // Show warnings as info messages
@@ -1905,6 +1911,7 @@ func (s *Server) renderSettingsWithErrors(w http.ResponseWriter, r *http.Request
 		OpenCodePort:      s.webPort,
 		WorkerCount:       workerCount,
 		Config:            cfg.LLM,
+		YoloMode:          cfg.YoloMode,
 		ForceStrongStages: forceStrongStages,
 		Errors:            errors,
 		AvailableModels:   s.modelsCache,

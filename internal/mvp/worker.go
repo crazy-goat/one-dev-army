@@ -254,13 +254,19 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		log.Printf("[Worker %d] [5/6] Awaiting user approval for #%d (PR: %s)", w.id, task.Issue.Number, prURL)
 		w.reportStageComplete("create-pr", EventSuccess, "PR created, awaiting approval: "+prURL)
 
-		// Block until user sends decision or context canceled
 		var decision UserDecision
-		select {
-		case decision = <-w.decisionCh:
-			log.Printf("[Worker %d] Received decision for #%d: %s", w.id, task.Issue.Number, decision.Action)
-		case <-ctx.Done():
-			return ctx.Err()
+		if w.cfg.YoloMode {
+			// YOLO mode: auto-approve without waiting for user
+			log.Printf("[Worker %d] YOLO mode enabled - auto-approving #%d", w.id, task.Issue.Number)
+			decision = UserDecision{Action: "approve"}
+		} else {
+			// Block until user sends decision or context canceled
+			select {
+			case decision = <-w.decisionCh:
+				log.Printf("[Worker %d] Received decision for #%d: %s", w.id, task.Issue.Number, decision.Action)
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 
 		if decision.Action == "approve" {

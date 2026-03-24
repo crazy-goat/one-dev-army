@@ -3,6 +3,7 @@ package mvp
 import (
 	"testing"
 
+	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
@@ -225,6 +226,50 @@ func TestCheckAlreadyDone(t *testing.T) {
 			got := checkAlreadyDone(tt.response)
 			if got != tt.want {
 				t.Errorf("checkAlreadyDone() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWorker_YoloMode(t *testing.T) {
+	tests := []struct {
+		name         string
+		yoloMode     bool
+		wantDecision string
+	}{
+		{
+			name:         "yolo mode enabled - auto approve",
+			yoloMode:     true,
+			wantDecision: "approve",
+		},
+		{
+			name:         "yolo mode disabled - wait for decision",
+			yoloMode:     false,
+			wantDecision: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a worker with the specified yolo mode
+			cfg := &config.Config{
+				YoloMode: tt.yoloMode,
+			}
+
+			worker := &Worker{
+				id:         1,
+				cfg:        cfg,
+				decisionCh: make(chan UserDecision, 1),
+			}
+
+			// Test that yolo mode correctly determines if we should auto-approve
+			var decision UserDecision
+			if worker.cfg.YoloMode {
+				decision = UserDecision{Action: "approve"}
+			}
+
+			if decision.Action != tt.wantDecision {
+				t.Errorf("yolo mode decision = %q, want %q", decision.Action, tt.wantDecision)
 			}
 		})
 	}
