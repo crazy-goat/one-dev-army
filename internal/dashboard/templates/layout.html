@@ -73,6 +73,7 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
     <a href="/settings" {{if eq .Active "settings"}}class="active"{{end}}>Settings</a>
   </div>
   <div class="nav-actions">
+    <button class="btn" onclick="window.open('http://localhost:{{.OpenCodePort}}', '_blank')">Chat</button>
     <a href="/wizard" class="btn btn-primary">+ New Issue</a>
   </div>
 </nav>

@@ -140,6 +140,7 @@ func createTestServerWithTemplates(t *testing.T) *Server {
 
 	srv := &Server{
 		tmpls:       tmpls,
+		webPort:     8081,
 		wizardStore: NewWizardSessionStore(),
 	}
 
@@ -1043,9 +1044,11 @@ func TestLayoutNavigationButtons(t *testing.T) {
 	// Execute the template with minimal data
 	var buf strings.Builder
 	data := struct {
-		Active string
+		Active       string
+		OpenCodePort int
 	}{
-		Active: "board",
+		Active:       "board",
+		OpenCodePort: 8081,
 	}
 
 	// We need to define a content template for the layout to work
@@ -1085,6 +1088,133 @@ func TestLayoutNavigationButtons(t *testing.T) {
 	// Check for nav-actions container
 	if !strings.Contains(output, "nav-actions") {
 		t.Error("layout template missing nav-actions container div")
+	}
+}
+
+// TestChatButton_Presence verifies the chat button is present on all pages
+func TestChatButton_Presence(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Test board page
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	srv.handleBoard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify chat button is present with correct onclick handler
+	if !strings.Contains(body, `onclick="window.open('http://localhost:`) {
+		t.Error("board page missing chat button with correct onclick handler")
+	}
+	if !strings.Contains(body, "Chat") {
+		t.Error("board page missing 'Chat' button text")
+	}
+
+	// Verify chat button uses the correct port from server config
+	expectedPort := fmt.Sprintf("localhost:%d", srv.webPort)
+	if !strings.Contains(body, expectedPort) {
+		t.Errorf("board page chat button should use configured port %d, got: %s", srv.webPort, body)
+	}
+}
+
+// TestChatButton_OnTaskPage verifies the chat button appears on task detail page
+func TestChatButton_OnTaskPage(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/task/123", nil)
+	req.SetPathValue("id", "123")
+	rec := httptest.NewRecorder()
+	srv.handleTaskDetail(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify chat button is present
+	if !strings.Contains(body, `onclick="window.open('http://localhost:`) {
+		t.Error("task page missing chat button with correct onclick handler")
+	}
+	if !strings.Contains(body, "Chat") {
+		t.Error("task page missing 'Chat' button text")
+	}
+}
+
+// TestChatButton_OnWizardPage verifies the chat button appears on wizard page
+func TestChatButton_OnWizardPage(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/wizard?type=feature", nil)
+	rec := httptest.NewRecorder()
+	srv.handleWizardPage(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify chat button is present
+	if !strings.Contains(body, `onclick="window.open('http://localhost:`) {
+		t.Error("wizard page missing chat button with correct onclick handler")
+	}
+	if !strings.Contains(body, "Chat") {
+		t.Error("wizard page missing 'Chat' button text")
+	}
+}
+
+// TestChatButton_OnSettingsPage verifies the chat button appears on settings page
+func TestChatButton_OnSettingsPage(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+	srv.handleSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify chat button is present
+	if !strings.Contains(body, `onclick="window.open('http://localhost:`) {
+		t.Error("settings page missing chat button with correct onclick handler")
+	}
+	if !strings.Contains(body, "Chat") {
+		t.Error("settings page missing 'Chat' button text")
+	}
+}
+
+// TestChatButton_UsesCorrectPort verifies the chat button uses the configured web port
+func TestChatButton_UsesCorrectPort(t *testing.T) {
+	// Create server with custom web port
+	srv := createTestServerWithTemplates(t)
+	srv.webPort = 9090
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	srv.handleBoard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify the custom port is used
+	if !strings.Contains(body, "localhost:9090") {
+		t.Errorf("chat button should use custom port 9090, got: %s", body)
 	}
 }
 

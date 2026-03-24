@@ -22,6 +22,7 @@ var templateFS embed.FS
 
 type Server struct {
 	port             int
+	webPort          int
 	tmpls            map[string]*template.Template
 	store            *db.Store
 	pool             func() []worker.WorkerInfo
@@ -39,7 +40,7 @@ type Server struct {
 	modelsCache      []opencode.ProviderModel
 }
 
-func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string) (*Server, error) {
+func NewServer(port int, webPort int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string) (*Server, error) {
 	tmpls, err := parseTemplates()
 	if err != nil {
 		return nil, err
@@ -49,6 +50,7 @@ func NewServer(port int, store *db.Store, pool func() []worker.WorkerInfo, gh *g
 
 	s := &Server{
 		port:         port,
+		webPort:      webPort,
 		tmpls:        tmpls,
 		store:        store,
 		pool:         pool,
