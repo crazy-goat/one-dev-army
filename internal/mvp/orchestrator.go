@@ -237,6 +237,11 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			log.Printf("[Orchestrator] Error removing merge-failed label: %v", err)
 		}
 
+		// Set initial stage so dashboard/cache/ledger reflect that work has started
+		if err := o.ChangeStage(nextIssue.Number, github.StagePlan, github.ReasonWorkerPickedUp); err != nil {
+			log.Printf("[Orchestrator] Error setting initial stage for #%d: %v", nextIssue.Number, err)
+		}
+
 		task := &Task{
 			Issue:     *nextIssue,
 			Milestone: milestone.Title,
