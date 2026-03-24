@@ -20,6 +20,7 @@ epic_analysis:
     llm: nexos-ai/Kimi K2.5
 sprint:
     tasks_per_sprint: 10
+yolo_mode: false
 
 # Multi-model LLM configuration with task-based routing
 llm:

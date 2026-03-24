@@ -19,6 +19,7 @@ type Config struct {
 	EpicAnalysis EpicAnalysis `yaml:"epic_analysis"`
 	Sprint       Sprint       `yaml:"sprint"`
 	LLM          LLMConfig    `yaml:"llm"`
+	YoloMode     bool         `yaml:"yolo_mode"`
 }
 
 type GitHub struct {

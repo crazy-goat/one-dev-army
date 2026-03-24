@@ -301,6 +301,55 @@ func TestValidateAndFallbackModels(t *testing.T) {
 	}
 }
 
+func TestLoad_YoloMode(t *testing.T) {
+	configWithYoloTrue := `github:
+  repo: "owner/repo"
+yolo_mode: true
+`
+	configWithYoloFalse := `github:
+  repo: "owner/repo"
+yolo_mode: false
+`
+	configWithoutYolo := `github:
+  repo: "owner/repo"
+`
+
+	tests := []struct {
+		name         string
+		config       string
+		wantYoloMode bool
+	}{
+		{
+			name:         "yolo_mode explicitly true",
+			config:       configWithYoloTrue,
+			wantYoloMode: true,
+		},
+		{
+			name:         "yolo_mode explicitly false",
+			config:       configWithYoloFalse,
+			wantYoloMode: false,
+		},
+		{
+			name:         "yolo_mode not specified (default false)",
+			config:       configWithoutYolo,
+			wantYoloMode: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := setupConfigDir(t, tt.config)
+			cfg, err := config.Load(dir)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if cfg.YoloMode != tt.wantYoloMode {
+				t.Errorf("yolo_mode = %v, want %v", cfg.YoloMode, tt.wantYoloMode)
+			}
+		})
+	}
+}
+
 func TestGetFirstAvailableModel(t *testing.T) {
 	tests := []struct {
 		name            string
