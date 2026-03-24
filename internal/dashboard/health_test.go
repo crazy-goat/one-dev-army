@@ -149,7 +149,7 @@ func TestHealthChecker_ThreadSafety(t *testing.T) {
 	}()
 
 	// Wait for all goroutines
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		select {
 		case <-done:
 		case <-time.After(time.Second):

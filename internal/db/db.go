@@ -4,14 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	_ "modernc.org/sqlite" // SQLite driver for database/sql
+
 	"github.com/crazy-goat/one-dev-army/internal/github"
-	_ "modernc.org/sqlite"
 )
 
 type StageMetric struct {
@@ -147,16 +149,16 @@ func (s *Store) submitWriteWithResult(fn func() (any, error)) (any, error) {
 		waitTime := time.Since(start)
 		s.metrics.TotalWaitMs.Add(waitTime.Milliseconds())
 	case <-s.ctx.Done():
-		return nil, fmt.Errorf("store is closed")
+		return nil, errors.New("store is closed")
 	case <-time.After(10 * time.Second):
-		return nil, fmt.Errorf("timeout enqueueing write job")
+		return nil, errors.New("timeout enqueueing write job")
 	}
 
 	select {
 	case result := <-resultCh:
 		return result.value, result.err
 	case <-time.After(10 * time.Second):
-		return nil, fmt.Errorf("timeout waiting for write result")
+		return nil, errors.New("timeout waiting for write result")
 	}
 }
 
@@ -630,7 +632,7 @@ func (s *Store) ClearIssueCache() error {
 }
 
 // scanIssues scans rows and converts them to github.Issue slice
-func (s *Store) scanIssues(rows *sql.Rows) ([]github.Issue, error) {
+func (*Store) scanIssues(rows *sql.Rows) ([]github.Issue, error) {
 	var issues []github.Issue
 	for rows.Next() {
 		var cache IssueCache

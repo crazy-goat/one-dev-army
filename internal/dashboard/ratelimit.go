@@ -8,7 +8,14 @@ import (
 	"time"
 )
 
+const (
+	colorRed    = "red"
+	colorYellow = "yellow"
+	colorGreen  = "green"
+)
+
 // RateLimitInfo holds the rate limit data from GitHub API
+//
 // Deprecated: Use APILimit for individual limits or RateLimitSummary for all limits
 type RateLimitInfo struct {
 	Limit     int       `json:"limit"`
@@ -109,21 +116,21 @@ func (r *RateLimitSummary) GetWorstPercentage() float64 {
 // Green (<50%), Yellow (50-80%), Red (>80%)
 func GetColorByPercentage(percentage float64) string {
 	if percentage > 80 {
-		return "red"
+		return colorRed
 	}
 	if percentage > 50 {
-		return "yellow"
+		return colorYellow
 	}
-	return "green"
+	return colorGreen
 }
 
 // GetColorCSSByPercentage returns the CSS color variable based on usage percentage
 func GetColorCSSByPercentage(percentage float64) string {
 	color := GetColorByPercentage(percentage)
 	switch color {
-	case "red":
+	case colorRed:
 		return "var(--red)"
-	case "yellow":
+	case colorYellow:
 		return "var(--orange)"
 	default:
 		return "var(--green)"
@@ -141,26 +148,28 @@ func (r *RateLimitSummary) GetWorstColorCSS() string {
 }
 
 // GetColor returns the color code based on remaining requests
+//
 // Deprecated: Use GetColorByPercentage for percentage-based coloring
 // Green (>1000), Yellow (500-1000), Red (<500)
 func (r *RateLimitInfo) GetColor() string {
 	if r.Remaining < 500 {
-		return "red"
+		return colorRed
 	}
 	if r.Remaining < 1000 {
-		return "yellow"
+		return colorYellow
 	}
-	return "green"
+	return colorGreen
 }
 
 // GetColorCSS returns the CSS color variable based on remaining requests
+//
 // Deprecated: Use GetColorCSSByPercentage for percentage-based coloring
 func (r *RateLimitInfo) GetColorCSS() string {
 	color := r.GetColor()
 	switch color {
-	case "red":
+	case colorRed:
 		return "var(--red)"
-	case "yellow":
+	case colorYellow:
 		return "var(--orange)"
 	default:
 		return "var(--green)"
@@ -276,7 +285,7 @@ func (s *RateLimitService) fetch() {
 		return
 	}
 
-	req, err := http.NewRequest("GET", "https://api.github.com/rate_limit", nil)
+	req, err := http.NewRequest(http.MethodGet, "https://api.github.com/rate_limit", nil)
 	if err != nil {
 		s.updateWithError(fmt.Sprintf("Request error: %v", err))
 		return
@@ -367,24 +376,13 @@ func (s *RateLimitService) fetch() {
 func (s *RateLimitService) updateWithError(errMsg string) {
 	s.mu.Lock()
 	// Keep the last known values but mark the error
-	// If we have no valid data yet, show the error
-	if s.data.UpdatedAt.IsZero() {
-		s.data.Error = errMsg
-	} else {
-		// We have cached data, just update the error field
-		// The UI will show cached values with a warning indicator
-		s.data.Error = errMsg
-	}
-	// Also update summary error
-	if s.summary.UpdatedAt.IsZero() {
-		s.summary.Error = errMsg
-	} else {
-		s.summary.Error = errMsg
-	}
+	s.data.Error = errMsg
+	s.summary.Error = errMsg
 	s.mu.Unlock()
 }
 
 // GetData returns the current rate limit data (thread-safe)
+//
 // Deprecated: Use GetSummary() for multi-type rate limit data
 func (s *RateLimitService) GetData() *RateLimitInfo {
 	s.mu.RLock()

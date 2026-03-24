@@ -41,7 +41,7 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 			}
 			return s[:n] + "\n... (truncated)"
 		},
-		"json": func(v interface{}) string {
+		"json": func(v any) string {
 			b, err := json.Marshal(v)
 			if err != nil {
 				return ""
@@ -826,12 +826,10 @@ func TestConcurrentSessionAccess(t *testing.T) {
 
 	// Create multiple sessions concurrently
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 100 {
+		wg.Go(func() {
 			_, _ = srv.wizardStore.Create("feature")
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -842,14 +840,14 @@ func TestConcurrentSessionAccess(t *testing.T) {
 	// Access sessions concurrently using the Get method
 	// Create sessions first to get their IDs
 	var ids []string
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		session, _ := srv.wizardStore.Create("feature")
 		if session != nil {
 			ids = append(ids, session.ID)
 		}
 	}
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -872,14 +870,12 @@ func TestConcurrentHandlerAccess(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Concurrent wizard new requests
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			req := httptest.NewRequest(http.MethodGet, "/wizard/new?type=feature", nil)
 			rec := httptest.NewRecorder()
 			srv.handleWizardNew(rec, req)
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -1024,7 +1020,7 @@ func TestWizardRoutes_Registered(t *testing.T) {
 	}
 
 	// Test logs endpoint separately (requires path value)
-	req := httptest.NewRequest("GET", "/wizard/logs/test-session", nil)
+	req := httptest.NewRequest(http.MethodGet, "/wizard/logs/test-session", nil)
 	req.SetPathValue("sessionId", "test-session")
 	rec := httptest.NewRecorder()
 	srv.handleWizardLogs(rec, req)
@@ -1591,7 +1587,7 @@ func TestWizardFlow_ConcurrentUsers(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Each user creates a complete wizard flow
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		wg.Add(1)
 		go func(userID int) {
 			defer wg.Done()
@@ -2567,7 +2563,7 @@ func TestHandleWizardRefine_AcceptsLanguageParameter(t *testing.T) {
 	defer srv.wizardStore.Stop()
 
 	// First create a session
-	req1 := httptest.NewRequest("GET", "/wizard/new?type=feature", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/wizard/new?type=feature", nil)
 	rec1 := httptest.NewRecorder()
 	srv.handleWizardNew(rec1, req1)
 
@@ -2597,7 +2593,7 @@ func TestHandleWizardRefine_AcceptsLanguageParameter(t *testing.T) {
 	formData.Set("idea", "Test feature idea")
 	formData.Set("language", "pl-PL")
 
-	req2 := httptest.NewRequest("POST", "/wizard/refine", strings.NewReader(formData.Encode()))
+	req2 := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(formData.Encode()))
 	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec2 := httptest.NewRecorder()
 
@@ -2630,7 +2626,7 @@ func TestHandleWizardRefine_GeneratesTitleAndDescription(t *testing.T) {
 	formData.Set("session_id", session.ID)
 	formData.Set("idea", "Add user authentication to the system")
 
-	req := httptest.NewRequest("POST", "/wizard/refine", strings.NewReader(formData.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(formData.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 
@@ -2675,7 +2671,7 @@ func TestHandleWizardRefine_BugType_GeneratesTitle(t *testing.T) {
 	formData.Set("session_id", session.ID)
 	formData.Set("idea", "Fix login error when user enters wrong password")
 
-	req := httptest.NewRequest("POST", "/wizard/refine", strings.NewReader(formData.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(formData.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 
@@ -2714,7 +2710,7 @@ func TestHandleWizardCreate_CustomTitleFromForm(t *testing.T) {
 	formData.Set("session_id", session.ID)
 	formData.Set("issue_title", "[Feature] Custom authentication title")
 
-	req := httptest.NewRequest("POST", "/wizard/create", strings.NewReader(formData.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader(formData.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 
@@ -2751,7 +2747,7 @@ func TestHandleWizardCreate_UsesSessionTitle(t *testing.T) {
 	formData := url.Values{}
 	formData.Set("session_id", session.ID)
 
-	req := httptest.NewRequest("POST", "/wizard/create", strings.NewReader(formData.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/wizard/create", strings.NewReader(formData.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 
@@ -3082,7 +3078,7 @@ func TestWizardRefine_MockTitleGeneration(t *testing.T) {
 	formData.Set("session_id", session.ID)
 	formData.Set("idea", "Add user authentication to the system")
 
-	req := httptest.NewRequest("POST", "/wizard/refine", strings.NewReader(formData.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(formData.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 	srv.handleWizardRefine(rec, req)
@@ -3102,7 +3098,7 @@ func TestWizardRefine_MockTitleGeneration(t *testing.T) {
 	formData2.Set("session_id", session2.ID)
 	formData2.Set("idea", "Fix login error when user enters wrong password")
 
-	req2 := httptest.NewRequest("POST", "/wizard/refine", strings.NewReader(formData2.Encode()))
+	req2 := httptest.NewRequest(http.MethodPost, "/wizard/refine", strings.NewReader(formData2.Encode()))
 	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec2 := httptest.NewRecorder()
 	srv.handleWizardRefine(rec2, req2)
@@ -4000,11 +3996,11 @@ func TestSettingsPersistence(t *testing.T) {
 	if reloadedCfg.LLM.Code.Model != "persisted-provider/persisted-model" {
 		t.Errorf("expected model to be 'persisted-provider/persisted-model', got %q", reloadedCfg.LLM.Code.Model)
 	}
-	if reloadedCfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold != 200 {
-		t.Errorf("expected code size threshold to be 200, got %d", reloadedCfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold)
+	if reloadedCfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold != 200 { //nolint:staticcheck // deprecated but kept for backward compatibility
+		t.Errorf("expected code size threshold to be 200, got %d", reloadedCfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold) //nolint:staticcheck // deprecated but kept for backward compatibility
 	}
-	if len(reloadedCfg.LLM.RoutingRules.ForceStrongForStages) != 1 || reloadedCfg.LLM.RoutingRules.ForceStrongForStages[0] != "test-stage" {
-		t.Errorf("expected force strong stages to be ['test-stage'], got %v", reloadedCfg.LLM.RoutingRules.ForceStrongForStages)
+	if len(reloadedCfg.LLM.RoutingRules.ForceStrongForStages) != 1 || reloadedCfg.LLM.RoutingRules.ForceStrongForStages[0] != "test-stage" { //nolint:staticcheck // deprecated but kept for backward compatibility
+		t.Errorf("expected force strong stages to be ['test-stage'], got %v", reloadedCfg.LLM.RoutingRules.ForceStrongForStages) //nolint:staticcheck // deprecated but kept for backward compatibility
 	}
 }
 

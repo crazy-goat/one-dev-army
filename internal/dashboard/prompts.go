@@ -195,7 +195,7 @@ Original request:
 // idea: the original user idea
 // codebaseContext: information about the existing codebase (file structure, key files, etc.)
 // language: accepted for API compatibility but ignored — output is always English
-func BuildRefinementPrompt(wizardType WizardType, idea string, codebaseContext string, language string) string {
+func BuildRefinementPrompt(wizardType WizardType, idea string, codebaseContext string, _ string) string {
 	if codebaseContext == "" {
 		codebaseContext = "No codebase context provided."
 	}
@@ -246,7 +246,7 @@ func BuildBreakdownPrompt(wizardType WizardType, description string) string {
 // BuildIssueGenerationPrompt creates the unified prompt for issue generation.
 // This generates both title and description in a single LLM call using structured JSON output.
 // The language parameter is accepted for API compatibility but ignored — output is always English.
-func BuildIssueGenerationPrompt(wizardType WizardType, idea string, codebaseContext string, language string) string {
+func BuildIssueGenerationPrompt(wizardType WizardType, idea string, codebaseContext string, _ string) string {
 	if codebaseContext == "" {
 		codebaseContext = "No codebase context provided."
 	}

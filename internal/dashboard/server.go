@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"log"
@@ -91,7 +92,7 @@ func NewServer(port int, webPort int, store *db.Store, pool func() []worker.Work
 // LoadModels fetches and caches available models from the opencode API
 func (s *Server) LoadModels() error {
 	if s.oc == nil {
-		return fmt.Errorf("opencode client not configured")
+		return errors.New("opencode client not configured")
 	}
 
 	providers, err := s.oc.ListProviders()
@@ -139,7 +140,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 			}
 			return s[:n] + "\n... (truncated)"
 		},
-		"json": func(v interface{}) string {
+		"json": func(v any) string {
 			b, err := json.Marshal(v)
 			if err != nil {
 				return ""

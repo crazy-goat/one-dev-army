@@ -58,7 +58,7 @@ func (m *BranchManager) RemoveBranch(branch string) error {
 	if err := cmd.Run(); err != nil {
 		// Branch doesn't exist - not an error, just log and return
 		log.Printf("[BranchManager] Branch %q does not exist, skipping deletion", branch)
-		return nil
+		return nil //nolint:nilerr // intentional - branch not existing is not an error
 	}
 
 	// Switch to main/master first
@@ -135,12 +135,12 @@ func (m *BranchManager) cleanupLegacyWorktrees() {
 	}
 
 	// Parse worktree list — remove any non-main worktrees
-	blocks := strings.Split(strings.TrimSpace(string(out)), "\n\n")
-	for _, block := range blocks {
+	blocks := strings.SplitSeq(strings.TrimSpace(string(out)), "\n\n")
+	for block := range blocks {
 		var wtPath string
-		for _, line := range strings.Split(block, "\n") {
-			if strings.HasPrefix(line, "worktree ") {
-				wtPath = strings.TrimPrefix(line, "worktree ")
+		for line := range strings.SplitSeq(block, "\n") {
+			if after, ok := strings.CutPrefix(line, "worktree "); ok {
+				wtPath = after
 			}
 		}
 		// Skip the main worktree (the repo itself)

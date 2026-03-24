@@ -1,6 +1,9 @@
 package config
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // TaskCategory represents the type of task for LLM routing
 type TaskCategory string
@@ -23,6 +26,7 @@ const (
 )
 
 // ModelVariant represents the strength variant for a model
+//
 // Deprecated: No longer used with per-mode model selection
 type ModelVariant string
 
@@ -83,11 +87,13 @@ type LLMConfig struct {
 	DefaultComplexity ComplexityLevel `yaml:"default_complexity,omitempty"`
 
 	// RoutingRules define when to use strong vs weak models
+	//
 	// Deprecated: Complexity-based routing is being phased out in favor of explicit mode selection
 	RoutingRules RoutingConfig `yaml:"routing_rules,omitempty"`
 }
 
 // RoutingConfig defines rules for model selection
+//
 // Deprecated: Being phased out in favor of explicit per-mode model selection
 type RoutingConfig struct {
 	// ComplexityThresholds define when to upgrade to strong model
@@ -98,6 +104,7 @@ type RoutingConfig struct {
 }
 
 // ComplexityThresholds defines thresholds for complexity detection
+//
 // Deprecated: Being phased out in favor of explicit per-mode model selection
 type ComplexityThresholds struct {
 	// CodeSizeThreshold is the number of lines that triggers medium complexity
@@ -142,7 +149,7 @@ func DefaultLLMConfig() LLMConfig {
 
 // GetModelForCategory returns the model config for a category
 // Note: complexity parameter is now ignored - each mode has a single model
-func (cfg *LLMConfig) GetModelForCategory(category TaskCategory, complexity ComplexityLevel) ModelConfig {
+func (cfg *LLMConfig) GetModelForCategory(category TaskCategory, _ ComplexityLevel) ModelConfig {
 	switch category {
 	case CategorySetup:
 		return ModelConfig{Model: cfg.Setup.Model}
@@ -160,13 +167,12 @@ func (cfg *LLMConfig) GetModelForCategory(category TaskCategory, complexity Comp
 }
 
 // ShouldUseStrongModel determines if a task should use the strong model based on complexity
+//
 // Deprecated: No longer relevant with per-mode model selection, kept for backward compatibility
 func (cfg *LLMConfig) ShouldUseStrongModel(complexity ComplexityLevel, stage string) bool {
 	// Check if stage is in force-strong list
-	for _, s := range cfg.RoutingRules.ForceStrongForStages {
-		if s == stage {
-			return true
-		}
+	if slices.Contains(cfg.RoutingRules.ForceStrongForStages, stage) {
+		return true
 	}
 
 	// Otherwise use complexity-based routing

@@ -1,7 +1,7 @@
 package dashboard
 
 import (
-	"fmt"
+	"errors"
 	"log"
 	"sync"
 	"time"
@@ -150,7 +150,6 @@ func (s *SyncService) syncNow() {
 
 // doSync performs the actual synchronization work
 func (s *SyncService) doSync() {
-
 	milestone := s.GetActiveMilestone()
 	if milestone == "" {
 		log.Println("[SyncService] No active milestone set, skipping sync")
@@ -204,7 +203,7 @@ func (s *SyncService) doSync() {
 // SyncNow triggers an immediate synchronization (public method)
 func (s *SyncService) SyncNow() error {
 	if !s.IsRunning() {
-		return fmt.Errorf("sync service is not running")
+		return errors.New("sync service is not running")
 	}
 
 	s.wg.Add(1)

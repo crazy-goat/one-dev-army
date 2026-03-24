@@ -296,7 +296,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			log.Printf("[Worker %d] Code review after fixes done (%s, approved=%v)", w.id, time.Since(stepStart).Round(time.Second), approved)
 			if !approved {
 				task.Status = StatusFailed
-				task.Result = &TaskResult{Error: fmt.Errorf("code review not approved after fixes")}
+				task.Result = &TaskResult{Error: errors.New("code review not approved after fixes")}
 				log.Printf("[Worker %d] ✗ FAILED: code review not approved after fixes", w.id)
 				return task.Result.Error
 			}
@@ -339,7 +339,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		log.Printf("[Worker %d] [5/6] Awaiting user approval for #%d (PR: %s)", w.id, task.Issue.Number, prURL)
 		w.reportStageComplete("create-pr", EventSuccess, "PR created, awaiting approval: "+prURL)
 
-		// Block until user sends decision or context cancelled
+		// Block until user sends decision or context canceled
 		var decision UserDecision
 		select {
 		case decision = <-w.decisionCh:
@@ -365,7 +365,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 				task.Status = StatusFailed
 				task.Result = &TaskResult{Error: fmt.Errorf("merge failed: %w", err)}
 
-				comment := fmt.Sprintf("Merge failed (likely conflict). PR closed, task moved to Failed.\n\nError: %s", err.Error())
+				comment := "Merge failed (likely conflict). PR closed, task moved to Failed.\n\nError: " + err.Error()
 				if cmtErr := w.gh.AddComment(task.Issue.Number, comment); cmtErr != nil {
 					log.Printf("[Worker %d] Error adding comment to #%d: %v", w.id, task.Issue.Number, cmtErr)
 				}
@@ -389,7 +389,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		task.Status = StatusCoding
 
 		if decision.Reason != "" {
-			comment := fmt.Sprintf("**Declined** — sent back for fixes.\n\n%s", decision.Reason)
+			comment := "**Declined** — sent back for fixes.\n\n" + decision.Reason
 			if cmtErr := w.gh.AddComment(task.Issue.Number, comment); cmtErr != nil {
 				log.Printf("[Worker %d] Error adding decline comment to #%d: %v", w.id, task.Issue.Number, cmtErr)
 			}
@@ -488,7 +488,8 @@ func parseTechnicalPlanningResponse(response string) (analysis, plan string) {
 	analysisIdx := strings.Index(response, "## Analysis")
 	planIdx := strings.Index(response, "## Implementation Plan")
 
-	if analysisIdx >= 0 && planIdx > analysisIdx {
+	switch {
+	case analysisIdx >= 0 && planIdx > analysisIdx:
 		// Extract analysis section (between ## Analysis and ## Implementation Plan)
 		analysisStart := analysisIdx + len("## Analysis")
 		analysis = strings.TrimSpace(response[analysisStart:planIdx])
@@ -496,17 +497,17 @@ func parseTechnicalPlanningResponse(response string) (analysis, plan string) {
 		// Extract plan section (after ## Implementation Plan)
 		planStart := planIdx + len("## Implementation Plan")
 		plan = strings.TrimSpace(response[planStart:])
-	} else if analysisIdx >= 0 {
+	case analysisIdx >= 0:
 		// Only analysis header found, treat rest as plan
 		analysisStart := analysisIdx + len("## Analysis")
 		analysis = strings.TrimSpace(response[analysisStart:])
 		plan = analysis
-	} else if planIdx >= 0 {
+	case planIdx >= 0:
 		// Only plan header found, treat everything before as analysis
 		analysis = strings.TrimSpace(response[:planIdx])
 		planStart := planIdx + len("## Implementation Plan")
 		plan = strings.TrimSpace(response[planStart:])
-	} else {
+	default:
 		// No headers found, use heuristics to split
 		// Try to find a natural break point (e.g., "Implementation Plan" without ##)
 		lowerResponse := strings.ToLower(response)
@@ -553,7 +554,7 @@ func (w *Worker) implement(ctx context.Context, task *Task, planStr string) erro
 	// Use router to select model for code category with complexity detection
 	llmModel := w.cfg.EpicAnalysis.LLM
 	if w.router != nil {
-		complexity := llm.DetectComplexity(planStr)
+		complexity := llm.DetectComplexity(planStr) //nolint:staticcheck // deprecated but still used
 		llmModel = w.router.SelectModel(config.CategoryCode, complexity, nil)
 	}
 
@@ -684,7 +685,7 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (appr
 	return result.Approved, review, nil
 }
 
-func (w *Worker) createPR(ctx context.Context, task *Task) (string, error) {
+func (w *Worker) createPR(_ context.Context, task *Task) (string, error) {
 	// Check if PR already exists
 	if existingBranch, err := w.gh.FindPRBranch(task.Issue.Number); err == nil && existingBranch != "" {
 		log.Printf("[Worker %d] PR already exists for issue #%d (branch: %s)", w.id, task.Issue.Number, existingBranch)
@@ -730,7 +731,7 @@ func (w *Worker) createPR(ctx context.Context, task *Task) (string, error) {
 	return prURL, nil
 }
 
-func (w *Worker) llmStep(ctx context.Context, task *Task, stepName, prompt, llm string) (string, error) {
+func (w *Worker) llmStep(_ context.Context, task *Task, stepName, prompt, llm string) (string, error) {
 	sessionTitle := fmt.Sprintf("%s-%d", stepName, task.Issue.Number)
 	session, err := w.oc.CreateSession(sessionTitle)
 	if err != nil {
@@ -800,10 +801,10 @@ func extractPRURL(errMsg string) string {
 }
 
 func checkAlreadyDone(response string) string {
-	for _, line := range strings.Split(response, "\n") {
+	for line := range strings.SplitSeq(response, "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "ALREADY_DONE:") {
-			return strings.TrimSpace(strings.TrimPrefix(line, "ALREADY_DONE:"))
+		if after, ok := strings.CutPrefix(line, "ALREADY_DONE:"); ok {
+			return strings.TrimSpace(after)
 		}
 	}
 	return ""

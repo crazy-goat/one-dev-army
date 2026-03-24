@@ -19,6 +19,12 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
 
+const (
+	columnAIReview      = "AI Review"
+	defaultBugTitle     = "[Bug] Fix issue"
+	defaultFeatureTitle = "[Feature] New feature"
+)
+
 type taskCard struct {
 	ID       int
 	Title    string
@@ -59,7 +65,7 @@ func (s *Server) handleBoardData(w http.ResponseWriter, r *http.Request) {
 	s.renderTemplateBlock(w, "board.html", "board-columns", data)
 }
 
-func (s *Server) buildBoardData(r *http.Request) boardData {
+func (s *Server) buildBoardData(_ *http.Request) boardData {
 	data := boardData{
 		Active:       "board",
 		OpenCodePort: s.webPort,
@@ -148,10 +154,10 @@ func inferColumnFromIssue(issue github.Issue) string {
 		return "Approve"
 	}
 	if labelSet["stage:create-pr"] {
-		return "AI Review" // Create PR is part of AI Review column
+		return columnAIReview // Create PR is part of AI Review column
 	}
 	if labelSet["stage:code-review"] {
-		return "AI Review"
+		return columnAIReview
 	}
 	if labelSet["stage:coding"] || labelSet["stage:testing"] || labelSet["in-progress"] {
 		return "Code"
@@ -204,7 +210,7 @@ func (s *Server) addCardToColumn(data *boardData, col string, issue github.Issue
 	}
 }
 
-func (s *Server) handleAddEpic(w http.ResponseWriter, r *http.Request) {
+func (*Server) handleAddEpic(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -231,7 +237,7 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-func (s *Server) handleManualSync(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleManualSync(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if s.syncService == nil {
@@ -258,7 +264,7 @@ func (s *Server) handleManualSync(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handlePlanSprint(w http.ResponseWriter, r *http.Request) {
+func (*Server) handlePlanSprint(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -445,7 +451,7 @@ func (s *Server) handleDecline(w http.ResponseWriter, r *http.Request) {
 		// Fallback: direct stage change if worker not processing
 		_ = s.orchestrator.ChangeStage(issueNum, github.StageCode, github.ReasonManualDecline)
 		if reason != "" {
-			comment := fmt.Sprintf("**Declined** — sent back for fixes.\n\n%s", reason)
+			comment := "**Declined** — sent back for fixes.\n\n" + reason
 			_ = s.gh.AddComment(issueNum, comment)
 		}
 		if s.store != nil {
@@ -511,7 +517,7 @@ func (s *Server) handleDirectMerge(w http.ResponseWriter, r *http.Request, issue
 		}
 		_ = s.orchestrator.ChangeStage(issueNum, github.StageFailed, github.ReasonManualMergeFailed)
 
-		comment := fmt.Sprintf("Merge failed (likely conflict). PR closed, task moved to Failed.\n\nError: %s", err.Error())
+		comment := "Merge failed (likely conflict). PR closed, task moved to Failed.\n\nError: " + err.Error()
 		_ = s.gh.AddComment(issueNum, comment)
 
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -555,7 +561,7 @@ func (s *Server) renderTemplateBlock(w http.ResponseWriter, name string, block s
 
 const LLMRequestTimeout = 3 * time.Minute
 
-func (s *Server) handleCurrentTask(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleCurrentTask(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if s.orchestrator == nil {
 		if err := json.NewEncoder(w).Encode(map[string]any{"active": false}); err != nil {
@@ -582,7 +588,7 @@ func (s *Server) handleCurrentTask(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleSprintStatus(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSprintStatus(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if s.orchestrator == nil {
 		if err := json.NewEncoder(w).Encode(map[string]any{"paused": true, "processing": false}); err != nil {
@@ -760,7 +766,7 @@ type workersData struct {
 	Workers      []worker.WorkerInfo
 }
 
-func (s *Server) handleWorkers(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleWorkers(w http.ResponseWriter, _ *http.Request) {
 	workers := s.pool()
 
 	data := workersData{
@@ -1114,9 +1120,9 @@ func (s *Server) handleWizardRefine(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		if session.Type == WizardTypeBug {
-			result.Title = "[Bug] Fix issue"
+			result.Title = defaultBugTitle
 		} else {
-			result.Title = "[Feature] New feature"
+			result.Title = defaultFeatureTitle
 		}
 	}
 
@@ -1227,9 +1233,9 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 		mockTitle := session.GetFinalTitle()
 		if mockTitle == "" {
 			if session.Type == WizardTypeBug {
-				mockTitle = "[Bug] Fix issue"
+				mockTitle = defaultBugTitle
 			} else {
-				mockTitle = "[Feature] New feature"
+				mockTitle = defaultFeatureTitle
 			}
 		}
 		mockIssue := CreatedIssue{
@@ -1292,9 +1298,9 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 	if title == "" {
 		// Simple fallback
 		if session.Type == WizardTypeBug {
-			title = "[Bug] Fix issue"
+			title = defaultBugTitle
 		} else {
-			title = "[Feature] New feature"
+			title = defaultFeatureTitle
 		}
 	}
 
@@ -1579,7 +1585,7 @@ func (s *Server) handleWizardSelectType(w http.ResponseWriter, r *http.Request) 
 }
 
 // handleRateLimit returns the current GitHub API rate limit status as HTML fragment
-func (s *Server) handleRateLimit(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleRateLimit(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	if s.rateLimitService == nil {
@@ -1705,7 +1711,7 @@ type settingsData struct {
 }
 
 // handleSettings renders the LLM configuration settings page
-func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSettings(w http.ResponseWriter, _ *http.Request) {
 	// Load current config with model validation and fallback
 	availableModels := s.GetAvailableModelIDs()
 	cfg, err := config.Load(s.rootDir, availableModels...)
@@ -1717,7 +1723,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build comma-separated list of forced strong stages
-	forceStrongStages := strings.Join(cfg.LLM.RoutingRules.ForceStrongForStages, ", ")
+	forceStrongStages := strings.Join(cfg.LLM.RoutingRules.ForceStrongForStages, ", ") //nolint:staticcheck // deprecated but kept for backward compatibility
 
 	data := settingsData{
 		Active:            "settings",
@@ -1769,9 +1775,9 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	for _, mode := range modes {
 		if mode.model == "" {
-			errors = append(errors, fmt.Sprintf("%s: Model is required", mode.name))
+			errors = append(errors, mode.name+": Model is required")
 		} else if !validateModelFormat(mode.model) {
-			errors = append(errors, fmt.Sprintf("%s: Model must be in 'provider/model' format (e.g., 'nexos-ai/Kimi K2.5')", mode.name))
+			errors = append(errors, mode.name+": Model must be in 'provider/model' format (e.g., 'nexos-ai/Kimi K2.5')")
 		}
 	}
 
@@ -1803,21 +1809,21 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	if err != nil || codeSizeThreshold < 1 {
 		errors = append(errors, "Code Size Threshold must be a positive integer")
 	} else {
-		cfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold = codeSizeThreshold
+		cfg.LLM.RoutingRules.ComplexityThresholds.CodeSizeThreshold = codeSizeThreshold //nolint:staticcheck // deprecated but kept for backward compatibility
 	}
 
 	highComplexityThreshold, err := strconv.Atoi(r.FormValue("routing_high_complexity_threshold"))
 	if err != nil || highComplexityThreshold < 1 {
 		errors = append(errors, "High Complexity Threshold must be a positive integer")
 	} else {
-		cfg.LLM.RoutingRules.ComplexityThresholds.HighComplexityThreshold = highComplexityThreshold
+		cfg.LLM.RoutingRules.ComplexityThresholds.HighComplexityThreshold = highComplexityThreshold //nolint:staticcheck // deprecated but kept for backward compatibility
 	}
 
 	fileCountThreshold, err := strconv.Atoi(r.FormValue("routing_file_count_threshold"))
 	if err != nil || fileCountThreshold < 1 {
 		errors = append(errors, "File Count Threshold must be a positive integer")
 	} else {
-		cfg.LLM.RoutingRules.ComplexityThresholds.FileCountThreshold = fileCountThreshold
+		cfg.LLM.RoutingRules.ComplexityThresholds.FileCountThreshold = fileCountThreshold //nolint:staticcheck // deprecated but kept for backward compatibility
 	}
 
 	// Parse forced strong stages
@@ -1825,15 +1831,15 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	if forceStrongStagesStr != "" {
 		// Split by comma and trim whitespace
 		stages := strings.Split(forceStrongStagesStr, ",")
-		cfg.LLM.RoutingRules.ForceStrongForStages = make([]string, 0, len(stages))
+		cfg.LLM.RoutingRules.ForceStrongForStages = make([]string, 0, len(stages)) //nolint:staticcheck // deprecated but kept for backward compatibility
 		for _, stage := range stages {
 			stage = strings.TrimSpace(stage)
 			if stage != "" {
-				cfg.LLM.RoutingRules.ForceStrongForStages = append(cfg.LLM.RoutingRules.ForceStrongForStages, stage)
+				cfg.LLM.RoutingRules.ForceStrongForStages = append(cfg.LLM.RoutingRules.ForceStrongForStages, stage) //nolint:staticcheck // deprecated but kept for backward compatibility
 			}
 		}
 	} else {
-		cfg.LLM.RoutingRules.ForceStrongForStages = []string{}
+		cfg.LLM.RoutingRules.ForceStrongForStages = []string{} //nolint:staticcheck // deprecated but kept for backward compatibility
 	}
 
 	// If there are validation errors, re-render the form with errors
@@ -1852,7 +1858,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[Dashboard] LLM configuration saved successfully")
 
 	// Re-render with success message and any warnings
-	forceStrongStages := strings.Join(cfg.LLM.RoutingRules.ForceStrongForStages, ", ")
+	forceStrongStages := strings.Join(cfg.LLM.RoutingRules.ForceStrongForStages, ", ") //nolint:staticcheck // deprecated but kept for backward compatibility
 	data := settingsData{
 		Active:            "settings",
 		OpenCodePort:      s.webPort,
@@ -1915,7 +1921,7 @@ func (s *Server) validateModelSelection(model string) bool {
 }
 
 // handleWorkerStatus returns the current worker status as JSON
-func (s *Server) handleWorkerStatus(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleWorkerStatus(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if s.orchestrator == nil {

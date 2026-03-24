@@ -111,7 +111,7 @@ func TestRunAll_CollectsAllResults(t *testing.T) {
 	defer srv.Close()
 
 	progressCalls := 0
-	results := preflight.RunAll(dir, srv.URL, func(name string, index, total int, status string) {
+	results := preflight.RunAll(dir, srv.URL, func(_ string, _, _ int, _ string) {
 		progressCalls++
 	})
 	if len(results) != 6 {
@@ -167,7 +167,7 @@ func TestRunAll_ProgressCallback(t *testing.T) {
 		t.Fatalf("expected 12 progress calls, got %d", len(calls))
 	}
 
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		if calls[i*2].status != "running" {
 			t.Errorf("call %d: expected status 'running', got %q", i*2, calls[i*2].status)
 		}

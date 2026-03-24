@@ -47,13 +47,13 @@ func countComplexityIndicators(text string) int {
 
 // ComplexityAnalyzer provides detailed complexity analysis for tasks
 type ComplexityAnalyzer struct {
-	thresholds config.ComplexityThresholds
+	thresholds config.ComplexityThresholds //nolint:staticcheck // deprecated but kept for backward compatibility
 }
 
 // NewComplexityAnalyzer creates a new complexity analyzer
-func NewComplexityAnalyzer(thresholds config.ComplexityThresholds) *ComplexityAnalyzer {
+func NewComplexityAnalyzer(thresholds config.ComplexityThresholds) *ComplexityAnalyzer { //nolint:staticcheck // deprecated but kept for backward compatibility
 	if thresholds.CodeSizeThreshold == 0 {
-		thresholds = config.DefaultLLMConfig().RoutingRules.ComplexityThresholds
+		thresholds = config.DefaultLLMConfig().RoutingRules.ComplexityThresholds //nolint:staticcheck // deprecated but kept for backward compatibility
 	}
 
 	return &ComplexityAnalyzer{
@@ -99,14 +99,14 @@ func (ca *ComplexityAnalyzer) calculateComplexity(report ComplexityReport) confi
 	if report.LineCount > ca.thresholds.HighComplexityThreshold {
 		score += 3
 	} else if report.LineCount > ca.thresholds.CodeSizeThreshold {
-		score += 1
+		score++
 	}
 
 	// File count scoring
 	if report.FileCount > ca.thresholds.FileCountThreshold {
 		score += 2
 	} else if report.FileCount > 2 {
-		score += 1
+		score++
 	}
 
 	// Complexity indicators
@@ -256,6 +256,7 @@ func EstimateFromKeywords(text string, keywords TaskKeywords) config.ComplexityL
 
 // DetectComplexity analyzes context and returns complexity level
 // This is a simplified version that uses default thresholds
+//
 // Deprecated: Complexity-based routing is being phased out
 func DetectComplexity(context string) config.ComplexityLevel {
 	thresholds := config.DefaultLLMConfig().RoutingRules.ComplexityThresholds

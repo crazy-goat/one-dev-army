@@ -43,7 +43,7 @@ func (ea *EpicAnalyzer) Analyze(description string) ([]TaskSpec, error) {
 	// Use router to select model for planning category with complexity detection
 	llmModel := ea.cfg.EpicAnalysis.LLM
 	if ea.router != nil {
-		complexity := llm.DetectComplexity(description)
+		complexity := llm.DetectComplexity(description) //nolint:staticcheck // deprecated but still used
 		routerModel := ea.router.SelectModel(config.CategoryPlanning, complexity, nil)
 		if routerModel != "" {
 			llmModel = routerModel

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"time"
 )
+
+const roleAssistant = "assistant"
 
 type Session struct {
 	ID    string `json:"id"`
@@ -170,7 +173,7 @@ func (c *Client) HealthCheck() (err error) {
 	}
 
 	if !result.Healthy {
-		return fmt.Errorf("health check: server reports unhealthy")
+		return errors.New("health check: server reports unhealthy")
 	}
 
 	return nil
@@ -295,7 +298,7 @@ func (c *Client) SendMessageStructured(ctx context.Context, sessionID, prompt st
 	}
 
 	if sResp.Info.Structured == nil {
-		return fmt.Errorf("structured message: no structured data in response")
+		return errors.New("structured message: no structured data in response")
 	}
 
 	if err := json.Unmarshal(sResp.Info.Structured, result); err != nil {
@@ -410,7 +413,7 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 	}
 	sseReq.Header.Set("Accept", "text/event-stream")
 
-	sseResp, err := c.httpClient.Do(sseReq)
+	sseResp, err := c.httpClient.Do(sseReq) //nolint:bodyclose // body closed in goroutine below
 	if err != nil {
 		return nil, fmt.Errorf("connecting to SSE: %w", err)
 	}
@@ -465,7 +468,7 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 					msgTexts[props.MessageID] = sb
 				}
 				sb.WriteString(props.Delta)
-				if output != nil && (msgRoles[props.MessageID] == "assistant" || assistantMsgID == "" || props.MessageID == assistantMsgID) {
+				if output != nil && (msgRoles[props.MessageID] == roleAssistant || assistantMsgID == "" || props.MessageID == assistantMsgID) {
 					_, _ = fmt.Fprint(output, props.Delta)
 				}
 
@@ -476,7 +479,7 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 				}
 				if props.Info.SessionID == sessionID {
 					msgRoles[props.Info.ID] = props.Info.Role
-					if props.Info.Role == "assistant" {
+					if props.Info.Role == roleAssistant {
 						assistantMsgID = props.Info.ID
 					}
 				}
@@ -574,7 +577,7 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 	case <-connected:
 	case <-time.After(5 * time.Second):
 		_ = sseResp.Body.Close()
-		return nil, fmt.Errorf("timeout waiting for SSE connection")
+		return nil, errors.New("timeout waiting for SSE connection")
 	case <-ctx.Done():
 		_ = sseResp.Body.Close()
 		return nil, ctx.Err()
@@ -605,7 +608,7 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 	}
 	if assistantText == "" {
 		for msgID, sb := range msgTexts {
-			if msgRoles[msgID] == "assistant" || msgRoles[msgID] == "" {
+			if msgRoles[msgID] == roleAssistant || msgRoles[msgID] == "" {
 				assistantText = sb.String()
 			}
 		}
@@ -632,7 +635,7 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 		Info: MessageInfo{
 			ID:        assistantMsgID,
 			SessionID: sessionID,
-			Role:      "assistant",
+			Role:      roleAssistant,
 		},
 		Parts: parts,
 	}

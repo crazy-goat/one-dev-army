@@ -31,9 +31,9 @@ func NewAttachmentManager(gh *github.Client, worktree *git.Worktree) *Attachment
 // No file is created - the plan is only added as a comment.
 // Returns empty string since no file URL is generated.
 func (am *AttachmentManager) CreateAndAttach(
-	ctx context.Context,
+	_ context.Context,
 	issueNum int,
-	branch string,
+	_ string,
 	analysis string,
 	planContent string,
 ) (string, error) {
@@ -62,7 +62,7 @@ func (am *AttachmentManager) CreateAndAttach(
 // GetFromIssue retrieves the plan from a GitHub issue by checking for plan.md
 // in the associated branch. Returns nil if no plan is found.
 func (am *AttachmentManager) GetFromIssue(
-	ctx context.Context,
+	_ context.Context,
 	issueNum int,
 ) (*Plan, error) {
 	// Try to find the branch for this issue
@@ -93,7 +93,7 @@ func (am *AttachmentManager) GetFromIssue(
 // UpdateAttachment updates an existing plan.md file with new content,
 // commits the changes, and pushes to the branch.
 func (am *AttachmentManager) UpdateAttachment(
-	ctx context.Context,
+	_ context.Context,
 	issueNum int,
 	branch string,
 	plan *Plan,

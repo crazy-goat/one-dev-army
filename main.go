@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -207,7 +208,7 @@ func runServe(dir string, debugWebSocket bool) error {
 		if spawnedServer != nil {
 			_ = spawnedServer.Stop()
 		}
-		return fmt.Errorf("preflight checks failed")
+		return errors.New("preflight checks failed")
 	}
 	fmt.Println()
 
@@ -265,7 +266,7 @@ func runServe(dir string, debugWebSocket bool) error {
 	// Conditionally setup GitHub Projects if enabled
 	if cfg.GitHub.UseProjects {
 		fmt.Println("  → GitHub Projects enabled, setting up project board...")
-		if _, err := gh.EnsureProject("ODA"); err != nil {
+		if _, err := gh.EnsureProject("ODA"); err != nil { //nolint:staticcheck // deprecated but kept for backward compatibility
 			return fmt.Errorf("ensuring project: %w", err)
 		}
 		fmt.Println("  ✓ project board ready")
@@ -351,7 +352,7 @@ func runServe(dir string, debugWebSocket bool) error {
 	pool.Start(ctx)
 
 	go func() {
-		if err := orchestrator.Run(ctx); err != nil && err != context.Canceled {
+		if err := orchestrator.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			fmt.Fprintf(os.Stderr, "orchestrator error: %v\n", err)
 		}
 	}()
@@ -367,7 +368,7 @@ func runServe(dir string, debugWebSocket bool) error {
 
 	srvErrCh := make(chan error, 1)
 	go func() {
-		if err := srv.Start(); err != nil && err != http.ErrServerClosed {
+		if err := srv.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			srvErrCh <- err
 		}
 		close(srvErrCh)

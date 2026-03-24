@@ -412,7 +412,7 @@ func TestRateLimitService_ConcurrentAccess(t *testing.T) {
 
 	// Concurrent reads
 	done := make(chan bool)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		go func() {
 			_ = service.GetData()
 			done <- true
@@ -420,7 +420,7 @@ func TestRateLimitService_ConcurrentAccess(t *testing.T) {
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		<-done
 	}
 
@@ -434,9 +434,9 @@ func TestRateLimitService_ConcurrentAccess(t *testing.T) {
 // TestRateLimitService_fetch_WithToken tests the fetch functionality with a mock server
 func TestRateLimitService_fetch_WithToken(t *testing.T) {
 	// Create a mock GitHub API server
-	mockResponse := map[string]interface{}{
-		"resources": map[string]interface{}{
-			"core": map[string]interface{}{
+	mockResponse := map[string]any{
+		"resources": map[string]any{
+			"core": map[string]any{
 				"limit":     5000,
 				"remaining": 4999,
 				"reset":     time.Now().Add(1 * time.Hour).Unix(),

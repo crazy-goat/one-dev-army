@@ -2,8 +2,10 @@ package scheduler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
@@ -43,7 +45,7 @@ func (p *Planner) PlanSprint() (*Sprint, error) {
 	}
 
 	if len(issues) == 0 {
-		return nil, fmt.Errorf("no open issues in backlog")
+		return nil, errors.New("no open issues in backlog")
 	}
 
 	session, err := p.oc.CreateSession("sprint-planning")
@@ -70,10 +72,7 @@ func (p *Planner) PlanSprint() (*Sprint, error) {
 		return nil, fmt.Errorf("parsing sprint plan: %w", err)
 	}
 
-	sprintID, err := p.nextSprintID()
-	if err != nil {
-		return nil, fmt.Errorf("determining sprint number: %w", err)
-	}
+	sprintID := p.nextSprintID()
 
 	milestoneName := fmt.Sprintf("Sprint %d", sprintID)
 	if err := p.gh.CreateMilestone(milestoneName); err != nil {
@@ -105,7 +104,7 @@ func (p *Planner) AnalyzeInsights(sprintID int) error {
 	var metaIssueNum int
 
 	for _, issue := range issues {
-		if strings.HasPrefix(issue.Title, "Sprint "+fmt.Sprintf("%d", sprintID)) {
+		if strings.HasPrefix(issue.Title, "Sprint "+strconv.Itoa(sprintID)) {
 			metaIssueNum = issue.Number
 		}
 
@@ -174,10 +173,10 @@ func (p *Planner) AnalyzeInsights(sprintID int) error {
 	return nil
 }
 
-func (p *Planner) nextSprintID() (int, error) {
+func (p *Planner) nextSprintID() int {
 	milestones, err := p.gh.ListMilestones()
 	if err != nil {
-		return 1, nil
+		return 1
 	}
 
 	maxID := 0
@@ -187,7 +186,7 @@ func (p *Planner) nextSprintID() (int, error) {
 			maxID = id
 		}
 	}
-	return maxID + 1, nil
+	return maxID + 1
 }
 
 type sprintPlanResponse struct {
@@ -229,7 +228,7 @@ func parseSprintPlan(content string) ([]int, error) {
 		return nil, fmt.Errorf("unmarshaling sprint plan: %w", err)
 	}
 	if len(plan.TaskIDs) == 0 {
-		return nil, fmt.Errorf("sprint plan contains no tasks")
+		return nil, errors.New("sprint plan contains no tasks")
 	}
 	return plan.TaskIDs, nil
 }

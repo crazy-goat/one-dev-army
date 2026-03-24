@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -179,12 +180,12 @@ func startMockOpencode(t *testing.T) (*httptest.Server, *requestLog) {
 			pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/session/"), "/")
 			sessID := pathParts[0]
 
-			response := map[string]interface{}{
-				"info": map[string]interface{}{
+			response := map[string]any{
+				"info": map[string]any{
 					"id":        "msg-cr-1",
 					"sessionID": sessID,
 					"role":      "assistant",
-					"structured": map[string]interface{}{
+					"structured": map[string]any{
 						"approved":     true,
 						"already_done": false,
 						"issues":       []string{},
@@ -192,7 +193,7 @@ func startMockOpencode(t *testing.T) (*httptest.Server, *requestLog) {
 						"verdict":      "Code looks good",
 					},
 				},
-				"parts": []interface{}{},
+				"parts": []any{},
 			}
 
 			_ = json.NewEncoder(w).Encode(response)
@@ -263,13 +264,7 @@ func TestWorkerProcessEndToEnd(t *testing.T) {
 
 	expectedSessions := []string{"technical-planning-99", "implement-99"}
 	for _, expected := range expectedSessions {
-		found := false
-		for _, s := range log.sessions {
-			if s == expected {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(log.sessions, expected)
 		if !found {
 			t.Errorf("expected session %q to be created, got sessions: %v", expected, log.sessions)
 		}

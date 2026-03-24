@@ -30,7 +30,7 @@ func (m *mockGitHubClient) ListIssuesWithPRStatus(milestone string) ([]github.Is
 	return result, nil
 }
 
-func (m *mockGitHubClient) AddLabel(issueNum int, label string) error {
+func (*mockGitHubClient) AddLabel(_ int, _ string) error {
 	return nil
 }
 
@@ -41,7 +41,7 @@ type mockStore struct {
 	saveErr      error
 }
 
-func (m *mockStore) SaveIssueCache(issue github.Issue, milestone string, force bool) error {
+func (m *mockStore) SaveIssueCache(issue github.Issue, _ string, _ bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.saveErr != nil {
@@ -187,7 +187,7 @@ func TestSyncService_syncNow_NoGitHubClient(t *testing.T) {
 	}
 }
 
-func TestSyncService_syncNow_NoStore(t *testing.T) {
+func TestSyncService_syncNow_NoStore(_ *testing.T) {
 	gh := &mockGitHubClient{
 		issues: []github.Issue{{Number: 1, Title: "Issue 1"}},
 	}
@@ -321,7 +321,7 @@ func TestSyncService_ThreadSafety(t *testing.T) {
 	}()
 
 	// Wait for all goroutines
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		select {
 		case <-done:
 		case <-time.After(time.Second):

@@ -137,10 +137,8 @@ func TestValidateIssueCreateFlags(t *testing.T) {
 				if !strings.Contains(err.Error(), tt.errMsg) {
 					t.Errorf("validateIssueCreateFlags() error = %v, want error containing %v", err, tt.errMsg)
 				}
-			} else {
-				if err != nil {
-					t.Errorf("validateIssueCreateFlags() error = %v, wantErr %v", err, tt.wantErr)
-				}
+			} else if err != nil {
+				t.Errorf("validateIssueCreateFlags() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -163,7 +161,7 @@ func TestIssueCreateCommand_Help(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			// Just verify it doesn't panic - help prints to stdout
 			// We can't easily capture stdout in this test structure
 			_ = tt.args

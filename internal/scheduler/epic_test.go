@@ -127,13 +127,11 @@ func TestEpicAnalyzer_ParseResponse(t *testing.T) {
 
 			// Broadcast SSE events in a goroutine, but track it so the SSE
 			// handler can wait for completion before returning.
-			broadcastWg.Add(1)
-			go func() {
-				defer broadcastWg.Done()
+			broadcastWg.Go(func() {
 				broadcast(`{"type":"message.updated","properties":{"info":{"id":"msg-1","sessionID":"sess-epic","role":"assistant"}}}`)
 				broadcast(fmt.Sprintf(`{"type":"message.part.delta","properties":{"sessionID":"sess-epic","messageID":"msg-1","partID":"prt-1","field":"text","delta":"%s"}}`, escapedJSON))
 				broadcast(`{"type":"session.status","properties":{"sessionID":"sess-epic","status":{"type":"idle"}}}`)
-			}()
+			})
 
 			w.WriteHeader(http.StatusNoContent)
 

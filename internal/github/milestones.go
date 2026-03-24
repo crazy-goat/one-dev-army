@@ -38,7 +38,7 @@ func (c *Client) EnsureMilestone() (string, error) {
 // Uses the same naming convention as EnsureMilestone (e.g. "Sprint 2026-03-24 08:15")
 // with a due date 2 weeks from now.
 // Returns the title of the created milestone and an error if creation fails.
-func (c *Client) CreateNextSprint(currentMilestoneTitle string) (string, error) {
+func (c *Client) CreateNextSprint(_ string) (string, error) {
 	now := time.Now()
 	title := "Sprint " + now.Format("2006-01-02 15:04")
 	dueDate := now.AddDate(0, 0, 14).Format("2006-01-02T15:04:05Z")

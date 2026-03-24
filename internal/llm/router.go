@@ -27,31 +27,24 @@ func NewRouter(cfg *config.LLMConfig) *Router {
 // SelectModel returns the appropriate model reference for a task
 // The complexity parameter is kept for backward compatibility but is now ignored
 // Each task category has a single dedicated model
-func (r *Router) SelectModel(category config.TaskCategory, complexity config.ComplexityLevel, hints map[string]any) string {
+func (r *Router) SelectModel(category config.TaskCategory, _ config.ComplexityLevel, _ map[string]any) string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	// Get model for category (each mode has a single model now)
-	modelCfg := r.cfg.GetModelForCategory(category, complexity)
+	modelCfg := r.cfg.GetModelForCategory(category, config.ComplexityMedium)
 	return modelCfg.ToModelRef()
 }
 
 // SelectModelForStage returns the appropriate model for a pipeline stage
 // Uses the new per-mode model selection
-func (r *Router) SelectModelForStage(stage string, context string) string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	// Determine category based on stage
-	category := r.categoryForStage(stage)
-
-	// Get model for category (complexity is now ignored)
-	modelCfg := r.cfg.GetModelForCategory(category, config.ComplexityMedium)
-	return modelCfg.ToModelRef()
+func (r *Router) SelectModelForStage(stage string, _ string) string {
+	category := categoryForStage(stage)
+	return r.SelectModel(category, config.ComplexityMedium, nil)
 }
 
 // categoryForStage maps pipeline stages to task categories
-func (r *Router) categoryForStage(stage string) config.TaskCategory {
+func categoryForStage(stage string) config.TaskCategory {
 	switch stage {
 	case "analysis", "planning", "plan-review":
 		return config.CategoryPlanning
@@ -97,12 +90,14 @@ func (r *Router) GetConfig() config.LLMConfig {
 }
 
 // RoutingHints provides a builder for routing hints
+//
 // Deprecated: Hints are no longer used for model selection
 type RoutingHints struct {
 	hints map[string]any
 }
 
 // NewRoutingHints creates a new routing hints builder
+//
 // Deprecated: Hints are no longer used for model selection
 func NewRoutingHints() *RoutingHints {
 	return &RoutingHints{

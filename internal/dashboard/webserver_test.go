@@ -180,7 +180,7 @@ func TestWebServer_ThreadSafety(t *testing.T) {
 	}()
 
 	// Wait for all goroutines
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		select {
 		case <-done:
 		case <-time.After(time.Second):
@@ -200,6 +200,6 @@ func TestWebServer_ContextCancellation(t *testing.T) {
 	case <-ws.ctx.Done():
 		// Expected
 	case <-time.After(time.Second):
-		t.Error("Context should be cancelled")
+		t.Error("Context should be canceled")
 	}
 }

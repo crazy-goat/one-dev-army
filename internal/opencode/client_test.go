@@ -34,7 +34,7 @@ func TestHealthCheck(t *testing.T) {
 }
 
 func TestHealthCheckUnhealthy(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]bool{"healthy": false})
 	}))
@@ -48,7 +48,7 @@ func TestHealthCheckUnhealthy(t *testing.T) {
 }
 
 func TestHealthCheckServerError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
@@ -267,7 +267,7 @@ func TestGetMessages(t *testing.T) {
 }
 
 func TestSendMessageServerError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte("internal error"))
 	}))
@@ -281,7 +281,7 @@ func TestSendMessageServerError(t *testing.T) {
 }
 
 func TestCreateSessionServerError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte("bad request"))
 	}))
@@ -354,7 +354,7 @@ func TestSendMessageStream_WithToolCalls(t *testing.T) {
 			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_call.completed","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-2","toolCall":{"id":"call-1","name":"Bash","arguments":{"command":"ls -la"}}}}`)
 			flusher.Flush()
 
-			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_result","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-3","toolResult":{"id":"call-1","output":"total 32\ndrwxr-xr-x  5 user user 4096 Jan 1 12:00 .\n"}}}`)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", "{\"type\":\"tool_result\",\"properties\":{\"sessionID\":\"sess-123\",\"messageID\":\"msg-1\",\"partID\":\"prt-3\",\"toolResult\":{\"id\":\"call-1\",\"output\":\"total 32\\ndrwxr-xr-x  5 user 4096 Jan 1 12:00 .\\n\"}}}")
 			flusher.Flush()
 
 			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"session.status","properties":{"sessionID":"sess-123","status":{"type":"idle"}}}`)
@@ -434,7 +434,7 @@ func TestSendMessageStream_WithToolCalls(t *testing.T) {
 }
 
 func TestClientClone(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(opencode.Session{
 			ID:    "sess-clone-test",

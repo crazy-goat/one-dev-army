@@ -2,6 +2,7 @@ package mvp
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -96,7 +97,7 @@ func TestOrchestratorRunContextCancel(t *testing.T) {
 
 	select {
 	case err := <-done:
-		if err != context.Canceled {
+		if !errors.Is(err, context.Canceled) {
 			t.Errorf("Run() error = %v, want context.Canceled", err)
 		}
 	case <-time.After(5 * time.Second):

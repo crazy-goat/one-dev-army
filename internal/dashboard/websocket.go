@@ -10,8 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/gorilla/websocket"
+
+	"github.com/crazy-goat/one-dev-army/internal/github"
 )
 
 const (
@@ -55,8 +56,8 @@ var upgrader = websocket.Upgrader{
 			return origin == "" || r.Host == origin
 		}
 
-		allowedList := strings.Split(allowedOrigins, ",")
-		for _, allowed := range allowedList {
+		allowedList := strings.SplitSeq(allowedOrigins, ",")
+		for allowed := range allowedList {
 			if strings.TrimSpace(allowed) == origin {
 				return true
 			}
@@ -155,7 +156,7 @@ func NewHubWithLimit(limit int, debug bool) *Hub {
 }
 
 // logf logs a message if debug mode is enabled
-func (h *Hub) logf(format string, v ...interface{}) {
+func (h *Hub) logf(format string, v ...any) {
 	if h.debug {
 		log.Printf("[WebSocket] "+format, v...)
 	}

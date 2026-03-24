@@ -96,7 +96,7 @@ func TestSprintDetector_GetCurrentSprintTitle(t *testing.T) {
 		detector := NewSprintDetector(client)
 
 		if detector == nil {
-			t.Error("NewSprintDetector() returned nil")
+			t.Fatal("NewSprintDetector() returned nil")
 		}
 
 		if detector.client != client {

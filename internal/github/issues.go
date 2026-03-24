@@ -359,9 +359,9 @@ func (c *Client) GetIssuePRStatus(issueNumber int) (bool, *time.Time, error) {
 	owner, repo := parts[0], parts[1]
 
 	out, err := c.ghNoRepo("api", "graphql",
-		"-f", fmt.Sprintf("query=%s", query),
-		"-f", fmt.Sprintf("owner=%s", owner),
-		"-f", fmt.Sprintf("repo=%s", repo),
+		"-f", "query="+query,
+		"-f", "owner="+owner,
+		"-f", "repo="+repo,
 		"-F", fmt.Sprintf("number=%d", issueNumber),
 	)
 	if err != nil {
@@ -483,13 +483,13 @@ func (c *Client) ListIssuesWithPRStatus(milestone string) ([]Issue, error) {
 	for {
 		args := []string{
 			"api", "graphql",
-			"-f", fmt.Sprintf("query=%s", query),
-			"-f", fmt.Sprintf("owner=%s", owner),
-			"-f", fmt.Sprintf("repo=%s", repo),
-			"-f", fmt.Sprintf("milestone=%s", milestone),
+			"-f", "query=" + query,
+			"-f", "owner=" + owner,
+			"-f", "repo=" + repo,
+			"-f", "milestone=" + milestone,
 		}
 		if cursor != nil {
-			args = append(args, "-f", fmt.Sprintf("cursor=%s", *cursor))
+			args = append(args, "-f", "cursor="+*cursor)
 		}
 
 		out, err := c.ghNoRepo(args...)
@@ -581,7 +581,7 @@ func (c *Client) CloseMilestone(number int) error {
 	return nil
 }
 
-func parseJSON(data []byte, v interface{}) error {
+func parseJSON(data []byte, v any) error {
 	if err := json.Unmarshal(data, v); err != nil {
 		return fmt.Errorf("parsing JSON: %w", err)
 	}

@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/gorilla/websocket"
+
+	"github.com/crazy-goat/one-dev-army/internal/github"
 )
 
 func TestNewHub(t *testing.T) {
@@ -84,14 +85,14 @@ func TestHubRegisterUnregister(t *testing.T) {
 
 	// Connect a client
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil) //nolint:bodyclose // websocket connection is closed below
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
 	defer func() { _ = conn.Close() }()
 
 	// Wait for registration using polling
-	waitForClientCount(t, hub, 1, time.Second)
+	waitForClientCount(t, hub, 1)
 
 	if count := hub.ClientCount(); count != 1 {
 		t.Errorf("Expected 1 client, got %d", count)
@@ -101,7 +102,7 @@ func TestHubRegisterUnregister(t *testing.T) {
 	_ = conn.Close()
 
 	// Wait for unregistration using polling
-	waitForClientCount(t, hub, 0, time.Second)
+	waitForClientCount(t, hub, 0)
 
 	if count := hub.ClientCount(); count != 0 {
 		t.Errorf("Expected 0 clients after disconnect, got %d", count)
@@ -122,8 +123,8 @@ func TestHubBroadcast(t *testing.T) {
 	// Connect multiple clients
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
 	var conns []*websocket.Conn
-	for i := 0; i < 3; i++ {
-		conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	for i := range 3 {
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil) //nolint:bodyclose // websocket connection is closed below
 		if err != nil {
 			t.Fatalf("Failed to connect client %d: %v", i, err)
 		}
@@ -132,7 +133,7 @@ func TestHubBroadcast(t *testing.T) {
 	}
 
 	// Wait for registration using polling
-	waitForClientCount(t, hub, 3, time.Second)
+	waitForClientCount(t, hub, 3)
 
 	// Give clients time to start their read pumps
 	time.Sleep(50 * time.Millisecond)
@@ -168,14 +169,14 @@ func TestHubBroadcastIssueUpdate(t *testing.T) {
 
 	// Connect a client
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil) //nolint:bodyclose // websocket connection is closed below
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
 	defer func() { _ = conn.Close() }()
 
 	// Wait for registration using polling
-	waitForClientCount(t, hub, 1, time.Second)
+	waitForClientCount(t, hub, 1)
 
 	// Broadcast issue update
 	issue := github.Issue{
@@ -230,14 +231,14 @@ func TestHubBroadcastSyncComplete(t *testing.T) {
 
 	// Connect a client
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil) //nolint:bodyclose // websocket connection is closed below
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
 	defer func() { _ = conn.Close() }()
 
 	// Wait for registration using polling
-	waitForClientCount(t, hub, 1, time.Second)
+	waitForClientCount(t, hub, 1)
 
 	// Broadcast sync complete
 	hub.BroadcastSyncComplete(10)
@@ -281,14 +282,14 @@ func TestHubBroadcastWorkerUpdate(t *testing.T) {
 
 	// Connect a client
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil) //nolint:bodyclose // websocket connection is closed below
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
 	defer func() { _ = conn.Close() }()
 
 	// Wait for registration using polling
-	waitForClientCount(t, hub, 1, time.Second)
+	waitForClientCount(t, hub, 1)
 
 	// Broadcast worker update
 	hub.BroadcastWorkerUpdate("worker-1", "processing", 42, "Test Issue", "Code", 120)
@@ -388,8 +389,8 @@ func TestHubConnectionLimit(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
 
 	// Connect clients up to the limit
-	for i := 0; i < 2; i++ {
-		conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	for i := range 2 {
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil) //nolint:bodyclose // websocket connection is closed below
 		if err != nil {
 			t.Fatalf("Failed to connect client %d: %v", i, err)
 		}
@@ -397,14 +398,14 @@ func TestHubConnectionLimit(t *testing.T) {
 	}
 
 	// Wait for registration using polling
-	waitForClientCount(t, hub, 2, time.Second)
+	waitForClientCount(t, hub, 2)
 
 	if count := hub.ClientCount(); count != 2 {
 		t.Errorf("Expected 2 clients, got %d", count)
 	}
 
 	// Try to connect a third client (should fail or be rejected)
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil) //nolint:bodyclose // websocket connection is closed below
 	if err == nil {
 		// If connection succeeded, it should be closed immediately
 		_ = conn.Close()
@@ -443,11 +444,11 @@ func TestHubConcurrentClients(t *testing.T) {
 	numClients := 10
 	conns := make([]*websocket.Conn, numClients)
 
-	for i := 0; i < numClients; i++ {
+	for i := range numClients {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+			conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil) //nolint:bodyclose // websocket connection is closed below
 			if err != nil {
 				t.Errorf("Failed to connect client %d: %v", idx, err)
 				return
@@ -459,7 +460,7 @@ func TestHubConcurrentClients(t *testing.T) {
 	wg.Wait()
 
 	// Wait for all registrations using polling
-	waitForClientCount(t, hub, numClients, time.Second)
+	waitForClientCount(t, hub, numClients)
 
 	if count := hub.ClientCount(); count != numClients {
 		t.Errorf("Expected %d clients, got %d", numClients, count)
@@ -473,7 +474,7 @@ func TestHubConcurrentClients(t *testing.T) {
 	}
 
 	// Wait for unregistrations using polling
-	waitForClientCount(t, hub, 0, time.Second)
+	waitForClientCount(t, hub, 0)
 
 	if count := hub.ClientCount(); count != 0 {
 		t.Errorf("Expected 0 clients after disconnect, got %d", count)
@@ -494,8 +495,8 @@ func TestHubStop(t *testing.T) {
 
 	// Connect some clients
 	var conns []*websocket.Conn
-	for i := 0; i < 3; i++ {
-		conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	for i := range 3 {
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil) //nolint:bodyclose // websocket connection is closed below
 		if err != nil {
 			t.Fatalf("Failed to connect client %d: %v", i, err)
 		}
@@ -503,7 +504,7 @@ func TestHubStop(t *testing.T) {
 	}
 
 	// Wait for registration using polling
-	waitForClientCount(t, hub, 3, time.Second)
+	waitForClientCount(t, hub, 3)
 
 	if count := hub.ClientCount(); count != 3 {
 		t.Errorf("Expected 3 clients, got %d", count)
@@ -513,7 +514,7 @@ func TestHubStop(t *testing.T) {
 	hub.Stop()
 
 	// Wait for stop to process using polling
-	waitForClientCount(t, hub, 0, time.Second)
+	waitForClientCount(t, hub, 0)
 
 	if count := hub.ClientCount(); count != 0 {
 		t.Errorf("Expected 0 clients after stop, got %d", count)
@@ -614,14 +615,14 @@ func TestClientPingPong(t *testing.T) {
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil) //nolint:bodyclose // websocket connection is closed below
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
 	defer func() { _ = conn.Close() }()
 
 	// Wait for registration using polling
-	waitForClientCount(t, hub, 1, time.Second)
+	waitForClientCount(t, hub, 1)
 
 	// Send a ping message
 	ping := Message{Type: MessageTypePing}
@@ -648,14 +649,14 @@ func TestClientPingPong(t *testing.T) {
 }
 
 // waitForClientCount polls the hub until it reaches the expected client count or timeout
-func waitForClientCount(t *testing.T, hub *Hub, expected int, timeout time.Duration) {
+func waitForClientCount(t *testing.T, hub *Hub, expected int) {
 	t.Helper()
 	start := time.Now()
 	for {
 		if hub.ClientCount() == expected {
 			return
 		}
-		if time.Since(start) > timeout {
+		if time.Since(start) > time.Second {
 			t.Fatalf("Timeout waiting for client count %d, got %d", expected, hub.ClientCount())
 		}
 		time.Sleep(10 * time.Millisecond)

@@ -177,8 +177,8 @@ func RunAll(projectDir, opencodeURL string, onProgress ProgressFunc) []CheckResu
 		fn   func() error
 	}{
 		{"git-repo", func() error { return CheckGitRepo(projectDir) }},
-		{"gh-cli", func() error { return CheckGhCLI() }},
-		{"gh-auth", func() error { return CheckGhAuth() }},
+		{"gh-cli", CheckGhCLI},
+		{"gh-auth", CheckGhAuth},
 		{"opencode", func() error { return CheckOpencode(opencodeURL) }},
 		{"opencode-dir", func() error { return CheckOpencodeDirectory(opencodeURL, projectDir) }},
 		{"config", func() error { return CheckConfig(projectDir) }},

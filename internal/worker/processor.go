@@ -161,7 +161,7 @@ func NewProcessor(cfg *config.Config, oc *opencode.Client, gh *github.Client, st
 	}
 }
 
-func (p *Processor) Process(ctx context.Context, w *Worker, task *Task) error {
+func (p *Processor) Process(_ context.Context, w *Worker, task *Task) error {
 	branch := BranchName(task.IssueNumber, task.Title)
 
 	if err := p.brMgr.CreateBranch(branch); err != nil {
@@ -216,7 +216,7 @@ func (p *Processor) Process(ctx context.Context, w *Worker, task *Task) error {
 				log.Printf("[Worker] Error setting NeedsUser stage for #%d: %v", task.IssueNumber, err)
 			}
 		}
-		_ = p.gh.AddComment(task.IssueNumber, fmt.Sprintf("ODA pipeline blocked at stage. Last output:\n\n%s", result.Output))
+		_ = p.gh.AddComment(task.IssueNumber, "ODA pipeline blocked at stage. Last output:\n\n"+result.Output)
 	}
 
 	return nil

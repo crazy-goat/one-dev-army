@@ -1,6 +1,7 @@
 package github
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -24,6 +25,15 @@ const (
 	StageFailed    Stage = "stage:failed"
 	StageBlocked   Stage = "stage:blocked"
 	StageNeedsUser Stage = "stage:needs-user"
+
+	// Column names for dashboard
+	ColumnBacklog  = "Backlog"
+	ColumnPlan     = "Plan"
+	ColumnCode     = "Code"
+	ColumnAIReview = "AI Review"
+	ColumnApprove  = "Approve"
+	ColumnMerge    = "Merge"
+	ColumnDone     = "Done"
 )
 
 // AllStages lists every valid Stage value.
@@ -50,19 +60,19 @@ func (s Stage) Label() string {
 func (s Stage) Column() string {
 	switch s {
 	case StageBacklog:
-		return "Backlog"
+		return ColumnBacklog
 	case StagePlan:
-		return "Plan"
+		return ColumnPlan
 	case StageCode:
-		return "Code"
+		return ColumnCode
 	case StageReview, StageCreatePR:
-		return "AI Review"
+		return ColumnAIReview
 	case StageApprove:
-		return "Approve"
+		return ColumnApprove
 	case StageMerge:
-		return "Merge"
+		return ColumnMerge
 	case StageDone:
-		return "Done"
+		return ColumnDone
 	case StageFailed:
 		return "Failed"
 	case StageBlocked:
@@ -70,7 +80,7 @@ func (s Stage) Column() string {
 	case StageNeedsUser:
 		return "Blocked"
 	default:
-		return "Backlog"
+		return ColumnBacklog
 	}
 }
 
@@ -194,7 +204,7 @@ func (c *Client) SetStageLabel(issueNumber int, stage Stage) (Issue, error) {
 }
 
 // getStageLabelsToRemove returns all stage-related labels that should be removed from an issue
-func (c *Client) getStageLabelsToRemove(issue *Issue) []string {
+func (*Client) getStageLabelsToRemove(issue *Issue) []string {
 	var toRemove []string
 	for _, label := range issue.Labels {
 		for _, prefix := range StageLabelPrefixes {
@@ -359,7 +369,7 @@ func parseIssueNumber(output []byte) (int, error) {
 	url := strings.TrimSpace(string(output))
 	parts := strings.Split(url, "/")
 	if len(parts) == 0 {
-		return 0, fmt.Errorf("empty output")
+		return 0, errors.New("empty output")
 	}
 	numStr := parts[len(parts)-1]
 	num, err := strconv.Atoi(numStr)

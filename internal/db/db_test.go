@@ -758,7 +758,7 @@ func TestConcurrentWrites_NoBusyErrors(t *testing.T) {
 	var wg sync.WaitGroup
 	errors := make(chan error, 100)
 
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
@@ -799,7 +799,7 @@ func TestConcurrentMixedWrites_NoBusyErrors(t *testing.T) {
 	errors := make(chan error, 200)
 
 	// Launch goroutines doing different write operations
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
@@ -821,7 +821,7 @@ func TestConcurrentMixedWrites_NoBusyErrors(t *testing.T) {
 		}(i)
 	}
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
@@ -837,7 +837,7 @@ func TestConcurrentMixedWrites_NoBusyErrors(t *testing.T) {
 		}(i)
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
@@ -873,7 +873,7 @@ func TestWriteOrdering(t *testing.T) {
 	var wg sync.WaitGroup
 	results := make(chan int, 100)
 
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
@@ -918,7 +918,7 @@ func TestGracefulShutdown(t *testing.T) {
 	// Submit jobs and track when all submissions are done
 	submitted := make(chan struct{})
 	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()

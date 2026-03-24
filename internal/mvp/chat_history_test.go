@@ -156,9 +156,9 @@ func TestChatHistory_ConcurrentAccess(t *testing.T) {
 
 	// Concurrent writes
 	done := make(chan bool, 10)
-	for i := 0; i < 10; i++ {
-		go func(id int) {
-			for j := 0; j < 10; j++ {
+	for i := range 10 {
+		go func(_ int) {
+			for range 10 {
 				ch.AddMessage("user", "Message")
 			}
 			done <- true
@@ -166,7 +166,7 @@ func TestChatHistory_ConcurrentAccess(t *testing.T) {
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
 
@@ -177,15 +177,15 @@ func TestChatHistory_ConcurrentAccess(t *testing.T) {
 
 	// Concurrent reads and writes
 	done = make(chan bool, 20)
-	for i := 0; i < 10; i++ {
-		go func(id int) {
-			for j := 0; j < 10; j++ {
+	for i := range 10 {
+		go func(_ int) {
+			for range 10 {
 				ch.AddMessage("assistant", "Response")
 			}
 			done <- true
 		}(i)
-		go func(id int) {
-			for j := 0; j < 10; j++ {
+		go func(_ int) {
+			for range 10 {
 				_ = ch.GetMessages()
 			}
 			done <- true
@@ -193,7 +193,7 @@ func TestChatHistory_ConcurrentAccess(t *testing.T) {
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		<-done
 	}
 

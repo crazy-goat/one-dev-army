@@ -85,7 +85,7 @@ func TestEnsureLabelsSkipsExistingLabels(t *testing.T) {
 	}
 }
 
-func TestEnsureLabelsHandlesErrors(t *testing.T) {
+func TestEnsureLabelsHandlesErrors(_ *testing.T) {
 	_ = &Client{Repo: "test/repo"}
 }
 
@@ -177,7 +177,7 @@ func TestEnsureLabelsLogic(t *testing.T) {
 	}
 }
 
-func TestListLabelsStructure(t *testing.T) {
+func TestListLabelsStructure(_ *testing.T) {
 	type labelStruct struct {
 		Name string `json:"name"`
 	}
@@ -189,7 +189,7 @@ func TestListLabelsStructure(t *testing.T) {
 	_ = labels
 }
 
-func TestEnsureLabelsErrorPropagation(t *testing.T) {
+func TestEnsureLabelsErrorPropagation(_ *testing.T) {
 	_ = &Client{Repo: "test/repo"}
 }
 
@@ -440,7 +440,7 @@ func TestGetStageFromLabels(t *testing.T) {
 
 // Test SetStageLabel with mock client
 func TestSetStageLabel(t *testing.T) {
-	t.Run("valid stage transitions", func(t *testing.T) {
+	t.Run("valid stage transitions", func(_ *testing.T) {
 		mc := newMockClient()
 		_ = &Client{Repo: mc.Repo}
 	})
@@ -716,12 +716,12 @@ func TestGetStageLabelsToRemove(t *testing.T) {
 
 // Test concurrent label operations
 func TestConcurrentLabelOperations(t *testing.T) {
-	t.Run("AddLabels concurrent execution", func(t *testing.T) {
+	t.Run("AddLabels concurrent execution", func(_ *testing.T) {
 		client := &Client{Repo: "test/repo"}
 		_ = client.AddLabels
 	})
 
-	t.Run("RemoveLabels concurrent execution", func(t *testing.T) {
+	t.Run("RemoveLabels concurrent execution", func(_ *testing.T) {
 		client := &Client{Repo: "test/repo"}
 		_ = client.RemoveLabels
 	})
@@ -854,13 +854,13 @@ func TestAllStagesCompleteness(t *testing.T) {
 }
 
 // Test SetStageLabel method signature accepts Stage type
-func TestSetStageLabelSignature(t *testing.T) {
+func TestSetStageLabelSignature(_ *testing.T) {
 	client := &Client{Repo: "test/repo"}
 	var _ = client.SetStageLabel
 }
 
 // Test that the client has all necessary methods for SetStageLabel
-func TestClientMethodsExist(t *testing.T) {
+func TestClientMethodsExist(_ *testing.T) {
 	client := &Client{Repo: "test/repo"}
 	var _ = client.GetIssue
 	var _ = client.AddLabel
@@ -1036,9 +1036,11 @@ func TestMockClientCommandKey(t *testing.T) {
 
 	args := []string{"issue", "view", "123", "--json", "number,title"}
 	key := ""
+	var keySb1039 strings.Builder
 	for _, arg := range args {
-		key += arg + " "
+		keySb1039.WriteString(arg + " ")
 	}
+	key += keySb1039.String()
 	key = strings.TrimSpace(key)
 
 	expected := "issue view 123 --json number,title"

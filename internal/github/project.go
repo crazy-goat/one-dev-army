@@ -2,8 +2,10 @@ package github
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 )
 
@@ -18,6 +20,8 @@ var ProjectColumns = []string{
 	"Failed",
 }
 
+const fieldNameStatus = "Status"
+
 type Project struct {
 	ID     string `json:"id"`
 	Number int    `json:"number"`
@@ -27,6 +31,7 @@ type Project struct {
 // EnsureProject ensures a GitHub Project with the given name exists for the
 // repo owner. Returns the project node ID and number. Creates the project if
 // it does not exist.
+//
 // Deprecated: GitHub Projects dependency is being removed. This method is no longer called on startup.
 func (c *Client) EnsureProject(name string) (Project, error) {
 	owner := strings.Split(c.Repo, "/")[0]
@@ -69,10 +74,11 @@ func (c *Client) EnsureProject(name string) (Project, error) {
 
 // setupProject links the project to the repo and sets visibility to public.
 // Errors are ignored — these are best-effort (project works without them).
+//
 // Deprecated: GitHub Projects dependency is being removed. This method is no longer called on startup.
 func (c *Client) setupProject(projectNumber int) {
 	owner := strings.Split(c.Repo, "/")[0]
-	num := fmt.Sprintf("%d", projectNumber)
+	num := strconv.Itoa(projectNumber)
 	_, _ = c.ghNoRepo("project", "link", num, "--owner", owner, "--repo", c.Repo)
 	_, _ = c.ghNoRepo("project", "edit", num, "--owner", owner, "--visibility", "PUBLIC")
 }
@@ -94,11 +100,12 @@ type fieldList struct {
 
 // EnsureProjectColumns ensures the project's Status field contains all
 // required columns in the correct order. Overwrites options if they differ.
+//
 // Deprecated: GitHub Projects dependency is being removed. This method is no longer called on startup.
 func (c *Client) EnsureProjectColumns(projectID string, projectNumber int) error {
 	owner := strings.Split(c.Repo, "/")[0]
 
-	out, err := c.ghNoRepo("project", "field-list", fmt.Sprintf("%d", projectNumber),
+	out, err := c.ghNoRepo("project", "field-list", strconv.Itoa(projectNumber),
 		"--owner", owner, "--format", "json")
 	if err != nil {
 		return fmt.Errorf("listing project fields: %w", err)
@@ -112,7 +119,7 @@ func (c *Client) EnsureProjectColumns(projectID string, projectNumber int) error
 	// Find the Status field.
 	var statusField *projectField
 	for i := range fl.Fields {
-		if fl.Fields[i].Name == "Status" {
+		if fl.Fields[i].Name == fieldNameStatus {
 			statusField = &fl.Fields[i]
 			break
 		}
@@ -155,11 +162,11 @@ func optionsMatch(existing []fieldOption, expected []string) bool {
 }
 
 // createStatusField creates a new Status SINGLE_SELECT field with all columns.
-func (c *Client) createStatusField(projectID string, projectNumber int, owner string, options []string) error {
+func (c *Client) createStatusField(_ string, projectNumber int, owner string, options []string) error {
 	_, err := c.ghNoRepo(
-		"project", "field-create", fmt.Sprintf("%d", projectNumber),
+		"project", "field-create", strconv.Itoa(projectNumber),
 		"--owner", owner,
-		"--name", "Status",
+		"--name", fieldNameStatus,
 		"--data-type", "SINGLE_SELECT",
 		"--single-select-options", strings.Join(options, ","),
 	)
@@ -194,7 +201,7 @@ func (c *Client) GetProjectItemsByStatus(projectNumber int) (map[string][]Projec
 	owner := strings.Split(c.Repo, "/")[0]
 
 	// Fetch project items with their fields
-	out, err := c.ghNoRepo("project", "item-list", fmt.Sprintf("%d", projectNumber),
+	out, err := c.ghNoRepo("project", "item-list", strconv.Itoa(projectNumber),
 		"--owner", owner, "--format", "json")
 	if err != nil {
 		return nil, fmt.Errorf("listing project items: %w", err)
@@ -224,7 +231,7 @@ func (c *Client) GetProjectItemsByStatus(projectNumber int) (map[string][]Projec
 	for _, item := range result.Items {
 		status := "Backlog"
 		for _, field := range item.Fields {
-			if field.Name == "Status" && field.Value != "" {
+			if field.Name == fieldNameStatus && field.Value != "" {
 				status = field.Value
 				break
 			}
@@ -251,7 +258,7 @@ func (c *Client) GetProjectItemsByStatus(projectNumber int) (map[string][]Projec
 // It first ensures the issue is added to the project, then sets its Status field.
 func (c *Client) MoveItemToColumn(projectNumber int, issueNumber int, column string) error {
 	owner := strings.Split(c.Repo, "/")[0]
-	num := fmt.Sprintf("%d", projectNumber)
+	num := strconv.Itoa(projectNumber)
 
 	repo := strings.Split(c.Repo, "/")
 	if len(repo) != 2 {
@@ -302,12 +309,12 @@ func (c *Client) MoveItemToColumn(projectNumber int, issueNumber int, column str
 
 	projectID := c.ProjectID
 	if projectID == "" {
-		return fmt.Errorf("project node ID not set — call EnsureProject first")
+		return errors.New("project node ID not set — call EnsureProject first")
 	}
 
 	fieldID := c.StatusFieldID
 	if fieldID == "" {
-		fieldID = "Status"
+		fieldID = fieldNameStatus
 	}
 
 	optionID := column
@@ -360,7 +367,7 @@ func (c *Client) updateStatusFieldOptions(fieldID string, options []string) erro
 }
 
 func (c *Client) refreshStatusOptionIDs(projectNumber int, owner string) error {
-	out, err := c.ghNoRepo("project", "field-list", fmt.Sprintf("%d", projectNumber),
+	out, err := c.ghNoRepo("project", "field-list", strconv.Itoa(projectNumber),
 		"--owner", owner, "--format", "json")
 	if err != nil {
 		return fmt.Errorf("refreshing status options: %w", err)
@@ -372,7 +379,7 @@ func (c *Client) refreshStatusOptionIDs(projectNumber int, owner string) error {
 	}
 
 	for _, f := range fl.Fields {
-		if f.Name == "Status" {
+		if f.Name == fieldNameStatus {
 			c.StatusOptionIDs = make(map[string]string, len(f.Options))
 			for _, opt := range f.Options {
 				c.StatusOptionIDs[opt.Name] = opt.ID
@@ -382,5 +389,5 @@ func (c *Client) refreshStatusOptionIDs(projectNumber int, owner string) error {
 		}
 	}
 
-	return fmt.Errorf("status field not found after update")
+	return errors.New("status field not found after update")
 }

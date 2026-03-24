@@ -147,8 +147,8 @@ func ParseFromMarkdown(content string) (*Plan, error) {
 			// Extract files from step content
 			filesRe := regexp.MustCompile(`(?m)^\*\*Files:\*\*\n((?:- [^\n]+\n?)+)`)
 			if fileMatches := filesRe.FindStringSubmatch(stepContent); len(fileMatches) > 1 {
-				fileLines := strings.Split(fileMatches[1], "\n")
-				for _, line := range fileLines {
+				fileLines := strings.SplitSeq(fileMatches[1], "\n")
+				for line := range fileLines {
 					line = strings.TrimSpace(line)
 					if strings.HasPrefix(line, "- `") && strings.HasSuffix(line, "`") {
 						file := line[3 : len(line)-1]
@@ -170,8 +170,8 @@ func ParseFromMarkdown(content string) (*Plan, error) {
 	// Extract test plan - find the section and extract items
 	testSectionRe := regexp.MustCompile(`(?s)## Test Plan\n\n(.+?)(?:\n\n## |\z)`)
 	if matches := testSectionRe.FindStringSubmatch(content); len(matches) > 1 {
-		testLines := strings.Split(matches[1], "\n")
-		for _, line := range testLines {
+		testLines := strings.SplitSeq(matches[1], "\n")
+		for line := range testLines {
 			line = strings.TrimSpace(line)
 			if strings.HasPrefix(line, "- [ ] ") {
 				plan.TestPlan = append(plan.TestPlan, line[6:])

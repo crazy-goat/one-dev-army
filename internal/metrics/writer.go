@@ -21,7 +21,7 @@ func (w *Writer) WriteStageMetric(m db.StageMetric) error {
 	return w.store.SaveStageMetric(m)
 }
 
-func (w *Writer) WriteTaskSummary(taskID, issueNumber, sprintID int) error {
+func (w *Writer) WriteTaskSummary(taskID, issueNumber, _ int) error {
 	metrics, err := w.store.GetTaskMetrics(taskID)
 	if err != nil {
 		return fmt.Errorf("reading task metrics: %w", err)

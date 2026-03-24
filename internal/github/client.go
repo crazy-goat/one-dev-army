@@ -2,6 +2,7 @@ package github
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -40,7 +41,7 @@ func (c *Client) gh(args ...string) ([]byte, error) {
 }
 
 // ghNoRepo runs gh without the -R flag, for commands that don't support it (e.g. gh project).
-func (c *Client) ghNoRepo(args ...string) ([]byte, error) {
+func (*Client) ghNoRepo(args ...string) ([]byte, error) {
 	cmd := exec.Command("gh", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -49,7 +50,7 @@ func (c *Client) ghNoRepo(args ...string) ([]byte, error) {
 	return out, nil
 }
 
-func (c *Client) ghJSON(result interface{}, args ...string) error {
+func (c *Client) ghJSON(result any, args ...string) error {
 	out, err := c.gh(args...)
 	if err != nil {
 		return err
@@ -61,7 +62,7 @@ func (c *Client) ghJSON(result interface{}, args ...string) error {
 }
 
 // ghNoRepoJSON runs gh without -R flag and parses JSON output
-func (c *Client) ghNoRepoJSON(result interface{}, args ...string) error {
+func (c *Client) ghNoRepoJSON(result any, args ...string) error {
 	out, err := c.ghNoRepo(args...)
 	if err != nil {
 		return err
@@ -80,7 +81,7 @@ func DetectRepo() (string, error) {
 	}
 	repo := strings.TrimSpace(string(out))
 	if repo == "" {
-		return "", fmt.Errorf("detecting repo: empty result from gh")
+		return "", errors.New("detecting repo: empty result from gh")
 	}
 	return repo, nil
 }
@@ -94,7 +95,7 @@ func GetToken() (string, error) {
 	}
 	token := strings.TrimSpace(string(out))
 	if token == "" {
-		return "", fmt.Errorf("getting token: empty result from gh")
+		return "", errors.New("getting token: empty result from gh")
 	}
 	return token, nil
 }

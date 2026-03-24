@@ -2,11 +2,13 @@ package dashboard
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -62,7 +64,7 @@ func (w *WebServer) Start() error {
 	defer w.mu.Unlock()
 
 	if w.cmd != nil && w.cmd.Process != nil {
-		return fmt.Errorf("web server already running")
+		return errors.New("web server already running")
 	}
 
 	log.Printf("[WebServer] Starting opencode web on port %d...", w.port)
@@ -131,7 +133,7 @@ func (w *WebServer) URL() string {
 }
 
 // browserShimDir returns the path to the directory containing no-op browser shims.
-func (w *WebServer) browserShimDir() string {
+func (*WebServer) browserShimDir() string {
 	return filepath.Join(os.TempDir(), "oda-shims")
 }
 
@@ -155,7 +157,7 @@ func (w *WebServer) ensureBrowserShims() error {
 
 // startProcess starts the opencode web process.
 func (w *WebServer) startProcess() error {
-	w.cmd = exec.Command("opencode", "web", "--port", fmt.Sprintf("%d", w.port))
+	w.cmd = exec.Command("opencode", "web", "--port", strconv.Itoa(w.port))
 	w.cmd.Dir = w.dir
 
 	// Prevent opencode from opening a browser window on startup.
@@ -186,7 +188,7 @@ func (w *WebServer) startProcess() error {
 
 	// Check if process is still running
 	if w.cmd.Process == nil || !w.isProcessRunning() {
-		return fmt.Errorf("process failed to start")
+		return errors.New("process failed to start")
 	}
 
 	return nil
@@ -267,10 +269,7 @@ func (w *WebServer) checkAndRestartIfNeeded() {
 	}
 
 	// Apply exponential backoff for restart delay
-	delay := restartDelay * time.Duration(1<<w.restartCount)
-	if delay > 60*time.Second {
-		delay = 60 * time.Second
-	}
+	delay := min(restartDelay*time.Duration(1<<w.restartCount), 60*time.Second)
 
 	// Increment restart count before attempting restart
 	w.restartCount++
@@ -283,7 +282,7 @@ func (w *WebServer) checkAndRestartIfNeeded() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	// Check if we should stop (context cancelled)
+	// Check if we should stop (context canceled)
 	select {
 	case <-w.ctx.Done():
 		return

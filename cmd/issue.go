@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"strings"
@@ -21,7 +22,7 @@ type IssueCreateFlags struct {
 // IssueCommand handles the 'issue' subcommand and its children
 func IssueCommand(args []string, client *github.Client) error {
 	if len(args) < 1 {
-		return fmt.Errorf("issue command requires a subcommand: create")
+		return errors.New("issue command requires a subcommand: create")
 	}
 
 	subcommand := args[0]
@@ -70,7 +71,7 @@ func IssueCreateCommand(args []string, client *github.Client) error {
 			return fmt.Errorf("detecting current sprint: %w", err)
 		}
 		if sprintTitle == "" {
-			return fmt.Errorf("no current sprint found (no open milestones)")
+			return errors.New("no current sprint found (no open milestones)")
 		}
 		milestone = sprintTitle
 	}

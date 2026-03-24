@@ -23,7 +23,6 @@ linters:
     - nakedret
     - nilerr
     - nilnesserr
-    - noctx
     - nosprintfhostport
     - perfsprint
     - predeclared

@@ -424,12 +424,10 @@ func TestWizardSessionStore_ConcurrentAccess(t *testing.T) {
 
 	// Create multiple sessions concurrently
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 100 {
+		wg.Go(func() {
 			_, _ = store.Create("feature")
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -443,7 +441,7 @@ func TestWizardSessionStore_ConcurrentAccess(t *testing.T) {
 		ids = append(ids, id)
 	}
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -464,21 +462,19 @@ func TestWizardSession_ConcurrentLogAccess(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Concurrent writes
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
-		go func(i int) {
+		go func(_ int) {
 			defer wg.Done()
 			session.AddLog("system", "Log message")
 		}(i)
 	}
 
 	// Concurrent reads
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 100 {
+		wg.Go(func() {
 			session.GetLogs()
-		}()
+		})
 	}
 
 	wg.Wait()

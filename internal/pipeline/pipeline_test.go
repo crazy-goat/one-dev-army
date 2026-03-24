@@ -1,7 +1,7 @@
 package pipeline_test
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/crazy-goat/one-dev-army/internal/pipeline"
@@ -20,7 +20,7 @@ func TestStageProgression(t *testing.T) {
 	}
 
 	stage := pipeline.StageQueued
-	for i := 0; i < len(expected); i++ {
+	for i := range expected {
 		if stage != expected[i] {
 			t.Fatalf("step %d: got %q, want %q", i, stage, expected[i])
 		}
@@ -225,8 +225,8 @@ func TestPipelineRetryThenSucceed(t *testing.T) {
 
 func TestPipelineExecutorError(t *testing.T) {
 	exec := &mockExecutor{
-		fn: func(_ int, stage pipeline.Stage, _ string) (*pipeline.StageResult, error) {
-			return nil, fmt.Errorf("executor crashed")
+		fn: func(_ int, _ pipeline.Stage, _ string) (*pipeline.StageResult, error) {
+			return nil, errors.New("executor crashed")
 		},
 	}
 

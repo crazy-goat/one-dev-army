@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
-	"gopkg.in/yaml.v3"
 )
 
 type Init struct {

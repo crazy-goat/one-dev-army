@@ -237,23 +237,24 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		// Worker.Process() returns nil only after successful merge (done).
 		// Any error means failed or already-done.
-		if processErr != nil && errors.Is(processErr, ErrAlreadyDone) {
+		switch {
+		case processErr != nil && errors.Is(processErr, ErrAlreadyDone):
 			log.Printf("[Orchestrator] ✓ Already done #%d: %v", nextIssue.Number, processErr)
 			o.recordStep(nextIssue.Number, "already-done", processErr.Error())
-			comment := fmt.Sprintf("Ticket already done — closing automatically.\n\n%s", processErr.Error())
+			comment := "Ticket already done — closing automatically.\n\n" + processErr.Error()
 			if err := o.gh.AddComment(nextIssue.Number, comment); err != nil {
 				log.Printf("[Orchestrator] Error adding comment: %v", err)
 			}
 			if err := o.ChangeStage(nextIssue.Number, github.StageDone, github.ReasonWorkerAlreadyDone); err != nil {
 				log.Printf("[Orchestrator] Error setting stage:done for #%d: %v", nextIssue.Number, err)
 			}
-		} else if processErr != nil {
+		case processErr != nil:
 			log.Printf("[Orchestrator] ✗ Failed #%d: %v", nextIssue.Number, processErr)
 			o.recordStep(nextIssue.Number, "failed", processErr.Error())
 			if err := o.ChangeStage(nextIssue.Number, github.StageFailed, github.ReasonWorkerFailed); err != nil {
 				log.Printf("[Orchestrator] Error setting stage:failed for #%d: %v", nextIssue.Number, err)
 			}
-		} else {
+		default:
 			log.Printf("[Orchestrator] ✓ Completed #%d (merged)", nextIssue.Number)
 			o.recordStep(nextIssue.Number, "done", "Ticket completed and merged")
 		}
@@ -264,7 +265,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 var nextTicketRe = regexp.MustCompile(`NEXT:\s*#(\d+)`)
 
-func (o *Orchestrator) pickNextTicket(ctx context.Context, candidates []github.Issue, awaitingApproval []github.Issue) (*github.Issue, error) {
+func (o *Orchestrator) pickNextTicket(_ context.Context, candidates []github.Issue, awaitingApproval []github.Issue) (*github.Issue, error) {
 	if len(candidates) == 1 && len(awaitingApproval) == 0 {
 		return &candidates[0], nil
 	}
@@ -281,7 +282,7 @@ func (o *Orchestrator) pickNextTicket(ctx context.Context, candidates []github.I
 		for _, issue := range awaitingApproval {
 			pendingLines = append(pendingLines, fmt.Sprintf("- #%d %s", issue.Number, issue.Title))
 		}
-		pendingInfo = fmt.Sprintf("\n\nTickets awaiting approval (PR created, AI review passed, but NOT yet merged — treat as NOT DONE, do NOT pick tickets that depend on these):\n%s", strings.Join(pendingLines, "\n"))
+		pendingInfo = "\n\nTickets awaiting approval (PR created, AI review passed, but NOT yet merged — treat as NOT DONE, do NOT pick tickets that depend on these):\n" + strings.Join(pendingLines, "\n")
 	}
 
 	prompt := fmt.Sprintf(pickTicketPrompt, o.gh.Repo, o.gh.Repo, ticketList) + pendingInfo
@@ -315,7 +316,7 @@ func (o *Orchestrator) pickNextTicket(ctx context.Context, candidates []github.I
 
 	match := nextTicketRe.FindStringSubmatch(response)
 	if match == nil {
-		return nil, fmt.Errorf("LLM did not return NEXT: #N format")
+		return nil, errors.New("LLM did not return NEXT: #N format")
 	}
 
 	num, err := strconv.Atoi(match[1])
@@ -386,7 +387,7 @@ func (o *Orchestrator) HandleSyncEvent(issue github.Issue) {
 	}
 }
 
-func (o *Orchestrator) sleep(ctx context.Context, d time.Duration) {
+func (*Orchestrator) sleep(ctx context.Context, d time.Duration) {
 	select {
 	case <-time.After(d):
 	case <-ctx.Done():
@@ -424,7 +425,7 @@ func hasLabel(issue github.Issue, name string) bool {
 }
 
 // getStageFromIssue extracts the current stage label from issue labels
-func (o *Orchestrator) getStageFromIssue(issue github.Issue) (string, error) {
+func (*Orchestrator) getStageFromIssue(issue github.Issue) (string, error) {
 	for _, label := range issue.Labels {
 		if strings.HasPrefix(label.Name, "stage:") {
 			return label.Name, nil
@@ -452,7 +453,7 @@ func (o *Orchestrator) HandleWorkerEvent(event WorkerEvent) {
 
 // decideNextStage determines the next stage based on current state and event.
 // Returns the next Stage, the reason for the transition, and true if a transition should happen.
-func (o *Orchestrator) decideNextStage(event WorkerEvent) (github.Stage, github.StageChangeReason, bool) {
+func (*Orchestrator) decideNextStage(event WorkerEvent) (github.Stage, github.StageChangeReason, bool) {
 	// State machine logic
 	switch event.Stage {
 	case "analysis":

@@ -86,7 +86,7 @@ func TestBuildIssueGenerationPrompt_EmptyCodebaseContext(t *testing.T) {
 
 // TestGeneratedIssueSchema_ValidJSON verifies the schema is valid JSON
 func TestGeneratedIssueSchema_ValidJSON(t *testing.T) {
-	var schema map[string]interface{}
+	var schema map[string]any
 	if err := json.Unmarshal(GeneratedIssueSchema, &schema); err != nil {
 		t.Fatalf("GeneratedIssueSchema is not valid JSON: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestGeneratedIssueSchema_ValidJSON(t *testing.T) {
 		t.Error("Schema type should be 'object'")
 	}
 
-	props, ok := schema["properties"].(map[string]interface{})
+	props, ok := schema["properties"].(map[string]any)
 	if !ok {
 		t.Fatal("Schema missing 'properties' field")
 	}
@@ -109,7 +109,7 @@ func TestGeneratedIssueSchema_ValidJSON(t *testing.T) {
 		t.Error("Schema missing 'description' property")
 	}
 
-	required, ok := schema["required"].([]interface{})
+	required, ok := schema["required"].([]any)
 	if !ok {
 		t.Fatal("Schema missing 'required' field")
 	}
@@ -208,19 +208,19 @@ func TestGeneratedIssue_ComplexityLabel(t *testing.T) {
 }
 
 func TestGeneratedIssueSchema_HasPriorityAndComplexity(t *testing.T) {
-	var schema map[string]interface{}
+	var schema map[string]any
 	if err := json.Unmarshal(GeneratedIssueSchema, &schema); err != nil {
 		t.Fatalf("GeneratedIssueSchema is not valid JSON: %v", err)
 	}
 
-	props := schema["properties"].(map[string]interface{})
+	props := schema["properties"].(map[string]any)
 
 	// Verify priority field exists with enum
-	priorityProp, ok := props["priority"].(map[string]interface{})
+	priorityProp, ok := props["priority"].(map[string]any)
 	if !ok {
 		t.Fatal("Schema missing 'priority' property")
 	}
-	priorityEnum, ok := priorityProp["enum"].([]interface{})
+	priorityEnum, ok := priorityProp["enum"].([]any)
 	if !ok {
 		t.Fatal("Priority property missing 'enum'")
 	}
@@ -235,11 +235,11 @@ func TestGeneratedIssueSchema_HasPriorityAndComplexity(t *testing.T) {
 	}
 
 	// Verify complexity field exists with enum
-	complexityProp, ok := props["complexity"].(map[string]interface{})
+	complexityProp, ok := props["complexity"].(map[string]any)
 	if !ok {
 		t.Fatal("Schema missing 'complexity' property")
 	}
-	complexityEnum, ok := complexityProp["enum"].([]interface{})
+	complexityEnum, ok := complexityProp["enum"].([]any)
 	if !ok {
 		t.Fatal("Complexity property missing 'enum'")
 	}
@@ -254,7 +254,7 @@ func TestGeneratedIssueSchema_HasPriorityAndComplexity(t *testing.T) {
 	}
 
 	// Verify both are required
-	required := schema["required"].([]interface{})
+	required := schema["required"].([]any)
 	requiredFields := make(map[string]bool)
 	for _, r := range required {
 		requiredFields[r.(string)] = true
