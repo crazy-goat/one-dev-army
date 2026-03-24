@@ -422,7 +422,7 @@ func (o *Orchestrator) HandleSyncEvent(issue github.Issue) {
 		return
 	}
 
-	// Ensure closed issues have stage:done label
+	// Closed issues always get stage:done (final state, takes priority over merging)
 	if strings.EqualFold(issue.State, "CLOSED") {
 		if !hasLabel(issue, "stage:done") {
 			log.Printf("[Orchestrator] Sync: closed issue #%d missing stage:done, fixing", issue.Number)
@@ -430,9 +430,10 @@ func (o *Orchestrator) HandleSyncEvent(issue github.Issue) {
 				log.Printf("[Orchestrator] Error setting stage:done for #%d: %v", issue.Number, err)
 			}
 		}
+		return // closed = done, no further checks needed
 	}
 
-	// Ensure merged PRs have stage:merging label
+	// Merged but still open PRs get stage:merging (waiting for close)
 	if issue.PRMerged && !issue.MergedAt.IsZero() {
 		if !hasLabel(issue, "stage:merging") {
 			log.Printf("[Orchestrator] Sync: merged issue #%d missing stage:merging, fixing", issue.Number)
