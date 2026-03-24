@@ -423,14 +423,6 @@ func hasLabel(issue github.Issue, name string) bool {
 	return false
 }
 
-func labelNames(issue github.Issue) string {
-	var names []string
-	for _, l := range issue.Labels {
-		names = append(names, l.Name)
-	}
-	return strings.Join(names, ", ")
-}
-
 // getStageFromIssue extracts the current stage label from issue labels
 func (o *Orchestrator) getStageFromIssue(issue github.Issue) (string, error) {
 	for _, label := range issue.Labels {

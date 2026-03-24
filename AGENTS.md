@@ -1,21 +1,24 @@
-# Developer Workstation - AGENTS.md
+# ODA (One Dev Army)
 
-## Workspace Overview
+## Project Overview
 
-This is a multi-project developer workstation. Projects live under `/home/decodo/work/`.
+ODA is a Go CLI tool (`oda`) that orchestrates AI coding agents to automate the full software development lifecycle. It turns a solo developer into a virtual scrum team by processing GitHub Issues through a multi-stage pipeline: **analysis, planning, coding, AI code review, PR creation, approval, and merge**. Each stage runs in a dedicated [opencode](https://opencode.ai) session with a configurable LLM model.
 
-### Primary Projects
+## Tech Stack
 
-| Project | Language | Purpose |
-|---------|----------|---------|
-| `subscriptions-api` | PHP 8.4 / Symfony 6 | Subscription management microservice (payments, orders, wallets, proxy integrations) |
-| `rtk` | Rust | CLI proxy that minimizes LLM token consumption (60-90% savings) |
-| `decodo-coding-tools` | Go 1.24 | CLI tool for Nexos AI services, Jira, GitLab operations |
-| `opencode` | TypeScript | AI-powered development tool (monorepo: desktop, web, console, SDK) |
+- **Language**: Go 1.25 (single binary, zero external runtime dependencies)
+- **AI Backend**: [opencode](https://opencode.ai) — LLM session management via HTTP/WebSocket API
+- **Source of Truth**: GitHub (issues, PRs, labels, milestones, optionally Projects v2)
+- **Local Storage**: SQLite (metrics, issue cache, task progress)
+- **Dashboard**: HTMX + Go `html/template` with embedded assets, real-time updates via WebSocket
+- **CLI**: GitHub CLI (`gh`) for all GitHub API interactions
+- **Config**: YAML (`.oda/config.yaml`)
 
----
+## Documentation
 
-## subscriptions-api (PHP/Symfony)
-
-### Structure
-
+- **[Architecture](docs/architecture.md)** — Orchestrator loop, state machine, worker pool, LLM routing, dashboard
+- **[Configuration](docs/configuration.md)** — CLI commands and `.oda/config.yaml` reference
+- **[Development](docs/development.md)** — Build, pre-commit checklist, CI/linting, testing & code conventions
+- **[Repository Structure](docs/structure.md)** — Full directory layout with detailed package descriptions
+- **[Workflow](docs/workflow.md)** — Ticket lifecycle flowchart (Mermaid)
+- **[State Machine](docs/state-machine.md)** — Full state machine specification with all transitions

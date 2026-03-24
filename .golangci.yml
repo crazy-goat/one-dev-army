@@ -1,0 +1,92 @@
+version: "2"
+
+run:
+  timeout: 2m
+
+linters:
+  default: standard
+  enable:
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - copyloopvar
+    - dupword
+    - errname
+    - errorlint
+    - fatcontext
+    - gocheckcompilerdirectives
+    - goconst
+    - gocritic
+    - goprintffuncname
+    - misspell
+    - modernize
+    - nakedret
+    - nilerr
+    - nilnesserr
+    - noctx
+    - nosprintfhostport
+    - perfsprint
+    - predeclared
+    - reassign
+    - revive
+    - sqlclosecheck
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - wastedassign
+    - whitespace
+
+  settings:
+    goconst:
+      min-len: 2
+      min-occurrences: 3
+    misspell:
+      locale: US
+    nakedret:
+      max-func-lines: 30
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+          disabled: true
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: unused-parameter
+        - name: unused-receiver
+        - name: var-declaration
+        - name: var-naming
+
+  exclusions:
+    presets:
+      - comments
+      - std-error-handling
+      - common-false-positives
+    rules:
+      - path: _test\.go
+        linters:
+          - goconst
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/crazy-goat/one-dev-army
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
