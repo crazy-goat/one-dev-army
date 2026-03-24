@@ -3,6 +3,7 @@ package dashboard
 import (
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 // GitHubClient defines the interface for GitHub operations needed by SyncService
 type GitHubClient interface {
 	ListIssuesWithPRStatus(milestone string) ([]github.Issue, error)
+	AddLabel(issueNum int, label string) error
 }
 
 // Store defines the interface for database operations needed by SyncService
@@ -151,7 +153,7 @@ func (s *SyncService) syncNow() {
 
 	log.Printf("[SyncService] Fetched %d issues from GitHub (single query)", len(issues))
 
-	// Cache each issue
+	// Cache each issue and ensure proper labels for closed/merged issues
 	cachedCount := 0
 	for _, issue := range issues {
 		if err := s.store.SaveIssueCache(issue, milestone, false); err != nil {
@@ -159,6 +161,40 @@ func (s *SyncService) syncNow() {
 			continue
 		}
 		cachedCount++
+
+		// Ensure closed issues have stage:done label
+		if strings.EqualFold(issue.State, "CLOSED") {
+			hasDoneLabel := false
+			for _, label := range issue.Labels {
+				if label.Name == "stage:done" {
+					hasDoneLabel = true
+					break
+				}
+			}
+			if !hasDoneLabel {
+				log.Printf("[SyncService] Adding missing stage:done label to closed issue #%d", issue.Number)
+				if err := s.gh.AddLabel(issue.Number, "stage:done"); err != nil {
+					log.Printf("[SyncService] Error adding stage:done label to #%d: %v", issue.Number, err)
+				}
+			}
+		}
+
+		// Ensure merged PRs have stage:merging label
+		if issue.PRMerged && !issue.MergedAt.IsZero() {
+			hasMergingLabel := false
+			for _, label := range issue.Labels {
+				if label.Name == "stage:merging" {
+					hasMergingLabel = true
+					break
+				}
+			}
+			if !hasMergingLabel {
+				log.Printf("[SyncService] Adding missing stage:merging label to merged issue #%d", issue.Number)
+				if err := s.gh.AddLabel(issue.Number, "stage:merging"); err != nil {
+					log.Printf("[SyncService] Error adding stage:merging label to #%d: %v", issue.Number, err)
+				}
+			}
+		}
 	}
 
 	log.Printf("[SyncService] Cached %d/%d issues", cachedCount, len(issues))
