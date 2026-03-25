@@ -1,0 +1,225 @@
+{{template "layout" .}}
+{{define "content"}}
+<style>
+.close-sprint-container {
+  max-width: 600px;
+  margin: 2rem auto;
+  padding: 2rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.close-sprint-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.close-sprint-header h1 {
+  margin-bottom: 0.5rem;
+}
+
+.close-sprint-header p {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.version-display {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.version-current {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+
+.version-number {
+  font-size: 2rem;
+  font-weight: 600;
+  font-family: monospace;
+  color: var(--text);
+}
+
+.version-arrow {
+  font-size: 1.5rem;
+  color: var(--muted);
+  margin: 0.5rem 0;
+}
+
+.version-new {
+  font-size: 2rem;
+  font-weight: 600;
+  font-family: monospace;
+  color: var(--accent);
+}
+
+.bump-options {
+  margin-bottom: 2rem;
+}
+
+.bump-option {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bump-option:hover {
+  border-color: var(--accent);
+}
+
+.bump-option input[type="radio"] {
+  margin-right: 1rem;
+  width: 1.2rem;
+  height: 1.2rem;
+  accent-color: var(--accent);
+}
+
+.bump-option-label {
+  flex: 1;
+  font-weight: 500;
+}
+
+.bump-option-desc {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.bump-option.selected {
+  border-color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.05);
+}
+
+.error-message {
+  background: rgba(231, 76, 60, 0.1);
+  border: 1px solid var(--red);
+  color: var(--red);
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.actions .btn {
+  padding: 0.75rem 2rem;
+  font-size: 1rem;
+}
+</style>
+
+<div class="close-sprint-container">
+  <div class="close-sprint-header">
+    <h1>Close Sprint & Release</h1>
+    <p>Select the version bump type for this release</p>
+  </div>
+
+  {{if .Error}}
+  <div class="error-message">
+    {{.Error}}
+  </div>
+  {{end}}
+
+  <div class="version-display">
+    <div class="version-current">Current Version</div>
+    <div class="version-number">{{.CurrentVersion}}</div>
+    <div class="version-arrow">↓</div>
+    <div class="version-current">New Version</div>
+    <div class="version-new" id="new-version">{{.NewVersion}}</div>
+  </div>
+
+  <form method="post" action="/api/sprint/close/confirm" id="version-form">
+    <input type="hidden" name="current_version" value="{{.CurrentVersion}}">
+
+    <div class="bump-options">
+      <label class="bump-option {{if eq .BumpType "major"}}selected{{end}}">
+        <input type="radio" name="bump_type" value="major" {{if eq .BumpType "major"}}checked{{end}} onchange="updateVersion('major')">
+        <div>
+          <div class="bump-option-label">Major Release</div>
+          <div class="bump-option-desc">Breaking changes, incompatible API modifications</div>
+        </div>
+      </label>
+
+      <label class="bump-option {{if eq .BumpType "minor"}}selected{{end}}">
+        <input type="radio" name="bump_type" value="minor" {{if eq .BumpType "minor"}}checked{{end}} onchange="updateVersion('minor')">
+        <div>
+          <div class="bump-option-label">Minor Release</div>
+          <div class="bump-option-desc">New features, backwards-compatible additions</div>
+        </div>
+      </label>
+
+      <label class="bump-option {{if eq .BumpType "patch"}}selected{{end}}">
+        <input type="radio" name="bump_type" value="patch" {{if eq .BumpType "patch"}}checked{{end}} onchange="updateVersion('patch')">
+        <div>
+          <div class="bump-option-label">Patch Release</div>
+          <div class="bump-option-desc">Bug fixes, backwards-compatible corrections</div>
+        </div>
+      </label>
+    </div>
+
+    <div class="actions">
+      <a href="/" class="btn">Cancel</a>
+      <button type="submit" class="btn btn-success">Create Tag & Close Sprint</button>
+    </div>
+  </form>
+</div>
+
+<script>
+const currentVersion = '{{.CurrentVersion}}';
+
+function parseVersion(v) {
+  const parts = v.split('.');
+  return {
+    major: parseInt(parts[0]),
+    minor: parseInt(parts[1]),
+    patch: parseInt(parts[2])
+  };
+}
+
+function bumpVersion(type) {
+  const v = parseVersion(currentVersion);
+  switch(type) {
+    case 'major':
+      return `${v.major + 1}.0.0`;
+    case 'minor':
+      return `${v.major}.${v.minor + 1}.0`;
+    case 'patch':
+      return `${v.major}.${v.minor}.${v.patch + 1}`;
+    default:
+      return currentVersion;
+  }
+}
+
+function updateVersion(type) {
+  const newVersion = bumpVersion(type);
+  document.getElementById('new-version').textContent = newVersion;
+
+  // Update selected styling
+  document.querySelectorAll('.bump-option').forEach(opt => {
+    opt.classList.remove('selected');
+  });
+  event.target.closest('.bump-option').classList.add('selected');
+}
+
+// Initialize with default selection
+if (!document.querySelector('input[name="bump_type"]:checked')) {
+  document.querySelector('input[value="patch"]').checked = true;
+  document.querySelector('input[value="patch"]').closest('.bump-option').classList.add('selected');
+}
+</script>
+{{end}}

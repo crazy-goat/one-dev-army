@@ -201,6 +201,13 @@ func parseTemplates() (map[string]*template.Template, error) {
 	}
 	tmpls["llm-config.html"] = settingsTmpl
 
+	// Parse close sprint template
+	closeSprintTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/close_sprint.html")
+	if err != nil {
+		return nil, fmt.Errorf("parsing close_sprint.html: %w", err)
+	}
+	tmpls["close_sprint.html"] = closeSprintTmpl
+
 	return tmpls, nil
 }
 
@@ -210,7 +217,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/sprint/status", s.handleSprintStatus)
 	s.mux.HandleFunc("POST /api/sprint/start", s.handleSprintStart)
 	s.mux.HandleFunc("POST /api/sprint/pause", s.handleSprintPause)
-	s.mux.HandleFunc("POST /api/sprint/close", s.handleSprintClose)
+	s.mux.HandleFunc("POST /api/sprint/close", s.handleSprintCloseLegacy)
+	// Sprint close with version bump workflow
+	s.mux.HandleFunc("GET /sprint/close", s.handleSprintClosePage)
+	s.mux.HandleFunc("POST /api/sprint/close/confirm", s.handleSprintCloseConfirm)
 	s.mux.HandleFunc("POST /epic", s.handleAddEpic)
 	s.mux.HandleFunc("POST /sync", s.handleSync)
 	s.mux.HandleFunc("POST /api/sync", s.handleManualSync)

@@ -3552,7 +3552,7 @@ func TestHandleSprintClose_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/sprint/close", nil)
 	rec := httptest.NewRecorder()
 
-	srv.handleSprintClose(rec, req)
+	srv.handleSprintCloseLegacy(rec, req)
 
 	// Should return 400 because there's no active milestone (gh is nil)
 	if rec.Code != http.StatusBadRequest {
@@ -3583,7 +3583,7 @@ func TestHandleSprintClose_NoOrchestrator(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/sprint/close", nil)
 	rec := httptest.NewRecorder()
 
-	srv.handleSprintClose(rec, req)
+	srv.handleSprintCloseLegacy(rec, req)
 
 	// Should return 400 because there's no active milestone (gh is nil)
 	// but should NOT fail due to orchestrator check (no orchestrator means not processing)
@@ -3609,9 +3609,7 @@ func TestBoardTemplate_CloseSprintButton(t *testing.T) {
 	tmplContent := `{{define "content"}}
 <div class="board-actions">
   {{if .CanCloseSprint}}
-  <form method="post" action="/api/sprint/close" style="display:inline">
-    <button type="submit" class="btn btn-success">Close Sprint</button>
-  </form>
+  <a href="/sprint/close" class="btn btn-success">Close Sprint</a>
   {{end}}
 </div>
 {{end}}`
@@ -3633,8 +3631,8 @@ func TestBoardTemplate_CloseSprintButton(t *testing.T) {
 		t.Error("template should contain 'Close Sprint' button when CanCloseSprint is true")
 	}
 
-	if !strings.Contains(output, `action="/api/sprint/close"`) {
-		t.Error("Close Sprint form should have correct action URL")
+	if !strings.Contains(output, `href="/sprint/close"`) {
+		t.Error("Close Sprint link should have correct href URL")
 	}
 }
 
@@ -3651,9 +3649,7 @@ func TestBoardTemplate_CloseSprintButton_Hidden(t *testing.T) {
 	tmplContent := `{{define "content"}}
 <div class="board-actions">
   {{if .CanCloseSprint}}
-  <form method="post" action="/api/sprint/close" style="display:inline">
-    <button type="submit" class="btn btn-success">Close Sprint</button>
-  </form>
+  <a href="/sprint/close" class="btn btn-success">Close Sprint</a>
   {{end}}
 </div>
 {{end}}`
@@ -3807,7 +3803,7 @@ func TestHandleSprintClose_SuccessWithNewSprintCreation(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/sprint/close", nil)
 	rec := httptest.NewRecorder()
 
-	srv.handleSprintClose(rec, req)
+	srv.handleSprintCloseLegacy(rec, req)
 
 	// Should return 400 because there's no active milestone (gh is nil)
 	if rec.Code != http.StatusBadRequest {
