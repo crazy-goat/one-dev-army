@@ -23,7 +23,7 @@
 
 .close-sprint-grid {
   display: grid;
-  grid-template-columns: 400px 1fr;
+  grid-template-columns: minmax(auto, 300px) 1fr;
   gap: 2rem;
   align-items: stretch;
 }
@@ -33,6 +33,7 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 1.5rem;
+  max-width: 300px;
 }
 
 .right-panel {
@@ -265,6 +266,7 @@
   margin-bottom: 1rem;
   outline: none;
   transition: border-color 0.2s;
+  box-sizing: border-box;
 }
 
 .preview-title-input:focus {
@@ -283,6 +285,7 @@
   color: var(--text);
   resize: vertical;
   outline: none;
+  box-sizing: border-box;
   transition: border-color 0.2s;
   line-height: 1.5;
 }
