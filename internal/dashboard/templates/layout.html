@@ -346,13 +346,13 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
             panel.className = 'processing-panel';
             panel.innerHTML = '<div class="processing-panel-content">' +
                 '<span class="processing-indicator"></span>' +
+                '<div class="processing-labels">' +
+                (workerStatus.step ? '<span class="processing-badge">' + workerStatus.step + '</span>' : '') +
+                '</div>' +
                 '<a href="/task/' + workerStatus.issueId + '" class="processing-ticket">' +
                 '<span class="processing-id">#' + workerStatus.issueId + '</span>' +
                 '<span class="processing-title">' + (workerStatus.issueTitle || '') + '</span>' +
-                '</a>' +
-                '<div class="processing-labels">' +
-                (workerStatus.step ? '<span class="processing-badge">' + workerStatus.step + '</span>' : '') +
-                '</div></div>';
+                '</a></div>';
         } else {
             panel.className = 'processing-panel processing-panel-idle';
             panel.innerHTML = '<div class="processing-panel-content">' +
