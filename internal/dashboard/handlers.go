@@ -1873,6 +1873,13 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[Dashboard] LLM configuration saved successfully")
 
+	// Trigger immediate propagation to workers and orchestrator
+	// This ensures changes are applied immediately without waiting for file-poll
+	if s.configPropagator != nil {
+		s.configPropagator.Propagate(cfg)
+		log.Printf("[Dashboard] Configuration propagated immediately to all workers")
+	}
+
 	// Re-render with success message
 	workerCount := 0
 	if s.pool != nil {

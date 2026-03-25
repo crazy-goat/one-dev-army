@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/git"
 	"github.com/crazy-goat/one-dev-army/internal/github"
@@ -41,9 +42,10 @@ type Server struct {
 	rootDir          string
 	modelsCache      []opencode.ProviderModel
 	brMgr            *git.BranchManager
+	configPropagator *config.ConfigPropagator
 }
 
-func NewServer(port int, webPort int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string, brMgr *git.BranchManager) (*Server, error) {
+func NewServer(port int, webPort int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string, brMgr *git.BranchManager, configPropagator *config.ConfigPropagator) (*Server, error) {
 	tmpls, err := parseTemplates()
 	if err != nil {
 		return nil, err
@@ -64,13 +66,14 @@ func NewServer(port int, webPort int, store *db.Store, pool func() []worker.Work
 			Addr:    fmt.Sprintf(":%d", port),
 			Handler: mux,
 		},
-		wizardStore: NewWizardSessionStore(),
-		oc:          oc,
-		wizardLLM:   wizardLLM,
-		hub:         hub,
-		syncService: syncService,
-		rootDir:     rootDir,
-		brMgr:       brMgr,
+		wizardStore:      NewWizardSessionStore(),
+		oc:               oc,
+		wizardLLM:        wizardLLM,
+		hub:              hub,
+		syncService:      syncService,
+		rootDir:          rootDir,
+		brMgr:            brMgr,
+		configPropagator: configPropagator,
 	}
 
 	if s.wizardLLM == "" {
