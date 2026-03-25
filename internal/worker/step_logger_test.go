@@ -29,7 +29,7 @@ func TestStepLogger_CreatesLogFile(t *testing.T) {
 		t.Errorf("expected stepName='test-step', got %s", logger.stepName)
 	}
 
-	expectedLogDir := filepath.Join(artifactDir, "123", "logs")
+	expectedLogDir := filepath.Join(artifactDir, "logs")
 	if logger.logDir != expectedLogDir {
 		t.Errorf("expected logDir=%s, got %s", expectedLogDir, logger.logDir)
 	}
