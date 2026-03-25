@@ -2179,7 +2179,7 @@ func TestBoardLayout_ValidHTMLStructure(t *testing.T) {
 		"board-header":  `class="board-header"`,
 		"board-actions": `class="board-actions"`,
 		"board grid":    `class="board"`,
-		"7 columns":     "grid-template-columns:repeat(8,1fr)",
+		"3 column grid": "grid-template-columns:15% 1fr 15%",
 	}
 
 	for name, pattern := range structureChecks {
@@ -2213,49 +2213,56 @@ func TestBoardLayout_StackedColumns(t *testing.T) {
 
 	body := rec.Body.String()
 
-	if !strings.Contains(body, `class="stacked-column"`) {
-		t.Error("board page missing stacked-column CSS class")
+	if !strings.Contains(body, `class="board-left"`) {
+		t.Error("board page missing board-left CSS class")
 	}
 
-	if !strings.Contains(body, "stacked-column") {
-		t.Error("board page missing stacked column containers")
+	if !strings.Contains(body, `class="board-right"`) {
+		t.Error("board page missing board-right CSS class")
 	}
 
-	if strings.Count(body, `class="stacked-column"`) != 2 {
-		t.Errorf("expected 2 stacked-column containers, got %d", strings.Count(body, `class="stacked-column"`))
+	if strings.Count(body, `class="board-left"`) != 1 {
+		t.Errorf("expected 1 board-left container, got %d", strings.Count(body, `class="board-left"`))
 	}
 
-	if !strings.Contains(body, ".stacked-column{") {
-		t.Error("board page missing stacked-column CSS rule")
+	if strings.Count(body, `class="board-right"`) != 1 {
+		t.Errorf("expected 1 board-right container, got %d", strings.Count(body, `class="board-right"`))
 	}
 
-	if !strings.Contains(body, ".stacked-column .column{") {
-		t.Error("board page missing stacked-column .column CSS rule")
+	if !strings.Contains(body, ".board-left{") {
+		t.Error("board page missing board-left CSS rule")
 	}
 
-	// Verify stacked column height constraint
-	if !strings.Contains(body, "calc(100vh") {
-		t.Error("stacked-column missing viewport height constraint")
+	if !strings.Contains(body, ".board-right{") {
+		t.Error("board page missing board-right CSS rule")
+	}
+
+	if !strings.Contains(body, ".board-left .column{") {
+		t.Error("board page missing board-left .column CSS rule")
+	}
+
+	if !strings.Contains(body, ".board-right .column{") {
+		t.Error("board page missing board-right .column CSS rule")
+	}
+
+	// Verify board uses flex layout with min-height:0 for proper scrolling
+	if !strings.Contains(body, "min-height:0") {
+		t.Error("board columns missing min-height:0 for proper flex layout")
 	}
 
 	// Verify internal scrolling
 	if !strings.Contains(body, "overflow-y:auto") {
-		t.Error("stacked-column columns missing overflow-y:auto for internal scrolling")
-	}
-
-	// Verify sticky column titles
-	if !strings.Contains(body, "position:sticky") {
-		t.Error("stacked-column titles missing position:sticky")
+		t.Error("board columns missing overflow-y:auto for internal scrolling")
 	}
 
 	// Verify smooth scrolling
 	if !strings.Contains(body, "scroll-behavior:smooth") {
-		t.Error("stacked-column columns missing scroll-behavior:smooth")
+		t.Error("board columns missing scroll-behavior:smooth")
 	}
 
 	// Verify flex basis for 50/50 split
-	if !strings.Contains(body, "50%") {
-		t.Error("stacked-column columns missing 50% flex basis for equal height split")
+	if !strings.Contains(body, "flex:1 1 50%") {
+		t.Error("board-left and board-right columns missing 50% flex basis for equal height split")
 	}
 }
 
