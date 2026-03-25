@@ -65,6 +65,7 @@ type boardData struct {
 	Merge          []taskCard
 	Done           []taskCard
 	Failed         []taskCard
+	TotalTickets   int
 }
 
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
@@ -157,6 +158,11 @@ func (s *Server) buildBoardData(_ *http.Request) boardData {
 		col := inferColumnFromIssue(issue)
 		s.addCardToColumn(&data, col, issue)
 	}
+
+	// Compute total tickets across all columns
+	data.TotalTickets = len(data.Blocked) + len(data.Backlog) + len(data.Plan) +
+		len(data.Code) + len(data.AIReview) + len(data.CheckPipeline) +
+		len(data.Approve) + len(data.Merge) + len(data.Done) + len(data.Failed)
 
 	// Check if sprint can be closed: all tasks in Done/Failed columns and not processing
 	if !data.Processing &&

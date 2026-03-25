@@ -5599,3 +5599,123 @@ func TestHandleManualProcessInvalidID(t *testing.T) {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 	}
 }
+
+// TestBuildBoardData_TotalTickets verifies TotalTickets is computed correctly
+func TestBuildBoardData_TotalTickets(t *testing.T) {
+	tests := []struct {
+		name     string
+		data     boardData
+		expected int
+	}{
+		{
+			name:     "empty sprint has zero total",
+			data:     boardData{},
+			expected: 0,
+		},
+		{
+			name: "counts all columns",
+			data: boardData{
+				Blocked:       []taskCard{{ID: 1}},
+				Backlog:       []taskCard{{ID: 2}, {ID: 3}},
+				Plan:          []taskCard{{ID: 4}},
+				Code:          []taskCard{{ID: 5}},
+				AIReview:      []taskCard{{ID: 6}},
+				CheckPipeline: []taskCard{{ID: 7}},
+				Approve:       []taskCard{{ID: 8}},
+				Merge:         []taskCard{{ID: 9}},
+				Done:          []taskCard{{ID: 10}},
+				Failed:        []taskCard{{ID: 11}},
+			},
+			expected: 11,
+		},
+		{
+			name: "only done and failed",
+			data: boardData{
+				Done:   []taskCard{{ID: 1}, {ID: 2}},
+				Failed: []taskCard{{ID: 3}},
+			},
+			expected: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			total := len(tt.data.Blocked) + len(tt.data.Backlog) + len(tt.data.Plan) +
+				len(tt.data.Code) + len(tt.data.AIReview) + len(tt.data.CheckPipeline) +
+				len(tt.data.Approve) + len(tt.data.Merge) + len(tt.data.Done) + len(tt.data.Failed)
+			if total != tt.expected {
+				t.Errorf("expected TotalTickets=%d, got %d", tt.expected, total)
+			}
+		})
+	}
+}
+
+// TestBoardLayout_EmptySprintPanel verifies the empty sprint panel renders correctly
+func TestBoardLayout_EmptySprintPanel(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	data := boardData{
+		Active:       "board",
+		TotalTickets: 0,
+	}
+
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	body := buf.String()
+
+	checks := []string{
+		"processing-empty-labels",
+		"processing-badge",
+		"Sprint",
+		"processing-empty-title",
+		"No tickets in sprint",
+		"processing-cta",
+		"wizard/new",
+	}
+	for _, check := range checks {
+		if !strings.Contains(body, check) {
+			t.Errorf("empty sprint panel should contain %q", check)
+		}
+	}
+}
+
+// TestBoardLayout_IdleWorkerPanel verifies the idle worker panel renders correctly when tickets exist
+func TestBoardLayout_IdleWorkerPanel(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	data := boardData{
+		Active:       "board",
+		TotalTickets: 5,
+		Backlog:      []taskCard{{ID: 1, Title: "Test"}},
+	}
+
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	body := buf.String()
+
+	if !strings.Contains(body, "Worker ready") {
+		t.Error("idle worker panel should show 'Worker ready' when tickets exist")
+	}
+	// Check for the specific CTA button link that only appears in empty sprint state
+	if strings.Contains(body, `href="/wizard/new?type=feature" class="processing-cta"`) {
+		t.Error("idle worker panel should NOT show CTA button when tickets exist")
+	}
+}

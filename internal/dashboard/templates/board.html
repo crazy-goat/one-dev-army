@@ -62,6 +62,12 @@
 .processing-priority-high{border-color:rgba(182,2,5,0.3);background:rgba(182,2,5,0.1)}
 .processing-priority-medium{border-color:rgba(251,202,4,0.3);background:rgba(251,202,4,0.1)}
 .processing-priority-low{border-color:rgba(14,138,22,0.3);background:rgba(14,138,22,0.1)}
+.processing-empty-labels{display:flex;gap:.4rem;flex-shrink:0;margin-bottom:.25rem}
+.processing-empty-message{display:flex;flex-direction:column;gap:.25rem;min-width:0;width:100%}
+.processing-empty-title{font-size:1.2rem;font-weight:600;line-height:1.3;color:var(--text)}
+.processing-empty-subtitle{color:var(--muted);font-size:.85rem}
+.processing-cta{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .8rem;font-size:.8rem;font-weight:500;color:var(--accent);background:var(--surface);border:1px solid var(--border);border-radius:6px;text-decoration:none;margin-top:.5rem;cursor:pointer;transition:background .15s,border-color .15s}
+.processing-cta:hover{background:var(--border);border-color:var(--accent)}
 .empty-state{color:var(--muted);font-size:.85rem;text-align:center;padding:2rem 1rem;font-style:italic}
 </style>
 
@@ -365,7 +371,7 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
     </div>
 
     <!-- Processing Panel at the bottom of center column -->
-    <div class="processing-panel{{if not .CurrentTicket}} processing-panel-idle{{end}}" id="processing-panel">
+    <div class="processing-panel{{if not .CurrentTicket}} processing-panel-idle{{end}}" id="processing-panel" data-total-tickets="{{.TotalTickets}}">
       <div class="processing-panel-content">
         <span class="processing-indicator"></span>
         {{if .CurrentTicket}}
@@ -389,7 +395,18 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
           <span class="processing-title">{{.CurrentTicket.Title}}</span>
         </a>
         {{else}}
+        {{if eq .TotalTickets 0}}
+        <div class="processing-empty-labels">
+          <span class="processing-badge">🎯 Sprint</span>
+        </div>
+        <div class="processing-empty-message">
+          <span class="processing-empty-title">No tickets in sprint</span>
+          <span class="processing-empty-subtitle">Create your first ticket to get started</span>
+          <a href="/wizard/new?type=feature" class="processing-cta">+ New Ticket</a>
+        </div>
+        {{else}}
         <span class="processing-idle-text">No active ticket &mdash; Worker ready</span>
+        {{end}}
         {{end}}
       </div>
     </div>
