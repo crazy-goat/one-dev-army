@@ -50,7 +50,7 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 		},
 		"labelIcon": func(label string) string {
 			switch label {
-			case "type:feature", "enhancement":
+			case "type:feature", "feature", "enhancement":
 				return "✨"
 			case "type:bug", "bug":
 				return "🐛"
@@ -78,7 +78,7 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 		},
 		"labelTooltip": func(label string) string {
 			switch label {
-			case "type:feature", "enhancement":
+			case "type:feature", "feature", "enhancement":
 				return "Type: Feature"
 			case "type:bug", "bug":
 				return "Type: Bug"
@@ -4855,6 +4855,7 @@ func TestLabelIcon(t *testing.T) {
 		expected string
 	}{
 		{"type:feature", "type:feature", "✨"},
+		{"feature", "feature", "✨"},
 		{"type:bug", "type:bug", "🐛"},
 		{"enhancement", "enhancement", "✨"},
 		{"bug", "bug", "🐛"},
@@ -4878,7 +4879,7 @@ func TestLabelIcon(t *testing.T) {
 			funcMap := template.FuncMap{
 				"labelIcon": func(label string) string {
 					switch label {
-					case "type:feature", "enhancement":
+					case "type:feature", "feature", "enhancement":
 						return "✨"
 					case "type:bug", "bug":
 						return "🐛"
@@ -4931,6 +4932,7 @@ func TestLabelTooltip(t *testing.T) {
 		expected string
 	}{
 		{"type:feature", "type:feature", "Type: Feature"},
+		{"feature", "feature", "Type: Feature"},
 		{"type:bug", "type:bug", "Type: Bug"},
 		{"enhancement", "enhancement", "Type: Feature"},
 		{"bug", "bug", "Type: Bug"},
@@ -4954,7 +4956,7 @@ func TestLabelTooltip(t *testing.T) {
 			funcMap := template.FuncMap{
 				"labelTooltip": func(label string) string {
 					switch label {
-					case "type:feature", "enhancement":
+					case "type:feature", "feature", "enhancement":
 						return "Type: Feature"
 					case "type:bug", "bug":
 						return "Type: Bug"
