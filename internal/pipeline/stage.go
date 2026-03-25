@@ -26,7 +26,7 @@ const (
 	ColumnPlan          Column = "Plan"
 	ColumnCode          Column = "Code"
 	ColumnAIReview      Column = "AI Review"
-	ColumnCheckPipeline Column = "Check Pipeline"
+	ColumnCheckPipeline Column = "Pipeline"
 	ColumnApprove       Column = "Approve"
 	ColumnMerge         Column = "Merge"
 	ColumnDone          Column = "Done"

@@ -2924,9 +2924,9 @@ func TestInferColumnFromIssue(t *testing.T) {
 			expected: "AI Review",
 		},
 		{
-			name:     "stage:check-pipeline maps to Check Pipeline",
+			name:     "stage:check-pipeline maps to Pipeline",
 			labels:   []string{"stage:check-pipeline"},
-			expected: "Check Pipeline",
+			expected: "Pipeline",
 		},
 		{
 			name:     "stage:create-pr maps to AI Review",
@@ -3020,8 +3020,8 @@ func TestAddCardToColumn(t *testing.T) {
 			expectedField: "AIReview",
 		},
 		{
-			name:          "Check Pipeline column adds to CheckPipeline field",
-			column:        "Check Pipeline",
+			name:          "Pipeline column adds to CheckPipeline field",
+			column:        "Pipeline",
 			expectedField: "CheckPipeline",
 		},
 		{
