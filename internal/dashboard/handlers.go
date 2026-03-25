@@ -526,6 +526,41 @@ func (s *Server) handleUnblock(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
+func (s *Server) handleManualProcess(w http.ResponseWriter, r *http.Request) {
+	if s.orchestrator == nil {
+		http.Error(w, "orchestrator not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	id := r.PathValue("id")
+	issueNum := 0
+	if _, err := fmt.Sscanf(id, "%d", &issueNum); err != nil {
+		http.Error(w, "invalid issue ID", http.StatusBadRequest)
+		return
+	}
+	if issueNum == 0 {
+		http.Error(w, "invalid issue ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.orchestrator.QueueManualProcess(issueNum); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	log.Printf("[Dashboard] Manual process queued for #%d", issueNum)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"message": fmt.Sprintf("Ticket #%d queued for processing", issueNum),
+	})
+}
+
 func (s *Server) handleDecline(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	issueNum := 0

@@ -121,6 +121,19 @@
   </div>
 </div>
 
+<!-- Process confirmation modal -->
+<div id="process-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:1.5rem;width:400px;max-width:90vw">
+    <h3 style="margin-bottom:.5rem">Process Ticket</h3>
+    <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem">Start processing <strong>#<span id="process-issue-id"></span></strong>?</p>
+    <p id="process-issue-title" style="font-size:.85rem;margin-bottom:1rem"></p>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end">
+      <button type="button" class="btn" onclick="closeProcessModal()">Cancel</button>
+      <button type="button" class="btn btn-primary" id="process-confirm-btn" onclick="confirmProcess()">Process Now</button>
+    </div>
+  </div>
+</div>
+
 <script>
 function openDeclineModal(id, title) {
   document.getElementById('decline-issue-id').textContent = id;
@@ -166,6 +179,43 @@ function triggerSync() {
             text.textContent = 'Sync';
         });
 }
+
+var processIssueId = 0;
+function openProcessModal(id, title) {
+  processIssueId = id;
+  document.getElementById('process-issue-id').textContent = id;
+  document.getElementById('process-issue-title').textContent = title;
+  document.getElementById('process-modal').style.display = 'flex';
+}
+function closeProcessModal() {
+  document.getElementById('process-modal').style.display = 'none';
+  processIssueId = 0;
+}
+function confirmProcess() {
+  if (!processIssueId) return;
+  var btn = document.getElementById('process-confirm-btn');
+  btn.disabled = true;
+  btn.textContent = 'Queuing...';
+  fetch('/api/tickets/' + processIssueId + '/process', {method: 'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success) {
+        alert('Failed: ' + (data.error || 'Unknown error'));
+      }
+      closeProcessModal();
+    })
+    .catch(function(err) {
+      alert('Error: ' + err.message);
+      closeProcessModal();
+    })
+    .finally(function() {
+      btn.disabled = false;
+      btn.textContent = 'Process Now';
+    });
+}
+document.getElementById('process-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeProcessModal();
+});
 </script>
 
 <!-- Modal container for wizard -->
@@ -185,6 +235,7 @@ function triggerSync() {
         {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
         {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
         <div class="card-actions">
+          <button type="button" class="btn btn-primary" onclick="openProcessModal({{.ID}}, '{{.Title}}')">Process</button>
           <form method="post" action="/block/{{.ID}}"><button type="submit" class="btn" title="Block this ticket">Block</button></form>
         </div>
       </div>

@@ -16,6 +16,7 @@ import (
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/github"
+	"github.com/crazy-goat/one-dev-army/internal/mvp"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 )
 
@@ -5494,5 +5495,54 @@ func TestBoardTemplate_ProcessingPanel_PartialLabels(t *testing.T) {
 
 	if strings.Contains(output, "📏") {
 		t.Error("template should NOT contain size badge when Size is empty")
+	}
+}
+
+func TestHandleManualProcess(t *testing.T) {
+	orch := &mvp.Orchestrator{}
+	s := &Server{orchestrator: orch}
+
+	req := httptest.NewRequest("POST", "/api/tickets/42/process", nil)
+	req.SetPathValue("id", "42")
+	w := httptest.NewRecorder()
+
+	s.handleManualProcess(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["success"] != true {
+		t.Errorf("success = %v, want true", resp["success"])
+	}
+}
+
+func TestHandleManualProcessNoOrchestrator(t *testing.T) {
+	s := &Server{}
+
+	req := httptest.NewRequest("POST", "/api/tickets/42/process", nil)
+	req.SetPathValue("id", "42")
+	w := httptest.NewRecorder()
+
+	s.handleManualProcess(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestHandleManualProcessInvalidID(t *testing.T) {
+	orch := &mvp.Orchestrator{}
+	s := &Server{orchestrator: orch}
+
+	req := httptest.NewRequest("POST", "/api/tickets/abc/process", nil)
+	req.SetPathValue("id", "abc")
+	w := httptest.NewRecorder()
+
+	s.handleManualProcess(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 	}
 }

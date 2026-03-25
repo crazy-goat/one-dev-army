@@ -483,6 +483,42 @@ func TestOrchestrator_ImplementsConfigAwareWorker(_ *testing.T) {
 	var _ config.ConfigAwareWorker = (*Orchestrator)(nil)
 }
 
+func TestQueueManualProcess(t *testing.T) {
+	o := &Orchestrator{paused: true}
+
+	err := o.QueueManualProcess(42)
+	if err != nil {
+		t.Fatalf("QueueManualProcess() error = %v", err)
+	}
+	if o.ManualNext() != 42 {
+		t.Errorf("ManualNext() = %d, want 42", o.ManualNext())
+	}
+	if o.IsPaused() {
+		t.Error("orchestrator should be auto-started after manual process")
+	}
+}
+
+func TestQueueManualProcessReplace(t *testing.T) {
+	o := &Orchestrator{paused: false}
+
+	o.QueueManualProcess(42)
+	o.QueueManualProcess(99)
+
+	if o.ManualNext() != 99 {
+		t.Errorf("ManualNext() = %d, want 99 (should replace previous)", o.ManualNext())
+	}
+}
+
+func TestQueueManualProcessAlreadyProcessing(t *testing.T) {
+	o := &Orchestrator{}
+	o.currentTask = &Task{Issue: github.Issue{Number: 42}}
+
+	err := o.QueueManualProcess(42)
+	if err == nil {
+		t.Error("expected error when queuing ticket that is already being processed")
+	}
+}
+
 // mockStageBroadcaster is a test mock for StageBroadcaster
 type mockStageBroadcaster struct {
 	issueUpdates                  []github.Issue
