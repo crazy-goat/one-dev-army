@@ -4,8 +4,7 @@
 .board-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem}
 .board-actions{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
 @media (max-width:768px){.board-header{flex-direction:column;align-items:flex-start}.board-actions{width:100%;justify-content:flex-start}}
-.board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:auto 1fr;gap:1rem;margin-bottom:2rem}
-.board>.stacked-column,.board>.column{grid-row:2}
+.board{display:grid;grid-template-columns:repeat(8,1fr);gap:1rem;margin-bottom:2rem}
 .stacked-column{display:flex;flex-direction:column;gap:0.5rem;height:calc(100vh - 8rem);min-height:300px}
 .stacked-column .column{flex:1 1 50%;min-height:0;overflow-y:auto;scroll-behavior:smooth}
 .stacked-column .column-title{position:sticky;top:0;z-index:1;background:var(--surface);padding-bottom:.5rem}
@@ -44,7 +43,7 @@
 .card .card-pr a:hover{text-decoration:underline}
 .badge-merged { background: #6f42c1; color: white; font-size: .65rem; padding: .1rem .4rem; border-radius: 4px; display: inline-flex; align-items: center; gap: .25rem; }
 .badge-closed { background: #6c757d; color: white; font-size: .65rem; padding: .1rem .4rem; border-radius: 4px; display: inline-flex; align-items: center; gap: .25rem; }
-.processing-panel{background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.2);border-radius:8px;padding:.5rem 1rem;display:flex;align-items:center;grid-column:2/8;grid-row:1}
+.processing-panel{background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.2);border-radius:8px;padding:.5rem 1rem;margin-bottom:1rem;display:flex;align-items:center}
 .processing-panel-content{display:flex;align-items:center;gap:.75rem;width:100%;min-width:0}
 .processing-indicator{width:8px;height:8px;border-radius:50%;background:#3498db;flex-shrink:0;animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -56,9 +55,6 @@
 .processing-priority-high{border-color:rgba(182,2,5,0.3);background:rgba(182,2,5,0.1)}
 .processing-priority-medium{border-color:rgba(251,202,4,0.3);background:rgba(251,202,4,0.1)}
 .processing-priority-low{border-color:rgba(14,138,22,0.3);background:rgba(14,138,22,0.1)}
-.processing-panel.idle{background:rgba(108,117,125,0.06);border-color:rgba(108,117,125,0.15)}
-.processing-panel.idle .processing-indicator{background:#6c757d;animation:none}
-.processing-panel.idle .processing-idle-text{color:var(--muted);font-size:.85rem;font-style:italic}
 .empty-state{color:var(--muted);font-size:.85rem;text-align:center;padding:2rem 1rem;font-style:italic}
 </style>
 
@@ -94,6 +90,35 @@
     </form>
   </div>
 </div>
+
+{{if .CurrentTicket}}
+<div class="processing-panel" id="processing-panel">
+  <div class="processing-panel-content">
+    <span class="processing-indicator"></span>
+    <a href="/task/{{.CurrentTicket.Number}}" class="processing-ticket">
+      <span class="processing-id">#{{.CurrentTicket.Number}}</span>
+      <span class="processing-title">{{.CurrentTicket.Title}}</span>
+    </a>
+    <div class="processing-labels">
+      {{if .CurrentTicket.Priority}}
+      <span class="processing-badge processing-priority-{{.CurrentTicket.Priority}}">
+        {{if eq .CurrentTicket.Priority "high"}}🔴{{else if eq .CurrentTicket.Priority "medium"}}🟡{{else}}🟢{{end}} {{.CurrentTicket.Priority}}
+      </span>
+      {{end}}
+      {{if .CurrentTicket.Type}}
+      <span class="processing-badge">
+        {{if eq .CurrentTicket.Type "bug"}}🐛 Bug{{else}}✨ Feature{{end}}
+      </span>
+      {{end}}
+      {{if .CurrentTicket.Size}}
+      <span class="processing-badge">📏 {{.CurrentTicket.Size}}</span>
+      {{end}}
+    </div>
+  </div>
+</div>
+{{else}}
+<div class="processing-panel" id="processing-panel" style="display:none"></div>
+{{end}}
 
 <div class="board" id="board-container" hx-get="/api/board-data" hx-swap="innerHTML" hx-trigger="refresh">
 {{template "board-columns" .}}
@@ -170,39 +195,6 @@ function triggerSync() {
 {{end}}
 
 {{define "board-columns"}}
-{{if .CurrentTicket}}
-<div class="processing-panel" id="processing-panel">
-  <div class="processing-panel-content">
-    <span class="processing-indicator"></span>
-    <a href="/task/{{.CurrentTicket.Number}}" class="processing-ticket">
-      <span class="processing-id">#{{.CurrentTicket.Number}}</span>
-      <span class="processing-title">{{.CurrentTicket.Title}}</span>
-    </a>
-    <div class="processing-labels">
-      {{if .CurrentTicket.Priority}}
-      <span class="processing-badge processing-priority-{{.CurrentTicket.Priority}}">
-        {{if eq .CurrentTicket.Priority "high"}}🔴{{else if eq .CurrentTicket.Priority "medium"}}🟡{{else}}🟢{{end}} {{.CurrentTicket.Priority}}
-      </span>
-      {{end}}
-      {{if .CurrentTicket.Type}}
-      <span class="processing-badge">
-        {{if eq .CurrentTicket.Type "bug"}}🐛 Bug{{else}}✨ Feature{{end}}
-      </span>
-      {{end}}
-      {{if .CurrentTicket.Size}}
-      <span class="processing-badge">📏 {{.CurrentTicket.Size}}</span>
-      {{end}}
-    </div>
-  </div>
-</div>
-{{else}}
-<div class="processing-panel idle" id="processing-panel">
-  <div class="processing-panel-content">
-    <span class="processing-indicator"></span>
-    <span class="processing-idle-text">No active ticket</span>
-  </div>
-</div>
-{{end}}
   <div class="stacked-column">
     <div class="column">
       <div class="column-title">Backlog <span class="count">{{len .Backlog}}</span></div>

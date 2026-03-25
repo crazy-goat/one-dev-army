@@ -5171,11 +5171,12 @@ func TestBoardTemplate_ProcessingPanel_Visible(t *testing.T) {
 	}
 }
 
-// TestBoardTemplate_ProcessingPanel_Idle tests that the processing panel shows idle state when CurrentTicket is nil
-func TestBoardTemplate_ProcessingPanel_Idle(t *testing.T) {
+// TestBoardTemplate_ProcessingPanel_Hidden tests that the processing panel is hidden when CurrentTicket is nil
+func TestBoardTemplate_ProcessingPanel_Hidden(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
 
+	// Create test data with CurrentTicket nil
 	data := boardData{
 		Active:        "board",
 		CurrentTicket: nil,
@@ -5183,6 +5184,7 @@ func TestBoardTemplate_ProcessingPanel_Idle(t *testing.T) {
 		Processing:    false,
 	}
 
+	// Execute the content template
 	tmpl := srv.tmpls["board.html"]
 	if tmpl == nil {
 		t.Fatal("board.html template not found")
@@ -5195,28 +5197,14 @@ func TestBoardTemplate_ProcessingPanel_Idle(t *testing.T) {
 
 	output := buf.String()
 
+	// Verify processing panel is present but hidden
 	if !strings.Contains(output, `id="processing-panel"`) {
 		t.Error("template should contain processing-panel element")
 	}
 
-	if strings.Contains(output, `id="processing-panel" style="display:none"`) || strings.Contains(output, `id="processing-panel" style='display:none'`) {
-		t.Error("processing panel should be visible when idle, not display:none")
-	}
-
-	if !strings.Contains(output, `class="processing-panel idle"`) {
-		t.Error("processing panel should have 'idle' class when CurrentTicket is nil")
-	}
-
-	if !strings.Contains(output, "No active ticket") {
-		t.Error("processing panel should show 'No active ticket' when idle")
-	}
-
-	if !strings.Contains(output, `class="processing-panel-content"`) {
-		t.Error("idle panel should have processing-panel-content for consistent height")
-	}
-
-	if !strings.Contains(output, `class="processing-indicator"`) {
-		t.Error("idle panel should have processing-indicator element")
+	// Verify panel has display:none style
+	if !strings.Contains(output, `id="processing-panel" style="display:none"`) {
+		t.Error("processing panel should be hidden (display:none) when CurrentTicket is nil")
 	}
 }
 
@@ -5491,96 +5479,5 @@ func TestBoardTemplate_ProcessingPanel_PartialLabels(t *testing.T) {
 
 	if strings.Contains(output, "📏") {
 		t.Error("template should NOT contain size badge when Size is empty")
-	}
-}
-
-func TestBoardTemplate_ProcessingPanel_InsideGrid(t *testing.T) {
-	srv := createTestServerWithTemplates(t)
-	defer srv.wizardStore.Stop()
-
-	data := boardData{
-		Active: "board",
-		CurrentTicket: &currentTicketInfo{
-			Number:   123,
-			Title:    "Test Ticket",
-			Status:   "coding",
-			Priority: "medium",
-			Type:     "feature",
-			Size:     "M",
-		},
-		Paused:     false,
-		Processing: true,
-	}
-
-	tmpl := srv.tmpls["board.html"]
-	if tmpl == nil {
-		t.Fatal("board.html template not found")
-	}
-
-	var buf strings.Builder
-	if err := tmpl.ExecuteTemplate(&buf, "board-columns", data); err != nil {
-		t.Fatalf("failed to execute template: %v", err)
-	}
-
-	output := buf.String()
-
-	if !strings.Contains(output, `id="processing-panel"`) {
-		t.Error("board-columns template should contain processing-panel element")
-	}
-
-	if !strings.Contains(output, "#123") {
-		t.Error("board-columns template should display ticket number")
-	}
-}
-
-func TestBoardTemplate_ProcessingPanel_IdleInsideGrid(t *testing.T) {
-	srv := createTestServerWithTemplates(t)
-	defer srv.wizardStore.Stop()
-
-	data := boardData{
-		Active:        "board",
-		CurrentTicket: nil,
-		Paused:        true,
-		Processing:    false,
-	}
-
-	tmpl := srv.tmpls["board.html"]
-	if tmpl == nil {
-		t.Fatal("board.html template not found")
-	}
-
-	var buf strings.Builder
-	if err := tmpl.ExecuteTemplate(&buf, "board-columns", data); err != nil {
-		t.Fatalf("failed to execute template: %v", err)
-	}
-
-	output := buf.String()
-
-	if !strings.Contains(output, `class="processing-panel idle"`) {
-		t.Error("board-columns template should contain idle processing-panel")
-	}
-
-	if !strings.Contains(output, "No active ticket") {
-		t.Error("board-columns template should show idle text")
-	}
-}
-
-func TestBoardTemplate_ProcessingPanel_GridPositioning(t *testing.T) {
-	srv := createTestServerWithTemplates(t)
-	defer srv.wizardStore.Stop()
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-
-	srv.handleBoard(rec, req)
-
-	body := rec.Body.String()
-
-	if !strings.Contains(body, "grid-column:2/8") {
-		t.Error("processing panel should have grid-column:2/8 CSS rule")
-	}
-
-	if !strings.Contains(body, "grid-template-rows:") {
-		t.Error("board grid should have grid-template-rows CSS rule")
 	}
 }
