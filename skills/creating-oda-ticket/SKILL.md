@@ -2,10 +2,7 @@
 name: creating-oda-ticket
 description: >
   Use when the user asks to create a ticket, issue, or task for ODA or One Dev Army —
-  e.g. "add a ticket to oda", "create an issue for one dev army", "new oda ticket",
-  "dodaj ticket do oda", "stwórz issue w one dev army".
-  Guides the conversation to gather required information (title, body) and optional
-  metadata (priority, size, type, sprint), then runs the `oda issue create` CLI command.
+  e.g. "add a ticket to oda", "create an issue for one dev army", "new oda ticket".
 ---
 
 # Creating an ODA Ticket
@@ -59,49 +56,98 @@ oda issue create \
 - `--type bug` → label `bug`
 - `--type feature` → label `feature`
 
+## The Golden Rule — Never Guess, Always Ask
+
+**NEVER invent, assume, or fabricate ticket content.** Every piece of information in the ticket must come from the user — either stated explicitly or clearly inferable from the current conversation context.
+
+If the user says "create an oda ticket" or "add a ticket" without describing WHAT the ticket is about — **you MUST have a conversation with the user first.** Do not guess. Do not make up a title. Do not infer from unrelated conversation context.
+
+### How to gather information — conversation, not interrogation
+
+**Talk to the user naturally.** Do NOT dump a list of questions like a form. Instead, have a normal conversation — ask about the topic, understand the problem, and organically gather what you need through dialogue.
+
+```
+❌ BAD — interrogation / form-style:
+"Sure! I need a few details:
+1. What's the title?
+2. Describe the problem
+3. Priority: high/medium/low?
+4. Size: S/M/L/XL?
+5. Bug or feature?"
+
+✅ GOOD — natural conversation:
+"Sure, what should this ticket be about?"
+
+(user describes the problem)
+
+"Got it. Is this urgent or can it wait?"
+```
+
+**Key principles:**
+- Ask ONE thing at a time, starting with the most important: **what is this about?**
+- Let the conversation flow — follow up naturally based on what the user says
+- Infer metadata (priority, size, type) from the conversation when obvious — don't ask about things you already know
+- If the user gives you everything in one message, don't ask more — just proceed
+
+### When you have NO context — start the conversation:
+
+- "create an oda ticket" → ask what it's about
+- "add this to the backlog" → "this" is undefined — ask what they mean
+- "add a ticket for that bug" → which bug? Ask.
+
+### When you have ENOUGH context — proceed:
+
+- "add a ticket for the dashboard WebSocket disconnecting after 5 minutes" — clear subject, go
+- "create a ticket: login page returns 500 on wrong password" — clear bug, go
+- User just discussed a specific problem and says "make a ticket for that" — context is in the conversation, go
+
 ## Workflow
 
 ### Step 1 — Gather Information
 
-Before running the command, ensure you have at minimum:
+You need at minimum:
 
 1. **Title** — a concise summary (required)
 2. **Body text** — detailed description with context, requirements, and acceptance criteria (required)
 
-If the user provides a vague request (e.g. "add a ticket for fixing the login"), ask clarifying questions to produce a well-written issue body. A good issue body includes:
+If the user's request is vague or lacks a subject, **have a conversation** to understand what they need. A good issue body includes:
 - **What** needs to be done
 - **Why** it matters (context, user impact)
 - **Acceptance criteria** — concrete conditions for "done"
 
-Also ask about or infer from context:
-- **Priority** — how urgent is this? (high/medium/low)
-- **Size** — estimated effort (S/M/L/XL)
-- **Type** — is this a bug fix or a new feature?
-- **Sprint** — should it go into the current sprint?
+For optional metadata (priority, size, type, sprint) — infer from conversation if obvious, otherwise weave the question into the dialogue naturally.
 
-If the user provides enough detail to infer these values confidently, use them without asking. If unclear, ask.
+### Step 2 — Show the Full Issue Before Creating
 
-### Step 2 — Confirm Before Creating
+**Before running the command, ALWAYS show the user the exact issue content that will be sent.** This is not optional. The user must see the full title and body text before you create anything.
 
-Present the user with a summary of what will be created:
+Display it like this:
 
 ```
 Title: <title>
-Body: <body text>
+
+Body:
+<full body text exactly as it will be sent — including markdown, acceptance criteria, everything>
+
 Priority: <value or "not set">
 Size: <value or "not set">
 Type: <value or "not set">
 Sprint: <current sprint or "not assigned">
 ```
 
-Wait for user confirmation before proceeding. If the user explicitly says "just do it" or provides all details upfront with clear intent, skip confirmation.
+Wait for user confirmation before proceeding. Do NOT create the issue until the user approves.
 
-### Step 3 — Run the Command
+### Step 3 — Send It
+
+Once the user confirms, run `oda issue create` immediately. Do not ask again, do not hesitate — the user said go, so go.
+
+**CRITICAL: NEVER pass body text inline with `--text`.** Passing text directly will break on quotes, backticks, dollar signs, and markdown formatting. You MUST write the body to a local file first, read it back with `cat`, and delete the file after.
 
 Execute the command from the ODA project directory (where `.oda/config.yaml` exists):
 
 ```bash
-cat > /tmp/issue_body.md << 'EOF'
+# 1. Write body to a local file (single-quoted 'EOF' prevents bash interpretation)
+cat > .issue_body.md << 'EOF'
 Body text here with full markdown support.
 
 ## Acceptance Criteria
@@ -109,13 +155,17 @@ Body text here with full markdown support.
 - [ ] Criterion two
 EOF
 
+# 2. Create the issue, reading body from the file
 oda issue create \
   --title "Title here" \
-  --text "$(cat /tmp/issue_body.md)" \
+  --text "$(cat .issue_body.md)" \
   --priority medium \
   --size M \
   --type feature \
   --current-sprint
+
+# 3. Clean up
+rm .issue_body.md
 ```
 
 Only include optional flags that have values. Do not pass empty strings.
@@ -142,32 +192,6 @@ If the command fails, check:
 - The command requires `.oda/config.yaml` to exist in the working directory (it reads `github.repo` from it)
 - It shells out to `gh` CLI — the user must be authenticated with GitHub
 - Issues created via CLI do **not** automatically get a `stage:backlog` label — they enter the backlog by having no `stage:*` label
-- Always write the issue body to a temp file (`/tmp/issue_body.md`) and pass it via `--text "$(cat /tmp/issue_body.md)"` — never pass body text inline
-
-## Best Practices — File-Based Body Text
-
-Always use a temporary file for the issue body text. Never pass body text inline with `--text`.
-
-**Why this is mandatory:**
-
-- **No escaping needed** — backticks, dollar signs, quotes, and special characters work as-is
-- **Full markdown support** — code blocks, headers, lists, and formatting are preserved exactly
-- **Easier to review** — you can inspect `/tmp/issue_body.md` before creating the ticket
-- **Prevents bash interpretation** — `$variables`, `$(commands)`, and backtick expressions inside the body are not evaluated
-
-**Pattern:**
-
-```bash
-cat > /tmp/issue_body.md << 'EOF'
-Your issue body here — any markdown, any special characters.
-EOF
-
-oda issue create \
-  --title "Title" \
-  --text "$(cat /tmp/issue_body.md)"
-```
-
-The single quotes around `'EOF'` are critical — they prevent bash from interpreting any content inside the heredoc.
 
 ## Example
 
