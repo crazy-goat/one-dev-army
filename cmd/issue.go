@@ -1,14 +1,19 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 )
 
@@ -22,10 +27,17 @@ type IssueCreateFlags struct {
 	CurrentSprint bool
 }
 
+// IssueLogFlags holds all the flags for the issue log command
+type IssueLogFlags struct {
+	Issue int
+	JSON  bool
+	Limit int
+}
+
 // IssueCommand handles the 'issue' subcommand and its children
-func IssueCommand(args []string, client *github.Client, dashboardPort int) error {
+func IssueCommand(args []string, client *github.Client, dashboardPort int, store *db.Store) error {
 	if len(args) < 1 {
-		return errors.New("issue command requires a subcommand: create")
+		return errors.New("issue command requires a subcommand: create, log")
 	}
 
 	subcommand := args[0]
@@ -34,6 +46,8 @@ func IssueCommand(args []string, client *github.Client, dashboardPort int) error
 	switch subcommand {
 	case "create":
 		return IssueCreateCommand(subArgs, client, dashboardPort)
+	case "log":
+		return IssueLogCommand(subArgs, store, os.Stdout)
 	default:
 		return fmt.Errorf("unknown issue subcommand: %s", subcommand)
 	}
@@ -149,12 +163,118 @@ func validateIssueCreateFlags(flags IssueCreateFlags) error {
 	return nil
 }
 
+// IssueLogCommand handles the 'issue log' subcommand
+func IssueLogCommand(args []string, store *db.Store, w io.Writer) error {
+	flags := IssueLogFlags{}
+
+	fs := flag.NewFlagSet("issue log", flag.ContinueOnError)
+	fs.IntVar(&flags.Issue, "issue", 0, "Issue number")
+	fs.BoolVar(&flags.JSON, "json", false, "Output as JSON")
+	fs.IntVar(&flags.Limit, "limit", 0, "Limit number of entries")
+
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("parsing flags: %w", err)
+	}
+
+	// Positional argument (if --issue not set)
+	if flags.Issue == 0 && fs.NArg() > 0 {
+		n, err := strconv.Atoi(fs.Arg(0))
+		if err != nil {
+			return fmt.Errorf("invalid issue number: %s", fs.Arg(0))
+		}
+		flags.Issue = n
+	}
+
+	if flags.Issue <= 0 {
+		return errors.New("issue number is required: oda issue log <number> or oda issue log --issue <number>")
+	}
+
+	if store == nil {
+		return errors.New("database not available")
+	}
+
+	changes, err := store.GetStageChangesLimit(flags.Issue, flags.Limit)
+	if err != nil {
+		return fmt.Errorf("querying stage changes: %w", err)
+	}
+
+	if len(changes) == 0 {
+		fmt.Fprintf(w, "No stage changes found for issue #%d\n", flags.Issue)
+		return nil
+	}
+
+	if flags.JSON {
+		return formatIssueLogJSON(w, flags.Issue, changes)
+	}
+	return formatIssueLogTable(w, flags.Issue, changes)
+}
+
+func formatIssueLogTable(w io.Writer, issueNumber int, changes []db.StageChange) error {
+	fmt.Fprintf(w, "Stage history for issue #%d (%d entries)\n\n", issueNumber, len(changes))
+	fmt.Fprintf(w, "%-21s %-13s %-13s %-25s %s\n", "TIME", "FROM", "TO", "REASON", "BY")
+
+	for _, c := range changes {
+		from := c.FromStage
+		if from == "" {
+			from = "—"
+		}
+		fmt.Fprintf(w, "%-21s %-13s %-13s %-25s %s\n",
+			c.ChangedAt.Format("2006-01-02 15:04:05"),
+			from,
+			c.ToStage,
+			c.Reason,
+			c.ChangedBy,
+		)
+	}
+	return nil
+}
+
+type issueLogOutput struct {
+	IssueNumber int             `json:"issue_number"`
+	Total       int             `json:"total"`
+	Entries     []issueLogEntry `json:"entries"`
+}
+
+type issueLogEntry struct {
+	ID        int    `json:"id"`
+	FromStage string `json:"from_stage"`
+	ToStage   string `json:"to_stage"`
+	Reason    string `json:"reason"`
+	ChangedBy string `json:"changed_by"`
+	ChangedAt string `json:"changed_at"`
+}
+
+func formatIssueLogJSON(w io.Writer, issueNumber int, changes []db.StageChange) error {
+	entries := make([]issueLogEntry, len(changes))
+	for i, c := range changes {
+		entries[i] = issueLogEntry{
+			ID:        c.ID,
+			FromStage: c.FromStage,
+			ToStage:   c.ToStage,
+			Reason:    c.Reason,
+			ChangedBy: c.ChangedBy,
+			ChangedAt: c.ChangedAt.Format(time.RFC3339),
+		}
+	}
+
+	output := issueLogOutput{
+		IssueNumber: issueNumber,
+		Total:       len(entries),
+		Entries:     entries,
+	}
+
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(output)
+}
+
 // PrintIssueUsage prints usage information for the issue command
 func PrintIssueUsage() {
 	fmt.Println("Usage: oda issue <subcommand> [options]")
 	fmt.Println()
 	fmt.Println("Subcommands:")
 	fmt.Println("  create    Create a new GitHub issue")
+	fmt.Println("  log       Display stage change history for an issue")
 	fmt.Println()
 	fmt.Println("Issue Create Options:")
 	fmt.Println("  --title string         Issue title (required)")
@@ -164,8 +284,15 @@ func PrintIssueUsage() {
 	fmt.Println("  --type string          Issue type: bug or feature")
 	fmt.Println("  --current-sprint       Assign issue to the current sprint")
 	fmt.Println()
+	fmt.Println("Issue Log Options:")
+	fmt.Println("  --issue int            Issue number (alternative to positional argument)")
+	fmt.Println("  --json                 Output as JSON instead of text table")
+	fmt.Println("  --limit int            Limit number of entries (default: all, newest-first)")
+	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  oda issue create --title \"Fix login bug\" --text \"Users cannot login\" --priority high --type bug --current-sprint")
+	fmt.Println("  oda issue log 42")
+	fmt.Println("  oda issue log --issue 42 --json --limit 10")
 }
 
 // triggerDashboardSync sends an HTTP POST request to the dashboard sync endpoint

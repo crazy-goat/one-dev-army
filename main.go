@@ -136,7 +136,15 @@ func runIssue(args []string, dir string) error {
 	}
 
 	gh := github.NewClient(cfg.GitHub.Repo)
-	return cmd.IssueCommand(args, gh, cfg.Dashboard.Port)
+
+	dbPath := filepath.Join(dir, ".oda", "metrics.db")
+	store, err := db.Open(dbPath)
+	if err != nil {
+		return fmt.Errorf("opening database: %w", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	return cmd.IssueCommand(args, gh, cfg.Dashboard.Port, store)
 }
 
 func runServe(dir string, debugWebSocket bool) error {
