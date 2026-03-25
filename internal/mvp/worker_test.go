@@ -458,3 +458,38 @@ func TestTechnicalPlanningPromptFormat(t *testing.T) {
 		t.Error("formatted prompt does not contain artifact save instruction")
 	}
 }
+
+func TestImplementationPromptFormat(t *testing.T) {
+	promptTemplate := prompts.MustGet(prompts.MVPImplementation)
+
+	// Verify the prompt template can be formatted with 8 arguments
+	formatted := fmt.Sprintf(promptTemplate, 456, "Test Implementation", "Test Plan", "/tmp/work", "go test ./...", 456, 456, 456)
+
+	// Verify the formatted prompt contains the planning artifact path
+	expectedPlanningPath := ".oda/artifacts/456/01-planning.md"
+	if !strings.Contains(formatted, expectedPlanningPath) {
+		t.Errorf("formatted prompt does not contain expected planning artifact path %q", expectedPlanningPath)
+	}
+
+	// Verify the formatted prompt contains the coding artifact path
+	expectedCodingPath := ".oda/artifacts/456/02-coding.md"
+	if !strings.Contains(formatted, expectedCodingPath) {
+		t.Errorf("formatted prompt does not contain expected coding artifact path %q", expectedCodingPath)
+	}
+
+	// Verify all format specifiers were replaced (no %! patterns indicating missing args)
+	if strings.Contains(formatted, "%!") {
+		t.Errorf("formatted prompt contains unreplaced format specifiers: %s", formatted)
+	}
+
+	// Verify the prompt contains key sections
+	if !strings.Contains(formatted, "ARTIFACT") {
+		t.Error("formatted prompt does not contain 'ARTIFACT' section")
+	}
+	if !strings.Contains(formatted, "READ PLANNING ARTIFACT") {
+		t.Error("formatted prompt does not contain 'READ PLANNING ARTIFACT' step")
+	}
+	if !strings.Contains(formatted, "CRITICAL: Save coding notes to the artifact file") {
+		t.Error("formatted prompt does not contain artifact save instruction")
+	}
+}
