@@ -50,6 +50,7 @@
 .card .card-pr a:hover{text-decoration:underline}
 .badge-merged{background:#6f42c1;color:white;font-size:.65rem;padding:.1rem .4rem;border-radius:4px;display:inline-flex;align-items:center;gap:.25rem}
 .badge-closed{background:#6c757d;color:white;font-size:.65rem;padding:.1rem .4rem;border-radius:4px;display:inline-flex;align-items:center;gap:.25rem}
+.processing-panel-title{font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.5rem;display:flex;align-items:center;gap:.5rem}
 .processing-panel{background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.2);border-radius:8px;padding:.5rem 1rem;display:flex;align-items:center;min-height:0;z-index:10;overflow-y:auto}
 .processing-panel-idle{background:rgba(108,117,125,0.08);border-color:rgba(108,117,125,0.2)}
 .processing-panel-idle .processing-indicator{background:#6c757d;animation:none}
@@ -374,6 +375,7 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
     <!-- Processing Panel at the bottom of center column -->
     <div class="processing-panel{{if not .CurrentTicket}} processing-panel-idle{{end}}" id="processing-panel" data-total-tickets="{{.TotalTickets}}">
       <div class="processing-panel-content">
+        <div class="processing-panel-title">Processing</div>
         <span class="processing-indicator"></span>
         {{if .CurrentTicket}}
         <div class="processing-labels">

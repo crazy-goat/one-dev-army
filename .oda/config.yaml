@@ -24,7 +24,7 @@ llm:
     planning:
         model: nexos-ai/Kimi K2.5
     orchestration:
-        model: nexos-ai/Kimi K2.5
+        model: '"openrouter/stepfun/step-3.5-flash:free"'
     code:
         model: nexos-ai/Kimi K2.5
     code-heavy:

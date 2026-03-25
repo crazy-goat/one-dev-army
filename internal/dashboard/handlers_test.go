@@ -6004,6 +6004,31 @@ func TestPlanSprintButton_HiddenWithTickets(t *testing.T) {
 	})
 }
 
+// TestProcessingPanel_Title verifies the processing panel has a title
+func TestProcessingPanel_Title(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleBoard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify processing panel title is present
+	if !strings.Contains(body, "processing-panel-title") {
+		t.Error("processing panel missing title CSS class")
+	}
+	if !strings.Contains(body, "Processing") {
+		t.Error("processing panel missing 'Processing' title text")
+	}
+}
+
 // TestBoardTemplate_CSSLayout verifies the CSS layout properties for board columns and processing panel
 func TestBoardTemplate_CSSLayout(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
