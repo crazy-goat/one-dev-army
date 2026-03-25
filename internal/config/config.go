@@ -53,7 +53,7 @@ type Sprint struct {
 	AutoStart      bool `yaml:"auto_start"`
 }
 
-func Load(rootDir string, availableModels ...string) (*Config, error) {
+func Load(rootDir string, _ ...string) (*Config, error) {
 	path := filepath.Join(rootDir, ".oda", "config.yaml")
 
 	data, err := os.ReadFile(path)

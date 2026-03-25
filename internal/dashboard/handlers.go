@@ -1904,7 +1904,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 // renderSettingsWithErrors renders the settings page with validation errors
-func (s *Server) renderSettingsWithErrors(w http.ResponseWriter, r *http.Request, errors []string) {
+func (s *Server) renderSettingsWithErrors(w http.ResponseWriter, _ *http.Request, errors []string) {
 	// Load current config to populate the form
 	cfg, err := config.Load(s.rootDir)
 	if err != nil {
@@ -1990,7 +1990,7 @@ func (s *Server) handleWorkerStatus(w http.ResponseWriter, _ *http.Request) {
 }
 
 // handleYoloToggle toggles the YOLO mode setting and returns an HTMX fragment
-func (s *Server) handleYoloToggle(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleYoloToggle(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	if s.rootDir == "" {

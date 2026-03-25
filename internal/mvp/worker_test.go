@@ -336,12 +336,12 @@ func TestWorker_UpdateConfig(t *testing.T) {
 	}
 }
 
-func TestWorker_ImplementsConfigAwareWorker(t *testing.T) {
+func TestWorker_ImplementsConfigAwareWorker(_ *testing.T) {
 	// This test verifies at compile time that Worker implements ConfigAwareWorker
 	var _ config.ConfigAwareWorker = (*Worker)(nil)
 }
 
-func TestWorker_UpdateConfig_Atomicity(t *testing.T) {
+func TestWorker_UpdateConfig_Atomicity(_ *testing.T) {
 	// Test that config updates are atomic and don't race
 	worker := &Worker{
 		id:         1,
@@ -355,7 +355,7 @@ func TestWorker_UpdateConfig_Atomicity(t *testing.T) {
 	done := make(chan bool, 2)
 
 	go func() {
-		for i := 0; i < 100; i++ {
+		for i := range 100 {
 			cfg := &config.Config{YoloMode: i%2 == 0}
 			worker.UpdateConfig(cfg)
 		}
@@ -363,7 +363,7 @@ func TestWorker_UpdateConfig_Atomicity(t *testing.T) {
 	}()
 
 	go func() {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			_ = worker.cfg.Load().YoloMode
 		}
 		done <- true

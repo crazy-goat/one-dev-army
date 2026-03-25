@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
+	"strconv"
 	"time"
 )
 
@@ -17,7 +18,7 @@ type Server struct {
 // on the specified port. It waits up to timeout for the health check to pass.
 // Returns a *Server that must be stopped via Stop() when done.
 func StartServer(port int, dir string, timeout time.Duration) (*Server, error) {
-	cmd := exec.Command("opencode", "serve", "--port", fmt.Sprintf("%d", port))
+	cmd := exec.Command("opencode", "serve", "--port", strconv.Itoa(port))
 	cmd.Dir = dir
 
 	if err := cmd.Start(); err != nil {
