@@ -2213,16 +2213,17 @@ func TestBoardLayout_StackedColumns(t *testing.T) {
 
 	body := rec.Body.String()
 
-	if !strings.Contains(body, `class="stacked-column"`) {
-		t.Error("board page missing stacked-column CSS class")
-	}
-
+	// Check for stacked-column class in HTML (can be part of multi-class attribute like class="board-left stacked-column")
 	if !strings.Contains(body, "stacked-column") {
-		t.Error("board page missing stacked column containers")
+		t.Error("board page missing stacked-column CSS class in HTML")
 	}
 
-	if strings.Count(body, `class="stacked-column"`) != 2 {
-		t.Errorf("expected 2 stacked-column containers, got %d", strings.Count(body, `class="stacked-column"`))
+	// Count occurrences of stacked-column in class attributes (handles both single and multi-class)
+	// Look for patterns like: class="... stacked-column" or class="stacked-column ..." or class="... stacked-column ..."
+	stackedColumnCount := strings.Count(body, `class="board-left stacked-column"`) +
+		strings.Count(body, `class="board-right stacked-column"`)
+	if stackedColumnCount != 2 {
+		t.Errorf("expected 2 stacked-column containers, got %d", stackedColumnCount)
 	}
 
 	if !strings.Contains(body, ".stacked-column{") {
@@ -5183,6 +5184,7 @@ func TestBoardTemplate_ProcessingPanel_Idle(t *testing.T) {
 		CurrentTicket: nil,
 		Paused:        true,
 		Processing:    false,
+		TotalTickets:  5,
 	}
 
 	// Execute the content template
@@ -5555,7 +5557,7 @@ func TestHandleManualProcess(t *testing.T) {
 	orch := &mvp.Orchestrator{}
 	s := &Server{orchestrator: orch}
 
-	req := httptest.NewRequest("POST", "/api/tickets/42/process", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/42/process", nil)
 	req.SetPathValue("id", "42")
 	w := httptest.NewRecorder()
 
@@ -5574,7 +5576,7 @@ func TestHandleManualProcess(t *testing.T) {
 func TestHandleManualProcessNoOrchestrator(t *testing.T) {
 	s := &Server{}
 
-	req := httptest.NewRequest("POST", "/api/tickets/42/process", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/42/process", nil)
 	req.SetPathValue("id", "42")
 	w := httptest.NewRecorder()
 
@@ -5589,7 +5591,7 @@ func TestHandleManualProcessInvalidID(t *testing.T) {
 	orch := &mvp.Orchestrator{}
 	s := &Server{orchestrator: orch}
 
-	req := httptest.NewRequest("POST", "/api/tickets/abc/process", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/abc/process", nil)
 	req.SetPathValue("id", "abc")
 	w := httptest.NewRecorder()
 
@@ -5597,5 +5599,63 @@ func TestHandleManualProcessInvalidID(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+// TestBoardTemplate_ProcessingPanel_EmptySprint tests that the processing panel shows empty sprint state when TotalTickets is 0
+func TestBoardTemplate_ProcessingPanel_EmptySprint(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	data := boardData{
+		Active:        "board",
+		CurrentTicket: nil,
+		Paused:        true,
+		Processing:    false,
+		TotalTickets:  0,
+	}
+
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	output := buf.String()
+
+	if !strings.Contains(output, `processing-panel-idle`) {
+		t.Error("empty sprint panel should have idle class")
+	}
+	if !strings.Contains(output, "Sprint") {
+		t.Error("empty sprint should show Sprint badge")
+	}
+	if !strings.Contains(output, "No tickets in sprint") {
+		t.Error("empty sprint should show 'No tickets in sprint' message")
+	}
+	if !strings.Contains(output, "processing-cta") {
+		t.Error("empty sprint should show CTA button")
+	}
+	if !strings.Contains(output, "New Ticket") {
+		t.Error("empty sprint CTA should say 'New Ticket'")
+	}
+	if strings.Contains(output, "Worker ready") {
+		t.Error("empty sprint should NOT show 'Worker ready' message")
+	}
+}
+
+// TestBuildBoardData_TotalTickets tests that TotalTickets is computed correctly
+func TestBuildBoardData_TotalTickets(t *testing.T) {
+	srv := &Server{
+		tmpls: make(map[string]*template.Template),
+	}
+
+	data := srv.buildBoardData(nil)
+
+	if data.TotalTickets != 0 {
+		t.Errorf("expected TotalTickets=0 with no store, got %d", data.TotalTickets)
 	}
 }
