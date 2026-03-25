@@ -4963,12 +4963,21 @@ func TestBoardTemplate_LabelIcons(t *testing.T) {
 
 	output := buf.String()
 
-	// Verify icon labels are rendered with icon class and tooltip
+	// Verify icon labels are rendered in card-icons container (top-right)
+	if !strings.Contains(output, `class="card-icons"`) {
+		t.Error("template should render card-icons container for icon labels")
+	}
+
+	// Verify icon labels are rendered with icon class and tooltip inside card-icons
 	if !strings.Contains(output, `class="label-icon"`) {
 		t.Error("template should render icon labels with label-icon class")
 	}
 
-	// Verify text labels are still rendered for unknown labels
+	// Verify text labels are still rendered in card-labels container
+	if !strings.Contains(output, `class="card-labels"`) {
+		t.Error("template should render card-labels container for text labels")
+	}
+
 	if !strings.Contains(output, `class="label"`) {
 		t.Error("template should render text labels with label class")
 	}
@@ -4984,7 +4993,7 @@ func TestBoardTemplate_LabelIcons(t *testing.T) {
 		t.Error("template should contain high priority icon (🔴)")
 	}
 
-	// Verify stage label is rendered as text (not icon)
+	// Verify stage label is rendered as text (not icon) in card-labels
 	if !strings.Contains(output, "stage:analysis") {
 		t.Error("template should render stage:analysis as text label")
 	}
