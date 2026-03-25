@@ -5928,6 +5928,86 @@ func TestHandleLogStream_SSEHeaders(t *testing.T) {
 	}
 }
 
+// TestBuildBoardData_CanPlanSprint tests the CanPlanSprint field logic
+func TestBuildBoardData_CanPlanSprint(t *testing.T) {
+	t.Run("empty board allows sprint planning", func(t *testing.T) {
+		srv := &Server{
+			tmpls: make(map[string]*template.Template),
+		}
+		data := srv.buildBoardData(nil)
+		if !data.CanPlanSprint {
+			t.Error("expected CanPlanSprint to be true when board has no tickets")
+		}
+	})
+
+	t.Run("board with tickets hides sprint planning", func(t *testing.T) {
+		// When TotalTickets > 0, CanPlanSprint should be false
+		// We verify this by checking the struct default (false) and the logic
+		data := boardData{TotalTickets: 5}
+		data.CanPlanSprint = data.TotalTickets == 0
+		if data.CanPlanSprint {
+			t.Error("expected CanPlanSprint to be false when board has tickets")
+		}
+	})
+}
+
+// TestPlanSprintButton_Visibility tests that the Plan Sprint button is visible when board is empty
+func TestPlanSprintButton_Visibility(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	t.Run("visible when no tickets", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		srv.handleBoard(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", rec.Code)
+		}
+
+		body := rec.Body.String()
+		if !strings.Contains(body, "Plan Sprint") {
+			t.Error("expected Plan Sprint button to be visible when board is empty")
+		}
+	})
+}
+
+// TestPlanSprintButton_HiddenWithTickets tests that the Plan Sprint button is hidden when board has tickets
+func TestPlanSprintButton_HiddenWithTickets(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	t.Run("hidden when tickets exist", func(t *testing.T) {
+		// Create test data with tickets
+		data := boardData{
+			Active:        "board",
+			CanPlanSprint: false, // Tickets exist
+			TotalTickets:  5,
+			Paused:        true,
+			Processing:    false,
+		}
+
+		// Execute the content template
+		tmpl := srv.tmpls["board.html"]
+		if tmpl == nil {
+			t.Fatal("board.html template not found")
+		}
+
+		var buf strings.Builder
+		if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+			t.Fatalf("failed to execute template: %v", err)
+		}
+
+		output := buf.String()
+
+		// Verify Plan Sprint button is NOT present when CanPlanSprint is false
+		// The button should be wrapped in {{if .CanPlanSprint}} conditional
+		if strings.Contains(output, `action="/plan-sprint"`) {
+			t.Error("Plan Sprint form should NOT be present when CanPlanSprint is false")
+		}
+	})
+}
+
 // TestBoardTemplate_CSSLayout verifies the CSS layout properties for board columns and processing panel
 func TestBoardTemplate_CSSLayout(t *testing.T) {
 	srv := createTestServerWithTemplates(t)

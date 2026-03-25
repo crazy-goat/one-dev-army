@@ -56,6 +56,7 @@ type boardData struct {
 	Paused         bool
 	Processing     bool
 	CanCloseSprint bool
+	CanPlanSprint  bool
 	CurrentTicket  *currentTicketInfo
 	YoloMode       bool
 	Blocked        []taskCard
@@ -143,6 +144,7 @@ func (s *Server) buildBoardData(_ *http.Request) boardData {
 
 	// If no GitHub client, no store, or no active milestone, return empty board
 	if s.gh == nil || s.store == nil || s.gh.GetActiveMilestone() == nil {
+		data.CanPlanSprint = true
 		return data
 	}
 
@@ -163,6 +165,7 @@ func (s *Server) buildBoardData(_ *http.Request) boardData {
 	}
 
 	data.TotalTickets = len(issues)
+	data.CanPlanSprint = data.TotalTickets == 0
 
 	// Check if sprint can be closed: all tasks in Done/Failed columns and not processing
 	if !data.Processing &&
