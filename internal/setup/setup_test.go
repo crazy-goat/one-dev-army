@@ -303,3 +303,149 @@ func TestHasWorkflowFiles_Yaml(t *testing.T) {
 		t.Error("hasWorkflowFiles() = false for directory with .yaml file")
 	}
 }
+
+func TestCheckGitignore_CreatesNewFile(t *testing.T) {
+	dir := t.TempDir()
+
+	s := &Setup{
+		projectDir: dir,
+		oc:         opencode.NewClient("http://localhost:0"),
+		cfg:        &config.Config{},
+	}
+
+	if err := s.checkGitignore(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify file was created
+	path := filepath.Join(dir, ".gitignore")
+	if !fileExists(path) {
+		t.Fatal(".gitignore was not created")
+	}
+
+	// Verify content
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), ".oda/artifacts/") {
+		t.Errorf(".gitignore does not contain .oda/artifacts/: %q", string(content))
+	}
+}
+
+func TestCheckGitignore_AppendsToExisting(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".gitignore")
+	if err := os.WriteFile(path, []byte("*.log\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &Setup{
+		projectDir: dir,
+		oc:         opencode.NewClient("http://localhost:0"),
+		cfg:        &config.Config{},
+	}
+
+	if err := s.checkGitignore(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify original content preserved and entry added
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contentStr := string(content)
+	if !strings.Contains(contentStr, "*.log") {
+		t.Errorf("original content was lost: %q", contentStr)
+	}
+	if !strings.Contains(contentStr, ".oda/artifacts/") {
+		t.Errorf(".oda/artifacts/ was not added: %q", contentStr)
+	}
+}
+
+func TestCheckGitignore_NoOpWhenEntryExists(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".gitignore")
+	originalContent := "*.log\n.oda/artifacts/\n"
+	if err := os.WriteFile(path, []byte(originalContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &Setup{
+		projectDir: dir,
+		oc:         opencode.NewClient("http://localhost:0"),
+		cfg:        &config.Config{},
+	}
+
+	if err := s.checkGitignore(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify content unchanged
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) != originalContent {
+		t.Errorf(".gitignore was modified when it shouldn't be: got %q, want %q", string(content), originalContent)
+	}
+}
+
+func TestCheckGitignore_NoOpWhenEntryExistsWithoutTrailingSlash(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".gitignore")
+	originalContent := "*.log\n.oda/artifacts\n"
+	if err := os.WriteFile(path, []byte(originalContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &Setup{
+		projectDir: dir,
+		oc:         opencode.NewClient("http://localhost:0"),
+		cfg:        &config.Config{},
+	}
+
+	if err := s.checkGitignore(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify content unchanged
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) != originalContent {
+		t.Errorf(".gitignore was modified when it shouldn't be: got %q, want %q", string(content), originalContent)
+	}
+}
+
+func TestCheckGitignore_HandlesNoTrailingNewline(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".gitignore")
+	// File without trailing newline
+	if err := os.WriteFile(path, []byte("*.log"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &Setup{
+		projectDir: dir,
+		oc:         opencode.NewClient("http://localhost:0"),
+		cfg:        &config.Config{},
+	}
+
+	if err := s.checkGitignore(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify entry was added with proper newline handling
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contentStr := string(content)
+	// Should have newline between existing content and new entry
+	if !strings.Contains(contentStr, "*.log\n.oda/artifacts/") {
+		t.Errorf("improper newline handling: %q", contentStr)
+	}
+}
