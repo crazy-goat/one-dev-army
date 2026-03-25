@@ -59,19 +59,19 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 			case "type:refactor":
 				return "🔧"
 			case "size:S":
-				return "🟢"
+				return "🐜"
 			case "size:M":
-				return "🟡"
+				return "🐕"
 			case "size:L":
-				return "🟠"
+				return "🐘"
 			case "size:XL":
-				return "🔴"
+				return "🦕"
 			case "priority:high":
-				return "🔥"
+				return "🔴"
 			case "priority:medium":
-				return "⚡"
+				return "🟡"
 			case "priority:low":
-				return "🌱"
+				return "🟢"
 			default:
 				return ""
 			}
@@ -4733,13 +4733,13 @@ func TestLabelIcon(t *testing.T) {
 		{"type:bug", "type:bug", "🐛"},
 		{"type:docs", "type:docs", "📚"},
 		{"type:refactor", "type:refactor", "🔧"},
-		{"size:S", "size:S", "🟢"},
-		{"size:M", "size:M", "🟡"},
-		{"size:L", "size:L", "🟠"},
-		{"size:XL", "size:XL", "🔴"},
-		{"priority:high", "priority:high", "🔥"},
-		{"priority:medium", "priority:medium", "⚡"},
-		{"priority:low", "priority:low", "🌱"},
+		{"size:S", "size:S", "🐜"},
+		{"size:M", "size:M", "🐕"},
+		{"size:L", "size:L", "🐘"},
+		{"size:XL", "size:XL", "🦕"},
+		{"priority:high", "priority:high", "🔴"},
+		{"priority:medium", "priority:medium", "🟡"},
+		{"priority:low", "priority:low", "🟢"},
 		{"unknown label", "unknown:label", ""},
 		{"stage label", "stage:analysis", ""},
 		{"empty label", "", ""},
@@ -4760,19 +4760,19 @@ func TestLabelIcon(t *testing.T) {
 					case "type:refactor":
 						return "🔧"
 					case "size:S":
-						return "🟢"
+						return "🐜"
 					case "size:M":
-						return "🟡"
+						return "🐕"
 					case "size:L":
-						return "🟠"
+						return "🐘"
 					case "size:XL":
-						return "🔴"
+						return "🦕"
 					case "priority:high":
-						return "🔥"
+						return "🔴"
 					case "priority:medium":
-						return "⚡"
+						return "🟡"
 					case "priority:low":
-						return "🌱"
+						return "🟢"
 					default:
 						return ""
 					}
@@ -4915,11 +4915,11 @@ func TestBoardTemplate_LabelIcons(t *testing.T) {
 	if !strings.Contains(output, "✨") {
 		t.Error("template should contain feature icon (✨)")
 	}
-	if !strings.Contains(output, "🟡") {
-		t.Error("template should contain size M icon (🟡)")
+	if !strings.Contains(output, "🐕") {
+		t.Error("template should contain size M icon (🐕)")
 	}
-	if !strings.Contains(output, "🔥") {
-		t.Error("template should contain high priority icon (🔥)")
+	if !strings.Contains(output, "🔴") {
+		t.Error("template should contain high priority icon (🔴)")
 	}
 
 	// Verify stage label is rendered as text (not icon)
