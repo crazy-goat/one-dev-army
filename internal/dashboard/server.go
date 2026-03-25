@@ -213,6 +213,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /plan-sprint", s.handlePlanSprint)
 	s.mux.HandleFunc("GET /task/{id}", s.handleTaskDetail)
 	s.mux.HandleFunc("GET /api/task/{id}/stream", s.handleTaskStream)
+	s.mux.HandleFunc("GET /api/logs/{issue}/stream", s.handleLogStream)
 	s.mux.HandleFunc("POST /approve/{id}", s.handleApprove)
 	s.mux.HandleFunc("POST /reject/{id}", s.handleReject)
 	s.mux.HandleFunc("POST /retry/{id}", s.handleRetry)

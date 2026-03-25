@@ -5711,3 +5711,219 @@ func TestBuildBoardData_TotalTickets(t *testing.T) {
 		t.Errorf("expected TotalTickets=0 with no store, got %d", data.TotalTickets)
 	}
 }
+
+func TestHandleLogStream_ValidIssue(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, ".oda", "artifacts", "392", "logs")
+	os.MkdirAll(logDir, 0o755)
+
+	content := "[2026-03-25 14:30:22] STEP START: implement\n[2026-03-25 14:30:23] Working...\n[2026-03-25 14:31:55] STEP END: implement\n"
+	os.WriteFile(filepath.Join(logDir, "20260325_143022_implement.log"), []byte(content), 0o644)
+
+	srv := &Server{rootDir: tmpDir}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/392/stream?follow=false", nil)
+	req.SetPathValue("issue", "392")
+	rec := httptest.NewRecorder()
+
+	srv.handleLogStream(rec, req)
+
+	if rec.Header().Get("Content-Type") != "text/event-stream" {
+		t.Errorf("expected Content-Type=text/event-stream, got %s", rec.Header().Get("Content-Type"))
+	}
+	if rec.Header().Get("Cache-Control") != "no-cache" {
+		t.Errorf("expected Cache-Control=no-cache, got %s", rec.Header().Get("Cache-Control"))
+	}
+	if rec.Header().Get("Connection") != "keep-alive" {
+		t.Errorf("expected Connection=keep-alive, got %s", rec.Header().Get("Connection"))
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "event: log:new") {
+		t.Error("expected log:new events in response")
+	}
+	if !strings.Contains(body, "event: log:complete") {
+		t.Error("expected log:complete event in response")
+	}
+	if !strings.Contains(body, `"step":"implement"`) {
+		t.Error("expected step name in events")
+	}
+}
+
+func TestHandleLogStream_StepFilter(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, ".oda", "artifacts", "393", "logs")
+	os.MkdirAll(logDir, 0o755)
+
+	content1 := "[2026-03-25 14:30:22] STEP START: analyze\n[2026-03-25 14:30:25] STEP END: analyze\n"
+	os.WriteFile(filepath.Join(logDir, "20260325_143022_analyze.log"), []byte(content1), 0o644)
+
+	content2 := "[2026-03-25 14:31:00] STEP START: implement\n[2026-03-25 14:31:55] STEP END: implement\n"
+	os.WriteFile(filepath.Join(logDir, "20260325_143100_implement.log"), []byte(content2), 0o644)
+
+	srv := &Server{rootDir: tmpDir}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/393/stream?step=implement&follow=false", nil)
+	req.SetPathValue("issue", "393")
+	rec := httptest.NewRecorder()
+
+	srv.handleLogStream(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `"step":"implement"`) {
+		t.Error("expected implement step in response")
+	}
+	if strings.Contains(body, `"step":"analyze"`) {
+		t.Error("should not contain analyze step when filtered to implement")
+	}
+}
+
+func TestHandleLogStream_MissingDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	srv := &Server{rootDir: tmpDir}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/999/stream?follow=false", nil)
+	req.SetPathValue("issue", "999")
+	rec := httptest.NewRecorder()
+
+	srv.handleLogStream(rec, req)
+
+	if rec.Header().Get("Content-Type") != "text/event-stream" {
+		t.Errorf("expected Content-Type=text/event-stream, got %s", rec.Header().Get("Content-Type"))
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "event: log:error") {
+		t.Error("expected log:error event for missing directory")
+	}
+	if !strings.Contains(body, "log directory not found") {
+		t.Error("expected error message about missing directory")
+	}
+}
+
+func TestHandleLogStream_InvalidIssueNumber(t *testing.T) {
+	tmpDir := t.TempDir()
+	srv := &Server{rootDir: tmpDir}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/abc/stream", nil)
+	req.SetPathValue("issue", "abc")
+	rec := httptest.NewRecorder()
+
+	srv.handleLogStream(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", rec.Code)
+	}
+}
+
+func TestHandleLogStream_EmptyLogsDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, ".oda", "artifacts", "394", "logs")
+	os.MkdirAll(logDir, 0o755)
+
+	srv := &Server{rootDir: tmpDir}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/394/stream?follow=false", nil)
+	req.SetPathValue("issue", "394")
+	rec := httptest.NewRecorder()
+
+	srv.handleLogStream(rec, req)
+
+	if rec.Header().Get("Content-Type") != "text/event-stream" {
+		t.Errorf("expected Content-Type=text/event-stream, got %s", rec.Header().Get("Content-Type"))
+	}
+
+	body := rec.Body.String()
+	if strings.Contains(body, "event: log:new") {
+		t.Error("should not have log:new events for empty directory")
+	}
+}
+
+func TestHandleLogStream_MultipleLogFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, ".oda", "artifacts", "395", "logs")
+	os.MkdirAll(logDir, 0o755)
+
+	content1 := "[2026-03-25 14:30:22] STEP START: analyze\n[2026-03-25 14:30:25] STEP END: analyze\n"
+	os.WriteFile(filepath.Join(logDir, "20260325_143022_analyze.log"), []byte(content1), 0o644)
+
+	content2 := "[2026-03-25 14:31:00] STEP START: implement\n[2026-03-25 14:31:55] STEP END: implement\n"
+	os.WriteFile(filepath.Join(logDir, "20260325_143100_implement.log"), []byte(content2), 0o644)
+
+	srv := &Server{rootDir: tmpDir}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/395/stream?follow=false", nil)
+	req.SetPathValue("issue", "395")
+	rec := httptest.NewRecorder()
+
+	srv.handleLogStream(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `"step":"analyze"`) {
+		t.Error("expected analyze step in response")
+	}
+	if !strings.Contains(body, `"step":"implement"`) {
+		t.Error("expected implement step in response")
+	}
+}
+
+func TestHandleLogStream_FollowDisabled(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, ".oda", "artifacts", "396", "logs")
+	os.MkdirAll(logDir, 0o755)
+
+	content := "[2026-03-25 14:30:22] STEP START: test\n[2026-03-25 14:30:23] Working...\n"
+	os.WriteFile(filepath.Join(logDir, "20260325_143022_test.log"), []byte(content), 0o644)
+
+	srv := &Server{rootDir: tmpDir}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/396/stream?follow=false", nil)
+	req.SetPathValue("issue", "396")
+	rec := httptest.NewRecorder()
+
+	done := make(chan bool)
+	go func() {
+		srv.handleLogStream(rec, req)
+		done <- true
+	}()
+
+	select {
+	case <-done:
+		body := rec.Body.String()
+		if !strings.Contains(body, "event: log:new") {
+			t.Error("expected log:new events")
+		}
+		if strings.Contains(body, "event: log:complete") {
+			t.Error("should not have log:complete when STEP END is not present")
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("handler should return immediately when follow=false")
+	}
+}
+
+func TestHandleLogStream_SSEHeaders(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, ".oda", "artifacts", "397", "logs")
+	os.MkdirAll(logDir, 0o755)
+
+	content := "[2026-03-25 14:30:22] test message\n"
+	os.WriteFile(filepath.Join(logDir, "20260325_143022_test.log"), []byte(content), 0o644)
+
+	srv := &Server{rootDir: tmpDir}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/397/stream?follow=false", nil)
+	req.SetPathValue("issue", "397")
+	rec := httptest.NewRecorder()
+
+	srv.handleLogStream(rec, req)
+
+	if rec.Header().Get("Content-Type") != "text/event-stream" {
+		t.Errorf("expected Content-Type=text/event-stream, got %s", rec.Header().Get("Content-Type"))
+	}
+	if rec.Header().Get("Cache-Control") != "no-cache" {
+		t.Errorf("expected Cache-Control=no-cache, got %s", rec.Header().Get("Cache-Control"))
+	}
+	if rec.Header().Get("Connection") != "keep-alive" {
+		t.Errorf("expected Connection=keep-alive, got %s", rec.Header().Get("Connection"))
+	}
+}
