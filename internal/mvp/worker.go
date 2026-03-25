@@ -781,7 +781,7 @@ func (w *Worker) handlePipelineFailure(task *Task, logs string) error {
 		log.Printf("[Worker %d] Warning: failed to add pipeline failure comment: %v", w.id, err)
 	}
 
-	return fmt.Errorf("CI pipeline checks failed")
+	return errors.New("CI pipeline checks failed")
 }
 
 func (w *Worker) llmStep(_ context.Context, task *Task, stepName, prompt, llm string) (string, error) {

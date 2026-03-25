@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -184,6 +185,7 @@ func (c *Client) ClosePR(branch string) error {
 type PRCheck struct {
 	Name  string `json:"name"`
 	State string `json:"state"`
+	Link  string `json:"link"`
 }
 
 type PRChecksResult struct {
@@ -191,9 +193,13 @@ type PRChecksResult struct {
 	Logs   string
 }
 
+// runIDPattern extracts the run ID from a GitHub Actions URL like
+// https://github.com/OWNER/REPO/actions/runs/12345678/job/98765432
+var runIDPattern = regexp.MustCompile(`/actions/runs/(\d+)`)
+
 func (c *Client) GetPRChecks(branch string) (*PRChecksResult, error) {
 	var checks []PRCheck
-	err := c.ghJSON(&checks, "pr", "checks", branch, "--json", "name,state")
+	err := c.ghJSON(&checks, "pr", "checks", branch, "--json", "name,state,link")
 	if err != nil {
 		return nil, fmt.Errorf("getting PR checks for %s: %w", branch, err)
 	}
@@ -202,14 +208,16 @@ func (c *Client) GetPRChecks(branch string) (*PRChecksResult, error) {
 		return &PRChecksResult{Status: "pending"}, nil
 	}
 
-	var failed []string
+	var failedNames []string
+	var failedLinks []string
 	allComplete := true
 	for _, check := range checks {
 		if check.State != "SUCCESS" && check.State != "FAILURE" {
 			allComplete = false
 		}
 		if check.State == "FAILURE" {
-			failed = append(failed, fmt.Sprintf("- %s: %s", check.Name, check.State))
+			failedNames = append(failedNames, check.Name)
+			failedLinks = append(failedLinks, check.Link)
 		}
 	}
 
@@ -217,12 +225,73 @@ func (c *Client) GetPRChecks(branch string) (*PRChecksResult, error) {
 		return &PRChecksResult{Status: "pending"}, nil
 	}
 
-	if len(failed) > 0 {
-		logs := "## Failed CI Checks\n\n" + strings.Join(failed, "\n")
+	if len(failedNames) > 0 {
+		logs := c.buildFailureLogs(failedNames, failedLinks)
 		return &PRChecksResult{Status: "fail", Logs: logs}, nil
 	}
 
 	return &PRChecksResult{Status: "pass"}, nil
+}
+
+// buildFailureLogs fetches actual CI logs for failed checks.
+// It deduplicates run IDs (multiple jobs can share one workflow run)
+// and calls `gh run view <id> --log-failed` for each unique run.
+// Falls back to just listing check names if log fetching fails.
+func (c *Client) buildFailureLogs(failedNames, failedLinks []string) string {
+	// Collect unique run IDs from links
+	seen := make(map[string]bool)
+	var runIDs []string
+	for _, link := range failedLinks {
+		if id := extractRunID(link); id != "" && !seen[id] {
+			seen[id] = true
+			runIDs = append(runIDs, id)
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString("## Failed CI Checks\n\n")
+	sb.WriteString("Failed: ")
+	sb.WriteString(strings.Join(failedNames, ", "))
+	sb.WriteString("\n\n")
+
+	if len(runIDs) == 0 {
+		// No run IDs extracted — fall back to names only
+		return sb.String()
+	}
+
+	for _, runID := range runIDs {
+		runLogs := c.getFailedRunLogs(runID)
+		if runLogs != "" {
+			sb.WriteString("### Run ")
+			sb.WriteString(runID)
+			sb.WriteString("\n\n```\n")
+			sb.WriteString(runLogs)
+			sb.WriteString("\n```\n\n")
+		}
+	}
+
+	return sb.String()
+}
+
+// extractRunID parses a GitHub Actions run ID from a check link URL.
+// Returns empty string if the link doesn't match the expected pattern.
+func extractRunID(link string) string {
+	matches := runIDPattern.FindStringSubmatch(link)
+	if len(matches) < 2 {
+		return ""
+	}
+	return matches[1]
+}
+
+// getFailedRunLogs fetches the failed step logs for a workflow run.
+// Returns empty string on any error (graceful degradation).
+func (c *Client) getFailedRunLogs(runID string) string {
+	out, err := c.gh("run", "view", runID, "--log-failed")
+	if err != nil {
+		log.Printf("[GitHub] Warning: failed to fetch logs for run %s: %v", runID, err)
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func (c *Client) FindPRBranch(issueNumber int) (string, error) {
