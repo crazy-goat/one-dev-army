@@ -94,12 +94,39 @@ Wait for user confirmation before proceeding. If the user explicitly says "just 
 
 ### Step 3 — Run the Command
 
-Execute the command from the ODA project directory (where `.oda/config.yaml` exists):
+Execute the command from the ODA project directory (where `.oda/config.yaml` exists).
+
+**For short, simple descriptions** (no special characters, no code blocks):
 
 ```bash
 oda issue create \
   --title "Title here" \
-  --text "Body text here" \
+  --text "Short description here" \
+  --priority medium \
+  --size M \
+  --type feature
+```
+
+**For long or complex descriptions** (contains code blocks, backticks, dollar signs, quotes, or multi-line markdown):
+
+First, write the body to a temporary file:
+
+```bash
+cat <<'EOF' > /tmp/oda-issue-body.md
+Full issue body with **markdown**, `code blocks`, and $special characters.
+
+## Acceptance Criteria
+- [ ] Criterion one
+- [ ] Criterion two
+EOF
+```
+
+Then pass the file content to the command:
+
+```bash
+oda issue create \
+  --title "Title here" \
+  --text "$(cat /tmp/oda-issue-body.md)" \
   --priority medium \
   --size M \
   --type feature \
@@ -130,17 +157,51 @@ If the command fails, check:
 - The command requires `.oda/config.yaml` to exist in the working directory (it reads `github.repo` from it)
 - It shells out to `gh` CLI — the user must be authenticated with GitHub
 - Issues created via CLI do **not** automatically get a `stage:backlog` label — they enter the backlog by having no `stage:*` label
-- The `--text` flag value should be properly quoted — escape any quotes inside the body text
-- For multi-line body text, use `\n` for line breaks or pass the text in a single quoted string
+- For multi-line or complex body text, use the file-based approach described in "Best Practice for Long Descriptions" below
+
+## Best Practice for Long Descriptions
+
+When the issue body contains any of the following, **always use a temporary file** instead of inline `--text`:
+
+- Markdown code blocks (triple backticks)
+- Backtick characters (`` ` ``)
+- Dollar signs (`$`)
+- Quotes (single or double)
+- Multi-line content with complex formatting
+
+**Why:** Inline `--text` passes the body through bash, which interprets backticks as command substitution, `$` as variable expansion, and struggles with nested quotes. This causes silent corruption or command failures.
+
+**Pattern:**
+
+1. Write the body to a temp file using a **single-quoted heredoc** (`<<'EOF'`) — single quotes around EOF prevent all bash interpretation:
+
+```bash
+cat <<'EOF' > /tmp/oda-issue-body.md
+Your full issue body here.
+Any markdown, code blocks, $variables, `backticks` — all preserved exactly.
+EOF
+```
+
+2. Pass the file content via command substitution:
+
+```bash
+oda issue create \
+  --title "Title" \
+  --text "$(cat /tmp/oda-issue-body.md)" \
+  ...
+```
+
+The temp file is automatically cleaned up on system reboot. You can also remove it manually after the command succeeds.
 
 ## Example
 
 User: "Add a high-priority bug ticket to ODA for the dashboard WebSocket disconnecting after 5 minutes of inactivity"
 
+First, write the issue body to a temporary file:
+
 ```bash
-oda issue create \
-  --title "Dashboard WebSocket disconnects after 5 minutes of inactivity" \
-  --text "The dashboard WebSocket connection drops after approximately 5 minutes of user inactivity. This causes the real-time ticket status updates to stop, and the user sees stale data until they manually refresh the page.
+cat <<'EOF' > /tmp/oda-issue-body.md
+The dashboard WebSocket connection drops after approximately 5 minutes of user inactivity. This causes the real-time ticket status updates to stop, and the user sees stale data until they manually refresh the page.
 
 ## Steps to Reproduce
 1. Open the ODA dashboard
@@ -154,7 +215,16 @@ WebSocket connection should remain alive indefinitely, using ping/pong keepalive
 - [ ] WebSocket connection stays alive during idle periods
 - [ ] Implement ping/pong keepalive mechanism
 - [ ] Add automatic reconnection with exponential backoff if connection drops
-- [ ] Add tests for keepalive and reconnection logic" \
+- [ ] Add tests for keepalive and reconnection logic
+EOF
+```
+
+Then create the issue:
+
+```bash
+oda issue create \
+  --title "Dashboard WebSocket disconnects after 5 minutes of inactivity" \
+  --text "$(cat /tmp/oda-issue-body.md)" \
   --priority high \
   --size M \
   --type bug \
