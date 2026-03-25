@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
@@ -26,7 +27,7 @@ type StageBroadcaster interface {
 }
 
 type Orchestrator struct {
-	cfg         *config.Config
+	cfg         atomic.Pointer[config.Config]
 	worker      *Worker
 	gh          *github.Client
 	oc          *opencode.Client
@@ -43,7 +44,6 @@ type Orchestrator struct {
 
 func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client, brMgr *git.BranchManager, store *db.Store, hub StageBroadcaster, router *llm.Router) *Orchestrator {
 	o := &Orchestrator{
-		cfg:    cfg,
 		gh:     gh,
 		oc:     oc,
 		brMgr:  brMgr,
@@ -52,6 +52,7 @@ func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client,
 		router: router,
 		paused: true,
 	}
+	o.cfg.Store(cfg)
 	o.worker = NewWorker(1, cfg, oc.Clone(), gh, brMgr, store, o, router)
 	return o
 }
@@ -102,6 +103,27 @@ func (o *Orchestrator) CurrentTask() *Task {
 func (o *Orchestrator) GetWorker() *Worker {
 	return o.worker
 }
+
+// UpdateConfig updates the orchestrator's configuration atomically and propagates to the worker and router.
+// This method is called by the ConfigPropagator when config changes.
+func (o *Orchestrator) UpdateConfig(cfg *config.Config) {
+	o.cfg.Store(cfg)
+
+	// Propagate to router (LLM config only)
+	if o.router != nil {
+		o.router.UpdateConfig(&cfg.LLM)
+	}
+
+	// Propagate to worker
+	if o.worker != nil {
+		o.worker.UpdateConfig(cfg)
+	}
+
+	log.Printf("[Orchestrator] Configuration updated (YoloMode=%v)", cfg.YoloMode)
+}
+
+// Compile-time interface check: ensure Orchestrator implements ConfigAwareWorker.
+var _ config.ConfigAwareWorker = (*Orchestrator)(nil)
 
 func (o *Orchestrator) Run(ctx context.Context) error {
 	o.mu.Lock()
@@ -297,7 +319,7 @@ func (o *Orchestrator) pickNextTicket(_ context.Context, candidates []github.Iss
 	}()
 
 	// Use router to select model for orchestration category
-	llmModel := o.cfg.LLM.Orchestration.Model
+	llmModel := o.cfg.Load().LLM.Orchestration.Model
 	if o.router != nil {
 		llmModel = o.router.SelectModel(config.CategoryOrchestration, config.ComplexityMedium, nil)
 	}

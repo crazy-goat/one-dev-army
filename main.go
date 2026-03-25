@@ -362,7 +362,8 @@ func runServe(dir string, debugWebSocket bool) error {
 
 	// Create ConfigPropagator to propagate config changes to workers
 	configPropagator := config.NewConfigPropagator(0) // No polling, uses ReloadManager
-	configPropagator.RegisterWorker(orchestrator.GetWorker())
+	// Register the orchestrator (which propagates to its worker and router internally)
+	configPropagator.RegisterWorker(orchestrator)
 	// Register propagator with ReloadManager to only propagate when config actually changes
 	reloadManager.OnReload(func(cfg *config.Config) {
 		configPropagator.Propagate(cfg)
@@ -399,7 +400,7 @@ func runServe(dir string, debugWebSocket bool) error {
 		}
 	}()
 
-	srv, err := dashboard.NewServer(cfg.Dashboard.Port, cfg.OpenCode.WebPort, store, pool.Workers, gh, orchestrator, oc, cfg.LLM.Planning.Model, hub, syncService, dir, brMgr)
+	srv, err := dashboard.NewServer(cfg.Dashboard.Port, cfg.OpenCode.WebPort, store, pool.Workers, gh, orchestrator, oc, cfg.LLM.Planning.Model, hub, syncService, dir, brMgr, configPropagator)
 	if err != nil {
 		return fmt.Errorf("creating dashboard server: %w", err)
 	}

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 )
 
@@ -439,5 +440,80 @@ func TestStageBacklogAsCandidate(t *testing.T) {
 	// Should NOT be a resume issue
 	if resumeIssue != nil {
 		t.Errorf("resumeIssue should be nil, got #%d", resumeIssue.Number)
+	}
+}
+
+// TestOrchestrator_UpdateConfig verifies that UpdateConfig updates the orchestrator's config atomically.
+func TestOrchestrator_UpdateConfig(t *testing.T) {
+	initialCfg := &config.Config{
+		YoloMode: false,
+		LLM:      config.DefaultLLMConfig(),
+	}
+
+	// Create orchestrator manually to avoid nil client issues
+	o := &Orchestrator{paused: true}
+	o.cfg.Store(initialCfg)
+
+	// Verify initial config
+	if o.cfg.Load().YoloMode != false {
+		t.Error("initial YoloMode should be false")
+	}
+
+	// Update config
+	newCfg := &config.Config{
+		YoloMode: true,
+		LLM:      config.DefaultLLMConfig(),
+	}
+	newCfg.LLM.Code.Model = "new-code-model"
+
+	o.UpdateConfig(newCfg)
+
+	// Verify updated config
+	if o.cfg.Load().YoloMode != true {
+		t.Error("YoloMode should be true after UpdateConfig")
+	}
+	if o.cfg.Load().LLM.Code.Model != "new-code-model" {
+		t.Errorf("Code.Model = %q, want %q", o.cfg.Load().LLM.Code.Model, "new-code-model")
+	}
+}
+
+// TestOrchestrator_ImplementsConfigAwareWorker verifies that Orchestrator implements ConfigAwareWorker interface.
+func TestOrchestrator_ImplementsConfigAwareWorker(t *testing.T) {
+	// This is a compile-time check
+	var _ config.ConfigAwareWorker = (*Orchestrator)(nil)
+}
+
+// TestOrchestrator_UpdateConfig_PropagatesToWorker verifies that UpdateConfig propagates to the worker.
+func TestOrchestrator_UpdateConfig_PropagatesToWorker(t *testing.T) {
+	initialCfg := &config.Config{
+		YoloMode: false,
+		LLM:      config.DefaultLLMConfig(),
+	}
+
+	// Create a worker manually
+	worker := &Worker{id: 1}
+	worker.cfg.Store(initialCfg)
+
+	// Create orchestrator with the worker
+	o := &Orchestrator{paused: true}
+	o.cfg.Store(initialCfg)
+	o.worker = worker
+
+	// Verify worker has initial config
+	if o.worker.cfg.Load().YoloMode != false {
+		t.Error("worker initial YoloMode should be false")
+	}
+
+	// Update config via orchestrator
+	newCfg := &config.Config{
+		YoloMode: true,
+		LLM:      config.DefaultLLMConfig(),
+	}
+
+	o.UpdateConfig(newCfg)
+
+	// Verify worker received the update
+	if o.worker.cfg.Load().YoloMode != true {
+		t.Error("worker YoloMode should be true after orchestrator UpdateConfig")
 	}
 }
