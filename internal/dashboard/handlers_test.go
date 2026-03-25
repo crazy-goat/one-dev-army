@@ -5183,6 +5183,7 @@ func TestBoardTemplate_ProcessingPanel_Idle(t *testing.T) {
 		CurrentTicket: nil,
 		Paused:        true,
 		Processing:    false,
+		TotalTickets:  1, // Set to non-zero to test idle worker panel (not empty sprint panel)
 	}
 
 	// Execute the content template
