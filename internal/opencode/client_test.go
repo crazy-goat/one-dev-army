@@ -466,3 +466,220 @@ func TestClientClone(t *testing.T) {
 		t.Errorf("original.BaseURL() changed after cloning: got %q, want %q", original.BaseURL(), srv.URL)
 	}
 }
+
+func TestSendMessageStream_WithToolCallsDifferentMessageIDs(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/event" && r.Method == http.MethodGet {
+			flusher, ok := w.(http.Flusher)
+			if !ok {
+				http.Error(w, "no flusher", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
+			flusher.Flush()
+
+			time.Sleep(50 * time.Millisecond)
+
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"message.updated","properties":{"info":{"id":"msg-1","sessionID":"sess-123","role":"assistant"}}}`)
+			flusher.Flush()
+
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"message.part.delta","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-1","field":"text","delta":"Reading file..."}}`)
+			flusher.Flush()
+
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_call.started","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-2","toolCall":{"id":"call-1","name":"read"}}}`)
+			flusher.Flush()
+
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_call.completed","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-2","toolCall":{"id":"call-1","name":"read","arguments":{"filePath":"/foo/bar"}}}}`)
+			flusher.Flush()
+
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_result","properties":{"sessionID":"sess-123","messageID":"msg-2","partID":"prt-3","toolResult":{"id":"call-1","output":"file content here"}}}`)
+			flusher.Flush()
+
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"session.status","properties":{"sessionID":"sess-123","status":{"type":"idle"}}}`)
+			flusher.Flush()
+
+			<-r.Context().Done()
+			return
+		}
+
+		if r.URL.Path == "/session/sess-123/prompt_async" && r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	client := opencode.NewClient(srv.URL)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	var output strings.Builder
+	msg, err := client.SendMessageStream(ctx, "sess-123", "read file", opencode.ModelRef{ProviderID: "anthropic", ModelID: "claude-sonnet-4"}, &output)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if msg == nil {
+		t.Fatal("expected message, got nil")
+	}
+
+	if len(msg.Parts) != 3 {
+		t.Fatalf("expected 3 parts (text + tool_call + tool_result), got %d: %+v", len(msg.Parts), msg.Parts)
+	}
+
+	hasText := false
+	hasToolCall := false
+	hasToolResult := false
+	for _, p := range msg.Parts {
+		switch p.Type {
+		case "text":
+			hasText = true
+		case "tool_call":
+			hasToolCall = true
+			if p.ToolCall == nil {
+				t.Fatal("tool_call part has nil ToolCall")
+			}
+			if p.ToolCall.Name != "read" {
+				t.Errorf("tool_call.name = %q, want read", p.ToolCall.Name)
+			}
+		case "tool_result":
+			hasToolResult = true
+			if p.ToolResult == nil {
+				t.Fatal("tool_result part has nil ToolResult")
+			}
+			if p.ToolResult.Output != "file content here" {
+				t.Errorf("tool_result.output = %q, want 'file content here'", p.ToolResult.Output)
+			}
+		}
+	}
+
+	if !hasText {
+		t.Error("missing text part")
+	}
+	if !hasToolCall {
+		t.Error("missing tool_call part")
+	}
+	if !hasToolResult {
+		t.Error("missing tool_result part — tool results from different messageIDs should be included")
+	}
+}
+
+func TestSendMessageStream_WithSubagentToolCall(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/event" && r.Method == http.MethodGet {
+			flusher, ok := w.(http.Flusher)
+			if !ok {
+				http.Error(w, "no flusher", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"server.connected","properties":{}}`)
+			flusher.Flush()
+
+			time.Sleep(50 * time.Millisecond)
+
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"message.updated","properties":{"info":{"id":"msg-1","sessionID":"sess-123","role":"assistant"}}}`)
+			flusher.Flush()
+
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_call.started","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-1","toolCall":{"id":"call-task-1","name":"task"}}}`)
+			flusher.Flush()
+
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_call.completed","properties":{"sessionID":"sess-123","messageID":"msg-1","partID":"prt-1","toolCall":{"id":"call-task-1","name":"task","arguments":{"description":"analyze code","prompt":"Review the code"}}}}`)
+			flusher.Flush()
+
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"tool_result","properties":{"sessionID":"sess-123","messageID":"msg-2","partID":"prt-2","toolResult":{"id":"call-task-1","output":"Code analysis complete"}}}`)
+			flusher.Flush()
+
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"message.updated","properties":{"info":{"id":"msg-3","sessionID":"sess-123","role":"assistant"}}}`)
+			flusher.Flush()
+
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"message.part.delta","properties":{"sessionID":"sess-123","messageID":"msg-3","partID":"prt-3","field":"text","delta":"Analysis done."}}`)
+			flusher.Flush()
+
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"session.status","properties":{"sessionID":"sess-123","status":{"type":"idle"}}}`)
+			flusher.Flush()
+
+			<-r.Context().Done()
+			return
+		}
+
+		if r.URL.Path == "/session/sess-123/prompt_async" && r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	client := opencode.NewClient(srv.URL)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	var output strings.Builder
+	msg, err := client.SendMessageStream(ctx, "sess-123", "analyze code", opencode.ModelRef{ProviderID: "anthropic", ModelID: "claude-sonnet-4"}, &output)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if msg == nil {
+		t.Fatal("expected message, got nil")
+	}
+
+	if len(msg.Parts) != 3 {
+		t.Fatalf("expected 3 parts (tool_call + tool_result + text), got %d: %+v", len(msg.Parts), msg.Parts)
+	}
+
+	hasText := false
+	hasToolCall := false
+	hasToolResult := false
+	for _, p := range msg.Parts {
+		switch p.Type {
+		case "text":
+			hasText = true
+			if p.Text != "Analysis done." {
+				t.Errorf("text = %q, want 'Analysis done.'", p.Text)
+			}
+		case "tool_call":
+			hasToolCall = true
+			if p.ToolCall == nil {
+				t.Fatal("tool_call part has nil ToolCall")
+			}
+			if p.ToolCall.Name != "task" {
+				t.Errorf("tool_call.name = %q, want task", p.ToolCall.Name)
+			}
+			if p.ToolCall.ID != "call-task-1" {
+				t.Errorf("tool_call.id = %q, want call-task-1", p.ToolCall.ID)
+			}
+		case "tool_result":
+			hasToolResult = true
+			if p.ToolResult == nil {
+				t.Fatal("tool_result part has nil ToolResult")
+			}
+			if p.ToolResult.Output != "Code analysis complete" {
+				t.Errorf("tool_result.output = %q, want 'Code analysis complete'", p.ToolResult.Output)
+			}
+		}
+	}
+
+	if !hasText {
+		t.Error("missing text part")
+	}
+	if !hasToolCall {
+		t.Error("missing tool_call part — subagent task tool should be visible")
+	}
+	if !hasToolResult {
+		t.Error("missing tool_result part — subagent results should be visible even when assistantMsgID changes")
+	}
+}

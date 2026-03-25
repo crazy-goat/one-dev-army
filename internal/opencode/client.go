@@ -619,13 +619,18 @@ func (c *Client) SendMessageStream(ctx context.Context, sessionID, prompt string
 		parts = append(parts, Part{Type: "text", Text: assistantText})
 	}
 
-	if toolCalls, ok := msgToolCalls[assistantMsgID]; ok {
+	// Collect tool calls from all messages (tool calls may arrive under
+	// different messageIDs than the assistant message, especially for
+	// subagent executions).
+	for _, toolCalls := range msgToolCalls {
 		for _, part := range toolCalls {
 			parts = append(parts, part)
 		}
 	}
 
-	if toolResults, ok := msgToolResults[assistantMsgID]; ok {
+	// Collect tool results from all messages (tool results typically
+	// arrive under a separate "tool" role messageID).
+	for _, toolResults := range msgToolResults {
 		for _, part := range toolResults {
 			parts = append(parts, part)
 		}
