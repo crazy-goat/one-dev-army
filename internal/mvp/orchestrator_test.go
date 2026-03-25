@@ -301,25 +301,26 @@ func TestResumeIssueClassification(t *testing.T) {
 		makeIssue(3, "stage:failed"),            // non-worker stage = ignored
 		makeIssue(4, "stage:awaiting-approval"), // worker stage = resume (but #2 takes priority)
 		makeIssue(5, "bug"),                     // no stage label = backlog candidate
+		makeIssue(6, "stage:backlog"),           // stage:backlog = backlog candidate
 	}
 
 	var candidates []github.Issue
 	var resumeIssue *github.Issue
 	for i := range issues {
 		stage := getStageLabel(issues[i])
-		if stage == "" {
+		if stage == "" || stage == string(github.StageBacklog) {
 			candidates = append(candidates, issues[i])
 		} else if isWorkerStage(stage) && resumeIssue == nil {
 			resumeIssue = &issues[i]
 		}
 	}
 
-	// Should have 2 backlog candidates (#1 and #5)
-	if len(candidates) != 2 {
-		t.Errorf("candidates count = %d, want 2", len(candidates))
+	// Should have 3 backlog candidates (#1, #5, and #6)
+	if len(candidates) != 3 {
+		t.Errorf("candidates count = %d, want 3", len(candidates))
 	}
-	if candidates[0].Number != 1 || candidates[1].Number != 5 {
-		t.Errorf("candidates = [#%d, #%d], want [#1, #5]", candidates[0].Number, candidates[1].Number)
+	if candidates[0].Number != 1 || candidates[1].Number != 5 || candidates[2].Number != 6 {
+		t.Errorf("candidates = [#%d, #%d, #%d], want [#1, #5, #6]", candidates[0].Number, candidates[1].Number, candidates[2].Number)
 	}
 
 	// Resume issue should be #2 (first worker stage found)
@@ -395,5 +396,48 @@ func TestDecideNextStage_CodingInProgress(t *testing.T) {
 	}
 	if reason != github.ReasonWorkerFixingFromReview {
 		t.Errorf("reason = %q, want %q", reason, github.ReasonWorkerFixingFromReview)
+	}
+}
+
+// TestStageBacklogAsCandidate verifies that issues explicitly labeled
+// stage:backlog are treated as backlog candidates, not ignored.
+func TestStageBacklogAsCandidate(t *testing.T) {
+	makeIssue := func(number int, labels ...string) github.Issue {
+		issue := github.Issue{Number: number, State: "OPEN"}
+		for _, l := range labels {
+			issue.Labels = append(issue.Labels, struct {
+				Name string `json:"name"`
+			}{Name: l})
+		}
+		return issue
+	}
+
+	// Single issue with stage:backlog label
+	issues := []github.Issue{
+		makeIssue(1, "stage:backlog"),
+	}
+
+	var candidates []github.Issue
+	var resumeIssue *github.Issue
+	for i := range issues {
+		stage := getStageLabel(issues[i])
+		if stage == "" || stage == string(github.StageBacklog) {
+			candidates = append(candidates, issues[i])
+		} else if isWorkerStage(stage) && resumeIssue == nil {
+			resumeIssue = &issues[i]
+		}
+	}
+
+	// Should be classified as a candidate
+	if len(candidates) != 1 {
+		t.Errorf("candidates count = %d, want 1", len(candidates))
+	}
+	if candidates[0].Number != 1 {
+		t.Errorf("candidate issue number = %d, want 1", candidates[0].Number)
+	}
+
+	// Should NOT be a resume issue
+	if resumeIssue != nil {
+		t.Errorf("resumeIssue should be nil, got #%d", resumeIssue.Number)
 	}
 }

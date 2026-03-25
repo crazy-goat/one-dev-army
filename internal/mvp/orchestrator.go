@@ -162,8 +162,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 
 			stage := getStageLabel(issues[i])
-			if stage == "" {
-				// No stage label = backlog candidate
+			if stage == "" || stage == string(github.StageBacklog) {
+				// No stage label or stage:backlog = backlog candidate
 				candidates = append(candidates, issues[i])
 			} else if isWorkerStage(stage) && resumeIssue == nil {
 				// Worker stage (analysis/coding/review/create-pr/awaiting-approval) = resume after restart
