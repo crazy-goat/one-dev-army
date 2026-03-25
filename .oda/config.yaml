@@ -22,7 +22,7 @@ llm:
     setup:
         model: nexos-ai/Claude Haiku 4.5
     planning:
-        model: '"Kimi K2.5"'
+        model: nexos-ai/Kimi K2.5
     orchestration:
         model: nexos-ai/Kimi K2.5
     code:

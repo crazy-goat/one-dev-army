@@ -118,7 +118,12 @@ func (s *Server) LoadModels() error {
 			continue
 		}
 		for _, model := range p.Models {
+			// Build full model ID as provider/model format
+			fullID := p.ID + "/" + model.ID
+			model.ID = fullID
+			model.ProviderID = p.ID
 			models = append(models, model)
+			log.Printf("[Dashboard] Loaded model: ID=%q, ProviderID=%q, Name=%q", model.ID, model.ProviderID, model.Name)
 		}
 	}
 
