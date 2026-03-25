@@ -321,7 +321,7 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
       </div>
 
       <div class="column col-check-pipeline">
-        <div class="column-title">Check Pipeline <span class="count">{{len .CheckPipeline}}</span></div>
+        <div class="column-title">Pipeline <span class="count">{{len .CheckPipeline}}</span></div>
         {{range .CheckPipeline}}
         <div class="card">
           <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>

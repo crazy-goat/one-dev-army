@@ -32,7 +32,7 @@ const (
 	ColumnPlan          = "Plan"
 	ColumnCode          = "Code"
 	ColumnAIReview      = "AI Review"
-	ColumnCheckPipeline = "Check Pipeline"
+	ColumnCheckPipeline = "Pipeline"
 	ColumnApprove       = "Approve"
 	ColumnMerge         = "Merge"
 	ColumnDone          = "Done"

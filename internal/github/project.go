@@ -15,7 +15,7 @@ var ProjectColumns = []string{
 	"Plan",
 	"Code",
 	"AI Review",
-	"Check Pipeline",
+	"Pipeline",
 	"Approve",
 	"Done",
 	"Failed",
@@ -179,15 +179,15 @@ func (c *Client) createStatusField(_ string, projectNumber int, owner string, op
 
 // columnColors maps column names to GitHub project colors.
 var columnColors = map[string]string{
-	"Blocked":        "RED",
-	"Backlog":        "GRAY",
-	"Plan":           "YELLOW",
-	"Code":           "BLUE",
-	"AI Review":      "YELLOW",
-	"Check Pipeline": "BLUE",
-	"Approve":        "PURPLE",
-	"Done":           "GREEN",
-	"Failed":         "RED",
+	"Blocked":   "RED",
+	"Backlog":   "GRAY",
+	"Plan":      "YELLOW",
+	"Code":      "BLUE",
+	"AI Review": "YELLOW",
+	"Pipeline":  "BLUE",
+	"Approve":   "PURPLE",
+	"Done":      "GREEN",
+	"Failed":    "RED",
 }
 
 // ProjectItem represents an item in a GitHub Project with its status

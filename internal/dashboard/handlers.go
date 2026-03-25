@@ -24,7 +24,7 @@ import (
 
 const (
 	columnAIReview      = "AI Review"
-	columnCheckPipeline = "Check Pipeline"
+	columnCheckPipeline = "Pipeline"
 	defaultBugTitle     = "[Bug] Fix issue"
 	defaultFeatureTitle = "[Feature] New feature"
 )
@@ -259,7 +259,7 @@ func (s *Server) addCardToColumn(data *boardData, col string, issue github.Issue
 		data.Code = append(data.Code, card)
 	case "AI Review":
 		data.AIReview = append(data.AIReview, card)
-	case "Check Pipeline":
+	case "Pipeline":
 		data.CheckPipeline = append(data.CheckPipeline, card)
 	case "Approve":
 		if s.store != nil {
