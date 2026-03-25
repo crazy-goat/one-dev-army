@@ -19,20 +19,22 @@ const (
 	ReasonManualProcess     StageChangeReason = "manual_process"
 
 	// Worker/Orchestrator pipeline changes
-	ReasonWorkerPickedUp            StageChangeReason = "worker_picked_up"
-	ReasonWorkerAlreadyDone         StageChangeReason = "worker_already_done"
-	ReasonWorkerFailed              StageChangeReason = "worker_failed"
-	ReasonWorkerApprove             StageChangeReason = "worker_approve"
-	ReasonWorkerCompletedAnalysis   StageChangeReason = "worker_completed_analysis"
-	ReasonWorkerCompletedCoding     StageChangeReason = "worker_completed_coding"
-	ReasonWorkerCompletedCodeReview StageChangeReason = "worker_completed_code_review"
-	ReasonWorkerCompletedCreatePR   StageChangeReason = "worker_completed_create_pr"
-	ReasonWorkerCompletedMerge      StageChangeReason = "worker_completed_merge"
-	ReasonWorkerDeclined            StageChangeReason = "worker_declined"
-	ReasonWorkerFixingFromReview    StageChangeReason = "worker_fixing_from_review"
-	ReasonWorkerNeedsUser           StageChangeReason = "worker_needs_user"
-	ReasonWorkerBlocked             StageChangeReason = "worker_blocked"
-	ReasonWorkerStageUpdate         StageChangeReason = "worker_stage_update"
+	ReasonWorkerPickedUp               StageChangeReason = "worker_picked_up"
+	ReasonWorkerAlreadyDone            StageChangeReason = "worker_already_done"
+	ReasonWorkerFailed                 StageChangeReason = "worker_failed"
+	ReasonWorkerApprove                StageChangeReason = "worker_approve"
+	ReasonWorkerCompletedAnalysis      StageChangeReason = "worker_completed_analysis"
+	ReasonWorkerCompletedCoding        StageChangeReason = "worker_completed_coding"
+	ReasonWorkerCompletedCodeReview    StageChangeReason = "worker_completed_code_review"
+	ReasonWorkerCompletedCreatePR      StageChangeReason = "worker_completed_create_pr"
+	ReasonWorkerCompletedCheckPipeline StageChangeReason = "worker_completed_check_pipeline"
+	ReasonCheckPipelineFailed          StageChangeReason = "check_pipeline_failed"
+	ReasonWorkerCompletedMerge         StageChangeReason = "worker_completed_merge"
+	ReasonWorkerDeclined               StageChangeReason = "worker_declined"
+	ReasonWorkerFixingFromReview       StageChangeReason = "worker_fixing_from_review"
+	ReasonWorkerNeedsUser              StageChangeReason = "worker_needs_user"
+	ReasonWorkerBlocked                StageChangeReason = "worker_blocked"
+	ReasonWorkerStageUpdate            StageChangeReason = "worker_stage_update"
 
 	// Sync changes
 	ReasonSyncInitial     StageChangeReason = "sync_initial"
@@ -85,7 +87,11 @@ func (r StageChangeReason) String() string {
 	case ReasonWorkerCompletedCodeReview:
 		return "Worker completed code-review, advancing to create-pr"
 	case ReasonWorkerCompletedCreatePR:
-		return "Worker completed PR creation, advancing to approval"
+		return "Worker completed PR creation, advancing to check pipeline"
+	case ReasonWorkerCompletedCheckPipeline:
+		return "Worker completed pipeline check, advancing to approval"
+	case ReasonCheckPipelineFailed:
+		return "CI pipeline checks failed, returning to coding"
 	case ReasonWorkerCompletedMerge:
 		return "Worker completed merge, ticket done"
 	case ReasonWorkerDeclined:

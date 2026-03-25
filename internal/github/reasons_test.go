@@ -13,6 +13,7 @@ var allReasons = []StageChangeReason{
 	ReasonManualDecline,
 	ReasonManualMerge,
 	ReasonManualMergeFailed,
+	ReasonManualProcess,
 	ReasonWorkerPickedUp,
 	ReasonWorkerAlreadyDone,
 	ReasonWorkerFailed,
@@ -21,6 +22,9 @@ var allReasons = []StageChangeReason{
 	ReasonWorkerCompletedCoding,
 	ReasonWorkerCompletedCodeReview,
 	ReasonWorkerCompletedCreatePR,
+	ReasonWorkerCompletedCheckPipeline,
+	ReasonCheckPipelineFailed,
+	ReasonWorkerCompletedMerge,
 	ReasonWorkerDeclined,
 	ReasonWorkerFixingFromReview,
 	ReasonWorkerNeedsUser,
@@ -29,6 +33,8 @@ var allReasons = []StageChangeReason{
 	ReasonSyncInitial,
 	ReasonSyncPeriodic,
 	ReasonSyncManual,
+	ReasonSyncClosedIssue,
+	ReasonSyncMergedPR,
 }
 
 func TestStageChangeReasonLabelNonEmpty(t *testing.T) {

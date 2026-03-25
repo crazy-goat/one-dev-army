@@ -540,3 +540,16 @@ func TestCodeReviewPromptFormat(t *testing.T) {
 		t.Error("formatted prompt does not contain 'REVIEW CRITERIA' section")
 	}
 }
+
+func TestStepOrderContainsCheckPipeline(t *testing.T) {
+	idx := stepIndex("check-pipeline")
+	if idx == -1 {
+		t.Fatal("check-pipeline not found in stepOrder")
+	}
+	createPRIdx := stepIndex("create-pr")
+	approvalIdx := stepIndex("awaiting-approval")
+	if idx <= createPRIdx || idx >= approvalIdx {
+		t.Errorf("check-pipeline index %d should be between create-pr (%d) and awaiting-approval (%d)",
+			idx, createPRIdx, approvalIdx)
+	}
+}

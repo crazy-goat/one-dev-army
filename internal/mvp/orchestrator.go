@@ -472,7 +472,7 @@ func getStageLabel(issue github.Issue) string {
 // These stages indicate the worker was interrupted (e.g. ODA restart) and should resume.
 func isWorkerStage(stage string) bool {
 	switch stage {
-	case "stage:analysis", "stage:coding", "stage:code-review", "stage:create-pr", "stage:awaiting-approval":
+	case "stage:analysis", "stage:coding", "stage:code-review", "stage:create-pr", "stage:check-pipeline", "stage:awaiting-approval":
 		return true
 	default:
 		return false
@@ -537,7 +537,14 @@ func (*Orchestrator) decideNextStage(event WorkerEvent) (github.Stage, github.St
 		}
 	case "create-pr":
 		if event.Status == EventSuccess {
-			return github.StageApprove, github.ReasonWorkerCompletedCreatePR, true
+			return github.StageCheckPipeline, github.ReasonWorkerCompletedCreatePR, true
+		}
+	case "check-pipeline":
+		if event.Status == EventSuccess {
+			return github.StageApprove, github.ReasonWorkerCompletedCheckPipeline, true
+		}
+		if event.Status == EventFailed {
+			return github.StageCode, github.ReasonCheckPipelineFailed, true
 		}
 	case "awaiting-approval":
 		if event.Status == EventSuccess {
@@ -664,7 +671,7 @@ func inferColumnForClosableCheck(issue github.Issue) string {
 		case "stage:blocked", "blocked", "stage:merging", "stage:awaiting-approval",
 			"awaiting-approval", "stage:create-pr", "stage:code-review",
 			"stage:coding", "stage:testing", "in-progress",
-			"stage:analysis", "stage:planning":
+			"stage:analysis", "stage:planning", "stage:check-pipeline":
 			return "Active"
 		}
 	}

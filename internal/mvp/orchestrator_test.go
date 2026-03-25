@@ -262,7 +262,7 @@ func TestGetStageLabel(t *testing.T) {
 func TestIsWorkerStage(t *testing.T) {
 	workerStages := []string{
 		"stage:analysis", "stage:coding", "stage:code-review",
-		"stage:create-pr", "stage:awaiting-approval",
+		"stage:create-pr", "stage:check-pipeline", "stage:awaiting-approval",
 	}
 	for _, s := range workerStages {
 		if !isWorkerStage(s) {
@@ -397,6 +397,60 @@ func TestDecideNextStage_CodingInProgress(t *testing.T) {
 	}
 	if reason != github.ReasonWorkerFixingFromReview {
 		t.Errorf("reason = %q, want %q", reason, github.ReasonWorkerFixingFromReview)
+	}
+}
+
+func TestDecideNextStage_CheckPipelineSuccess(t *testing.T) {
+	o := &Orchestrator{}
+	event := WorkerEvent{
+		IssueNumber: 42,
+		Stage:       "check-pipeline",
+		Status:      EventSuccess,
+	}
+	stage, reason, ok := o.decideNextStage(event)
+	if !ok {
+		t.Fatal("expected transition for check-pipeline success")
+	}
+	if stage != github.StageApprove {
+		t.Errorf("stage = %q, want %q", stage, github.StageApprove)
+	}
+	if reason != github.ReasonWorkerCompletedCheckPipeline {
+		t.Errorf("reason = %q, want %q", reason, github.ReasonWorkerCompletedCheckPipeline)
+	}
+}
+
+func TestDecideNextStage_CheckPipelineFailed(t *testing.T) {
+	o := &Orchestrator{}
+	event := WorkerEvent{
+		IssueNumber: 42,
+		Stage:       "check-pipeline",
+		Status:      EventFailed,
+	}
+	stage, reason, ok := o.decideNextStage(event)
+	if !ok {
+		t.Fatal("expected transition for check-pipeline failure")
+	}
+	if stage != github.StageCode {
+		t.Errorf("stage = %q, want %q", stage, github.StageCode)
+	}
+	if reason != github.ReasonCheckPipelineFailed {
+		t.Errorf("reason = %q, want %q", reason, github.ReasonCheckPipelineFailed)
+	}
+}
+
+func TestDecideNextStage_CreatePRGoesToCheckPipeline(t *testing.T) {
+	o := &Orchestrator{}
+	event := WorkerEvent{
+		IssueNumber: 42,
+		Stage:       "create-pr",
+		Status:      EventSuccess,
+	}
+	stage, _, ok := o.decideNextStage(event)
+	if !ok {
+		t.Fatal("expected transition for create-pr success")
+	}
+	if stage != github.StageCheckPipeline {
+		t.Errorf("stage = %q, want %q", stage, github.StageCheckPipeline)
 	}
 }
 
@@ -598,6 +652,13 @@ func TestInferColumnForClosableCheck(t *testing.T) {
 			issue: github.Issue{State: "OPEN", Labels: []struct {
 				Name string `json:"name"`
 			}{{Name: "stage:blocked"}}},
+			want: "Active",
+		},
+		{
+			name: "stage:check-pipeline is Active",
+			issue: github.Issue{State: "OPEN", Labels: []struct {
+				Name string `json:"name"`
+			}{{Name: "stage:check-pipeline"}}},
 			want: "Active",
 		},
 		{
