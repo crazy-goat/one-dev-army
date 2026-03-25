@@ -259,22 +259,56 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		}
 	}
 
-	// === CHECK PIPELINE ===
-	if resumeFrom <= 4 {
-		task.Status = StatusCheckingPipeline
-		log.Printf("[Worker %d] [5/7] Checking CI pipeline for #%d...", w.id, task.Issue.Number)
-		stepStart := time.Now()
-		if err := w.checkPipeline(ctx, task); err != nil {
-			task.Status = StatusFailed
-			task.Result = &TaskResult{Error: fmt.Errorf("pipeline check: %w", err)}
-			log.Printf("[Worker %d] ✗ FAILED pipeline check: %v", w.id, err)
-			w.reportStageComplete("check-pipeline", EventFailed, err.Error())
-			return task.Result.Error
+	// === CHECK PIPELINE (with retry back to coding) ===
+	cfg := w.cfg.Load()
+	maxPipelineRetries := cfg.Pipeline.MaxRetries
+	if maxPipelineRetries <= 0 {
+		maxPipelineRetries = 5
+	}
+	pipelineAttempt := 0
+	for {
+		if resumeFrom <= 4 {
+			task.Status = StatusCheckingPipeline
+			log.Printf("[Worker %d] [5/7] Checking CI pipeline for #%d (attempt %d/%d)...", w.id, task.Issue.Number, pipelineAttempt+1, maxPipelineRetries)
+			stepStart := time.Now()
+			if err := w.checkPipeline(ctx, task); err != nil {
+				pipelineAttempt++
+				if pipelineAttempt >= maxPipelineRetries {
+					task.Status = StatusFailed
+					task.Result = &TaskResult{Error: fmt.Errorf("pipeline check: %w (after %d attempts)", err, pipelineAttempt)}
+					log.Printf("[Worker %d] ✗ FAILED pipeline check after %d attempts: %v", w.id, pipelineAttempt, err)
+					w.reportStageComplete("check-pipeline", EventFailed, err.Error())
+					return task.Result.Error
+				}
+				log.Printf("[Worker %d] Pipeline failed (attempt %d/%d), retrying from coding...", w.id, pipelineAttempt, maxPipelineRetries)
+				w.reportStageComplete("check-pipeline", EventFailed, fmt.Sprintf("attempt %d/%d failed, retrying coding", pipelineAttempt, maxPipelineRetries))
+
+				// Fix from pipeline failure
+				task.Status = StatusCoding
+				w.reportStageComplete("coding", EventInProgress, fmt.Sprintf("fixing pipeline failure (attempt %d)", pipelineAttempt))
+				if fixErr := w.implement(ctx, task, implPlan); fixErr != nil {
+					task.Status = StatusFailed
+					task.Result = &TaskResult{Error: fmt.Errorf("fixing from pipeline failure: %w", fixErr)}
+					log.Printf("[Worker %d] ✗ FAILED fixing from pipeline failure: %v", w.id, fixErr)
+					return task.Result.Error
+				}
+				if pushErr := w.brMgr.PushBranch(task.Branch); pushErr != nil {
+					task.Status = StatusFailed
+					task.Result = &TaskResult{Error: fmt.Errorf("pushing pipeline fixes: %w", pushErr)}
+					log.Printf("[Worker %d] ✗ FAILED pushing pipeline fixes: %v", w.id, pushErr)
+					return task.Result.Error
+				}
+				// PR already exists, just push — skip create-pr step
+				// Reset resumeFrom so check-pipeline runs again
+				resumeFrom = 4
+				continue
+			}
+			log.Printf("[Worker %d] [5/7] Pipeline checks passed (%s)", w.id, time.Since(stepStart).Round(time.Second))
+			w.reportStageComplete("check-pipeline", EventSuccess, "all CI checks passed")
+		} else {
+			log.Printf("[Worker %d] [5/7] Skipping check-pipeline (completed previously)", w.id)
 		}
-		log.Printf("[Worker %d] [5/7] Pipeline checks passed (%s)", w.id, time.Since(stepStart).Round(time.Second))
-		w.reportStageComplete("check-pipeline", EventSuccess, "all CI checks passed")
-	} else {
-		log.Printf("[Worker %d] [5/7] Skipping check-pipeline (completed previously)", w.id)
+		break
 	}
 
 	// If resuming from awaiting-approval or later, recover prURL from store
