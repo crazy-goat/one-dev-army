@@ -5952,14 +5952,17 @@ func TestBoardTemplate_CSSLayout(t *testing.T) {
 
 	output := buf.String()
 
-	// Verify board-center-columns has flex:1 1 auto (not flex:0 0 auto)
+	// Verify board-center uses grid with 40/60 split
+	if !strings.Contains(output, "display:grid;grid-template-rows:40% 60%") {
+		t.Error("board-center should use display:grid with grid-template-rows:40% 60%")
+	}
+
+	// Verify board-center-columns does NOT have flex properties (grid parent handles sizing)
 	if strings.Contains(output, ".board-center-columns{") {
-		// Extract the CSS rule for board-center-columns
-		if !strings.Contains(output, "flex:1 1 auto") {
-			t.Error("board-center-columns should have flex:1 1 auto to fill available space")
+		if strings.Contains(output, "flex:1 1 auto") {
+			t.Error("board-center-columns should NOT have flex:1 1 auto (grid parent handles sizing)")
 		}
-		// Verify it does NOT have flex:0 0 auto
-		if strings.Contains(output, ".board-center-columns{display:grid;grid-template-columns:repeat(6,1fr);gap:1rem;flex:0 0 auto") {
+		if strings.Contains(output, "flex:0 0 auto") {
 			t.Error("board-center-columns should NOT have flex:0 0 auto")
 		}
 	} else {
@@ -5979,31 +5982,17 @@ func TestBoardTemplate_CSSLayout(t *testing.T) {
 		t.Error("board-center-columns should use repeat(6,1fr) for 6 pipeline columns")
 	}
 
-	// Verify processing-panel has flex:0 0 auto (not flex:1)
+	// Verify processing-panel does NOT have flex:0 0 auto (grid parent handles sizing)
 	if strings.Contains(output, ".processing-panel{") {
-		if !strings.Contains(output, "flex:0 0 auto") {
-			t.Error("processing-panel should have flex:0 0 auto to prevent growing")
-		}
-		// Verify it does NOT have flex:1
-		if strings.Contains(output, ".processing-panel{background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.2);border-radius:8px;padding:.5rem 1rem;display:flex;align-items:center;flex:1") {
-			t.Error("processing-panel should NOT have flex:1")
+		if strings.Contains(output, "flex:0 0 auto") {
+			t.Error("processing-panel should NOT have flex:0 0 auto (grid parent handles sizing)")
 		}
 	} else {
 		t.Error("processing-panel CSS rule not found")
 	}
 
-	// Verify processing-panel has max-height:250px
-	if !strings.Contains(output, "max-height:250px") {
-		t.Error("processing-panel should have max-height:250px to cap its height")
-	}
-
-	// Verify processing-panel has min-height:150px (not 200px)
-	if strings.Contains(output, "min-height:200px") {
-		t.Error("processing-panel should have min-height:150px not 200px")
-	}
-
-	// Verify mobile media query has correct constraints
-	if !strings.Contains(output, "min-height:120px;max-height:200px") {
-		t.Error("mobile media query should set processing-panel min-height:120px and max-height:200px")
+	// Verify processing-panel does NOT have fixed min/max height (grid handles sizing)
+	if strings.Contains(output, ".processing-panel{") && strings.Contains(output, "max-height:250px") {
+		t.Error("processing-panel should NOT have max-height:250px (grid row handles sizing)")
 	}
 }
