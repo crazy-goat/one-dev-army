@@ -93,13 +93,9 @@
       <span id="sync-text">Sync</span>
     </button>
     {{if .CanCloseSprint}}
-    <form method="post" action="/api/sprint/close" style="display:inline" id="close-sprint-form">
-      <button type="submit" class="btn btn-success">Close Sprint</button>
-    </form>
+    <a href="/sprint/close" class="btn btn-success">Close Sprint</a>
     {{else}}
-    <form method="post" action="/api/sprint/close" style="display:none" id="close-sprint-form">
-      <button type="submit" class="btn btn-success">Close Sprint</button>
-    </form>
+    <a href="/sprint/close" class="btn btn-success" style="display:none" id="close-sprint-link">Close Sprint</a>
     {{end}}
     {{if .CanPlanSprint}}
     <form method="post" action="/plan-sprint" style="display:inline">

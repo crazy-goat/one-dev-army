@@ -19,6 +19,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/mvp"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
+	"github.com/crazy-goat/one-dev-army/internal/version"
 )
 
 const (
@@ -771,7 +772,7 @@ func (s *Server) handleSprintPause(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-func (s *Server) handleSprintClose(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSprintCloseLegacy(w http.ResponseWriter, r *http.Request) {
 	// Validate orchestrator is not processing
 	if s.orchestrator != nil && s.orchestrator.IsProcessing() {
 		http.Error(w, "cannot close sprint while processing tasks", http.StatusConflict)
@@ -841,6 +842,221 @@ func (s *Server) handleSprintClose(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Redirect to board
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+const (
+	bumpTypeMajor = "major"
+	bumpTypeMinor = "minor"
+	bumpTypePatch = "patch"
+)
+
+// handleSprintClosePage renders the version selection page for closing a sprint
+func (s *Server) handleSprintClosePage(w http.ResponseWriter, r *http.Request) {
+	// Validate orchestrator is not processing
+	if s.orchestrator != nil && s.orchestrator.IsProcessing() {
+		http.Error(w, "cannot close sprint while processing tasks", http.StatusConflict)
+		return
+	}
+
+	// Get active milestone
+	if s.gh == nil || s.gh.GetActiveMilestone() == nil {
+		http.Error(w, "no active milestone", http.StatusBadRequest)
+		return
+	}
+
+	// Get current version (latest tag or default)
+	currentVersion := "0.0.0"
+	if s.gh != nil {
+		latest, err := s.gh.GetLatestTag()
+		if err != nil {
+			log.Printf("[Dashboard] Error fetching latest tag: %v", err)
+		} else {
+			currentVersion = latest
+		}
+	}
+
+	// Get bump type from query param (default to patch)
+	bumpType := r.URL.Query().Get("bump_type")
+	if bumpType != bumpTypeMajor && bumpType != bumpTypeMinor && bumpType != bumpTypePatch {
+		bumpType = bumpTypePatch
+	}
+
+	// Calculate new version
+	newVersion := currentVersion
+	if v, err := version.Parse(currentVersion); err == nil {
+		switch bumpType {
+		case bumpTypeMajor:
+			newVersion = v.BumpMajor().String()
+		case bumpTypeMinor:
+			newVersion = v.BumpMinor().String()
+		case bumpTypePatch:
+			newVersion = v.BumpPatch().String()
+		}
+	}
+
+	// Get error from query param (if redirected back due to error)
+	errorMsg := r.URL.Query().Get("error")
+
+	data := struct {
+		Active         string
+		OpenCodePort   int
+		WorkerCount    int
+		CurrentVersion string
+		NewVersion     string
+		BumpType       string
+		Error          string
+	}{
+		Active:         "close-sprint",
+		OpenCodePort:   s.webPort,
+		WorkerCount:    0,
+		CurrentVersion: currentVersion,
+		NewVersion:     newVersion,
+		BumpType:       bumpType,
+		Error:          errorMsg,
+	}
+
+	if s.pool != nil {
+		data.WorkerCount = len(s.pool())
+	}
+
+	s.render(w, "close_sprint.html", data)
+}
+
+// handleSprintCloseConfirm creates the tag and closes the sprint
+func (s *Server) handleSprintCloseConfirm(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	// Validate orchestrator is not processing
+	if s.orchestrator != nil && s.orchestrator.IsProcessing() {
+		http.Error(w, "cannot close sprint while processing tasks", http.StatusConflict)
+		return
+	}
+
+	// Get active milestone
+	if s.gh == nil || s.gh.GetActiveMilestone() == nil {
+		http.Error(w, "no active milestone", http.StatusBadRequest)
+		return
+	}
+
+	milestone := s.gh.GetActiveMilestone()
+
+	// Get form data
+	currentVersion := r.FormValue("current_version")
+	bumpType := r.FormValue("bump_type")
+
+	// Validate bump type
+	if bumpType != bumpTypeMajor && bumpType != bumpTypeMinor && bumpType != bumpTypePatch {
+		http.Redirect(w, r, "/sprint/close?error=Invalid+bump+type", http.StatusSeeOther)
+		return
+	}
+
+	// Calculate new version
+	var newVersion string
+	if v, err := version.Parse(currentVersion); err == nil {
+		switch bumpType {
+		case bumpTypeMajor:
+			newVersion = v.BumpMajor().String()
+		case bumpTypeMinor:
+			newVersion = v.BumpMinor().String()
+		case bumpTypePatch:
+			newVersion = v.BumpPatch().String()
+		}
+	} else {
+		// Fallback: if current version is invalid, start from 0.0.0 and apply bump
+		fallbackVersion := version.Version{Major: 0, Minor: 0, Patch: 0}
+		switch bumpType {
+		case bumpTypeMajor:
+			newVersion = fallbackVersion.BumpMajor().String()
+		case bumpTypeMinor:
+			newVersion = fallbackVersion.BumpMinor().String()
+		case bumpTypePatch:
+			newVersion = fallbackVersion.BumpPatch().String()
+		}
+	}
+
+	// Check if tag already exists
+	tagName := "v" + newVersion
+	exists, err := s.gh.TagExists(tagName)
+	if err != nil {
+		log.Printf("[Dashboard] Error checking tag existence: %v", err)
+		http.Redirect(w, r, "/sprint/close?error=Failed+to+check+tag+existence", http.StatusSeeOther)
+		return
+	}
+	if exists {
+		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=Tag+"+tagName+"+already+exists", http.StatusSeeOther)
+		return
+	}
+
+	// Create the tag on master branch
+	tagMessage := fmt.Sprintf("Release %s - %s", tagName, milestone.Title)
+	if err := s.gh.CreateTag(tagName, "master", tagMessage); err != nil {
+		log.Printf("[Dashboard] Error creating tag %s: %v", tagName, err)
+		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=Failed+to+create+tag", http.StatusSeeOther)
+		return
+	}
+
+	log.Printf("[Dashboard] Created tag %s for milestone %s", tagName, milestone.Title)
+
+	// Close the milestone via GitHub API
+	if err := s.gh.CloseMilestone(milestone.Number); err != nil {
+		log.Printf("[Dashboard] Error closing milestone %s: %v", milestone.Title, err)
+		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=Failed+to+close+milestone", http.StatusSeeOther)
+		return
+	}
+
+	log.Printf("[Dashboard] Closed milestone: %s", milestone.Title)
+
+	// Auto-create a new sprint to ensure continuous sprint coverage
+	newSprintTitle, err := s.gh.CreateNextSprint(milestone.Title)
+	if err != nil {
+		log.Printf("[Dashboard] Error creating next sprint after closing %s: %v", milestone.Title, err)
+		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=Failed+to+create+next+sprint", http.StatusSeeOther)
+		return
+	}
+
+	log.Printf("[Dashboard] Created new sprint: %s", newSprintTitle)
+
+	// Reload milestone state to get the newly created sprint
+	newMilestone, err := s.gh.GetOldestOpenMilestone()
+	if err != nil {
+		log.Printf("[Dashboard] Error reloading milestones after closing %s: %v", milestone.Title, err)
+		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=Failed+to+reload+milestones", http.StatusSeeOther)
+		return
+	}
+
+	// Validate that we have a new active sprint
+	if newMilestone == nil {
+		log.Printf("[Dashboard] No open milestone found after closing %s", milestone.Title)
+		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=No+active+sprint+available+after+closing", http.StatusSeeOther)
+		return
+	}
+
+	// Update GitHub client with the new active milestone
+	s.gh.SetActiveMilestone(newMilestone)
+	log.Printf("[Dashboard] Set new active milestone: %s", newMilestone.Title)
+
+	// Update sync service with the new milestone title
+	if s.syncService != nil {
+		s.syncService.SetActiveMilestone(newMilestone.Title)
+		log.Printf("[Dashboard] Updated sync service with new milestone: %s", newMilestone.Title)
+	}
+
+	// Trigger a sync to refresh cached data with the new sprint
+	if s.syncService != nil {
+		if err := s.syncService.SyncNow(); err != nil {
+			log.Printf("[Dashboard] Warning: failed to trigger sync after sprint close: %v", err)
+			// Don't fail the operation if sync trigger fails
+		} else {
+			log.Printf("[Dashboard] Triggered sync to refresh data for new sprint: %s", newMilestone.Title)
+		}
+	}
+
+	// Redirect to board with success message
+	// Note: We could add a flash message system, but for now just redirect
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
