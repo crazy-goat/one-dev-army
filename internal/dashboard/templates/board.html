@@ -5,8 +5,9 @@
 .board-actions{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
 @media (max-width:768px){.board-header{flex-direction:column;align-items:flex-start}.board-actions{width:100%;justify-content:flex-start}}
 .board{display:grid;grid-template-columns:repeat(7,1fr);gap:1rem;margin-bottom:2rem}
-.stacked-column{display:flex;flex-direction:column;gap:0.5rem;min-height:300px}
-.stacked-column .column{min-height:140px;flex:1}
+.stacked-column{display:flex;flex-direction:column;gap:0.5rem;height:calc(100vh - 8rem);min-height:300px}
+.stacked-column .column{flex:1 1 50%;min-height:0;overflow-y:auto;scroll-behavior:smooth}
+.stacked-column .column-title{position:sticky;top:0;z-index:1;background:var(--surface);padding-bottom:.5rem}
 .column{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem;min-height:300px}
 .column-title{font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.75rem;display:flex;justify-content:space-between;align-items:center}
 .column-title .count{background:var(--border);padding:.1rem .5rem;border-radius:10px;font-size:.75rem}

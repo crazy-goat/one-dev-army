@@ -2285,6 +2285,31 @@ func TestBoardLayout_StackedColumns(t *testing.T) {
 	if !strings.Contains(body, ".stacked-column .column{") {
 		t.Error("board page missing stacked-column .column CSS rule")
 	}
+
+	// Verify stacked column height constraint
+	if !strings.Contains(body, "calc(100vh") {
+		t.Error("stacked-column missing viewport height constraint")
+	}
+
+	// Verify internal scrolling
+	if !strings.Contains(body, "overflow-y:auto") {
+		t.Error("stacked-column columns missing overflow-y:auto for internal scrolling")
+	}
+
+	// Verify sticky column titles
+	if !strings.Contains(body, "position:sticky") {
+		t.Error("stacked-column titles missing position:sticky")
+	}
+
+	// Verify smooth scrolling
+	if !strings.Contains(body, "scroll-behavior:smooth") {
+		t.Error("stacked-column columns missing scroll-behavior:smooth")
+	}
+
+	// Verify flex basis for 50/50 split
+	if !strings.Contains(body, "50%") {
+		t.Error("stacked-column columns missing 50% flex basis for equal height split")
+	}
 }
 
 // TestBoardLayout_BacklogAboveBlocked verifies Backlog column appears before Blocked in the left stack
