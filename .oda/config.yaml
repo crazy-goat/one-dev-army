@@ -27,4 +27,4 @@ llm:
         model: nexos-ai/Kimi K2.5
     code-heavy:
         model: nexos-ai/Claude Opus 4.6
-yolo_mode: true
+yolo_mode: false
