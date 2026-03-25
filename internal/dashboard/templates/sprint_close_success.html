@@ -1,0 +1,162 @@
+{{template "layout" .}}
+{{define "content"}}
+<style>
+.success-wrapper {
+  max-width: 800px;
+  margin: 3rem auto;
+  padding: 0 2rem;
+  text-align: center;
+}
+
+.success-icon {
+  font-size: 4rem;
+  margin-bottom: 1.5rem;
+}
+
+.success-title {
+  font-size: 1.8rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--green);
+}
+
+.success-message {
+  font-size: 1.1rem;
+  color: var(--muted);
+  margin-bottom: 2rem;
+}
+
+.warning-box {
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid var(--orange);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 2rem;
+  color: var(--orange);
+  font-size: 0.95rem;
+}
+
+.release-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  text-align: left;
+}
+
+.release-card-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.release-tag {
+  background: var(--accent);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-family: monospace;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.release-title {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.release-details {
+  display: grid;
+  gap: 1rem;
+}
+
+.detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.detail-label {
+  color: var(--muted);
+  font-size: 0.9rem;
+  min-width: 120px;
+}
+
+.detail-value {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.actions .btn {
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border: none;
+}
+
+.btn-primary:hover {
+  background: var(--accent);
+  opacity: 0.9;
+  text-decoration: none;
+}
+</style>
+
+<div class="success-wrapper">
+  <div class="success-icon">🎉</div>
+  <h1 class="success-title">Sprint Closed Successfully!</h1>
+  <p class="success-message">
+    The sprint <strong>{{.MilestoneTitle}}</strong> has been closed and a new release has been created.
+  </p>
+
+  {{if .Warning}}
+  <div class="warning-box">
+    ⚠️ {{.Warning}}
+  </div>
+  {{end}}
+
+  <div class="release-card">
+    <div class="release-card-header">
+      <span class="release-tag">{{.TagName}}</span>
+      <span class="release-title">{{.ReleaseTitle}}</span>
+    </div>
+    
+    <div class="release-details">
+      <div class="detail-row">
+        <span class="detail-label">Closed Sprint:</span>
+        <span class="detail-value">{{.MilestoneTitle}}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">New Sprint:</span>
+        <span class="detail-value">{{.NewSprintTitle}}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">GitHub Release:</span>
+        <span class="detail-value">
+          <a href="{{.ReleaseURL}}" target="_blank" rel="noopener">{{.ReleaseURL}}</a>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <a href="{{.ReleaseURL}}" target="_blank" rel="noopener" class="btn btn-primary">View Release on GitHub</a>
+    <a href="/" class="btn">Back to Dashboard</a>
+  </div>
+</div>
+{{end}}

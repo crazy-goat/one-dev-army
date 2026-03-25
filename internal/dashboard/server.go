@@ -208,6 +208,13 @@ func parseTemplates() (map[string]*template.Template, error) {
 	}
 	tmpls["close_sprint.html"] = closeSprintTmpl
 
+	// Parse sprint close success template
+	sprintCloseSuccessTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html", "templates/sprint_close_success.html")
+	if err != nil {
+		return nil, fmt.Errorf("parsing sprint_close_success.html: %w", err)
+	}
+	tmpls["sprint_close_success.html"] = sprintCloseSuccessTmpl
+
 	return tmpls, nil
 }
 

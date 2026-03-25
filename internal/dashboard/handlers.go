@@ -1045,47 +1045,43 @@ func (s *Server) handleSprintCloseConfirm(w http.ResponseWriter, r *http.Request
 	log.Printf("[Dashboard] Closed milestone: %s", milestone.Title)
 
 	// Auto-create a new sprint to ensure continuous sprint coverage
-	newSprintTitle, err := s.gh.CreateNextSprint(milestone.Title)
+	var newSprintTitle string
+	var warning string
+	newSprintTitle, err = s.gh.CreateNextSprint(milestone.Title)
 	if err != nil {
-		log.Printf("[Dashboard] Error creating next sprint after closing %s: %v", milestone.Title, err)
-		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=Failed+to+create+next+sprint", http.StatusSeeOther)
-		return
-	}
+		log.Printf("[Dashboard] Warning: failed to create next sprint after closing %s: %v", milestone.Title, err)
+		warning = "Note: Release was created successfully, but failed to create the next sprint automatically."
+	} else {
+		log.Printf("[Dashboard] Created new sprint: %s", newSprintTitle)
 
-	log.Printf("[Dashboard] Created new sprint: %s", newSprintTitle)
+		// Reload milestone state to get the newly created sprint
+		newMilestone, err := s.gh.GetOldestOpenMilestone()
+		switch {
+		case err != nil:
+			log.Printf("[Dashboard] Warning: failed to reload milestones after closing %s: %v", milestone.Title, err)
+			warning = "Note: Release was created successfully, but failed to reload sprint data."
+		case newMilestone == nil:
+			log.Printf("[Dashboard] Warning: no open milestone found after closing %s", milestone.Title)
+			warning = "Note: Release was created successfully, but no active sprint is available."
+		default:
+			// Update GitHub client with the new active milestone
+			s.gh.SetActiveMilestone(newMilestone)
+			log.Printf("[Dashboard] Set new active milestone: %s", newMilestone.Title)
 
-	// Reload milestone state to get the newly created sprint
-	newMilestone, err := s.gh.GetOldestOpenMilestone()
-	if err != nil {
-		log.Printf("[Dashboard] Error reloading milestones after closing %s: %v", milestone.Title, err)
-		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=Failed+to+reload+milestones", http.StatusSeeOther)
-		return
-	}
+			// Update sync service with the new milestone title
+			if s.syncService != nil {
+				s.syncService.SetActiveMilestone(newMilestone.Title)
+				log.Printf("[Dashboard] Updated sync service with new milestone: %s", newMilestone.Title)
+			}
 
-	// Validate that we have a new active sprint
-	if newMilestone == nil {
-		log.Printf("[Dashboard] No open milestone found after closing %s", milestone.Title)
-		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=No+active+sprint+available+after+closing", http.StatusSeeOther)
-		return
-	}
-
-	// Update GitHub client with the new active milestone
-	s.gh.SetActiveMilestone(newMilestone)
-	log.Printf("[Dashboard] Set new active milestone: %s", newMilestone.Title)
-
-	// Update sync service with the new milestone title
-	if s.syncService != nil {
-		s.syncService.SetActiveMilestone(newMilestone.Title)
-		log.Printf("[Dashboard] Updated sync service with new milestone: %s", newMilestone.Title)
-	}
-
-	// Trigger a sync to refresh cached data with the new sprint
-	if s.syncService != nil {
-		if err := s.syncService.SyncNow(); err != nil {
-			log.Printf("[Dashboard] Warning: failed to trigger sync after sprint close: %v", err)
-			// Don't fail the operation if sync trigger fails
-		} else {
-			log.Printf("[Dashboard] Triggered sync to refresh data for new sprint: %s", newMilestone.Title)
+			// Trigger a sync to refresh cached data with the new sprint
+			if s.syncService != nil {
+				if err := s.syncService.SyncNow(); err != nil {
+					log.Printf("[Dashboard] Warning: failed to trigger sync after sprint close: %v", err)
+				} else {
+					log.Printf("[Dashboard] Triggered sync to refresh data for new sprint: %s", newMilestone.Title)
+				}
+			}
 		}
 	}
 
@@ -1093,10 +1089,38 @@ func (s *Server) handleSprintCloseConfirm(w http.ResponseWriter, r *http.Request
 	log.Printf("[Dashboard] Release Title: %s", releaseTitle)
 	log.Printf("[Dashboard] Release Body:\n%s", releaseBody)
 
-	// Redirect to GitHub release page
+	// Render success page
 	releaseURL := fmt.Sprintf("https://github.com/%s/releases/tag/%s", s.gh.Repo, tagName)
-	log.Printf("[Dashboard] Redirecting to release: %s", releaseURL)
-	http.Redirect(w, r, releaseURL, http.StatusSeeOther)
+
+	data := struct {
+		Active         string
+		OpenCodePort   int
+		WorkerCount    int
+		MilestoneTitle string
+		NewSprintTitle string
+		TagName        string
+		ReleaseTitle   string
+		ReleaseURL     string
+		Warning        string
+		YoloMode       bool
+	}{
+		Active:         "sprint-close-success",
+		OpenCodePort:   s.webPort,
+		WorkerCount:    0,
+		MilestoneTitle: milestone.Title,
+		NewSprintTitle: newSprintTitle,
+		TagName:        tagName,
+		ReleaseTitle:   releaseTitle,
+		ReleaseURL:     releaseURL,
+		Warning:        warning,
+		YoloMode:       false,
+	}
+
+	if s.pool != nil {
+		data.WorkerCount = len(s.pool())
+	}
+
+	s.render(w, "sprint_close_success.html", data)
 }
 
 // handleSprintClosePreview generates release notes preview without actually closing sprint
