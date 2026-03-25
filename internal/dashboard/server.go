@@ -161,19 +161,19 @@ func parseTemplates() (map[string]*template.Template, error) {
 			case "type:refactor":
 				return "🔧"
 			case "size:S":
-				return "🟢"
+				return "🐜"
 			case "size:M":
-				return "🟡"
+				return "🐕"
 			case "size:L":
-				return "🟠"
+				return "🐘"
 			case "size:XL":
-				return "🔴"
+				return "🦕"
 			case "priority:high":
-				return "🔥"
+				return "🔴"
 			case "priority:medium":
-				return "⚡"
+				return "🟡"
 			case "priority:low":
-				return "🌱"
+				return "🟢"
 			default:
 				return ""
 			}
