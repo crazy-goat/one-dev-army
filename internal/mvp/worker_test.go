@@ -1,6 +1,8 @@
 package mvp
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
@@ -371,4 +373,56 @@ func TestWorker_UpdateConfig_Atomicity(t *testing.T) {
 	// If we get here without panic or race detector errors, atomicity is working
 	// The final value could be either true or false depending on timing
 	_ = worker.cfg.Load().YoloMode
+}
+
+func TestWorker_CreateArtifactDir(t *testing.T) {
+	tests := []struct {
+		name        string
+		issueNumber int
+		wantPath    string
+	}{
+		{
+			name:        "create artifact directory for issue 42",
+			issueNumber: 42,
+			wantPath:    filepath.Join(".oda", "artifacts", "42"),
+		},
+		{
+			name:        "create artifact directory for issue 123",
+			issueNumber: 123,
+			wantPath:    filepath.Join(".oda", "artifacts", "123"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			w := &Worker{
+				id:      1,
+				repoDir: tmpDir,
+			}
+
+			// Test creating artifact directory
+			got, err := w.createArtifactDir(tt.issueNumber)
+			if err != nil {
+				t.Fatalf("createArtifactDir() error = %v", err)
+			}
+
+			// Verify returned path
+			wantFullPath := filepath.Join(tmpDir, tt.wantPath)
+			if got != wantFullPath {
+				t.Errorf("createArtifactDir() = %q, want %q", got, wantFullPath)
+			}
+
+			// Verify directory exists
+			if _, err := os.Stat(got); os.IsNotExist(err) {
+				t.Errorf("createArtifactDir() directory does not exist: %s", got)
+			}
+
+			// Test idempotency - calling again should not error
+			_, err = w.createArtifactDir(tt.issueNumber)
+			if err != nil {
+				t.Errorf("createArtifactDir() second call error = %v, want no error", err)
+			}
+		})
+	}
 }
