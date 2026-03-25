@@ -354,11 +354,25 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
                 '<span class="processing-title">' + (workerStatus.issueTitle || '') + '</span>' +
                 '</a></div>';
         } else {
+            var totalTickets = parseInt(panel.getAttribute('data-total-tickets') || '0', 10);
             panel.className = 'processing-panel processing-panel-idle';
-            panel.innerHTML = '<div class="processing-panel-content">' +
-                '<span class="processing-indicator"></span>' +
-                '<span class="processing-idle-text">No active ticket &mdash; Worker ready</span>' +
-                '</div>';
+            if (totalTickets === 0) {
+                panel.innerHTML = '<div class="processing-panel-content">' +
+                    '<span class="processing-indicator"></span>' +
+                    '<div class="processing-empty-labels">' +
+                    '<span class="processing-badge">\uD83C\uDFAF Sprint</span>' +
+                    '</div>' +
+                    '<div class="processing-empty-message">' +
+                    '<span class="processing-empty-title">No tickets in sprint</span>' +
+                    '<span class="processing-empty-subtitle">Create your first ticket to get started</span>' +
+                    '<a href="/wizard/new?type=feature" class="processing-cta">+ New Ticket</a>' +
+                    '</div></div>';
+            } else {
+                panel.innerHTML = '<div class="processing-panel-content">' +
+                    '<span class="processing-indicator"></span>' +
+                    '<span class="processing-idle-text">No active ticket &mdash; Worker ready</span>' +
+                    '</div>';
+            }
         }
     }
     

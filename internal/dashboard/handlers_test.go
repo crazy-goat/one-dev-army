@@ -5183,6 +5183,7 @@ func TestBoardTemplate_ProcessingPanel_Idle(t *testing.T) {
 		CurrentTicket: nil,
 		Paused:        true,
 		Processing:    false,
+		TotalTickets:  5,
 	}
 
 	// Execute the content template
@@ -5597,5 +5598,63 @@ func TestHandleManualProcessInvalidID(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+// TestBoardTemplate_ProcessingPanel_EmptySprint tests that the processing panel shows empty sprint state when TotalTickets is 0
+func TestBoardTemplate_ProcessingPanel_EmptySprint(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	data := boardData{
+		Active:        "board",
+		CurrentTicket: nil,
+		Paused:        true,
+		Processing:    false,
+		TotalTickets:  0,
+	}
+
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	output := buf.String()
+
+	if !strings.Contains(output, `processing-panel-idle`) {
+		t.Error("empty sprint panel should have idle class")
+	}
+	if !strings.Contains(output, "Sprint") {
+		t.Error("empty sprint should show Sprint badge")
+	}
+	if !strings.Contains(output, "No tickets in sprint") {
+		t.Error("empty sprint should show 'No tickets in sprint' message")
+	}
+	if !strings.Contains(output, "processing-cta") {
+		t.Error("empty sprint should show CTA button")
+	}
+	if !strings.Contains(output, "New Ticket") {
+		t.Error("empty sprint CTA should say 'New Ticket'")
+	}
+	if strings.Contains(output, "Worker ready") {
+		t.Error("empty sprint should NOT show 'Worker ready' message")
+	}
+}
+
+// TestBuildBoardData_TotalTickets tests that TotalTickets is computed correctly
+func TestBuildBoardData_TotalTickets(t *testing.T) {
+	srv := &Server{
+		tmpls: make(map[string]*template.Template),
+	}
+
+	data := srv.buildBoardData(nil)
+
+	if data.TotalTickets != 0 {
+		t.Errorf("expected TotalTickets=0 with no store, got %d", data.TotalTickets)
 	}
 }
