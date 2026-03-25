@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1024,6 +1027,188 @@ func (s *Server) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 			if props.SessionID == sessionID && props.Status.Type == "idle" {
 				_, _ = fmt.Fprintf(w, "data: {\"done\":true}\n\n")
 				flusher.Flush()
+				return
+			}
+		}
+	}
+}
+
+func sendSSEEvent(w http.ResponseWriter, flusher http.Flusher, event string, data any) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, jsonData)
+	flusher.Flush()
+}
+
+func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
+	issueStr := r.PathValue("issue")
+	_, err := strconv.Atoi(issueStr)
+	if err != nil {
+		http.Error(w, "invalid issue number", http.StatusBadRequest)
+		return
+	}
+
+	stepFilter := r.URL.Query().Get("step")
+	follow := r.URL.Query().Get("follow") != "false"
+
+	logDir := filepath.Join(s.rootDir, ".oda", "artifacts", issueStr, "logs")
+
+	info, err := os.Stat(logDir)
+	if err != nil || !info.IsDir() {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "streaming not supported", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		sendSSEEvent(w, flusher, "log:error", map[string]string{
+			"error": "log directory not found for issue " + issueStr,
+		})
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		sendSSEEvent(w, flusher, "log:error", map[string]string{
+			"error": fmt.Sprintf("failed to read log directory: %v", err),
+		})
+		return
+	}
+
+	type fileOffset struct {
+		offset   int64
+		complete bool
+	}
+	fileOffsets := make(map[string]fileOffset)
+
+	var logFiles []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".log") {
+			continue
+		}
+		if stepFilter != "" {
+			stepName := strings.TrimSuffix(name, ".log")
+			if idx := strings.LastIndex(stepName, "_"); idx != -1 {
+				stepName = stepName[idx+1:]
+			}
+			if stepName != stepFilter {
+				continue
+			}
+		}
+		logFiles = append(logFiles, name)
+	}
+
+	sort.Strings(logFiles)
+
+	streamFile := func(filename string) {
+		filepath := filepath.Join(logDir, filename)
+		file, err := os.Open(filepath)
+		if err != nil {
+			sendSSEEvent(w, flusher, "log:error", map[string]string{
+				"error": fmt.Sprintf("failed to open log file %s: %v", filename, err),
+			})
+			return
+		}
+		defer file.Close()
+
+		offset := fileOffsets[filename].offset
+		if offset > 0 {
+			_, err = file.Seek(offset, 0)
+			if err != nil {
+				sendSSEEvent(w, flusher, "log:error", map[string]string{
+					"error": fmt.Sprintf("failed to seek in log file %s: %v", filename, err),
+				})
+				return
+			}
+		}
+
+		scanner := bufio.NewScanner(file)
+		stepName := strings.TrimSuffix(filename, ".log")
+		if idx := strings.LastIndex(stepName, "_"); idx != -1 {
+			stepName = stepName[idx+1:]
+		}
+
+		for scanner.Scan() {
+			line := scanner.Text()
+			timestamp := ""
+			message := line
+			if len(line) > 22 && line[0] == '[' && line[5] == '-' && line[20] == ']' {
+				timestamp = line[1:20]
+				if len(line) > 22 {
+					message = line[22:]
+				}
+			}
+
+			sendSSEEvent(w, flusher, "log:new", map[string]string{
+				"file":      filename,
+				"step":      stepName,
+				"timestamp": timestamp,
+				"message":   message,
+			})
+
+			if strings.Contains(line, "STEP END:") {
+				fileOffsets[filename] = fileOffset{offset: offset, complete: true}
+				sendSSEEvent(w, flusher, "log:complete", map[string]string{
+					"file": filename,
+					"step": stepName,
+				})
+				return
+			}
+		}
+
+		if err := scanner.Err(); err != nil {
+			sendSSEEvent(w, flusher, "log:error", map[string]string{
+				"error": fmt.Sprintf("error reading log file %s: %v", filename, err),
+			})
+			return
+		}
+
+		currentOffset, _ := file.Seek(0, 1)
+		fileOffsets[filename] = fileOffset{offset: currentOffset, complete: false}
+	}
+
+	for _, filename := range logFiles {
+		streamFile(filename)
+	}
+
+	if !follow {
+		return
+	}
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			allComplete := true
+			for _, filename := range logFiles {
+				if !fileOffsets[filename].complete {
+					allComplete = false
+					streamFile(filename)
+				}
+			}
+			if allComplete {
 				return
 			}
 		}
