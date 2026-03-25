@@ -196,6 +196,15 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
                     refreshBoard();
                 }
                 
+                // Handle sprint closable updates
+                if (msg.type === 'can_close_sprint' && msg.payload) {
+                    const payload = JSON.parse(msg.payload);
+                    const closeForm = document.getElementById('close-sprint-form');
+                    if (closeForm) {
+                        closeForm.style.display = payload.can_close ? 'inline' : 'none';
+                    }
+                }
+                
                 // Handle worker status updates
                 if (msg.type === 'worker_update' && msg.payload) {
                     const payload = JSON.parse(msg.payload);

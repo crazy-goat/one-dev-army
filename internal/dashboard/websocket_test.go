@@ -538,6 +538,7 @@ func TestMessageTypes(t *testing.T) {
 		{MessageTypeIssueUpdate, "issue_update"},
 		{MessageTypeSyncComplete, "sync_complete"},
 		{MessageTypeWorkerUpdate, "worker_update"},
+		{MessageTypeSprintClosable, "can_close_sprint"},
 		{MessageTypePing, "ping"},
 		{MessageTypePong, "pong"},
 	}
@@ -600,6 +601,77 @@ func TestSyncCompletePayloadMarshal(t *testing.T) {
 
 	if decoded.Count != payload.Count {
 		t.Errorf("Count mismatch: got %d, want %d", decoded.Count, payload.Count)
+	}
+}
+
+func TestSprintClosablePayloadMarshal(t *testing.T) {
+	payload := SprintClosablePayload{
+		CanClose: true,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("Failed to marshal payload: %v", err)
+	}
+
+	var decoded SprintClosablePayload
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Failed to unmarshal payload: %v", err)
+	}
+
+	if decoded.CanClose != payload.CanClose {
+		t.Errorf("CanClose mismatch: got %v, want %v", decoded.CanClose, payload.CanClose)
+	}
+}
+
+func TestHubBroadcastSprintClosable(t *testing.T) {
+	hub := NewHub(false)
+	go hub.Run()
+	defer hub.Stop()
+
+	// Create a test server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ServeWs(hub, w, r)
+	}))
+	defer server.Close()
+
+	// Connect a client
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil) //nolint:bodyclose // websocket connection is closed below
+	if err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	// Wait for registration using polling
+	waitForClientCount(t, hub, 1)
+
+	// Broadcast sprint closable
+	hub.BroadcastSprintClosable(true)
+
+	// Verify client received the message
+	_ = conn.SetReadDeadline(time.Now().Add(time.Second))
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("Failed to receive message: %v", err)
+	}
+
+	var received Message
+	if err := json.Unmarshal(msg, &received); err != nil {
+		t.Fatalf("Failed to unmarshal message: %v", err)
+	}
+
+	if received.Type != MessageTypeSprintClosable {
+		t.Errorf("Expected type %s, got %s", MessageTypeSprintClosable, received.Type)
+	}
+
+	var payload SprintClosablePayload
+	if err := json.Unmarshal(received.Payload, &payload); err != nil {
+		t.Fatalf("Failed to unmarshal payload: %v", err)
+	}
+
+	if !payload.CanClose {
+		t.Errorf("Expected can_close to be true, got %v", payload.CanClose)
 	}
 }
 

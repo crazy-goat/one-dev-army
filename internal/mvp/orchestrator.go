@@ -24,6 +24,7 @@ import (
 type StageBroadcaster interface {
 	BroadcastIssueUpdate(issue github.Issue)
 	BroadcastWorkerUpdate(workerID, status string, taskID int, taskTitle, stage string, elapsedSeconds int)
+	BroadcastSprintClosable(canClose bool)
 }
 
 type Orchestrator struct {
@@ -556,6 +557,11 @@ func (o *Orchestrator) ChangeStage(issueNumber int, toStage github.Stage, reason
 		o.hub.BroadcastIssueUpdate(updatedIssue)
 	}
 
+	// Check if all issues are in terminal state after moving to Done/Failed
+	if toStage == github.StageDone || toStage == github.StageFailed {
+		o.checkAndBroadcastSprintClosable()
+	}
+
 	// Save to ledger (last)
 	if o.store != nil {
 		if err := o.store.SaveStageChange(issueNumber, fromStage, toLabel, reason.Label(), "orchestrator"); err != nil {
@@ -565,6 +571,60 @@ func (o *Orchestrator) ChangeStage(issueNumber int, toStage github.Stage, reason
 
 	log.Printf("[Orchestrator] Successfully changed stage of #%d from %s to %s", issueNumber, fromStage, toLabel)
 	return nil
+}
+
+// checkAndBroadcastSprintClosable checks if all issues in the active milestone
+// are in terminal states (Done/Failed) and broadcasts a WebSocket message if so.
+func (o *Orchestrator) checkAndBroadcastSprintClosable() {
+	if o.hub == nil || o.store == nil {
+		return
+	}
+	milestone := o.activeMilestone()
+	if milestone == "" {
+		return
+	}
+	issues, err := o.store.GetOpenIssuesCacheByMilestone(milestone)
+	if err != nil {
+		log.Printf("[Orchestrator] Error checking sprint closable: %v", err)
+		return
+	}
+	if len(issues) == 0 {
+		return
+	}
+	for _, issue := range issues {
+		col := inferColumnForClosableCheck(issue)
+		if col != "Done" && col != "Failed" {
+			return
+		}
+	}
+	log.Printf("[Orchestrator] All %d issues in terminal state — broadcasting sprint closable", len(issues))
+	o.hub.BroadcastSprintClosable(true)
+}
+
+// inferColumnForClosableCheck determines the board column for an issue
+// based on its labels and state. Used for sprint closable detection.
+func inferColumnForClosableCheck(issue github.Issue) string {
+	labels := issue.GetLabelNames()
+	for _, l := range labels {
+		lower := strings.ToLower(l)
+		if lower == "stage:failed" || lower == "failed" {
+			return "Failed"
+		}
+	}
+	if strings.EqualFold(issue.State, "CLOSED") {
+		return "Done"
+	}
+	for _, l := range labels {
+		lower := strings.ToLower(l)
+		switch lower {
+		case "stage:blocked", "blocked", "stage:merging", "stage:awaiting-approval",
+			"awaiting-approval", "stage:create-pr", "stage:code-review",
+			"stage:coding", "stage:testing", "in-progress",
+			"stage:analysis", "stage:planning":
+			return "Active"
+		}
+	}
+	return "Backlog"
 }
 
 // SendDecision sends a user decision (approve/decline) to the worker processing the given issue.
