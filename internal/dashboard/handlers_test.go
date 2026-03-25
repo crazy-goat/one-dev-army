@@ -2179,7 +2179,7 @@ func TestBoardLayout_ValidHTMLStructure(t *testing.T) {
 		"board-header":  `class="board-header"`,
 		"board-actions": `class="board-actions"`,
 		"board grid":    `class="board"`,
-		"7 columns":     "grid-template-columns:repeat(8,1fr)",
+		"3 columns":     "grid-template-columns:15% 1fr 15%",
 	}
 
 	for name, pattern := range structureChecks {
@@ -2213,49 +2213,33 @@ func TestBoardLayout_StackedColumns(t *testing.T) {
 
 	body := rec.Body.String()
 
-	if !strings.Contains(body, `class="stacked-column"`) {
-		t.Error("board page missing stacked-column CSS class")
+	// Check for board-left and board-right containers (stacked side columns)
+	if !strings.Contains(body, `class="board-left"`) {
+		t.Error("board page missing board-left container")
 	}
 
-	if !strings.Contains(body, "stacked-column") {
-		t.Error("board page missing stacked column containers")
+	if !strings.Contains(body, `class="board-right"`) {
+		t.Error("board page missing board-right container")
 	}
 
-	if strings.Count(body, `class="stacked-column"`) != 2 {
-		t.Errorf("expected 2 stacked-column containers, got %d", strings.Count(body, `class="stacked-column"`))
-	}
-
-	if !strings.Contains(body, ".stacked-column{") {
-		t.Error("board page missing stacked-column CSS rule")
-	}
-
-	if !strings.Contains(body, ".stacked-column .column{") {
-		t.Error("board page missing stacked-column .column CSS rule")
-	}
-
-	// Verify stacked column height constraint
-	if !strings.Contains(body, "calc(100vh") {
-		t.Error("stacked-column missing viewport height constraint")
+	// Verify flex column layout for stacking
+	if !strings.Contains(body, "flex-direction:column") {
+		t.Error("board side columns missing flex-direction:column for stacking")
 	}
 
 	// Verify internal scrolling
 	if !strings.Contains(body, "overflow-y:auto") {
-		t.Error("stacked-column columns missing overflow-y:auto for internal scrolling")
-	}
-
-	// Verify sticky column titles
-	if !strings.Contains(body, "position:sticky") {
-		t.Error("stacked-column titles missing position:sticky")
+		t.Error("board columns missing overflow-y:auto for internal scrolling")
 	}
 
 	// Verify smooth scrolling
 	if !strings.Contains(body, "scroll-behavior:smooth") {
-		t.Error("stacked-column columns missing scroll-behavior:smooth")
+		t.Error("board columns missing scroll-behavior:smooth")
 	}
 
-	// Verify flex basis for 50/50 split
-	if !strings.Contains(body, "50%") {
-		t.Error("stacked-column columns missing 50% flex basis for equal height split")
+	// Verify 50% flex basis for equal height split
+	if !strings.Contains(body, "flex:1 1 50%") {
+		t.Error("board side column children missing 50% flex basis for equal height split")
 	}
 }
 
