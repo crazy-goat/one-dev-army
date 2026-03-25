@@ -3,7 +3,7 @@
 <style>
 .board-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;flex-wrap:wrap;gap:.5rem;flex-shrink:0}
 .board-actions{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
-@media (max-width:768px){.board-header{flex-direction:column;align-items:flex-start}.board-actions{width:100%;justify-content:flex-start}}
+@media (max-width:768px){.board-header{flex-direction:column;align-items:flex-start}.board-actions{width:100%;justify-content:flex-start}.processing-title{font-size:1rem}.processing-panel{min-height:150px}}
 .board{display:grid;grid-template-columns:15% 1fr 15%;gap:1rem;flex:1;min-height:0}
 .board-left{display:flex;flex-direction:column;gap:0.5rem;min-height:0}
 .board-left .column{flex:1 1 50%;min-height:0;overflow-y:auto;scroll-behavior:smooth}
@@ -51,13 +51,13 @@
 .processing-panel-idle{background:rgba(108,117,125,0.08);border-color:rgba(108,117,125,0.2)}
 .processing-panel-idle .processing-indicator{background:#6c757d;animation:none}
 .processing-idle-text{color:var(--muted);font-size:.85rem}
-.processing-panel-content{display:flex;align-items:center;gap:.75rem;width:100%;min-width:0}
+.processing-panel-content{display:flex;flex-direction:column;align-items:flex-start;gap:.5rem;width:100%;min-width:0}
 .processing-indicator{width:8px;height:8px;border-radius:50%;background:#3498db;flex-shrink:0;animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.processing-ticket{display:flex;align-items:center;gap:.4rem;text-decoration:none;color:var(--text);min-width:0;flex:1}
-.processing-id{color:var(--accent);font-weight:600;font-size:.85rem;flex-shrink:0}
-.processing-title{font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.processing-labels{display:flex;gap:.4rem;flex-shrink:0}
+.processing-ticket{display:flex;flex-direction:column;gap:.25rem;text-decoration:none;color:var(--text);min-width:0;width:100%}
+.processing-id{color:var(--muted);font-weight:500;font-size:.8rem}
+.processing-title{font-size:1.2rem;font-weight:600;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.processing-labels{display:flex;gap:.4rem;flex-shrink:0;margin-bottom:.25rem}
 .processing-badge{font-size:.7rem;padding:.15rem .5rem;border-radius:4px;background:var(--surface);border:1px solid var(--border);white-space:nowrap;text-transform:capitalize}
 .processing-priority-high{border-color:rgba(182,2,5,0.3);background:rgba(182,2,5,0.1)}
 .processing-priority-medium{border-color:rgba(251,202,4,0.3);background:rgba(251,202,4,0.1)}
@@ -369,10 +369,6 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
       <div class="processing-panel-content">
         <span class="processing-indicator"></span>
         {{if .CurrentTicket}}
-        <a href="/task/{{.CurrentTicket.Number}}" class="processing-ticket">
-          <span class="processing-id">#{{.CurrentTicket.Number}}</span>
-          <span class="processing-title">{{.CurrentTicket.Title}}</span>
-        </a>
         <div class="processing-labels">
           {{if .CurrentTicket.Priority}}
           <span class="processing-badge processing-priority-{{.CurrentTicket.Priority}}">
@@ -388,6 +384,10 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
           <span class="processing-badge">📏 {{.CurrentTicket.Size}}</span>
           {{end}}
         </div>
+        <a href="/task/{{.CurrentTicket.Number}}" class="processing-ticket">
+          <span class="processing-id">#{{.CurrentTicket.Number}}</span>
+          <span class="processing-title">{{.CurrentTicket.Title}}</span>
+        </a>
         {{else}}
         <span class="processing-idle-text">No active ticket &mdash; Worker ready</span>
         {{end}}

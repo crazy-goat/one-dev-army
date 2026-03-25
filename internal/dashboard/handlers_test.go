@@ -5498,6 +5498,59 @@ func TestBoardTemplate_ProcessingPanel_PartialLabels(t *testing.T) {
 	}
 }
 
+// TestBoardTemplate_ProcessingPanel_LayoutOrder tests that labels appear before ticket in the HTML structure
+func TestBoardTemplate_ProcessingPanel_LayoutOrder(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	data := boardData{
+		Active: "board",
+		CurrentTicket: &currentTicketInfo{
+			Number:   500,
+			Title:    "Layout Order Test Ticket",
+			Status:   "coding",
+			Priority: "high",
+			Type:     "feature",
+			Size:     "M",
+		},
+		Paused:     false,
+		Processing: true,
+	}
+
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify that processing-labels appears before processing-ticket in the HTML
+	labelsIdx := strings.Index(output, `class="processing-labels"`)
+	ticketIdx := strings.Index(output, `class="processing-ticket"`)
+
+	if labelsIdx == -1 {
+		t.Error("template should contain processing-labels element")
+	}
+
+	if ticketIdx == -1 {
+		t.Error("template should contain processing-ticket element")
+	}
+
+	if labelsIdx != -1 && ticketIdx != -1 && labelsIdx > ticketIdx {
+		t.Error("processing-labels should appear BEFORE processing-ticket in the HTML structure")
+	}
+
+	// Verify new CSS classes are present
+	if !strings.Contains(output, "flex-direction:column") {
+		t.Error("template should contain flex-direction:column CSS for vertical layout")
+	}
+}
+
 func TestHandleManualProcess(t *testing.T) {
 	orch := &mvp.Orchestrator{}
 	s := &Server{orchestrator: orch}
