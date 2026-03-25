@@ -23,9 +23,13 @@ ODA (One Dev Army) has a CLI command `oda issue create` that creates GitHub Issu
 ## Command Reference
 
 ```bash
+cat > /tmp/issue_body.md << 'EOF'
+Issue body text (markdown supported)
+EOF
+
 oda issue create \
   --title "Issue title" \
-  --text "Issue body text" \
+  --text "$(cat /tmp/issue_body.md)" \
   [--priority high|medium|low] \
   [--size S|M|L|XL] \
   [--type bug|feature] \
@@ -97,9 +101,17 @@ Wait for user confirmation before proceeding. If the user explicitly says "just 
 Execute the command from the ODA project directory (where `.oda/config.yaml` exists):
 
 ```bash
+cat > /tmp/issue_body.md << 'EOF'
+Body text here with full markdown support.
+
+## Acceptance Criteria
+- [ ] Criterion one
+- [ ] Criterion two
+EOF
+
 oda issue create \
   --title "Title here" \
-  --text "Body text here" \
+  --text "$(cat /tmp/issue_body.md)" \
   --priority medium \
   --size M \
   --type feature \
@@ -130,17 +142,40 @@ If the command fails, check:
 - The command requires `.oda/config.yaml` to exist in the working directory (it reads `github.repo` from it)
 - It shells out to `gh` CLI — the user must be authenticated with GitHub
 - Issues created via CLI do **not** automatically get a `stage:backlog` label — they enter the backlog by having no `stage:*` label
-- The `--text` flag value should be properly quoted — escape any quotes inside the body text
-- For multi-line body text, use `\n` for line breaks or pass the text in a single quoted string
+- Always write the issue body to a temp file (`/tmp/issue_body.md`) and pass it via `--text "$(cat /tmp/issue_body.md)"` — never pass body text inline
+
+## Best Practices — File-Based Body Text
+
+Always use a temporary file for the issue body text. Never pass body text inline with `--text`.
+
+**Why this is mandatory:**
+
+- **No escaping needed** — backticks, dollar signs, quotes, and special characters work as-is
+- **Full markdown support** — code blocks, headers, lists, and formatting are preserved exactly
+- **Easier to review** — you can inspect `/tmp/issue_body.md` before creating the ticket
+- **Prevents bash interpretation** — `$variables`, `$(commands)`, and backtick expressions inside the body are not evaluated
+
+**Pattern:**
+
+```bash
+cat > /tmp/issue_body.md << 'EOF'
+Your issue body here — any markdown, any special characters.
+EOF
+
+oda issue create \
+  --title "Title" \
+  --text "$(cat /tmp/issue_body.md)"
+```
+
+The single quotes around `'EOF'` are critical — they prevent bash from interpreting any content inside the heredoc.
 
 ## Example
 
 User: "Add a high-priority bug ticket to ODA for the dashboard WebSocket disconnecting after 5 minutes of inactivity"
 
 ```bash
-oda issue create \
-  --title "Dashboard WebSocket disconnects after 5 minutes of inactivity" \
-  --text "The dashboard WebSocket connection drops after approximately 5 minutes of user inactivity. This causes the real-time ticket status updates to stop, and the user sees stale data until they manually refresh the page.
+cat > /tmp/issue_body.md << 'EOF'
+The dashboard WebSocket connection drops after approximately 5 minutes of user inactivity. This causes the real-time ticket status updates to stop, and the user sees stale data until they manually refresh the page.
 
 ## Steps to Reproduce
 1. Open the ODA dashboard
@@ -154,7 +189,12 @@ WebSocket connection should remain alive indefinitely, using ping/pong keepalive
 - [ ] WebSocket connection stays alive during idle periods
 - [ ] Implement ping/pong keepalive mechanism
 - [ ] Add automatic reconnection with exponential backoff if connection drops
-- [ ] Add tests for keepalive and reconnection logic" \
+- [ ] Add tests for keepalive and reconnection logic
+EOF
+
+oda issue create \
+  --title "Dashboard WebSocket disconnects after 5 minutes of inactivity" \
+  --text "$(cat /tmp/issue_body.md)" \
   --priority high \
   --size M \
   --type bug \

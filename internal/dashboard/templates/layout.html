@@ -342,7 +342,6 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
         if (!panel) return;
         
         if (workerStatus.active && !workerStatus.paused && workerStatus.issueId) {
-            panel.className = 'processing-panel';
             panel.style.display = 'flex';
             panel.innerHTML = '<div class="processing-panel-content">' +
                 '<span class="processing-indicator"></span>' +
@@ -354,12 +353,8 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
                 (workerStatus.step ? '<span class="processing-badge">' + workerStatus.step + '</span>' : '') +
                 '</div></div>';
         } else {
-            panel.className = 'processing-panel idle';
-            panel.style.display = 'flex';
-            panel.innerHTML = '<div class="processing-panel-content">' +
-                '<span class="processing-indicator"></span>' +
-                '<span class="processing-idle-text">No active ticket</span>' +
-                '</div>';
+            panel.style.display = 'none';
+            panel.innerHTML = '';
         }
     }
     
