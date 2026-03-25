@@ -494,7 +494,7 @@ func (w *Worker) implement(ctx context.Context, task *Task, planStr string) erro
 	if testCmd == "" {
 		testCmd = "go test ./..."
 	}
-	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPImplementation), task.Issue.Number, task.Issue.Title, planStr, task.Worktree, testCmd)
+	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPImplementation), task.Issue.Number, task.Issue.Title, planStr, task.Worktree, testCmd, task.Issue.Number, task.Issue.Number, task.Issue.Number)
 
 	// Use router to select model for code category with complexity detection
 	llmModel := w.cfg.Load().LLM.Code.Model
