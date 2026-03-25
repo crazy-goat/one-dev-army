@@ -462,8 +462,8 @@ func TestTechnicalPlanningPromptFormat(t *testing.T) {
 func TestImplementationPromptFormat(t *testing.T) {
 	promptTemplate := prompts.MustGet(prompts.MVPImplementation)
 
-	// Verify the prompt template can be formatted with 8 arguments
-	formatted := fmt.Sprintf(promptTemplate, 456, "Test Implementation", "Test Plan", "/tmp/work", "go test ./...", 456, 456, 456)
+	// Verify the prompt template can be formatted with 10 arguments (added pipeline-fail.log placeholders)
+	formatted := fmt.Sprintf(promptTemplate, 456, "Test Implementation", "Test Plan", "/tmp/work", "go test ./...", 456, 456, 456, 456, 456)
 
 	// Verify the formatted prompt contains the planning artifact path
 	expectedPlanningPath := ".oda/artifacts/456/01-planning.md"
@@ -475,6 +475,12 @@ func TestImplementationPromptFormat(t *testing.T) {
 	expectedCodingPath := ".oda/artifacts/456/02-coding.md"
 	if !strings.Contains(formatted, expectedCodingPath) {
 		t.Errorf("formatted prompt does not contain expected coding artifact path %q", expectedCodingPath)
+	}
+
+	// Verify the formatted prompt contains the pipeline failure log path
+	expectedPipelineFailPath := ".oda/artifacts/456/pipeline-fail.log"
+	if !strings.Contains(formatted, expectedPipelineFailPath) {
+		t.Errorf("formatted prompt does not contain expected pipeline-fail.log path %q", expectedPipelineFailPath)
 	}
 
 	// Verify all format specifiers were replaced (no %! patterns indicating missing args)
@@ -491,5 +497,46 @@ func TestImplementationPromptFormat(t *testing.T) {
 	}
 	if !strings.Contains(formatted, "CRITICAL: Save coding notes to the artifact file") {
 		t.Error("formatted prompt does not contain artifact save instruction")
+	}
+	if !strings.Contains(formatted, "PIPELINE FAILURE") {
+		t.Error("formatted prompt does not contain pipeline failure check section")
+	}
+	if !strings.Contains(formatted, "CHECK FOR PIPELINE FAILURE LOGS") {
+		t.Error("formatted prompt does not contain 'CHECK FOR PIPELINE FAILURE LOGS' step")
+	}
+}
+
+func TestCodeReviewPromptFormat(t *testing.T) {
+	promptTemplate := prompts.MustGet(prompts.MVPCodeReview)
+
+	// Verify the prompt template can be formatted with 5 arguments (added pipeline-fail.log placeholder)
+	formatted := fmt.Sprintf(promptTemplate, 789, "Test Review", "https://github.com/org/repo/pull/42", "org/repo", 789)
+
+	// Verify the formatted prompt contains the pipeline failure log path
+	expectedPipelineFailPath := ".oda/artifacts/789/pipeline-fail.log"
+	if !strings.Contains(formatted, expectedPipelineFailPath) {
+		t.Errorf("formatted prompt does not contain expected pipeline-fail.log path %q", expectedPipelineFailPath)
+	}
+
+	// Verify all format specifiers were replaced (no %! patterns indicating missing args)
+	if strings.Contains(formatted, "%!") {
+		t.Errorf("formatted prompt contains unreplaced format specifiers: %s", formatted)
+	}
+
+	// Verify the prompt contains key sections
+	if !strings.Contains(formatted, "PIPELINE FAILURE") {
+		t.Error("formatted prompt does not contain pipeline failure check section")
+	}
+
+	if !strings.Contains(formatted, "Pipeline failures resolved") {
+		t.Error("formatted prompt does not contain 'Pipeline failures resolved' criterion")
+	}
+
+	if !strings.Contains(formatted, "REVIEW PROCESS") {
+		t.Error("formatted prompt does not contain 'REVIEW PROCESS' section")
+	}
+
+	if !strings.Contains(formatted, "REVIEW CRITERIA") {
+		t.Error("formatted prompt does not contain 'REVIEW CRITERIA' section")
 	}
 }

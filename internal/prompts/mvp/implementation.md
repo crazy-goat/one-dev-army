@@ -13,7 +13,23 @@ Save your coding notes, decisions, and progress to: .oda/artifacts/%d/02-coding.
 
 CRITICAL: Save coding notes to the artifact file using file write tools BEFORE returning your response.
 
+PIPELINE FAILURE RECOVERY:
+Check if the file .oda/artifacts/%d/pipeline-fail.log exists.
+If the file exists:
+- CRITICAL: Read the pipeline failure logs from this file
+- CRITICAL: Fix ALL errors described in the logs BEFORE proceeding with any other work
+- The pipeline previously failed — your primary goal is to fix those failures
+If the file does not exist, proceed normally with the implementation plan.
+
 STEP-BY-STEP WORKFLOW:
+
+0. CHECK FOR PIPELINE FAILURE LOGS
+   - Check if .oda/artifacts/%d/pipeline-fail.log exists
+   - If the file exists:
+     - CRITICAL: Read the pipeline failure logs from this file
+     - CRITICAL: Fix ALL errors described in the logs BEFORE proceeding
+     - The pipeline previously failed — your primary goal is to fix those failures
+   - If the file does not exist, skip this step
 
 1. READ AGENTS.md FIRST
    - Read the AGENTS.md file in the working directory for project-specific rules
