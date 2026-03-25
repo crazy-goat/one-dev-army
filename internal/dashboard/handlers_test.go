@@ -2179,7 +2179,7 @@ func TestBoardLayout_ValidHTMLStructure(t *testing.T) {
 		"board-header":  `class="board-header"`,
 		"board-actions": `class="board-actions"`,
 		"board grid":    `class="board"`,
-		"7 columns":     "grid-template-columns:repeat(8,1fr)",
+		"6 columns":     "grid-template-columns:repeat(6,1fr)",
 	}
 
 	for name, pattern := range structureChecks {
@@ -5925,5 +5925,85 @@ func TestHandleLogStream_SSEHeaders(t *testing.T) {
 	}
 	if rec.Header().Get("Connection") != "keep-alive" {
 		t.Errorf("expected Connection=keep-alive, got %s", rec.Header().Get("Connection"))
+	}
+}
+
+// TestBoardTemplate_CSSLayout verifies the CSS layout properties for board columns and processing panel
+func TestBoardTemplate_CSSLayout(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Create minimal test data
+	data := boardData{
+		Active: "board",
+		Paused: true,
+	}
+
+	// Execute the content template
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify board-center-columns has flex:1 1 auto (not flex:0 0 auto)
+	if strings.Contains(output, ".board-center-columns{") {
+		// Extract the CSS rule for board-center-columns
+		if !strings.Contains(output, "flex:1 1 auto") {
+			t.Error("board-center-columns should have flex:1 1 auto to fill available space")
+		}
+		// Verify it does NOT have flex:0 0 auto
+		if strings.Contains(output, ".board-center-columns{display:grid;grid-template-columns:repeat(6,1fr);gap:1rem;flex:0 0 auto") {
+			t.Error("board-center-columns should NOT have flex:0 0 auto")
+		}
+	} else {
+		t.Error("board-center-columns CSS rule not found")
+	}
+
+	// Verify board-center-columns does NOT have fixed height:180px
+	if strings.Contains(output, "height:180px") {
+		t.Error("board-center-columns should NOT have fixed height:180px")
+	}
+
+	// Verify grid uses repeat(6,1fr) not repeat(8,1fr)
+	if strings.Contains(output, "repeat(8,1fr)") {
+		t.Error("board-center-columns should use repeat(6,1fr) not repeat(8,1fr)")
+	}
+	if !strings.Contains(output, "repeat(6,1fr)") {
+		t.Error("board-center-columns should use repeat(6,1fr) for 6 pipeline columns")
+	}
+
+	// Verify processing-panel has flex:0 0 auto (not flex:1)
+	if strings.Contains(output, ".processing-panel{") {
+		if !strings.Contains(output, "flex:0 0 auto") {
+			t.Error("processing-panel should have flex:0 0 auto to prevent growing")
+		}
+		// Verify it does NOT have flex:1
+		if strings.Contains(output, ".processing-panel{background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.2);border-radius:8px;padding:.5rem 1rem;display:flex;align-items:center;flex:1") {
+			t.Error("processing-panel should NOT have flex:1")
+		}
+	} else {
+		t.Error("processing-panel CSS rule not found")
+	}
+
+	// Verify processing-panel has max-height:250px
+	if !strings.Contains(output, "max-height:250px") {
+		t.Error("processing-panel should have max-height:250px to cap its height")
+	}
+
+	// Verify processing-panel has min-height:150px (not 200px)
+	if strings.Contains(output, "min-height:200px") {
+		t.Error("processing-panel should have min-height:150px not 200px")
+	}
+
+	// Verify mobile media query has correct constraints
+	if !strings.Contains(output, "min-height:120px;max-height:200px") {
+		t.Error("mobile media query should set processing-panel min-height:120px and max-height:200px")
 	}
 }
