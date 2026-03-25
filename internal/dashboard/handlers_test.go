@@ -5046,3 +5046,120 @@ func TestBoardTemplate_LabelIcons(t *testing.T) {
 		t.Error("template should contain tooltip for priority high label")
 	}
 }
+
+// TestHandleBoard_SprintNameInHeader verifies that when SprintName is set, it appears in the h1 header
+func TestHandleBoard_SprintNameInHeader(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Test with SprintName set
+	data := boardData{
+		Active:     "board",
+		SprintName: "Sprint 2026-03-25 07:54",
+		Paused:     true,
+		Processing: false,
+	}
+
+	// Execute the content template
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify the h1 contains the sprint name
+	if !strings.Contains(output, "<h1>Sprint 2026-03-25 07:54</h1>") {
+		t.Errorf("expected h1 to contain sprint name 'Sprint 2026-03-25 07:54', got: %s", output)
+	}
+
+	// Verify the old subtitle p element is NOT present
+	if strings.Contains(output, `<p style="color:var(--muted);font-size:.9rem;margin-top:.25rem">`) {
+		t.Error("old subtitle p element should NOT be present when SprintName is set")
+	}
+
+	// Verify "Sprint Board" fallback is NOT present when SprintName is set
+	if strings.Contains(output, "<h1>Sprint Board</h1>") {
+		t.Error("fallback 'Sprint Board' should NOT appear in h1 when SprintName is set")
+	}
+}
+
+// TestHandleBoard_SprintNameFallback verifies that when SprintName is empty, "Sprint Board" appears as fallback
+func TestHandleBoard_SprintNameFallback(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Test with SprintName empty (no active sprint)
+	data := boardData{
+		Active:     "board",
+		SprintName: "", // Empty - should use fallback
+		Paused:     true,
+		Processing: false,
+	}
+
+	// Execute the content template
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify the h1 contains the fallback "Sprint Board"
+	if !strings.Contains(output, "<h1>Sprint Board</h1>") {
+		t.Errorf("expected h1 to contain fallback 'Sprint Board' when SprintName is empty, got: %s", output)
+	}
+
+	// Verify the old subtitle p element is NOT present (it was removed entirely)
+	if strings.Contains(output, `<p style="color:var(--muted);font-size:.9rem;margin-top:.25rem">`) {
+		t.Error("old subtitle p element should NOT be present (removed from template)")
+	}
+}
+
+// TestHandleBoard_NoSubtitleParagraph verifies the subtitle paragraph element is completely removed
+func TestHandleBoard_NoSubtitleParagraph(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Test with SprintName set
+	data := boardData{
+		Active:     "board",
+		SprintName: "Test Sprint Name",
+		Paused:     true,
+		Processing: false,
+	}
+
+	// Execute the content template
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify no p element exists inside board-header div
+	// The old pattern was: <p style="color:var(--muted);font-size:.9rem;margin-top:.25rem">{{.SprintName}}</p>
+	if strings.Contains(output, `font-size:.9rem`) {
+		t.Error("subtitle paragraph with font-size:.9rem should NOT be present")
+	}
+
+	// Verify no p element with SprintName content
+	if strings.Contains(output, "Test Sprint Name</p>") {
+		t.Error("SprintName should NOT appear inside a p element")
+	}
+}

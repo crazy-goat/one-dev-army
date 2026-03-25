@@ -45,8 +45,7 @@
 
 <div class="board-header">
   <div>
-    <h1>Sprint Board</h1>
-    {{if .SprintName}}<p style="color:var(--muted);font-size:.9rem;margin-top:.25rem">{{.SprintName}}</p>{{end}}
+    <h1>{{if .SprintName}}{{.SprintName}}{{else}}Sprint Board{{end}}</h1>
   </div>
   <div class="board-actions">
     {{if .Paused}}
