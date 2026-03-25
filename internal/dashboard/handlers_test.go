@@ -5096,3 +5096,388 @@ func TestHandleBoard_NoSubtitleParagraph(t *testing.T) {
 		t.Error("SprintName should NOT appear inside a p element")
 	}
 }
+
+// TestBoardTemplate_ProcessingPanel_Visible tests that the processing panel is visible when CurrentTicket is set
+func TestBoardTemplate_ProcessingPanel_Visible(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Create test data with CurrentTicket populated
+	data := boardData{
+		Active: "board",
+		CurrentTicket: &currentTicketInfo{
+			Number:   789,
+			Title:    "Processing Ticket Title",
+			Status:   "coding",
+			Priority: "high",
+			Type:     "feature",
+			Size:     "L",
+		},
+		Paused:     false,
+		Processing: true,
+	}
+
+	// Execute the content template
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify processing panel is present
+	if !strings.Contains(output, `id="processing-panel"`) {
+		t.Error("template should contain processing-panel element")
+	}
+
+	// Verify panel is visible (not display:none)
+	if strings.Contains(output, `id="processing-panel" style="display:none"`) {
+		t.Error("processing panel should be visible when CurrentTicket is set")
+	}
+
+	// Verify ticket number is displayed
+	if !strings.Contains(output, "#789") {
+		t.Error("template should display ticket number #789")
+	}
+
+	// Verify ticket title is displayed
+	if !strings.Contains(output, "Processing Ticket Title") {
+		t.Error("template should display ticket title")
+	}
+
+	// Verify priority badge is present
+	if !strings.Contains(output, `processing-priority-high`) {
+		t.Error("template should contain high priority badge class")
+	}
+
+	// Verify type badge is present
+	if !strings.Contains(output, "✨ Feature") {
+		t.Error("template should contain feature type badge")
+	}
+
+	// Verify size badge is present
+	if !strings.Contains(output, "📏 L") {
+		t.Error("template should contain size L badge")
+	}
+
+	// Verify link to task detail page
+	if !strings.Contains(output, `href="/task/789"`) {
+		t.Error("template should contain link to task detail page")
+	}
+}
+
+// TestBoardTemplate_ProcessingPanel_Hidden tests that the processing panel is hidden when CurrentTicket is nil
+func TestBoardTemplate_ProcessingPanel_Hidden(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Create test data with CurrentTicket nil
+	data := boardData{
+		Active:        "board",
+		CurrentTicket: nil,
+		Paused:        true,
+		Processing:    false,
+	}
+
+	// Execute the content template
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify processing panel is present but hidden
+	if !strings.Contains(output, `id="processing-panel"`) {
+		t.Error("template should contain processing-panel element")
+	}
+
+	// Verify panel has display:none style
+	if !strings.Contains(output, `id="processing-panel" style="display:none"`) {
+		t.Error("processing panel should be hidden (display:none) when CurrentTicket is nil")
+	}
+}
+
+// TestBoardTemplate_ProcessingPanel_LongTitle tests that long titles are handled gracefully
+func TestBoardTemplate_ProcessingPanel_LongTitle(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Create test data with a very long title
+	longTitle := strings.Repeat("A", 200)
+	data := boardData{
+		Active: "board",
+		CurrentTicket: &currentTicketInfo{
+			Number:   999,
+			Title:    longTitle,
+			Status:   "coding",
+			Priority: "low",
+			Type:     "bug",
+			Size:     "XL",
+		},
+		Paused:     false,
+		Processing: true,
+	}
+
+	// Execute the content template
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify the long title is rendered (CSS handles truncation)
+	if !strings.Contains(output, longTitle) {
+		t.Error("template should render long title (CSS handles truncation)")
+	}
+
+	// Verify processing panel is still visible
+	if strings.Contains(output, `id="processing-panel" style="display:none"`) {
+		t.Error("processing panel should be visible even with long title")
+	}
+}
+
+// TestBoardTemplate_ProcessingPanel_PriorityVariations tests priority badge variations
+func TestBoardTemplate_ProcessingPanel_PriorityVariations(t *testing.T) {
+	tests := []struct {
+		name          string
+		priority      string
+		expectedEmoji string
+		expectedClass string
+	}{
+		{
+			name:          "high priority",
+			priority:      "high",
+			expectedEmoji: "🔴",
+			expectedClass: "processing-priority-high",
+		},
+		{
+			name:          "medium priority",
+			priority:      "medium",
+			expectedEmoji: "🟡",
+			expectedClass: "processing-priority-medium",
+		},
+		{
+			name:          "low priority",
+			priority:      "low",
+			expectedEmoji: "🟢",
+			expectedClass: "processing-priority-low",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := createTestServerWithTemplates(t)
+			defer srv.wizardStore.Stop()
+
+			data := boardData{
+				Active: "board",
+				CurrentTicket: &currentTicketInfo{
+					Number:   100,
+					Title:    "Test Ticket",
+					Status:   "coding",
+					Priority: tt.priority,
+					Type:     "feature",
+					Size:     "M",
+				},
+				Paused:     false,
+				Processing: true,
+			}
+
+			tmpl := srv.tmpls["board.html"]
+			if tmpl == nil {
+				t.Fatal("board.html template not found")
+			}
+
+			var buf strings.Builder
+			if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+				t.Fatalf("failed to execute template: %v", err)
+			}
+
+			output := buf.String()
+
+			// Verify priority emoji is present
+			if !strings.Contains(output, tt.expectedEmoji) {
+				t.Errorf("template should contain %s emoji for %s priority", tt.expectedEmoji, tt.priority)
+			}
+
+			// Verify priority class is present
+			if !strings.Contains(output, tt.expectedClass) {
+				t.Errorf("template should contain %s class for %s priority", tt.expectedClass, tt.priority)
+			}
+		})
+	}
+}
+
+// TestBoardTemplate_ProcessingPanel_TypeVariations tests type badge variations
+func TestBoardTemplate_ProcessingPanel_TypeVariations(t *testing.T) {
+	tests := []struct {
+		name          string
+		issueType     string
+		expectedBadge string
+	}{
+		{
+			name:          "bug type",
+			issueType:     "bug",
+			expectedBadge: "🐛 Bug",
+		},
+		{
+			name:          "feature type",
+			issueType:     "feature",
+			expectedBadge: "✨ Feature",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := createTestServerWithTemplates(t)
+			defer srv.wizardStore.Stop()
+
+			data := boardData{
+				Active: "board",
+				CurrentTicket: &currentTicketInfo{
+					Number:   200,
+					Title:    "Test Ticket",
+					Status:   "coding",
+					Priority: "medium",
+					Type:     tt.issueType,
+					Size:     "S",
+				},
+				Paused:     false,
+				Processing: true,
+			}
+
+			tmpl := srv.tmpls["board.html"]
+			if tmpl == nil {
+				t.Fatal("board.html template not found")
+			}
+
+			var buf strings.Builder
+			if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+				t.Fatalf("failed to execute template: %v", err)
+			}
+
+			output := buf.String()
+
+			// Verify type badge is present
+			if !strings.Contains(output, tt.expectedBadge) {
+				t.Errorf("template should contain %q badge for %s type", tt.expectedBadge, tt.issueType)
+			}
+		})
+	}
+}
+
+// TestBoardTemplate_ProcessingPanel_SizeVariations tests size badge variations
+func TestBoardTemplate_ProcessingPanel_SizeVariations(t *testing.T) {
+	tests := []struct {
+		name          string
+		size          string
+		expectedBadge string
+	}{
+		{"size S", "S", "📏 S"},
+		{"size M", "M", "📏 M"},
+		{"size L", "L", "📏 L"},
+		{"size XL", "XL", "📏 XL"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := createTestServerWithTemplates(t)
+			defer srv.wizardStore.Stop()
+
+			data := boardData{
+				Active: "board",
+				CurrentTicket: &currentTicketInfo{
+					Number:   300,
+					Title:    "Test Ticket",
+					Status:   "coding",
+					Priority: "low",
+					Type:     "feature",
+					Size:     tt.size,
+				},
+				Paused:     false,
+				Processing: true,
+			}
+
+			tmpl := srv.tmpls["board.html"]
+			if tmpl == nil {
+				t.Fatal("board.html template not found")
+			}
+
+			var buf strings.Builder
+			if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+				t.Fatalf("failed to execute template: %v", err)
+			}
+
+			output := buf.String()
+
+			// Verify size badge is present
+			if !strings.Contains(output, tt.expectedBadge) {
+				t.Errorf("template should contain %q badge", tt.expectedBadge)
+			}
+		})
+	}
+}
+
+// TestBoardTemplate_ProcessingPanel_PartialLabels tests panel with partial label data
+func TestBoardTemplate_ProcessingPanel_PartialLabels(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Create test data with only priority (no type or size)
+	data := boardData{
+		Active: "board",
+		CurrentTicket: &currentTicketInfo{
+			Number:   400,
+			Title:    "Partial Labels Ticket",
+			Status:   "coding",
+			Priority: "high",
+			Type:     "", // No type
+			Size:     "", // No size
+		},
+		Paused:     false,
+		Processing: true,
+	}
+
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify priority badge is present
+	if !strings.Contains(output, `processing-priority-high`) {
+		t.Error("template should contain high priority badge")
+	}
+
+	// Verify type and size badges are NOT present (empty values)
+	if strings.Contains(output, "🐛 Bug") || strings.Contains(output, "✨ Feature") {
+		t.Error("template should NOT contain type badge when Type is empty")
+	}
+
+	if strings.Contains(output, "📏") {
+		t.Error("template should NOT contain size badge when Size is empty")
+	}
+}

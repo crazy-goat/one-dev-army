@@ -337,6 +337,27 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
         }
     }
     
+    function updateProcessingPanel() {
+        var panel = document.getElementById('processing-panel');
+        if (!panel) return;
+        
+        if (workerStatus.active && !workerStatus.paused && workerStatus.issueId) {
+            panel.style.display = 'flex';
+            panel.innerHTML = '<div class="processing-panel-content">' +
+                '<span class="processing-indicator"></span>' +
+                '<a href="/task/' + workerStatus.issueId + '" class="processing-ticket">' +
+                '<span class="processing-id">#' + workerStatus.issueId + '</span>' +
+                '<span class="processing-title">' + (workerStatus.issueTitle || '') + '</span>' +
+                '</a>' +
+                '<div class="processing-labels">' +
+                (workerStatus.step ? '<span class="processing-badge">' + workerStatus.step + '</span>' : '') +
+                '</div></div>';
+        } else {
+            panel.style.display = 'none';
+            panel.innerHTML = '';
+        }
+    }
+    
     function handleWorkerUpdate(data) {
         workerStatus.active = data.active || false;
         workerStatus.paused = data.paused || false;
@@ -354,6 +375,7 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
         }
         
         updateWorkerStatusUI();
+        updateProcessingPanel();
     }
     
     function fetchWorkerStatus() {
@@ -368,6 +390,8 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
         fetchWorkerStatus();
         // Update elapsed time display every second
         setInterval(updateWorkerStatusUI, 1000);
+        // Also update processing panel on load
+        setTimeout(updateProcessingPanel, 100);
     });
     
     // Expose for global access

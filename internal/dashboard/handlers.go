@@ -36,6 +36,15 @@ type taskCard struct {
 	IsMerged bool
 }
 
+type currentTicketInfo struct {
+	Number   int
+	Title    string
+	Status   string
+	Priority string
+	Type     string
+	Size     string
+}
+
 type boardData struct {
 	Active         string
 	OpenCodePort   int
@@ -44,7 +53,7 @@ type boardData struct {
 	Paused         bool
 	Processing     bool
 	CanCloseSprint bool
-	CurrentIssue   string
+	CurrentTicket  *currentTicketInfo
 	YoloMode       bool
 	Blocked        []taskCard
 	Backlog        []taskCard
@@ -99,7 +108,24 @@ func (s *Server) buildBoardData(_ *http.Request) boardData {
 		data.Paused = s.orchestrator.IsPaused()
 		data.Processing = s.orchestrator.IsProcessing()
 		if task := s.orchestrator.CurrentTask(); task != nil {
-			data.CurrentIssue = fmt.Sprintf("#%d: %s (%s)", task.Issue.Number, task.Issue.Title, task.Status)
+			info := &currentTicketInfo{
+				Number: task.Issue.Number,
+				Title:  task.Issue.Title,
+				Status: string(task.Status),
+			}
+			for _, label := range task.Issue.Labels {
+				switch {
+				case strings.HasPrefix(label.Name, "priority:"):
+					info.Priority = strings.TrimPrefix(label.Name, "priority:")
+				case label.Name == "bug" || label.Name == "type:bug":
+					info.Type = "bug"
+				case label.Name == "feature" || label.Name == "type:feature" || label.Name == "enhancement":
+					info.Type = "feature"
+				case strings.HasPrefix(label.Name, "size:"):
+					info.Size = strings.TrimPrefix(label.Name, "size:")
+				}
+			}
+			data.CurrentTicket = info
 		}
 	}
 
