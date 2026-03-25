@@ -40,6 +40,10 @@ func (s *Setup) CheckAndGenerate() error {
 		return fmt.Errorf("GitHub Actions check: %w", err)
 	}
 
+	if err := s.checkGitignore(); err != nil {
+		return fmt.Errorf(".gitignore check: %w", err)
+	}
+
 	return nil
 }
 
@@ -136,6 +140,51 @@ func (s *Setup) checkGitHubActions() error {
 	}
 
 	fmt.Println("CI workflow created at .github/workflows/ci.yml")
+	return nil
+}
+
+func (s *Setup) checkGitignore() error {
+	path := filepath.Join(s.projectDir, ".gitignore")
+	entry := ".oda/artifacts/"
+
+	// Check if .gitignore exists and contains the entry
+	if fileExists(path) {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("reading .gitignore: %w", err)
+		}
+
+		// Check if entry already exists (handle both with and without trailing slash)
+		contentStr := string(content)
+		if strings.Contains(contentStr, entry) || strings.Contains(contentStr, ".oda/artifacts") {
+			return nil
+		}
+
+		// Entry not found, append it
+		fmt.Println("Adding .oda/artifacts/ to .gitignore...")
+
+		// Ensure there's a newline before appending
+		if !strings.HasSuffix(contentStr, "\n") {
+			content = append(content, '\n')
+		}
+
+		content = append(content, []byte(entry+"\n")...)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			return fmt.Errorf("writing .gitignore: %w", err)
+		}
+
+		fmt.Println(".gitignore updated.")
+		return nil
+	}
+
+	// .gitignore doesn't exist, create it
+	fmt.Println("Creating .gitignore with .oda/artifacts/ entry...")
+
+	if err := os.WriteFile(path, []byte(entry+"\n"), 0o644); err != nil {
+		return fmt.Errorf("creating .gitignore: %w", err)
+	}
+
+	fmt.Println(".gitignore created.")
 	return nil
 }
 
