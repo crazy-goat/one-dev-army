@@ -5,31 +5,33 @@ package pipeline
 type Stage string
 
 const (
-	StageQueued     Stage = "queued"
-	StageAnalysis   Stage = "analysis"
-	StageCoding     Stage = "coding"
-	StageCodeReview Stage = "code-review"
-	StageCreatePR   Stage = "create-pr"
-	StageApprove    Stage = "awaiting-approval"
-	StageMerging    Stage = "merging"
-	StageDone       Stage = "done"
-	StageFailed     Stage = "failed"
-	StageBlocked    Stage = "blocked"
+	StageQueued        Stage = "queued"
+	StageAnalysis      Stage = "analysis"
+	StageCoding        Stage = "coding"
+	StageCodeReview    Stage = "code-review"
+	StageCreatePR      Stage = "create-pr"
+	StageCheckPipeline Stage = "check-pipeline"
+	StageApprove       Stage = "awaiting-approval"
+	StageMerging       Stage = "merging"
+	StageDone          Stage = "done"
+	StageFailed        Stage = "failed"
+	StageBlocked       Stage = "blocked"
 )
 
 // Column represents a dashboard column.
 type Column string
 
 const (
-	ColumnBacklog  Column = "Backlog"
-	ColumnPlan     Column = "Plan"
-	ColumnCode     Column = "Code"
-	ColumnAIReview Column = "AI Review"
-	ColumnApprove  Column = "Approve"
-	ColumnMerge    Column = "Merge"
-	ColumnDone     Column = "Done"
-	ColumnFailed   Column = "Failed"
-	ColumnBlocked  Column = "Blocked"
+	ColumnBacklog       Column = "Backlog"
+	ColumnPlan          Column = "Plan"
+	ColumnCode          Column = "Code"
+	ColumnAIReview      Column = "AI Review"
+	ColumnCheckPipeline Column = "Check Pipeline"
+	ColumnApprove       Column = "Approve"
+	ColumnMerge         Column = "Merge"
+	ColumnDone          Column = "Done"
+	ColumnFailed        Column = "Failed"
+	ColumnBlocked       Column = "Blocked"
 )
 
 var stageOrder = []Stage{
@@ -38,6 +40,7 @@ var stageOrder = []Stage{
 	StageCoding,
 	StageCodeReview,
 	StageCreatePR,
+	StageCheckPipeline,
 	StageApprove,
 	StageMerging,
 	StageDone,
@@ -54,6 +57,8 @@ func (s Stage) Column() Column {
 		return ColumnCode
 	case StageCodeReview, StageCreatePR:
 		return ColumnAIReview
+	case StageCheckPipeline:
+		return ColumnCheckPipeline
 	case StageApprove:
 		return ColumnApprove
 	case StageMerging:
@@ -81,6 +86,8 @@ func (s Stage) Label() string {
 		return "stage:code-review"
 	case StageCreatePR:
 		return "stage:create-pr"
+	case StageCheckPipeline:
+		return "stage:check-pipeline"
 	case StageApprove:
 		return "stage:awaiting-approval"
 	case StageMerging:
@@ -108,7 +115,7 @@ func (s Stage) Next() Stage {
 // Per state machine: all retries go back to Code.
 func (s Stage) RetryTarget() Stage {
 	switch s {
-	case StageCodeReview, StageCreatePR, StageMerging:
+	case StageCodeReview, StageCreatePR, StageCheckPipeline, StageMerging:
 		return StageCoding
 	default:
 		return s

@@ -14,26 +14,28 @@ import (
 type Stage string
 
 const (
-	StageBacklog   Stage = "stage:backlog"
-	StagePlan      Stage = "stage:analysis"
-	StageCode      Stage = "stage:coding"
-	StageReview    Stage = "stage:code-review"
-	StageCreatePR  Stage = "stage:create-pr"
-	StageApprove   Stage = "stage:awaiting-approval"
-	StageMerge     Stage = "stage:merging"
-	StageDone      Stage = "stage:done"
-	StageFailed    Stage = "stage:failed"
-	StageBlocked   Stage = "stage:blocked"
-	StageNeedsUser Stage = "stage:needs-user"
+	StageBacklog       Stage = "stage:backlog"
+	StagePlan          Stage = "stage:analysis"
+	StageCode          Stage = "stage:coding"
+	StageReview        Stage = "stage:code-review"
+	StageCreatePR      Stage = "stage:create-pr"
+	StageCheckPipeline Stage = "stage:check-pipeline"
+	StageApprove       Stage = "stage:awaiting-approval"
+	StageMerge         Stage = "stage:merging"
+	StageDone          Stage = "stage:done"
+	StageFailed        Stage = "stage:failed"
+	StageBlocked       Stage = "stage:blocked"
+	StageNeedsUser     Stage = "stage:needs-user"
 
 	// Column names for dashboard
-	ColumnBacklog  = "Backlog"
-	ColumnPlan     = "Plan"
-	ColumnCode     = "Code"
-	ColumnAIReview = "AI Review"
-	ColumnApprove  = "Approve"
-	ColumnMerge    = "Merge"
-	ColumnDone     = "Done"
+	ColumnBacklog       = "Backlog"
+	ColumnPlan          = "Plan"
+	ColumnCode          = "Code"
+	ColumnAIReview      = "AI Review"
+	ColumnCheckPipeline = "Check Pipeline"
+	ColumnApprove       = "Approve"
+	ColumnMerge         = "Merge"
+	ColumnDone          = "Done"
 )
 
 // AllStages lists every valid Stage value.
@@ -43,6 +45,7 @@ var AllStages = []Stage{
 	StageCode,
 	StageReview,
 	StageCreatePR,
+	StageCheckPipeline,
 	StageApprove,
 	StageMerge,
 	StageDone,
@@ -67,6 +70,8 @@ func (s Stage) Column() string {
 		return ColumnCode
 	case StageReview, StageCreatePR:
 		return ColumnAIReview
+	case StageCheckPipeline:
+		return ColumnCheckPipeline
 	case StageApprove:
 		return ColumnApprove
 	case StageMerge:
@@ -128,6 +133,7 @@ var RequiredLabels = []Label{
 	{Name: "stage:coding", Color: "1D76DB"},
 	{Name: "stage:code-review", Color: "1D76DB"},
 	{Name: "stage:create-pr", Color: "1D76DB"},
+	{Name: "stage:check-pipeline", Color: "1D76DB"},
 	{Name: "stage:awaiting-approval", Color: "0E8A16"},
 	{Name: "stage:merging", Color: "0E8A16"},
 	{Name: "stage:done", Color: "0E8A16"},

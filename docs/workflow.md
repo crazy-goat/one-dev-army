@@ -30,12 +30,13 @@ flowchart TD
     Fix --> Review
     Approved -->|Yes| CreatePR[Step 5: Create PR<br/>Push & Open PR]
     
-    CreatePR --> Success{Success?}
-    Success -->|Yes| Label2[Add Label:<br/>awaiting-approval]
+    CreatePR --> CheckPipeline[Step 6: Check Pipeline<br/>Run lint, tests, typecheck]
+    CheckPipeline --> ChecksPass{Checks Pass?}
+    ChecksPass -->|Yes| Label2[Add Label:<br/>awaiting-approval]
     Label2 --> Column2[Move to Column:<br/>Approve]
     Column2 --> Manual[Await Manual<br/>Approval]
     
-    Success -->|No| Label3[Add Label:<br/>failed]
+    ChecksPass -->|No| Label3[Add Label:<br/>failed]
     Label3 --> Column3[Move to Column:<br/>Blocked]
     Column3 --> Error[Log Error<br/>Wait for User]
     
@@ -61,8 +62,12 @@ stateDiagram-v2
     Reviewing --> CreatingPR: Code approved
     Reviewing --> Coding: Issues found (retry)
     
-    CreatingPR --> Done: PR created
-    CreatingPR --> Failed: Error creating PR
+    CreatingPR --> CheckingPipeline: PR created
+    CheckingPipeline --> AwaitingApproval: All checks pass
+    CheckingPipeline --> Failed: Checks failed
+    
+    AwaitingApproval --> Merging: User approves
+    Merging --> Done: PR merged
     
     Analyzing --> Failed: Error
     Planning --> Failed: Error

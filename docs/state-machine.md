@@ -6,7 +6,7 @@ This document describes the complete state machine for ticket processing in the 
 
 ## States
 
-The system has 10 distinct states, each represented by a GitHub label with the `stage:` prefix:
+The system has 11 distinct states, each represented by a GitHub label with the `stage:` prefix:
 
 | State | Label | Description |
 |-------|-------|-------------|
@@ -15,6 +15,7 @@ The system has 10 distinct states, each represented by a GitHub label with the `
 | **Code** | `stage:coding` | Implementation phase |
 | **AI Review** | `stage:code-review` | AI code review phase |
 | **Create PR** | `stage:create-pr` | Creating pull request |
+| **Check Pipeline** | `stage:check-pipeline` | Automated checks (lint, tests, typecheck) running |
 | **Approve** | `stage:awaiting-approval` | PR created, waiting for manual approval |
 | **Merge** | `stage:merging` | Merging PR to main branch |
 | **Done** | *no label* | Ticket completed, issue closed |
@@ -26,7 +27,7 @@ The system has 10 distinct states, each represented by a GitHub label with the `
 ### Normal Flow (Happy Path)
 
 ```
-Backlog → Plan → Code → AI Review → Create PR → Approve → Merge → Done
+Backlog → Plan → Code → AI Review → Create PR → Check Pipeline → Approve → Merge → Done
 ```
 
 ### Error Flow
@@ -108,8 +109,20 @@ Failed → [User: Cancel] → Backlog
 
 | To | Trigger | Actions |
 |----|---------|---------|
-| **Approve** | PR created successfully | `SetStageLabel("Approve")` → adds `stage:awaiting-approval` |
+| **Check Pipeline** | PR created successfully | `SetStageLabel("Check Pipeline")` → adds `stage:check-pipeline` |
 | **Failed** | Error creating PR (permissions, conflicts, etc.) | `SetStageLabel("Failed")` → adds `stage:failed` |
+
+### Check Pipeline
+
+**Entry Conditions:**
+- Label: `stage:check-pipeline`
+
+**Exit Transitions:**
+
+| To | Trigger | Actions |
+|----|---------|---------|
+| **Approve** | All checks pass | `SetStageLabel("Approve")` → adds `stage:awaiting-approval` |
+| **Failed** | Checks fail (lint, tests, typecheck) | `SetStageLabel("Failed")` → adds `stage:failed` |
 
 ### Approve
 
@@ -179,12 +192,13 @@ Dashboard columns are determined by the current label with the following priorit
 2. `stage:failed` → **Failed**
 3. `stage:merging` → **Merge**
 4. `stage:awaiting-approval` → **Approve**
-5. `stage:create-pr` → **AI Review** (part of AI Review column)
-6. `stage:code-review` → **AI Review**
-7. `stage:coding` → **Code**
-8. `stage:analysis` → **Plan**
-9. No `stage:*` label → **Backlog**
-10. Issue closed → **Done**
+5. `stage:check-pipeline` → **Check Pipeline**
+6. `stage:create-pr` → **AI Review** (part of AI Review column)
+7. `stage:code-review` → **AI Review**
+8. `stage:coding` → **Code**
+9. `stage:analysis` → **Plan**
+10. No `stage:*` label → **Backlog**
+11. Issue closed → **Done**
 
 ## Dashboard Actions
 

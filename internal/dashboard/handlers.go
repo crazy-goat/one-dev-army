@@ -20,6 +20,7 @@ import (
 
 const (
 	columnAIReview      = "AI Review"
+	columnCheckPipeline = "Check Pipeline"
 	defaultBugTitle     = "[Bug] Fix issue"
 	defaultFeatureTitle = "[Feature] New feature"
 )
@@ -50,6 +51,7 @@ type boardData struct {
 	Plan           []taskCard
 	Code           []taskCard
 	AIReview       []taskCard
+	CheckPipeline  []taskCard
 	Approve        []taskCard
 	Merge          []taskCard
 	Done           []taskCard
@@ -137,6 +139,7 @@ func (s *Server) buildBoardData(_ *http.Request) boardData {
 		len(data.Plan) == 0 &&
 		len(data.Code) == 0 &&
 		len(data.AIReview) == 0 &&
+		len(data.CheckPipeline) == 0 &&
 		len(data.Approve) == 0 &&
 		len(data.Merge) == 0 {
 		data.CanCloseSprint = true
@@ -173,6 +176,12 @@ func inferColumnFromIssue(issue github.Issue) string {
 	}
 	if labelSet["stage:awaiting-approval"] || labelSet["awaiting-approval"] {
 		return "Approve"
+	}
+	if labelSet["stage:check-pipeline"] {
+		return columnCheckPipeline
+	}
+	if labelSet["stage:create-pr"] {
+		return columnAIReview
 	}
 	if labelSet["stage:create-pr"] {
 		return columnAIReview // Create PR is part of AI Review column
@@ -213,6 +222,8 @@ func (s *Server) addCardToColumn(data *boardData, col string, issue github.Issue
 		data.Code = append(data.Code, card)
 	case "AI Review":
 		data.AIReview = append(data.AIReview, card)
+	case "Check Pipeline":
+		data.CheckPipeline = append(data.CheckPipeline, card)
 	case "Approve":
 		if s.store != nil {
 			if prURL, err := s.store.GetStepResponse(issue.Number, "create-pr"); err == nil && prURL != "" {
