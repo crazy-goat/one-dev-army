@@ -61,6 +61,7 @@ var migrations = []string{
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_stage_change_ledger_issue ON stage_change_ledger(issue_number)`,
 	`CREATE INDEX IF NOT EXISTS idx_stage_change_ledger_changed_at ON stage_change_ledger(changed_at)`,
+	`ALTER TABLE task_steps ADD COLUMN llm_model TEXT NOT NULL DEFAULT ''`,
 }
 
 // columnExists checks if a column exists in a table
@@ -93,6 +94,12 @@ func migrate(db *sql.DB) error {
 		// Special handling for the merged_at migration
 		if strings.Contains(m, "merged_at") {
 			if columnExists(db, "issue_cache", "merged_at") {
+				continue // Skip if column already exists
+			}
+		}
+		// Special handling for the llm_model migration
+		if strings.Contains(m, "llm_model") {
+			if columnExists(db, "task_steps", "llm_model") {
 				continue // Skip if column already exists
 			}
 		}

@@ -13,6 +13,8 @@ tools:
     e2e_cmd: ""
 pipeline:
     max_retries: 5
+    check_interval: 10
+    check_timeout: 1800
 sprint:
     tasks_per_sprint: 10
     auto_start: false
@@ -20,7 +22,7 @@ llm:
     setup:
         model: nexos-ai/Claude Haiku 4.5
     planning:
-        model: nexos-ai/Claude Opus 4.6
+        model: '"Kimi K2.5"'
     orchestration:
         model: nexos-ai/Kimi K2.5
     code:

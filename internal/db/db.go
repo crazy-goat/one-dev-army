@@ -234,6 +234,7 @@ type TaskStep struct {
 	ErrorMsg          string
 	SessionID         string
 	PlanAttachmentURL string
+	LLMModel          string
 	StartedAt         *time.Time
 	FinishedAt        *time.Time
 }
@@ -252,13 +253,13 @@ type IssueCache struct {
 	MergedAt    *time.Time
 }
 
-func (s *Store) InsertStep(issueNumber int, stepName, prompt, sessionID string) (int64, error) {
+func (s *Store) InsertStep(issueNumber int, stepName, prompt, sessionID, llmModel string) (int64, error) {
 	result, err := s.submitWriteWithResult(func() (any, error) {
 		now := time.Now()
 		res, err := s.db.Exec(
-			`INSERT INTO task_steps (issue_number, step_name, status, prompt, session_id, started_at)
-			 VALUES (?, ?, 'running', ?, ?, ?)`,
-			issueNumber, stepName, prompt, sessionID, now,
+			`INSERT INTO task_steps (issue_number, step_name, status, prompt, session_id, llm_model, started_at)
+			 VALUES (?, ?, 'running', ?, ?, ?, ?)`,
+			issueNumber, stepName, prompt, sessionID, llmModel, now,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("inserting task step: %w", err)
@@ -301,7 +302,7 @@ func (s *Store) FailStep(id int64, errMsg string) error {
 
 func (s *Store) GetSteps(issueNumber int) (steps []TaskStep, err error) {
 	rows, err := s.db.Query(
-		`SELECT id, issue_number, step_name, status, prompt, response, error_msg, session_id, plan_attachment_url, started_at, finished_at
+		`SELECT id, issue_number, step_name, status, prompt, response, error_msg, session_id, plan_attachment_url, llm_model, started_at, finished_at
 		 FROM task_steps WHERE issue_number = ? ORDER BY id`, issueNumber,
 	)
 	if err != nil {
@@ -315,7 +316,7 @@ func (s *Store) GetSteps(issueNumber int) (steps []TaskStep, err error) {
 
 	for rows.Next() {
 		var st TaskStep
-		if err := rows.Scan(&st.ID, &st.IssueNumber, &st.StepName, &st.Status, &st.Prompt, &st.Response, &st.ErrorMsg, &st.SessionID, &st.PlanAttachmentURL, &st.StartedAt, &st.FinishedAt); err != nil {
+		if err := rows.Scan(&st.ID, &st.IssueNumber, &st.StepName, &st.Status, &st.Prompt, &st.Response, &st.ErrorMsg, &st.SessionID, &st.PlanAttachmentURL, &st.LLMModel, &st.StartedAt, &st.FinishedAt); err != nil {
 			return nil, fmt.Errorf("scanning task step: %w", err)
 		}
 		steps = append(steps, st)

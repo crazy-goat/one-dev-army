@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,20 +15,34 @@ type StepLogger struct {
 	file      *os.File
 	issueNum  int
 	stepName  string
+	provider  string
+	model     string
 	startTime time.Time
 	logDir    string
 	mu        sync.Mutex
 }
 
-func NewStepLogger(artifactDir string, issueNum int, stepName string) (*StepLogger, error) {
+func NewStepLogger(artifactDir string, issueNum int, stepName string, llmModel string) (*StepLogger, error) {
 	logDir := filepath.Join(artifactDir, "logs")
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return nil, fmt.Errorf("creating log directory %s: %w", logDir, err)
 	}
 
+	var provider, model string
+	if llmModel != "" {
+		if p, m, ok := strings.Cut(llmModel, "/"); ok {
+			provider = p
+			model = m
+		} else {
+			model = llmModel
+		}
+	}
+
 	return &StepLogger{
 		issueNum: issueNum,
 		stepName: stepName,
+		provider: provider,
+		model:    model,
 		logDir:   logDir,
 	}, nil
 }
@@ -57,6 +72,12 @@ func (l *StepLogger) Start() error {
 	l.file = file
 	l.logf("STEP START: %s", l.stepName)
 	l.logf("Issue: #%d", l.issueNum)
+	if l.provider != "" {
+		l.logf("Provider: %s", l.provider)
+	}
+	if l.model != "" {
+		l.logf("Model: %s", l.model)
+	}
 	l.logf("Start Time: %s", l.startTime.Format("2006-01-02 15:04:05"))
 	l.logf("---")
 

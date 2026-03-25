@@ -59,6 +59,25 @@ func NewWorker(id int, cfg *config.Config, oc *opencode.Client, gh *github.Clien
 
 // Processes the event synchronously so that GitHub labels, cache, ledger,
 // and WebSocket are updated immediately — not deferred until after Process().
+func (w *Worker) resolveModel(category config.TaskCategory, complexity config.ComplexityLevel, hints map[string]any) string {
+	cfg := w.cfg.Load()
+	var model string
+	switch category {
+	case config.CategoryPlanning:
+		model = cfg.LLM.Planning.Model
+	case config.CategoryCode:
+		model = cfg.LLM.Code.Model
+	default:
+		model = cfg.LLM.Code.Model
+	}
+	if w.router != nil {
+		model = w.router.SelectModel(category, complexity, hints)
+	}
+	return model
+}
+
+// Processes the event synchronously so that GitHub labels, cache, ledger,
+// and WebSocket are updated immediately — not deferred until after Process().
 func (w *Worker) reportStageComplete(stage string, status EventStatus, output string) {
 	if w.orchestrator == nil || w.orchestrator.currentTask == nil {
 		return
@@ -146,7 +165,8 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	if resumeFrom <= 0 {
 		log.Printf("[Worker %d] [1/7] Technical planning for #%d...", w.id, task.Issue.Number)
 		stepStart := time.Now()
-		stepLogger, slErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "technical-planning")
+		llmModel := w.resolveModel(config.CategoryPlanning, config.ComplexityMedium, nil)
+		stepLogger, slErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "technical-planning", llmModel)
 		if slErr != nil {
 			log.Printf("[Worker %d] Warning: failed to create step logger: %v", w.id, slErr)
 		}
@@ -154,7 +174,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			_ = stepLogger.Start()
 			defer stepLogger.Close()
 		}
-		analysis, implPlan, err = w.technicalPlanning(ctx, task, stepLogger)
+		analysis, implPlan, err = w.technicalPlanning(ctx, task, llmModel, stepLogger)
 		if err != nil {
 			task.Status = StatusFailed
 			task.Result = &TaskResult{Error: fmt.Errorf("technical planning: %w", err)}
@@ -188,7 +208,9 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		task.Status = StatusCoding
 		log.Printf("[Worker %d] [2/7] Implementing #%d (includes tests)...", w.id, task.Issue.Number)
 		stepStart := time.Now()
-		stepLogger, slErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "implement")
+		complexity := llm.DetectComplexity(implPlan) //nolint:staticcheck // deprecated but still used
+		llmModel := w.resolveModel(config.CategoryCode, complexity, nil)
+		stepLogger, slErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "implement", llmModel)
 		if slErr != nil {
 			log.Printf("[Worker %d] Warning: failed to create step logger: %v", w.id, slErr)
 		}
@@ -196,7 +218,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			_ = stepLogger.Start()
 			defer stepLogger.Close()
 		}
-		if err := w.implement(ctx, task, implPlan, stepLogger); err != nil {
+		if err := w.implement(ctx, task, implPlan, llmModel, stepLogger); err != nil {
 			task.Status = StatusFailed
 			task.Result = &TaskResult{Error: fmt.Errorf("implementing: %w", err)}
 			log.Printf("[Worker %d] ✗ FAILED implementing: %v", w.id, err)
@@ -218,7 +240,8 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		task.Status = StatusReviewing
 		log.Printf("[Worker %d] [3/7] Code review #%d...", w.id, task.Issue.Number)
 		stepStart := time.Now()
-		stepLogger, slErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "code-review")
+		llmModel := w.resolveModel(config.CategoryCode, config.ComplexityHigh, map[string]any{"stage": "code-review"})
+		stepLogger, slErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "code-review", llmModel)
 		if slErr != nil {
 			log.Printf("[Worker %d] Warning: failed to create step logger: %v", w.id, slErr)
 		}
@@ -226,7 +249,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			_ = stepLogger.Start()
 			defer stepLogger.Close()
 		}
-		approved, review, crErr := w.codeReview(ctx, task, "", stepLogger)
+		approved, review, crErr := w.codeReview(ctx, task, "", llmModel, stepLogger)
 		if crErr != nil {
 			task.Status = StatusFailed
 			task.Result = &TaskResult{Error: fmt.Errorf("code review: %w", crErr)}
@@ -243,7 +266,8 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			task.Status = StatusCoding
 			w.reportStageComplete("coding", EventInProgress, "fixing from AI review")
 			stepStart = time.Now()
-			fixLogger, fixErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "fix-from-review")
+			fixLLMModel := w.resolveModel(config.CategoryCode, config.ComplexityMedium, nil)
+			fixLogger, fixErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "fix-from-review", fixLLMModel)
 			if fixErr != nil {
 				log.Printf("[Worker %d] Warning: failed to create fix logger: %v", w.id, fixErr)
 			}
@@ -251,7 +275,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 				_ = fixLogger.Start()
 				defer fixLogger.Close()
 			}
-			if fixErr := w.fixFromReview(ctx, task, review, fixLogger); fixErr != nil {
+			if fixErr := w.fixFromReview(ctx, task, review, fixLLMModel, fixLogger); fixErr != nil {
 				task.Status = StatusFailed
 				task.Result = &TaskResult{Error: fmt.Errorf("fixing from review: %w", fixErr)}
 				log.Printf("[Worker %d] ✗ FAILED fixing from review: %v", w.id, fixErr)
@@ -272,7 +296,8 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			}
 			log.Printf("[Worker %d] Re-running code review after fixes...", w.id)
 			stepStart = time.Now()
-			approved, _, crErr = w.codeReview(ctx, task, "", nil)
+			crLLMModel := w.resolveModel(config.CategoryCode, config.ComplexityHigh, map[string]any{"stage": "code-review"})
+			approved, _, crErr = w.codeReview(ctx, task, "", crLLMModel, nil)
 			if crErr != nil {
 				task.Status = StatusFailed
 				task.Result = &TaskResult{Error: fmt.Errorf("code review after fixes: %w", crErr)}
@@ -299,7 +324,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		task.Status = StatusCreatingPR
 		log.Printf("[Worker %d] [4/7] Creating PR for #%d...", w.id, task.Issue.Number)
 		stepStart := time.Now()
-		stepLogger, slErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "create-pr")
+		stepLogger, slErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "create-pr", "")
 		if slErr != nil {
 			log.Printf("[Worker %d] Warning: failed to create step logger: %v", w.id, slErr)
 		}
@@ -341,7 +366,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			task.Status = StatusCheckingPipeline
 			log.Printf("[Worker %d] [5/7] Checking CI pipeline for #%d (attempt %d/%d)...", w.id, task.Issue.Number, pipelineAttempt+1, maxPipelineRetries)
 			stepStart := time.Now()
-			stepLogger, slErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "check-pipeline")
+			stepLogger, slErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "check-pipeline", "")
 			if slErr != nil {
 				log.Printf("[Worker %d] Warning: failed to create step logger: %v", w.id, slErr)
 			}
@@ -369,7 +394,8 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 
 				task.Status = StatusCoding
 				w.reportStageComplete("coding", EventInProgress, fmt.Sprintf("fixing pipeline failure (attempt %d)", pipelineAttempt))
-				fixLogger, fixErr := worker.NewStepLogger(artifactDir, task.Issue.Number, fmt.Sprintf("fix-pipeline-attempt-%d", pipelineAttempt))
+				fixLLMModel := w.resolveModel(config.CategoryCode, config.ComplexityMedium, nil)
+				fixLogger, fixErr := worker.NewStepLogger(artifactDir, task.Issue.Number, fmt.Sprintf("fix-pipeline-attempt-%d", pipelineAttempt), fixLLMModel)
 				if fixErr != nil {
 					log.Printf("[Worker %d] Warning: failed to create fix logger: %v", w.id, fixErr)
 				}
@@ -377,7 +403,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 					_ = fixLogger.Start()
 					defer fixLogger.Close()
 				}
-				if fixErr := w.implement(ctx, task, implPlan, fixLogger); fixErr != nil {
+				if fixErr := w.implement(ctx, task, implPlan, fixLLMModel, fixLogger); fixErr != nil {
 					task.Status = StatusFailed
 					task.Result = &TaskResult{Error: fmt.Errorf("fixing from pipeline failure: %w", fixErr)}
 					log.Printf("[Worker %d] ✗ FAILED fixing from pipeline failure: %v", w.id, fixErr)
@@ -420,7 +446,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	for {
 		task.Status = StatusAwaitingApproval
 		log.Printf("[Worker %d] [6/7] Awaiting user approval for #%d (PR: %s)", w.id, task.Issue.Number, prURL)
-		approvalLogger, alErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "awaiting-approval")
+		approvalLogger, alErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "awaiting-approval", "")
 		if alErr != nil {
 			log.Printf("[Worker %d] Warning: failed to create approval logger: %v", w.id, alErr)
 		}
@@ -465,7 +491,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			}
 			w.reportStageComplete("awaiting-approval", EventSuccess, "user approved")
 
-			mergeLogger, mlErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "merge")
+			mergeLogger, mlErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "merge", "")
 			if mlErr != nil {
 				log.Printf("[Worker %d] Warning: failed to create merge logger: %v", w.id, mlErr)
 			}
@@ -532,7 +558,8 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 
 		w.reportStageComplete("awaiting-approval", EventFailed, "user declined: "+decision.Reason)
 
-		declineLogger, dlErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "fix-from-decline")
+		declineLLMModel := w.resolveModel(config.CategoryCode, config.ComplexityMedium, nil)
+		declineLogger, dlErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "fix-from-decline", declineLLMModel)
 		if dlErr != nil {
 			log.Printf("[Worker %d] Warning: failed to create decline fix logger: %v", w.id, dlErr)
 		}
@@ -540,7 +567,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			_ = declineLogger.Start()
 			defer declineLogger.Close()
 		}
-		if fixErr := w.fixFromReview(ctx, task, decision.Reason, declineLogger); fixErr != nil {
+		if fixErr := w.fixFromReview(ctx, task, decision.Reason, declineLLMModel, declineLogger); fixErr != nil {
 			task.Status = StatusFailed
 			task.Result = &TaskResult{Error: fmt.Errorf("fixing from decline: %w", fixErr)}
 			log.Printf("[Worker %d] ✗ FAILED fixing from decline: %v", w.id, fixErr)
@@ -562,7 +589,8 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		task.Status = StatusReviewing
 		w.reportStageComplete("coding", EventSuccess, "fixes applied after decline")
 
-		reReviewLogger, rrErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "code-review-after-decline")
+		reReviewLLMModel := w.resolveModel(config.CategoryCode, config.ComplexityHigh, map[string]any{"stage": "code-review"})
+		reReviewLogger, rrErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "code-review-after-decline", reReviewLLMModel)
 		if rrErr != nil {
 			log.Printf("[Worker %d] Warning: failed to create re-review logger: %v", w.id, rrErr)
 		}
@@ -570,7 +598,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			_ = reReviewLogger.Start()
 			defer reReviewLogger.Close()
 		}
-		approved, review, crErr := w.codeReview(ctx, task, prURL, reReviewLogger)
+		approved, review, crErr := w.codeReview(ctx, task, prURL, reReviewLLMModel, reReviewLogger)
 		if crErr != nil {
 			task.Status = StatusFailed
 			task.Result = &TaskResult{Error: fmt.Errorf("code review after decline: %w", crErr)}
@@ -583,7 +611,8 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		if !approved {
 			task.Status = StatusCoding
 			w.reportStageComplete("coding", EventInProgress, "fixing from re-review after decline")
-			reFixLogger, rfErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "fix-from-re-review")
+			reFixLLMModel := w.resolveModel(config.CategoryCode, config.ComplexityMedium, nil)
+			reFixLogger, rfErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "fix-from-re-review", reFixLLMModel)
 			if rfErr != nil {
 				log.Printf("[Worker %d] Warning: failed to create re-fix logger: %v", w.id, rfErr)
 			}
@@ -591,7 +620,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 				_ = reFixLogger.Start()
 				defer reFixLogger.Close()
 			}
-			if fixErr := w.fixFromReview(ctx, task, review, reFixLogger); fixErr != nil {
+			if fixErr := w.fixFromReview(ctx, task, review, reFixLLMModel, reFixLogger); fixErr != nil {
 				task.Status = StatusFailed
 				task.Result = &TaskResult{Error: fmt.Errorf("fixing from re-review: %w", fixErr)}
 				if reFixLogger != nil {
@@ -617,13 +646,8 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	}
 }
 
-func (w *Worker) technicalPlanning(ctx context.Context, task *Task, logger *worker.StepLogger) (analysis, implPlan string, err error) {
+func (w *Worker) technicalPlanning(ctx context.Context, task *Task, llmModel string, logger *worker.StepLogger) (analysis, implPlan string, err error) {
 	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPTechnicalPlanning), task.Issue.Number, task.Issue.Title, task.Issue.Body, task.Issue.Number)
-
-	llmModel := w.cfg.Load().LLM.Planning.Model
-	if w.router != nil {
-		llmModel = w.router.SelectModel(config.CategoryPlanning, config.ComplexityMedium, nil)
-	}
 
 	response, err := w.llmStep(ctx, task, "technical-planning", prompt, llmModel, logger)
 	if err != nil {
@@ -696,7 +720,7 @@ func parseTechnicalPlanningResponse(response string) (analysis, plan string) {
 	return analysis, plan
 }
 
-func (w *Worker) implement(ctx context.Context, task *Task, planStr string, logger *worker.StepLogger) error {
+func (w *Worker) implement(ctx context.Context, task *Task, planStr, llmModel string, logger *worker.StepLogger) error {
 	w.oc.SetDirectory(task.Worktree)
 
 	comments, err := w.gh.ListComments(task.Issue.Number)
@@ -720,12 +744,6 @@ func (w *Worker) implement(ctx context.Context, task *Task, planStr string, logg
 	}
 	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPImplementation), task.Issue.Number, task.Issue.Title, planStr, task.Worktree, testCmd, task.Issue.Number, task.Issue.Number, task.Issue.Number, task.Issue.Number, task.Issue.Number)
 
-	llmModel := w.cfg.Load().LLM.Code.Model
-	if w.router != nil {
-		complexity := llm.DetectComplexity(planStr) //nolint:staticcheck // deprecated but still used
-		llmModel = w.router.SelectModel(config.CategoryCode, complexity, nil)
-	}
-
 	_, err = w.llmStep(ctx, task, "implement", prompt, llmModel, logger)
 	if err != nil {
 		return err
@@ -745,7 +763,7 @@ func (w *Worker) ensureCommit(task *Task) {
 	_ = out
 }
 
-func (w *Worker) fixFromReview(ctx context.Context, task *Task, review string, logger *worker.StepLogger) error {
+func (w *Worker) fixFromReview(ctx context.Context, task *Task, review, llmModel string, logger *worker.StepLogger) error {
 	w.oc.SetDirectory(task.Worktree)
 
 	testCmd := w.cfg.Load().Tools.TestCmd
@@ -753,11 +771,6 @@ func (w *Worker) fixFromReview(ctx context.Context, task *Task, review string, l
 		testCmd = "go test ./..."
 	}
 	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPFixFromReview), task.Issue.Number, task.Issue.Title, task.Worktree, testCmd, review)
-
-	llmModel := w.cfg.Load().LLM.Code.Model
-	if w.router != nil {
-		llmModel = w.router.SelectModel(config.CategoryCode, config.ComplexityMedium, nil)
-	}
 
 	_, err := w.llmStep(ctx, task, "fix-from-review", prompt, llmModel, logger)
 	if err != nil {
@@ -785,7 +798,7 @@ type crResult struct {
 	Verdict     string   `json:"verdict"`
 }
 
-func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string, logger *worker.StepLogger) (approved bool, review string, err error) {
+func (w *Worker) codeReview(ctx context.Context, task *Task, prURL, llmModel string, logger *worker.StepLogger) (approved bool, review string, err error) {
 	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPCodeReview), task.Issue.Number, task.Issue.Title, prURL, w.gh.Repo, task.Issue.Number)
 
 	sessionTitle := fmt.Sprintf("code-review-%d", task.Issue.Number)
@@ -803,7 +816,7 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string, logge
 
 	var stepID int64
 	if w.store != nil {
-		id, sErr := w.store.InsertStep(task.Issue.Number, "code-review", prompt, session.ID)
+		id, sErr := w.store.InsertStep(task.Issue.Number, "code-review", prompt, session.ID, llmModel)
 		if sErr != nil {
 			log.Printf("[Worker %d] failed to insert step: %v", w.id, sErr)
 		} else {
@@ -812,12 +825,6 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string, logge
 	}
 
 	task.AddChatMessage("user", prompt)
-
-	llmModel := w.cfg.Load().LLM.Code.Model
-	if w.router != nil {
-		hints := map[string]any{"stage": "code-review"}
-		llmModel = w.router.SelectModel(config.CategoryCode, config.ComplexityHigh, hints)
-	}
 
 	model := opencode.ParseModelRef(llmModel)
 	var result crResult
@@ -854,7 +861,7 @@ func (w *Worker) createPR(_ context.Context, task *Task, logger *worker.StepLogg
 
 	var stepID int64
 	if w.store != nil {
-		id, err := w.store.InsertStep(task.Issue.Number, "create-pr", fmt.Sprintf("push %s + create PR", task.Branch), "")
+		id, err := w.store.InsertStep(task.Issue.Number, "create-pr", fmt.Sprintf("push %s + create PR", task.Branch), "", "")
 		if err != nil {
 			log.Printf("[Worker %d] failed to insert create-pr step: %v", w.id, err)
 		} else {
@@ -1014,7 +1021,7 @@ func (w *Worker) llmStep(_ context.Context, task *Task, stepName, prompt, llm st
 
 	var stepID int64
 	if w.store != nil {
-		id, sErr := w.store.InsertStep(task.Issue.Number, stepName, prompt, session.ID)
+		id, sErr := w.store.InsertStep(task.Issue.Number, stepName, prompt, session.ID, llm)
 		if sErr != nil {
 			log.Printf("[Worker %d] failed to insert step: %v", w.id, sErr)
 		} else {
