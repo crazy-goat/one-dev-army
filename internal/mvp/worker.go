@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -1024,7 +1025,13 @@ func (w *Worker) llmStep(_ context.Context, task *Task, stepName, prompt, llm st
 	task.AddChatMessage("user", prompt)
 
 	model := opencode.ParseModelRef(llm)
-	msg, err := w.oc.SendMessage(session.ID, prompt, model, nil)
+
+	var output io.Writer
+	if logger != nil {
+		output = logger
+	}
+
+	msg, err := w.oc.SendMessage(session.ID, prompt, model, output)
 	if err != nil {
 		if w.store != nil && stepID > 0 {
 			_ = w.store.FailStep(stepID, err.Error())
@@ -1033,6 +1040,7 @@ func (w *Worker) llmStep(_ context.Context, task *Task, stepName, prompt, llm st
 	}
 
 	if logger != nil {
+		logger.Logf("--- Streamed output ends ---")
 		logger.LogLLMResponse(msg)
 	}
 
