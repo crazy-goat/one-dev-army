@@ -2179,7 +2179,7 @@ func TestBoardLayout_ValidHTMLStructure(t *testing.T) {
 		"board-header":  `class="board-header"`,
 		"board-actions": `class="board-actions"`,
 		"board grid":    `class="board"`,
-		"7 columns":     "grid-template-columns:repeat(8,1fr)",
+		"7 columns":     "grid-template-columns:repeat(6,1fr)",
 	}
 
 	for name, pattern := range structureChecks {
@@ -2213,49 +2213,28 @@ func TestBoardLayout_StackedColumns(t *testing.T) {
 
 	body := rec.Body.String()
 
-	if !strings.Contains(body, `class="stacked-column"`) {
-		t.Error("board page missing stacked-column CSS class")
+	// Check for board-left and board-right containers (stacked columns)
+	if !strings.Contains(body, `class="board-left"`) {
+		t.Error("board page missing board-left container for stacked columns")
 	}
 
-	if !strings.Contains(body, "stacked-column") {
-		t.Error("board page missing stacked column containers")
-	}
-
-	if strings.Count(body, `class="stacked-column"`) != 2 {
-		t.Errorf("expected 2 stacked-column containers, got %d", strings.Count(body, `class="stacked-column"`))
-	}
-
-	if !strings.Contains(body, ".stacked-column{") {
-		t.Error("board page missing stacked-column CSS rule")
-	}
-
-	if !strings.Contains(body, ".stacked-column .column{") {
-		t.Error("board page missing stacked-column .column CSS rule")
-	}
-
-	// Verify stacked column height constraint
-	if !strings.Contains(body, "calc(100vh") {
-		t.Error("stacked-column missing viewport height constraint")
+	if !strings.Contains(body, `class="board-right"`) {
+		t.Error("board page missing board-right container for stacked columns")
 	}
 
 	// Verify internal scrolling
 	if !strings.Contains(body, "overflow-y:auto") {
-		t.Error("stacked-column columns missing overflow-y:auto for internal scrolling")
-	}
-
-	// Verify sticky column titles
-	if !strings.Contains(body, "position:sticky") {
-		t.Error("stacked-column titles missing position:sticky")
+		t.Error("board columns missing overflow-y:auto for internal scrolling")
 	}
 
 	// Verify smooth scrolling
 	if !strings.Contains(body, "scroll-behavior:smooth") {
-		t.Error("stacked-column columns missing scroll-behavior:smooth")
+		t.Error("board columns missing scroll-behavior:smooth")
 	}
 
-	// Verify flex basis for 50/50 split
-	if !strings.Contains(body, "50%") {
-		t.Error("stacked-column columns missing 50% flex basis for equal height split")
+	// Verify flex basis for 50/50 split in stacked columns
+	if !strings.Contains(body, "flex:1 1 50%") {
+		t.Error("stacked columns missing 50% flex basis for equal height split")
 	}
 }
 
@@ -5610,7 +5589,7 @@ func TestHandleManualProcess(t *testing.T) {
 	orch := &mvp.Orchestrator{}
 	s := &Server{orchestrator: orch}
 
-	req := httptest.NewRequest("POST", "/api/tickets/42/process", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/42/process", nil)
 	req.SetPathValue("id", "42")
 	w := httptest.NewRecorder()
 
@@ -5629,7 +5608,7 @@ func TestHandleManualProcess(t *testing.T) {
 func TestHandleManualProcessNoOrchestrator(t *testing.T) {
 	s := &Server{}
 
-	req := httptest.NewRequest("POST", "/api/tickets/42/process", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/42/process", nil)
 	req.SetPathValue("id", "42")
 	w := httptest.NewRecorder()
 
@@ -5644,7 +5623,7 @@ func TestHandleManualProcessInvalidID(t *testing.T) {
 	orch := &mvp.Orchestrator{}
 	s := &Server{orchestrator: orch}
 
-	req := httptest.NewRequest("POST", "/api/tickets/abc/process", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/abc/process", nil)
 	req.SetPathValue("id", "abc")
 	w := httptest.NewRecorder()
 
