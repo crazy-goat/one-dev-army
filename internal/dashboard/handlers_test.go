@@ -3347,8 +3347,10 @@ func TestBuildBoardData_CanCloseSprint_True(t *testing.T) {
 		len(data.Plan) == 0 &&
 		len(data.Code) == 0 &&
 		len(data.AIReview) == 0 &&
+		len(data.CheckPipeline) == 0 &&
 		len(data.Approve) == 0 &&
-		len(data.Merge) == 0 {
+		len(data.Merge) == 0 &&
+		(len(data.Done) > 0 || len(data.Failed) > 0) {
 		data.CanCloseSprint = true
 	}
 
@@ -3389,8 +3391,10 @@ func TestBuildBoardData_CanCloseSprint_False_WhenProcessing(t *testing.T) {
 		len(data.Plan) == 0 &&
 		len(data.Code) == 0 &&
 		len(data.AIReview) == 0 &&
+		len(data.CheckPipeline) == 0 &&
 		len(data.Approve) == 0 &&
-		len(data.Merge) == 0 {
+		len(data.Merge) == 0 &&
+		(len(data.Done) > 0 || len(data.Failed) > 0) {
 		data.CanCloseSprint = true
 	}
 
@@ -3410,45 +3414,59 @@ func TestBuildBoardData_CanCloseSprint_False_WhenActiveTasks(t *testing.T) {
 		aiReview      []taskCard
 		approve       []taskCard
 		merge         []taskCard
+		done          []taskCard
+		failed        []taskCard
 		expectedClose bool
 	}{
 		{
 			name:          "tasks in Blocked column",
 			blocked:       []taskCard{{ID: 1, Title: "Blocked task"}},
+			done:          []taskCard{{ID: 100, Title: "Done task"}},
 			expectedClose: false,
 		},
 		{
 			name:          "tasks in Backlog column",
 			backlog:       []taskCard{{ID: 1, Title: "Backlog task"}},
+			done:          []taskCard{{ID: 100, Title: "Done task"}},
 			expectedClose: false,
 		},
 		{
 			name:          "tasks in Plan column",
 			plan:          []taskCard{{ID: 1, Title: "Plan task"}},
+			done:          []taskCard{{ID: 100, Title: "Done task"}},
 			expectedClose: false,
 		},
 		{
 			name:          "tasks in Code column",
 			code:          []taskCard{{ID: 1, Title: "Code task"}},
+			done:          []taskCard{{ID: 100, Title: "Done task"}},
 			expectedClose: false,
 		},
 		{
 			name:          "tasks in AI Review column",
 			aiReview:      []taskCard{{ID: 1, Title: "AI Review task"}},
+			done:          []taskCard{{ID: 100, Title: "Done task"}},
 			expectedClose: false,
 		},
 		{
 			name:          "tasks in Approve column",
 			approve:       []taskCard{{ID: 1, Title: "Approve task"}},
+			done:          []taskCard{{ID: 100, Title: "Done task"}},
 			expectedClose: false,
 		},
 		{
 			name:          "tasks in Merge column",
 			merge:         []taskCard{{ID: 1, Title: "Merge task"}},
+			done:          []taskCard{{ID: 100, Title: "Done task"}},
 			expectedClose: false,
 		},
 		{
-			name:          "no tasks in active columns",
+			name:          "no tasks in active columns but no done/failed tickets",
+			expectedClose: false,
+		},
+		{
+			name:          "no tasks in active columns with done tickets",
+			done:          []taskCard{{ID: 100, Title: "Done task"}},
 			expectedClose: true,
 		},
 	}
@@ -3465,8 +3483,8 @@ func TestBuildBoardData_CanCloseSprint_False_WhenActiveTasks(t *testing.T) {
 				AIReview:   tt.aiReview,
 				Approve:    tt.approve,
 				Merge:      tt.merge,
-				Done:       []taskCard{{ID: 100, Title: "Done task"}},
-				Failed:     []taskCard{{ID: 101, Title: "Failed task"}},
+				Done:       tt.done,
+				Failed:     tt.failed,
 			}
 
 			// Apply the same logic as in buildBoardData
@@ -3476,8 +3494,10 @@ func TestBuildBoardData_CanCloseSprint_False_WhenActiveTasks(t *testing.T) {
 				len(data.Plan) == 0 &&
 				len(data.Code) == 0 &&
 				len(data.AIReview) == 0 &&
+				len(data.CheckPipeline) == 0 &&
 				len(data.Approve) == 0 &&
-				len(data.Merge) == 0 {
+				len(data.Merge) == 0 &&
+				(len(data.Done) > 0 || len(data.Failed) > 0) {
 				data.CanCloseSprint = true
 			}
 
@@ -3485,6 +3505,41 @@ func TestBuildBoardData_CanCloseSprint_False_WhenActiveTasks(t *testing.T) {
 				t.Errorf("expected CanCloseSprint=%v, got %v", tt.expectedClose, data.CanCloseSprint)
 			}
 		})
+	}
+}
+
+// TestBuildBoardData_CanCloseSprint_False_WhenEmptySprint verifies CanCloseSprint is false when sprint has no tickets at all
+func TestBuildBoardData_CanCloseSprint_False_WhenEmptySprint(t *testing.T) {
+	data := boardData{
+		Active:     "board",
+		Processing: false,
+		Blocked:    []taskCard{},
+		Backlog:    []taskCard{},
+		Plan:       []taskCard{},
+		Code:       []taskCard{},
+		AIReview:   []taskCard{},
+		Approve:    []taskCard{},
+		Merge:      []taskCard{},
+		Done:       []taskCard{},
+		Failed:     []taskCard{},
+	}
+
+	// Apply the same logic as in buildBoardData
+	if !data.Processing &&
+		len(data.Blocked) == 0 &&
+		len(data.Backlog) == 0 &&
+		len(data.Plan) == 0 &&
+		len(data.Code) == 0 &&
+		len(data.AIReview) == 0 &&
+		len(data.CheckPipeline) == 0 &&
+		len(data.Approve) == 0 &&
+		len(data.Merge) == 0 &&
+		(len(data.Done) > 0 || len(data.Failed) > 0) {
+		data.CanCloseSprint = true
+	}
+
+	if data.CanCloseSprint {
+		t.Error("expected CanCloseSprint to be false when sprint has no tickets at all")
 	}
 }
 
