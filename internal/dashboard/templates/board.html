@@ -43,7 +43,10 @@
 .card .card-pr a:hover{text-decoration:underline}
 .badge-merged { background: #6f42c1; color: white; font-size: .65rem; padding: .1rem .4rem; border-radius: 4px; display: inline-flex; align-items: center; gap: .25rem; }
 .badge-closed { background: #6c757d; color: white; font-size: .65rem; padding: .1rem .4rem; border-radius: 4px; display: inline-flex; align-items: center; gap: .25rem; }
-.processing-panel{background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.2);border-radius:8px;padding:.5rem 1rem;margin-bottom:1rem;display:flex;align-items:center}
+.processing-panel{background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.2);border-radius:8px;padding:.5rem 1rem;display:flex;align-items:center;grid-column:2/8;grid-row:1}
+.processing-panel-idle{background:rgba(108,117,125,0.08);border-color:rgba(108,117,125,0.2)}
+.processing-panel-idle .processing-indicator{background:#6c757d;animation:none}
+.processing-idle-text{color:var(--muted);font-size:.85rem}
 .processing-panel-content{display:flex;align-items:center;gap:.75rem;width:100%;min-width:0}
 .processing-indicator{width:8px;height:8px;border-radius:50%;background:#3498db;flex-shrink:0;animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -90,35 +93,6 @@
     </form>
   </div>
 </div>
-
-{{if .CurrentTicket}}
-<div class="processing-panel" id="processing-panel">
-  <div class="processing-panel-content">
-    <span class="processing-indicator"></span>
-    <a href="/task/{{.CurrentTicket.Number}}" class="processing-ticket">
-      <span class="processing-id">#{{.CurrentTicket.Number}}</span>
-      <span class="processing-title">{{.CurrentTicket.Title}}</span>
-    </a>
-    <div class="processing-labels">
-      {{if .CurrentTicket.Priority}}
-      <span class="processing-badge processing-priority-{{.CurrentTicket.Priority}}">
-        {{if eq .CurrentTicket.Priority "high"}}🔴{{else if eq .CurrentTicket.Priority "medium"}}🟡{{else}}🟢{{end}} {{.CurrentTicket.Priority}}
-      </span>
-      {{end}}
-      {{if .CurrentTicket.Type}}
-      <span class="processing-badge">
-        {{if eq .CurrentTicket.Type "bug"}}🐛 Bug{{else}}✨ Feature{{end}}
-      </span>
-      {{end}}
-      {{if .CurrentTicket.Size}}
-      <span class="processing-badge">📏 {{.CurrentTicket.Size}}</span>
-      {{end}}
-    </div>
-  </div>
-</div>
-{{else}}
-<div class="processing-panel" id="processing-panel" style="display:none"></div>
-{{end}}
 
 <div class="board" id="board-container" hx-get="/api/board-data" hx-swap="innerHTML" hx-trigger="refresh">
 {{template "board-columns" .}}
@@ -195,6 +169,34 @@ function triggerSync() {
 {{end}}
 
 {{define "board-columns"}}
+  <div class="processing-panel{{if not .CurrentTicket}} processing-panel-idle{{end}}" id="processing-panel">
+    <div class="processing-panel-content">
+      <span class="processing-indicator"></span>
+      {{if .CurrentTicket}}
+      <a href="/task/{{.CurrentTicket.Number}}" class="processing-ticket">
+        <span class="processing-id">#{{.CurrentTicket.Number}}</span>
+        <span class="processing-title">{{.CurrentTicket.Title}}</span>
+      </a>
+      <div class="processing-labels">
+        {{if .CurrentTicket.Priority}}
+        <span class="processing-badge processing-priority-{{.CurrentTicket.Priority}}">
+          {{if eq .CurrentTicket.Priority "high"}}🔴{{else if eq .CurrentTicket.Priority "medium"}}🟡{{else}}🟢{{end}} {{.CurrentTicket.Priority}}
+        </span>
+        {{end}}
+        {{if .CurrentTicket.Type}}
+        <span class="processing-badge">
+          {{if eq .CurrentTicket.Type "bug"}}🐛 Bug{{else}}✨ Feature{{end}}
+        </span>
+        {{end}}
+        {{if .CurrentTicket.Size}}
+        <span class="processing-badge">📏 {{.CurrentTicket.Size}}</span>
+        {{end}}
+      </div>
+      {{else}}
+      <span class="processing-idle-text">No active ticket &mdash; Worker ready</span>
+      {{end}}
+    </div>
+  </div>
   <div class="stacked-column">
     <div class="column">
       <div class="column-title">Backlog <span class="count">{{len .Backlog}}</span></div>
