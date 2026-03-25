@@ -170,7 +170,8 @@ func (s *Server) buildBoardData(_ *http.Request) boardData {
 		len(data.AIReview) == 0 &&
 		len(data.CheckPipeline) == 0 &&
 		len(data.Approve) == 0 &&
-		len(data.Merge) == 0 {
+		len(data.Merge) == 0 &&
+		(len(data.Done) > 0 || len(data.Failed) > 0) {
 		data.CanCloseSprint = true
 	}
 
