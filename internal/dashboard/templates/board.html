@@ -4,10 +4,14 @@
 .board-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem}
 .board-actions{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
 @media (max-width:768px){.board-header{flex-direction:column;align-items:flex-start}.board-actions{width:100%;justify-content:flex-start}}
-.board{display:grid;grid-template-columns:repeat(8,1fr);gap:1rem;margin-bottom:2rem}
-.stacked-column{display:flex;flex-direction:column;gap:0.5rem;height:calc(100vh - 8rem);min-height:300px}
-.stacked-column .column{flex:1 1 50%;min-height:0;overflow-y:auto;scroll-behavior:smooth}
-.stacked-column .column-title{position:sticky;top:0;z-index:1;background:var(--surface);padding-bottom:.5rem}
+.board{display:grid;grid-template-columns:15% 70% 15%;gap:1rem;margin-bottom:2rem}
+.board-left{display:flex;flex-direction:column;gap:0.5rem;height:calc(100vh - 12rem)}
+.board-left .column{flex:1 1 50%;min-height:0;overflow-y:auto;scroll-behavior:smooth}
+.board-right{display:flex;flex-direction:column;gap:0.5rem;height:calc(100vh - 12rem)}
+.board-right .column{flex:1 1 50%;min-height:0;overflow-y:auto;scroll-behavior:smooth}
+.board-center{display:flex;flex-direction:column;gap:1rem;height:calc(100vh - 12rem)}
+.board-center-columns{display:grid;grid-template-columns:repeat(6,1fr);gap:1rem;flex:0 0 auto;height:180px}
+.board-center .column{min-height:0;overflow-y:auto;scroll-behavior:smooth;height:100%}
 .column{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem;min-height:300px}
 .column-title{font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.75rem;display:flex;justify-content:space-between;align-items:center}
 .column-title .count{background:var(--border);padding:.1rem .5rem;border-radius:10px;font-size:.75rem}
@@ -41,9 +45,9 @@
 .card .card-pr{margin-top:.3rem}
 .card .card-pr a{color:#9b59b6;font-size:.8rem;font-weight:600;text-decoration:none}
 .card .card-pr a:hover{text-decoration:underline}
-.badge-merged { background: #6f42c1; color: white; font-size: .65rem; padding: .1rem .4rem; border-radius: 4px; display: inline-flex; align-items: center; gap: .25rem; }
-.badge-closed { background: #6c757d; color: white; font-size: .65rem; padding: .1rem .4rem; border-radius: 4px; display: inline-flex; align-items: center; gap: .25rem; }
-.processing-panel{background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.2);border-radius:8px;padding:.5rem 1rem;display:flex;align-items:center;grid-column:2/8;grid-row:1}
+.badge-merged{background:#6f42c1;color:white;font-size:.65rem;padding:.1rem .4rem;border-radius:4px;display:inline-flex;align-items:center;gap:.25rem}
+.badge-closed{background:#6c757d;color:white;font-size:.65rem;padding:.1rem .4rem;border-radius:4px;display:inline-flex;align-items:center;gap:.25rem}
+.processing-panel{background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.2);border-radius:8px;padding:.5rem 1rem;display:flex;align-items:center;flex:1;min-height:200px;z-index:10}
 .processing-panel-idle{background:rgba(108,117,125,0.08);border-color:rgba(108,117,125,0.2)}
 .processing-panel-idle .processing-indicator{background:#6c757d;animation:none}
 .processing-idle-text{color:var(--muted);font-size:.85rem}
@@ -169,35 +173,8 @@ function triggerSync() {
 {{end}}
 
 {{define "board-columns"}}
-  <div class="processing-panel{{if not .CurrentTicket}} processing-panel-idle{{end}}" id="processing-panel">
-    <div class="processing-panel-content">
-      <span class="processing-indicator"></span>
-      {{if .CurrentTicket}}
-      <a href="/task/{{.CurrentTicket.Number}}" class="processing-ticket">
-        <span class="processing-id">#{{.CurrentTicket.Number}}</span>
-        <span class="processing-title">{{.CurrentTicket.Title}}</span>
-      </a>
-      <div class="processing-labels">
-        {{if .CurrentTicket.Priority}}
-        <span class="processing-badge processing-priority-{{.CurrentTicket.Priority}}">
-          {{if eq .CurrentTicket.Priority "high"}}🔴{{else if eq .CurrentTicket.Priority "medium"}}🟡{{else}}🟢{{end}} {{.CurrentTicket.Priority}}
-        </span>
-        {{end}}
-        {{if .CurrentTicket.Type}}
-        <span class="processing-badge">
-          {{if eq .CurrentTicket.Type "bug"}}🐛 Bug{{else}}✨ Feature{{end}}
-        </span>
-        {{end}}
-        {{if .CurrentTicket.Size}}
-        <span class="processing-badge">📏 {{.CurrentTicket.Size}}</span>
-        {{end}}
-      </div>
-      {{else}}
-      <span class="processing-idle-text">No active ticket &mdash; Worker ready</span>
-      {{end}}
-    </div>
-  </div>
-  <div class="stacked-column">
+  <!-- Left column: Backlog + Blocked -->
+  <div class="board-left">
     <div class="column">
       <div class="column-title">Backlog <span class="count">{{len .Backlog}}</span></div>
       {{range .Backlog}}
@@ -235,104 +212,140 @@ function triggerSync() {
     </div>
   </div>
 
-  <div class="column col-plan">
-    <div class="column-title">Plan <span class="count">{{len .Plan}}</span></div>
-    {{range .Plan}}
-    <div class="card">
-      <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>
-      <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
-      <div class="card-title">{{.Title}}</div>
-      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
-      {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
-      {{if .Worker}}<div class="card-worker">{{.Worker}}</div>{{end}}
-    </div>
-    {{else}}
-    <div class="empty-state">No tickets in planning</div>
-    {{end}}
-  </div>
+  <!-- Center column: Pipeline columns + Panel -->
+  <div class="board-center">
+    <div class="board-center-columns">
+      <div class="column col-plan">
+        <div class="column-title">Plan <span class="count">{{len .Plan}}</span></div>
+        {{range .Plan}}
+        <div class="card">
+          <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>
+          <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
+          <div class="card-title">{{.Title}}</div>
+          {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
+          {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
+          {{if .Worker}}<div class="card-worker">{{.Worker}}</div>{{end}}
+        </div>
+        {{else}}
+        <div class="empty-state">No tickets in planning</div>
+        {{end}}
+      </div>
 
-  <div class="column col-code">
-    <div class="column-title">Code <span class="count">{{len .Code}}</span></div>
-    {{range .Code}}
-    <div class="card">
-      <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>
-      <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
-      <div class="card-title">{{.Title}}</div>
-      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
-      {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
-      {{if .Worker}}<div class="card-worker">{{.Worker}}</div>{{end}}
-    </div>
-    {{else}}
-    <div class="empty-state">No tickets in coding</div>
-    {{end}}
-  </div>
+      <div class="column col-code">
+        <div class="column-title">Code <span class="count">{{len .Code}}</span></div>
+        {{range .Code}}
+        <div class="card">
+          <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>
+          <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
+          <div class="card-title">{{.Title}}</div>
+          {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
+          {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
+          {{if .Worker}}<div class="card-worker">{{.Worker}}</div>{{end}}
+        </div>
+        {{else}}
+        <div class="empty-state">No tickets in coding</div>
+        {{end}}
+      </div>
 
-  <div class="column">
-    <div class="column-title">AI Review <span class="count">{{len .AIReview}}</span></div>
-    {{range .AIReview}}
-    <div class="card">
-      <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>
-      <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
-      <div class="card-title">{{.Title}}</div>
-      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
-      {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
-    </div>
-    {{else}}
-    <div class="empty-state">No tickets in AI review</div>
-    {{end}}
-  </div>
+      <div class="column">
+        <div class="column-title">AI Review <span class="count">{{len .AIReview}}</span></div>
+        {{range .AIReview}}
+        <div class="card">
+          <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>
+          <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
+          <div class="card-title">{{.Title}}</div>
+          {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
+          {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
+        </div>
+        {{else}}
+        <div class="empty-state">No tickets in AI review</div>
+        {{end}}
+      </div>
 
-  <div class="column col-check-pipeline">
-    <div class="column-title">Check Pipeline <span class="count">{{len .CheckPipeline}}</span></div>
-    {{range .CheckPipeline}}
-    <div class="card">
-      <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>
-      <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
-      <div class="card-title">{{.Title}}</div>
-      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
-      {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
-    </div>
-    {{else}}
-    <div class="empty-state">No tickets in check pipeline</div>
-    {{end}}
-  </div>
+      <div class="column col-check-pipeline">
+        <div class="column-title">Check Pipeline <span class="count">{{len .CheckPipeline}}</span></div>
+        {{range .CheckPipeline}}
+        <div class="card">
+          <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>
+          <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
+          <div class="card-title">{{.Title}}</div>
+          {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
+          {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
+        </div>
+        {{else}}
+        <div class="empty-state">No tickets in check pipeline</div>
+        {{end}}
+      </div>
 
-  <div class="column col-approve">
-    <div class="column-title">Approve <span class="count">{{len .Approve}}</span></div>
-    {{range .Approve}}
-    <div class="card">
-      <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>
-      <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
-      <div class="card-title">{{.Title}}</div>
-      {{if .PRURL}}<div class="card-pr"><a href="{{.PRURL}}" target="_blank">View PR →</a></div>{{end}}
-      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
-      {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
-      <div class="card-actions">
-        <form method="post" action="/approve-merge/{{.ID}}"><button type="submit" class="btn btn-success">Approve & Merge</button></form>
-        <button type="button" class="btn btn-danger" onclick="openDeclineModal({{.ID}}, '{{.Title}}')">Decline</button>
+      <div class="column col-approve">
+        <div class="column-title">Approve <span class="count">{{len .Approve}}</span></div>
+        {{range .Approve}}
+        <div class="card">
+          <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>
+          <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
+          <div class="card-title">{{.Title}}</div>
+          {{if .PRURL}}<div class="card-pr"><a href="{{.PRURL}}" target="_blank">View PR →</a></div>{{end}}
+          {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
+          {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
+          <div class="card-actions">
+            <form method="post" action="/approve-merge/{{.ID}}"><button type="submit" class="btn btn-success">Approve & Merge</button></form>
+            <button type="button" class="btn btn-danger" onclick="openDeclineModal({{.ID}}, '{{.Title}}')">Decline</button>
+          </div>
+        </div>
+        {{else}}
+        <div class="empty-state">No tickets awaiting approval</div>
+        {{end}}
+      </div>
+
+      <div class="column col-merge">
+        <div class="column-title">Merge <span class="count">{{len .Merge}}</span></div>
+        {{range .Merge}}
+        <div class="card">
+          <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>
+          <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
+          <div class="card-title">{{.Title}}</div>
+          {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
+          {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
+        </div>
+        {{else}}
+        <div class="empty-state">No tickets merging</div>
+        {{end}}
       </div>
     </div>
-    {{else}}
-    <div class="empty-state">No tickets awaiting approval</div>
-    {{end}}
-  </div>
 
-  <div class="column col-merge">
-    <div class="column-title">Merge <span class="count">{{len .Merge}}</span></div>
-    {{range .Merge}}
-    <div class="card">
-      <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>
-      <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
-      <div class="card-title">{{.Title}}</div>
-      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
-      {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
+    <!-- Processing Panel at the bottom of center column -->
+    <div class="processing-panel{{if not .CurrentTicket}} processing-panel-idle{{end}}" id="processing-panel">
+      <div class="processing-panel-content">
+        <span class="processing-indicator"></span>
+        {{if .CurrentTicket}}
+        <a href="/task/{{.CurrentTicket.Number}}" class="processing-ticket">
+          <span class="processing-id">#{{.CurrentTicket.Number}}</span>
+          <span class="processing-title">{{.CurrentTicket.Title}}</span>
+        </a>
+        <div class="processing-labels">
+          {{if .CurrentTicket.Priority}}
+          <span class="processing-badge processing-priority-{{.CurrentTicket.Priority}}">
+            {{if eq .CurrentTicket.Priority "high"}}🔴{{else if eq .CurrentTicket.Priority "medium"}}🟡{{else}}🟢{{end}} {{.CurrentTicket.Priority}}
+          </span>
+          {{end}}
+          {{if .CurrentTicket.Type}}
+          <span class="processing-badge">
+            {{if eq .CurrentTicket.Type "bug"}}🐛 Bug{{else}}✨ Feature{{end}}
+          </span>
+          {{end}}
+          {{if .CurrentTicket.Size}}
+          <span class="processing-badge">📏 {{.CurrentTicket.Size}}</span>
+          {{end}}
+        </div>
+        {{else}}
+        <span class="processing-idle-text">No active ticket &mdash; Worker ready</span>
+        {{end}}
+      </div>
     </div>
-    {{else}}
-    <div class="empty-state">No tickets merging</div>
-    {{end}}
   </div>
 
-  <div class="stacked-column">
+  <!-- Right column: Done + Failed -->
+  <div class="board-right">
     <div class="column">
       <div class="column-title">Done <span class="count">{{len .Done}}</span></div>
       {{range .Done}}
