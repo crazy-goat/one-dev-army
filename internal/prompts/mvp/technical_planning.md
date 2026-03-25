@@ -6,7 +6,15 @@ Issue body:
 CRITICAL FIRST STEP — Check if already implemented:
 Before creating any plan, READ the relevant source files in the codebase using available file tools. Verify if this feature/fix is ALREADY IMPLEMENTED. If and ONLY if the existing code already fully satisfies all issue requirements with no changes needed, respond with a single line starting with the exact prefix ALREADY_DONE: followed by your concrete evidence (e.g. "method Foo already exists in bar.go:42"). Do NOT use this if the feature is only partially implemented or needs any modifications.
 
-If changes ARE needed (which is the expected case), provide a comprehensive technical analysis and implementation plan with the following structure:
+If changes ARE needed (which is the expected case), provide a comprehensive technical analysis and implementation plan.
+
+ARTIFACT — Save detailed analysis to file:
+Save the complete technical analysis and implementation plan to: .oda/artifacts/%d/01-planning.md
+
+CRITICAL: Save the complete analysis to the artifact file using file write tools BEFORE returning your response.
+
+RESPONSE to orchestrator:
+Return ONLY a brief 2-3 sentence summary confirming that the analysis has been saved to the artifact file. The orchestrator will read the full plan from the artifact file.
 
 ## Analysis
 
@@ -32,3 +40,4 @@ REQUIREMENTS:
 - Identify the project's coding conventions by examining existing code
 - Be specific and actionable — exact file paths, function names, etc.
 - Do NOT ask questions. Output both sections directly.
+- Save the full analysis to the artifact file at .oda/artifacts/%d/01-planning.md
