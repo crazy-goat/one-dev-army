@@ -40,4 +40,3 @@ REQUIREMENTS:
 - Identify the project's coding conventions by examining existing code
 - Be specific and actionable — exact file paths, function names, etc.
 - Do NOT ask questions. Output both sections directly.
-- Save the full analysis to the artifact file at .oda/artifacts/%d/01-planning.md

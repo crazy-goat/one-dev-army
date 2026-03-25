@@ -442,6 +442,11 @@ func TestTechnicalPlanningPromptFormat(t *testing.T) {
 		t.Errorf("formatted prompt does not contain expected artifact path %q", expectedArtifactPath)
 	}
 
+	// Verify all format specifiers were replaced (no %! patterns indicating missing args)
+	if strings.Contains(formatted, "%!") {
+		t.Errorf("formatted prompt contains unreplaced format specifiers: %s", formatted)
+	}
+
 	// Verify the prompt contains key sections
 	if !strings.Contains(formatted, "ARTIFACT") {
 		t.Error("formatted prompt does not contain 'ARTIFACT' section")
