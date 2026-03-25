@@ -2287,6 +2287,36 @@ func TestBoardLayout_StackedColumns(t *testing.T) {
 	}
 }
 
+// TestBoardLayout_BacklogAboveBlocked verifies Backlog column appears before Blocked in the left stack
+func TestBoardLayout_BacklogAboveBlocked(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleBoard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	backlogIdx := strings.Index(body, ">Backlog ")
+	blockedIdx := strings.Index(body, ">Blocked ")
+
+	if backlogIdx < 0 {
+		t.Fatal("Backlog column title not found in board output")
+	}
+	if blockedIdx < 0 {
+		t.Fatal("Blocked column title not found in board output")
+	}
+	if backlogIdx >= blockedIdx {
+		t.Errorf("Backlog (at index %d) should appear before Blocked (at index %d) in the left stack", backlogIdx, blockedIdx)
+	}
+}
+
 // TestBoardLayout_SprintControlsFunctional verifies sprint control buttons work
 func TestBoardLayout_SprintControlsFunctional(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
