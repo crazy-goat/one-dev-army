@@ -23,7 +23,7 @@ type Tag struct {
 // If no tags exist, returns defaultVersion and nil error
 func (c *Client) GetLatestTag() (string, error) {
 	// Fetch all tags using gh CLI
-	out, err := c.gh("api", "repos/"+c.Repo+"/git/refs/tags")
+	out, err := c.ghNoRepo("api", "repos/"+c.Repo+"/git/refs/tags")
 	if err != nil {
 		// Check if it's a 404 (no tags exist)
 		if strings.Contains(err.Error(), "404") {
@@ -77,7 +77,7 @@ func (c *Client) GetLatestTag() (string, error) {
 
 // TagExists checks if a tag already exists in the repository
 func (c *Client) TagExists(tagName string) (bool, error) {
-	_, err := c.gh("api", "repos/"+c.Repo+"/git/refs/tags/"+tagName)
+	_, err := c.ghNoRepo("api", "repos/"+c.Repo+"/git/refs/tags/"+tagName)
 	if err != nil {
 		if strings.Contains(err.Error(), "404") {
 			return false, nil
@@ -90,7 +90,7 @@ func (c *Client) TagExists(tagName string) (bool, error) {
 // CreateTag creates a new annotated tag on the specified branch
 func (c *Client) CreateTag(tagName, branch, message string) error {
 	// First, get the SHA of the latest commit on the branch
-	out, err := c.gh("api", "repos/"+c.Repo+"/git/ref/heads/"+branch)
+	out, err := c.ghNoRepo("api", "repos/"+c.Repo+"/git/ref/heads/"+branch)
 	if err != nil {
 		return fmt.Errorf("fetching branch %s: %w", branch, err)
 	}
