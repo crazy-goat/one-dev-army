@@ -221,6 +221,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /decline/{id}", s.handleDecline)
 	s.mux.HandleFunc("POST /block/{id}", s.handleBlock)
 	s.mux.HandleFunc("POST /unblock/{id}", s.handleUnblock)
+	s.mux.HandleFunc("POST /api/tickets/{id}/process", s.handleManualProcess)
 
 	// WebSocket endpoint
 	s.mux.HandleFunc("GET /ws", s.handleWebSocket)

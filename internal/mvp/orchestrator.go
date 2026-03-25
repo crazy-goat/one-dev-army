@@ -40,6 +40,7 @@ type Orchestrator struct {
 	paused      bool
 	processing  bool
 	currentTask *Task
+	manualNext  int
 	mu          sync.Mutex
 }
 
@@ -98,6 +99,29 @@ func (o *Orchestrator) CurrentTask() *Task {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	return o.currentTask
+}
+
+func (o *Orchestrator) QueueManualProcess(issueNumber int) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	if o.currentTask != nil && o.currentTask.Issue.Number == issueNumber {
+		return fmt.Errorf("ticket #%d is already being processed", issueNumber)
+	}
+
+	o.manualNext = issueNumber
+	if o.paused {
+		o.paused = false
+		log.Printf("[Orchestrator] ▶ Auto-started sprint for manual process of #%d", issueNumber)
+	}
+	log.Printf("[Orchestrator] Manual process queued: #%d", issueNumber)
+	return nil
+}
+
+func (o *Orchestrator) ManualNext() int {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.manualNext
 }
 
 // GetWorker returns the orchestrator's worker for config propagation.
@@ -203,13 +227,33 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			nextIssue = resumeIssue
 			isResume = true
 			log.Printf("[Orchestrator] Resuming in-progress #%d: %s", nextIssue.Number, nextIssue.Title)
-		} else if len(candidates) > 0 {
-			picked, err := o.pickNextTicket(ctx, candidates, nil)
-			if err != nil {
-				log.Printf("[Orchestrator] Error picking next ticket: %v — falling back to first candidate", err)
-				picked = &candidates[0]
+		} else {
+			o.mu.Lock()
+			manualNum := o.manualNext
+			o.manualNext = 0
+			o.mu.Unlock()
+
+			if manualNum > 0 {
+				for i := range candidates {
+					if candidates[i].Number == manualNum {
+						nextIssue = &candidates[i]
+						log.Printf("[Orchestrator] ▶ Manual process: picking #%d: %s", nextIssue.Number, nextIssue.Title)
+						break
+					}
+				}
+				if nextIssue == nil {
+					log.Printf("[Orchestrator] Manual process #%d not found in backlog candidates, falling back to auto-pick", manualNum)
+				}
 			}
-			nextIssue = picked
+
+			if nextIssue == nil && len(candidates) > 0 {
+				picked, err := o.pickNextTicket(ctx, candidates, nil)
+				if err != nil {
+					log.Printf("[Orchestrator] Error picking next ticket: %v — falling back to first candidate", err)
+					picked = &candidates[0]
+				}
+				nextIssue = picked
+			}
 		}
 
 		if nextIssue == nil {
