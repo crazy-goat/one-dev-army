@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync/atomic"
@@ -112,6 +114,18 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	task.Worktree = w.repoDir
 	log.Printf("[Worker %d] Branch %s ready, working in %s", w.id, branch, w.repoDir)
 
+	// Create artifact directory for this ticket
+	var artifactDir string
+	var err error
+	artifactDir, err = w.createArtifactDir(task.Issue.Number)
+	if err != nil {
+		task.Status = StatusFailed
+		task.Result = &TaskResult{Error: fmt.Errorf("creating artifact directory: %w", err)}
+		log.Printf("[Worker %d] ✗ FAILED creating artifact directory: %v", w.id, err)
+		return task.Result.Error
+	}
+	log.Printf("[Worker %d] Artifact directory ready: %s", w.id, artifactDir)
+
 	// Deferred cleanup: delete branch if task did not complete successfully.
 	// On successful merge, gh pr merge --delete-branch handles branch deletion.
 	defer func() {
@@ -124,7 +138,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	}()
 
 	var analysis, implPlan, prURL string
-	var err error
+	_ = artifactDir
 
 	if resumeFrom <= 0 {
 		log.Printf("[Worker %d] [1/4] Technical planning for #%d...", w.id, task.Issue.Number)
@@ -745,6 +759,14 @@ func extractText(msg *opencode.Message) string {
 		}
 	}
 	return sb.String()
+}
+
+func (w *Worker) createArtifactDir(issueNumber int) (string, error) {
+	artifactDir := filepath.Join(w.repoDir, ".oda", "artifacts", fmt.Sprintf("%d", issueNumber))
+	if err := os.MkdirAll(artifactDir, 0o755); err != nil {
+		return "", fmt.Errorf("creating artifact directory %s: %w", artifactDir, err)
+	}
+	return artifactDir, nil
 }
 
 // UpdateConfig updates the worker's configuration atomically.
