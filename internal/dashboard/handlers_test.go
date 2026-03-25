@@ -2232,7 +2232,7 @@ func TestBoardLayout_ValidHTMLStructure(t *testing.T) {
 		"board-header":  `class="board-header"`,
 		"board-actions": `class="board-actions"`,
 		"board grid":    `class="board"`,
-		"9 columns":     "grid-template-columns:repeat(9,1fr)",
+		"7 columns":     "grid-template-columns:repeat(7,1fr)",
 	}
 
 	for name, pattern := range structureChecks {
@@ -2247,6 +2247,43 @@ func TestBoardLayout_ValidHTMLStructure(t *testing.T) {
 	closeDivs := strings.Count(body, "</div>")
 	if openDivs != closeDivs {
 		t.Errorf("HTML structure issue: %d opening <div> tags but %d closing </div> tags", openDivs, closeDivs)
+	}
+}
+
+// TestBoardLayout_StackedColumns verifies board has stacked columns for Blocked/Backlog and Done/Failed
+func TestBoardLayout_StackedColumns(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleBoard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	if !strings.Contains(body, `class="stacked-column"`) {
+		t.Error("board page missing stacked-column CSS class")
+	}
+
+	if !strings.Contains(body, "stacked-column") {
+		t.Error("board page missing stacked column containers")
+	}
+
+	if strings.Count(body, `class="stacked-column"`) != 2 {
+		t.Errorf("expected 2 stacked-column containers, got %d", strings.Count(body, `class="stacked-column"`))
+	}
+
+	if !strings.Contains(body, ".stacked-column{") {
+		t.Error("board page missing stacked-column CSS rule")
+	}
+
+	if !strings.Contains(body, ".stacked-column .column{") {
+		t.Error("board page missing stacked-column .column CSS rule")
 	}
 }
 
