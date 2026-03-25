@@ -373,6 +373,23 @@ func (s *Store) DeleteSteps(issueNumber int) error {
 	})
 }
 
+// DeleteStepsFrom removes all task steps from a specific step onward for an issue.
+// This is used when retrying from an earlier stage (e.g., after pipeline failure).
+func (s *Store) DeleteStepsFrom(issueNumber int, fromStep string) error {
+	return s.submitWrite(func() (any, error) {
+		// Delete the specified step and all subsequent steps
+		_, err := s.db.Exec(`
+			DELETE FROM task_steps 
+			WHERE issue_number = ? 
+			AND step_name IN ('implement', 'code-review', 'create-pr', 'check-pipeline', 'awaiting-approval', 'merge')
+		`, issueNumber)
+		if err != nil {
+			return nil, fmt.Errorf("deleting task steps from %s: %w", fromStep, err)
+		}
+		return nil, nil
+	})
+}
+
 func (s *Store) GetSprintCost(sprintID int) (float64, error) {
 	var cost sql.NullFloat64
 	err := s.db.QueryRow(

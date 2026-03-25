@@ -509,6 +509,17 @@ func (o *Orchestrator) HandleWorkerEvent(event WorkerEvent) {
 		return
 	}
 
+	// Clear task steps when retrying from check-pipeline failure to coding
+	// This ensures worker starts from implement step, not from check-pipeline
+	if event.Stage == "check-pipeline" && event.Status == EventFailed && nextStage == github.StageCode {
+		if o.store != nil {
+			log.Printf("[Orchestrator] Clearing task steps for #%d after pipeline failure - will retry from implement", event.IssueNumber)
+			if err := o.store.DeleteStepsFrom(event.IssueNumber, "implement"); err != nil {
+				log.Printf("[Orchestrator] Warning: failed to clear task steps for #%d: %v", event.IssueNumber, err)
+			}
+		}
+	}
+
 	// Update stage
 	if err := o.ChangeStage(event.IssueNumber, nextStage, reason); err != nil {
 		log.Printf("[Orchestrator] Error changing stage for #%d: %v", event.IssueNumber, err)
