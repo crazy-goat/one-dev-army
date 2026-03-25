@@ -495,7 +495,7 @@ func (w *Worker) implement(ctx context.Context, task *Task, planStr string) erro
 	if testCmd == "" {
 		testCmd = "go test ./..."
 	}
-	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPImplementation), task.Issue.Number, task.Issue.Title, planStr, task.Worktree, testCmd, task.Issue.Number, task.Issue.Number, task.Issue.Number)
+	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPImplementation), task.Issue.Number, task.Issue.Title, planStr, task.Worktree, testCmd, task.Issue.Number, task.Issue.Number, task.Issue.Number, task.Issue.Number, task.Issue.Number)
 
 	// Use router to select model for code category with complexity detection
 	llmModel := w.cfg.Load().LLM.Code.Model
@@ -565,7 +565,7 @@ type crResult struct {
 }
 
 func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (approved bool, review string, err error) {
-	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPCodeReview), task.Issue.Number, task.Issue.Title, prURL, w.gh.Repo)
+	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPCodeReview), task.Issue.Number, task.Issue.Title, prURL, w.gh.Repo, task.Issue.Number)
 
 	sessionTitle := fmt.Sprintf("code-review-%d", task.Issue.Number)
 	session, err := w.oc.CreateSession(sessionTitle)

@@ -2,6 +2,13 @@ You are reviewing code changes for GitHub issue #%d: %s
 
 The changes are in PR %s in repository %s.
 
+PIPELINE FAILURE CHECK:
+Check if .oda/artifacts/%d/pipeline-fail.log exists.
+If the file exists:
+- Read the pipeline failure logs
+- Verify that ALL errors from the logs have been addressed in the code changes
+- Add "Pipeline failures resolved" as a critical review criterion
+
 REVIEW PROCESS:
 1. Fetch the PR diff using: gh pr diff <pr-number>
 2. Read the diff carefully to understand all changes
@@ -21,6 +28,7 @@ REVIEW CRITERIA (assign severity: critical, major, minor, or none):
    - Context propagation (accept context.Context in public APIs)
    - Resource cleanup (defer Close(), handle cleanup on all paths)
    - Race conditions (shared state properly synchronized)
+8. Pipeline failures resolved — if pipeline-fail.log exists, verify all errors fixed
 
 APPROVAL THRESHOLD:
 - approved=true: Code is production-ready, all critical and major issues resolved
