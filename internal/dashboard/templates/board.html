@@ -4,7 +4,7 @@
 .board-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem}
 .board-actions{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
 @media (max-width:768px){.board-header{flex-direction:column;align-items:flex-start}.board-actions{width:100%;justify-content:flex-start}}
-.board{display:grid;grid-template-columns:repeat(7,1fr);gap:1rem;margin-bottom:2rem}
+.board{display:grid;grid-template-columns:repeat(8,1fr);gap:1rem;margin-bottom:2rem}
 .stacked-column{display:flex;flex-direction:column;gap:0.5rem;height:calc(100vh - 8rem);min-height:300px}
 .stacked-column .column{flex:1 1 50%;min-height:0;overflow-y:auto;scroll-behavior:smooth}
 .stacked-column .column-title{position:sticky;top:0;z-index:1;background:var(--surface);padding-bottom:.5rem}
@@ -34,6 +34,8 @@
 .col-code .column-title{color:#3498db}
 .col-approve .card{border-color:#9b59b6;background:rgba(155,89,182,0.05)}
 .col-approve .column-title{color:#9b59b6}
+.col-check-pipeline .card{border-color:#17a2b8;background:rgba(23,162,184,0.05)}
+.col-check-pipeline .column-title{color:#17a2b8}
 .col-merge .card{border-color:#6f42c1;background:rgba(111,66,193,0.05)}
 .col-merge .column-title{color:#6f42c1}
 .card .card-pr{margin-top:.3rem}
@@ -234,6 +236,21 @@ function triggerSync() {
     </div>
     {{else}}
     <div class="empty-state">No tickets in AI review</div>
+    {{end}}
+  </div>
+
+  <div class="column col-check-pipeline">
+    <div class="column-title">Check Pipeline <span class="count">{{len .CheckPipeline}}</span></div>
+    {{range .CheckPipeline}}
+    <div class="card">
+      <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>
+      <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
+      <div class="card-title">{{.Title}}</div>
+      {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
+      {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
+    </div>
+    {{else}}
+    <div class="empty-state">No tickets in check pipeline</div>
     {{end}}
   </div>
 

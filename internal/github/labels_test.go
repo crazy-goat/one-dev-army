@@ -107,6 +107,7 @@ func TestLabelStructure(t *testing.T) {
 		{"stage:blocked exists", "stage:blocked", "B60205", true},
 		{"stage:failed exists", "stage:failed", "D93F0B", true},
 		{"stage:create-pr exists", "stage:create-pr", "1D76DB", true},
+		{"stage:check-pipeline exists", "stage:check-pipeline", "1D76DB", true},
 		{"stage:merging exists", "stage:merging", "0E8A16", true},
 		{"stage:backlog exists", "stage:backlog", "EEEEEE", true},
 		{"stage:done exists", "stage:done", "0E8A16", true},
@@ -197,14 +198,14 @@ func TestRequiredLabelsCount(t *testing.T) {
 	// Labels:
 	// sprint, insight (2)
 	// size:S, size:M, size:L, size:XL (4)
-	// stage:backlog, stage:analysis, stage:coding, stage:code-review, stage:create-pr,
+	// stage:backlog, stage:analysis, stage:coding, stage:code-review, stage:create-pr, stage:check-pipeline,
 	// stage:awaiting-approval, stage:merging, stage:done, stage:failed, stage:blocked,
-	// stage:needs-user (11)
+	// stage:needs-user (12)
 	// priority:high, priority:medium, priority:low (3)
 	// epic, wizard, merge-failed (3)
 	// bug, feature (2)
-	// Total: 25
-	expectedCount := 25
+	// Total: 26
+	expectedCount := 26
 	if len(RequiredLabels) != expectedCount {
 		t.Errorf("Expected %d labels, got %d", expectedCount, len(RequiredLabels))
 	}
@@ -300,6 +301,7 @@ func TestStageLabelRoundTrip(t *testing.T) {
 		{StageCode, "stage:coding"},
 		{StageReview, "stage:code-review"},
 		{StageCreatePR, "stage:create-pr"},
+		{StageCheckPipeline, "stage:check-pipeline"},
 		{StageApprove, "stage:awaiting-approval"},
 		{StageMerge, "stage:merging"},
 		{StageDone, "stage:done"},
@@ -339,6 +341,7 @@ func TestStageColumn(t *testing.T) {
 		{StageCode, "Code"},
 		{StageReview, "AI Review"},
 		{StageCreatePR, "AI Review"},
+		{StageCheckPipeline, "Check Pipeline"},
 		{StageApprove, "Approve"},
 		{StageMerge, "Merge"},
 		{StageDone, "Done"},
@@ -379,6 +382,7 @@ func TestIsStageLabel(t *testing.T) {
 		{"stage:coding", true},
 		{"stage:code-review", true},
 		{"stage:create-pr", true},
+		{"stage:check-pipeline", true},
 		{"stage:awaiting-approval", true},
 		{"stage:merging", true},
 		{"stage:failed", true},
@@ -420,6 +424,7 @@ func TestGetStageFromLabels(t *testing.T) {
 		{"Code stage", []string{"stage:coding"}, StageCode},
 		{"AI Review stage", []string{"stage:code-review"}, StageReview},
 		{"Create PR stage", []string{"stage:create-pr"}, StageCreatePR},
+		{"Check Pipeline stage", []string{"stage:check-pipeline"}, StageCheckPipeline},
 		{"Approve stage", []string{"stage:awaiting-approval"}, StageApprove},
 		{"Merge stage", []string{"stage:merging"}, StageMerge},
 		{"Done stage", []string{"stage:done"}, StageDone},
@@ -796,7 +801,8 @@ func TestStageTransitions(t *testing.T) {
 		{StagePlan, StageCode, "stage:coding", []string{"stage:analysis"}},
 		{StageCode, StageReview, "stage:code-review", []string{"stage:coding"}},
 		{StageReview, StageCreatePR, "stage:create-pr", []string{"stage:code-review"}},
-		{StageCreatePR, StageApprove, "stage:awaiting-approval", []string{"stage:create-pr"}},
+		{StageCreatePR, StageCheckPipeline, "stage:check-pipeline", []string{"stage:create-pr"}},
+		{StageCheckPipeline, StageApprove, "stage:awaiting-approval", []string{"stage:check-pipeline"}},
 		{StageApprove, StageMerge, "stage:merging", []string{"stage:awaiting-approval"}},
 		{StageMerge, StageDone, "stage:done", []string{"stage:merging"}},
 		{StageCode, StageFailed, "stage:failed", []string{"stage:coding"}},
@@ -829,6 +835,7 @@ func TestAllStagesCompleteness(t *testing.T) {
 		StageCode,
 		StageReview,
 		StageCreatePR,
+		StageCheckPipeline,
 		StageApprove,
 		StageMerge,
 		StageDone,

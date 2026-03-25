@@ -14,6 +14,8 @@ The orchestrator (`internal/mvp/orchestrator.go`) is the central control loop:
 Tickets flow through stages tracked by GitHub labels with the `stage:` prefix:
 
 ```
+Backlog -> Plan -> Code -> AI Review -> Create PR -> Check Pipeline -> Approve -> Merge -> Done
+```
 Backlog -> Plan -> Code -> AI Review -> Create PR -> Approve -> Merge -> Done
                                                                   |
 Any State -----> Failed -----> [Retry] -----> Backlog
@@ -44,7 +46,7 @@ Each mode has strong/weak model variants. Routing rules determine which variant 
 
 The HTMX dashboard (`internal/dashboard/`) provides:
 
-- Real-time Kanban board (Backlog, Plan, Code, AI Review, Approve, Merge, Done, Failed, Blocked)
+- Real-time Kanban board (Backlog, Plan, Code, AI Review, Check Pipeline, Approve, Merge, Done, Failed, Blocked)
 - Worker status with elapsed time
 - Issue actions (approve/decline PR, retry, cancel, block/unblock)
 - Wizard for epic decomposition (LLM-powered issue generation)

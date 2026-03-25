@@ -2178,7 +2178,7 @@ func TestBoardLayout_ValidHTMLStructure(t *testing.T) {
 		"board-header":  `class="board-header"`,
 		"board-actions": `class="board-actions"`,
 		"board grid":    `class="board"`,
-		"7 columns":     "grid-template-columns:repeat(7,1fr)",
+		"7 columns":     "grid-template-columns:repeat(8,1fr)",
 	}
 
 	for name, pattern := range structureChecks {
@@ -2922,6 +2922,11 @@ func TestInferColumnFromIssue(t *testing.T) {
 			expected: "AI Review",
 		},
 		{
+			name:     "stage:check-pipeline maps to Check Pipeline",
+			labels:   []string{"stage:check-pipeline"},
+			expected: "Check Pipeline",
+		},
+		{
 			name:     "stage:create-pr maps to AI Review",
 			labels:   []string{"stage:create-pr"},
 			expected: "AI Review",
@@ -3013,6 +3018,11 @@ func TestAddCardToColumn(t *testing.T) {
 			expectedField: "AIReview",
 		},
 		{
+			name:          "Check Pipeline column adds to CheckPipeline field",
+			column:        "Check Pipeline",
+			expectedField: "CheckPipeline",
+		},
+		{
 			name:          "Approve column adds to Approve field",
 			column:        "Approve",
 			expectedField: "Approve",
@@ -3054,6 +3064,8 @@ func TestAddCardToColumn(t *testing.T) {
 				count = len(data.Backlog)
 			case "AIReview":
 				count = len(data.AIReview)
+			case "CheckPipeline":
+				count = len(data.CheckPipeline)
 			case "Approve":
 				count = len(data.Approve)
 			case "Done":
