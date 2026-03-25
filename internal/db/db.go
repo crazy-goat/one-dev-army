@@ -746,6 +746,37 @@ func (s *Store) GetStageChanges(issueNumber int) (changes []StageChange, err err
 	return changes, nil
 }
 
+// GetStageChangesLimit returns stage changes for an issue with optional limit
+func (s *Store) GetStageChangesLimit(issueNumber, limit int) (changes []StageChange, err error) {
+	query := `SELECT id, issue_number, from_stage, to_stage, reason, changed_by, changed_at
+		 FROM stage_change_ledger WHERE issue_number = ? ORDER BY changed_at DESC`
+	if limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", limit)
+	}
+
+	rows, err := s.db.Query(query, issueNumber)
+	if err != nil {
+		return nil, fmt.Errorf("querying stage changes: %w", err)
+	}
+	defer func() {
+		if cerr := rows.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing rows: %w", cerr)
+		}
+	}()
+
+	for rows.Next() {
+		var c StageChange
+		if err := rows.Scan(&c.ID, &c.IssueNumber, &c.FromStage, &c.ToStage, &c.Reason, &c.ChangedBy, &c.ChangedAt); err != nil {
+			return nil, fmt.Errorf("scanning stage change: %w", err)
+		}
+		changes = append(changes, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating stage changes: %w", err)
+	}
+	return changes, nil
+}
+
 // StageChange represents a single stage change record
 type StageChange struct {
 	ID          int
