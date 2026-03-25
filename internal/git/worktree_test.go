@@ -39,6 +39,11 @@ func setupRepo(t *testing.T) string {
 	cloneDir := t.TempDir()
 	runGit(cloneDir, "clone", bareDir, ".")
 
+	// Configure git identity in the repo so that all git commands
+	// (including those run by BranchManager internally) have a valid committer.
+	runGit(cloneDir, "config", "user.name", "test")
+	runGit(cloneDir, "config", "user.email", "test@test.com")
+
 	// Create an initial commit and push to origin
 	runGit(cloneDir, "commit", "--allow-empty", "-m", "init")
 	runGit(cloneDir, "push", "origin", "master")

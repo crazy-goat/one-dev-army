@@ -48,62 +48,8 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 			}
 			return string(b)
 		},
-		"labelIcon": func(label string) string {
-			switch label {
-			case "type:feature", "feature", "enhancement":
-				return "✨"
-			case "type:bug", "bug":
-				return "🐛"
-			case "type:docs":
-				return "📚"
-			case "type:refactor":
-				return "🔧"
-			case "size:S":
-				return "🐜"
-			case "size:M":
-				return "🐕"
-			case "size:L":
-				return "🐘"
-			case "size:XL":
-				return "🦕"
-			case "priority:high":
-				return "🔴"
-			case "priority:medium":
-				return "🟡"
-			case "priority:low":
-				return "🟢"
-			default:
-				return ""
-			}
-		},
-		"labelTooltip": func(label string) string {
-			switch label {
-			case "type:feature", "feature", "enhancement":
-				return "Type: Feature"
-			case "type:bug", "bug":
-				return "Type: Bug"
-			case "type:docs":
-				return "Documentation"
-			case "type:refactor":
-				return "Refactor"
-			case "size:S":
-				return "Size: Small"
-			case "size:M":
-				return "Size: Medium"
-			case "size:L":
-				return "Size: Large"
-			case "size:XL":
-				return "Size: Extra Large"
-			case "priority:high":
-				return "Priority: High"
-			case "priority:medium":
-				return "Priority: Medium"
-			case "priority:low":
-				return "Priority: Low"
-			default:
-				return ""
-			}
-		},
+		"labelIcon":    LabelIcon,
+		"labelTooltip": LabelTooltip,
 	}
 
 	pages := []string{"board.html", "task.html"}
@@ -4900,50 +4846,9 @@ func TestLabelIcon(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a minimal template to test the function
-			funcMap := template.FuncMap{
-				"labelIcon": func(label string) string {
-					switch label {
-					case "type:feature", "feature", "enhancement":
-						return "✨"
-					case "type:bug", "bug":
-						return "🐛"
-					case "type:docs":
-						return "📚"
-					case "type:refactor":
-						return "🔧"
-					case "size:S":
-						return "🐜"
-					case "size:M":
-						return "🐕"
-					case "size:L":
-						return "🐘"
-					case "size:XL":
-						return "🦕"
-					case "priority:high":
-						return "🔴"
-					case "priority:medium":
-						return "🟡"
-					case "priority:low":
-						return "🟢"
-					default:
-						return ""
-					}
-				},
-			}
-
-			tmpl, err := template.New("test").Funcs(funcMap).Parse("{{labelIcon .}}")
-			if err != nil {
-				t.Fatalf("failed to parse template: %v", err)
-			}
-
-			var buf strings.Builder
-			if err := tmpl.Execute(&buf, tt.label); err != nil {
-				t.Fatalf("failed to execute template: %v", err)
-			}
-
-			if buf.String() != tt.expected {
-				t.Errorf("labelIcon(%q) = %q, want %q", tt.label, buf.String(), tt.expected)
+			got := LabelIcon(tt.label)
+			if got != tt.expected {
+				t.Errorf("LabelIcon(%q) = %q, want %q", tt.label, got, tt.expected)
 			}
 		})
 	}
@@ -4977,50 +4882,9 @@ func TestLabelTooltip(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a minimal template to test the function
-			funcMap := template.FuncMap{
-				"labelTooltip": func(label string) string {
-					switch label {
-					case "type:feature", "feature", "enhancement":
-						return "Type: Feature"
-					case "type:bug", "bug":
-						return "Type: Bug"
-					case "type:docs":
-						return "Documentation"
-					case "type:refactor":
-						return "Refactor"
-					case "size:S":
-						return "Size: Small"
-					case "size:M":
-						return "Size: Medium"
-					case "size:L":
-						return "Size: Large"
-					case "size:XL":
-						return "Size: Extra Large"
-					case "priority:high":
-						return "Priority: High"
-					case "priority:medium":
-						return "Priority: Medium"
-					case "priority:low":
-						return "Priority: Low"
-					default:
-						return ""
-					}
-				},
-			}
-
-			tmpl, err := template.New("test").Funcs(funcMap).Parse("{{labelTooltip .}}")
-			if err != nil {
-				t.Fatalf("failed to parse template: %v", err)
-			}
-
-			var buf strings.Builder
-			if err := tmpl.Execute(&buf, tt.label); err != nil {
-				t.Fatalf("failed to execute template: %v", err)
-			}
-
-			if buf.String() != tt.expected {
-				t.Errorf("labelTooltip(%q) = %q, want %q", tt.label, buf.String(), tt.expected)
+			got := LabelTooltip(tt.label)
+			if got != tt.expected {
+				t.Errorf("LabelTooltip(%q) = %q, want %q", tt.label, got, tt.expected)
 			}
 		})
 	}

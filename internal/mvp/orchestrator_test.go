@@ -478,7 +478,7 @@ func TestOrchestrator_UpdateConfig(t *testing.T) {
 }
 
 // TestOrchestrator_ImplementsConfigAwareWorker verifies that Orchestrator implements ConfigAwareWorker interface.
-func TestOrchestrator_ImplementsConfigAwareWorker(t *testing.T) {
+func TestOrchestrator_ImplementsConfigAwareWorker(_ *testing.T) {
 	// This is a compile-time check
 	var _ config.ConfigAwareWorker = (*Orchestrator)(nil)
 }
@@ -607,7 +607,7 @@ func TestCheckAndBroadcastSprintClosable_AllTerminal(t *testing.T) {
 	}
 }
 
-func TestCheckAndBroadcastSprintClosable_NoHub(t *testing.T) {
+func TestCheckAndBroadcastSprintClosable_NoHub(_ *testing.T) {
 	// Create orchestrator without hub
 	o := &Orchestrator{}
 

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -762,7 +763,7 @@ func extractText(msg *opencode.Message) string {
 }
 
 func (w *Worker) createArtifactDir(issueNumber int) (string, error) {
-	artifactDir := filepath.Join(w.repoDir, ".oda", "artifacts", fmt.Sprintf("%d", issueNumber))
+	artifactDir := filepath.Join(w.repoDir, ".oda", "artifacts", strconv.Itoa(issueNumber))
 	if err := os.MkdirAll(artifactDir, 0o755); err != nil {
 		return "", fmt.Errorf("creating artifact directory %s: %w", artifactDir, err)
 	}

@@ -276,29 +276,27 @@ func TestTaskChatHistory_ConcurrentAccess(t *testing.T) {
 
 	// Add messages concurrently
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		wg.Add(1)
-		go func(idx int) {
+		go func() {
 			defer wg.Done()
-			for j := 0; j < 10; j++ {
+			for j := range 10 {
 				role := "user"
 				if j%2 == 0 {
 					role = "assistant"
 				}
-				task.AddChatMessage(role, fmt.Sprintf("Message %d-%d", idx, j))
+				task.AddChatMessage(role, fmt.Sprintf("Message %d-%d", i, j))
 			}
-		}(i)
+		}()
 	}
 
 	// Read messages concurrently
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < 20; j++ {
+	for range 5 {
+		wg.Go(func() {
+			for range 20 {
 				_ = task.GetChatMessages()
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -321,7 +319,7 @@ func TestTaskChatHistory_MaxSize(t *testing.T) {
 	}
 
 	// Add more than 1000 messages (the default max)
-	for i := 0; i < 1100; i++ {
+	for i := range 1100 {
 		task.AddChatMessage("user", fmt.Sprintf("Message %d", i))
 	}
 

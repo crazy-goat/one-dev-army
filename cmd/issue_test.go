@@ -194,7 +194,7 @@ func TestTriggerDashboardSync(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			syncCalled := false
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/api/sync" && r.Method == "POST" {
+				if r.URL.Path == "/api/sync" && r.Method == http.MethodPost {
 					syncCalled = true
 				}
 				w.WriteHeader(tt.serverResponse)
@@ -216,7 +216,7 @@ func TestTriggerDashboardSync(t *testing.T) {
 	}
 }
 
-func TestTriggerDashboardSync_DashboardNotRunning(t *testing.T) {
+func TestTriggerDashboardSync_DashboardNotRunning(_ *testing.T) {
 	// Use an unused port to simulate dashboard not running
 	triggerDashboardSync(59999)
 	// Should not panic or return error - function should return gracefully

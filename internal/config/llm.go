@@ -15,9 +15,8 @@ const (
 	CategorySetup         TaskCategory = "setup"         // CI generation, project setup
 )
 
-// ComplexityLevel represents the complexity hint for model selection
-//
-// Deprecated: No longer used with per-mode model selection
+// ComplexityLevel represents the complexity hint for model selection.
+// Kept for keyword-based complexity estimation in the llm package.
 type ComplexityLevel string
 
 const (

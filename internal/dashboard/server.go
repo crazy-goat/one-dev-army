@@ -154,62 +154,8 @@ func parseTemplates() (map[string]*template.Template, error) {
 			}
 			return string(b)
 		},
-		"labelIcon": func(label string) string {
-			switch label {
-			case "type:feature", "feature", "enhancement":
-				return "✨"
-			case "type:bug", "bug":
-				return "🐛"
-			case "type:docs":
-				return "📚"
-			case "type:refactor":
-				return "🔧"
-			case "size:S":
-				return "🐜"
-			case "size:M":
-				return "🐕"
-			case "size:L":
-				return "🐘"
-			case "size:XL":
-				return "🦕"
-			case "priority:high":
-				return "🔴"
-			case "priority:medium":
-				return "🟡"
-			case "priority:low":
-				return "🟢"
-			default:
-				return ""
-			}
-		},
-		"labelTooltip": func(label string) string {
-			switch label {
-			case "type:feature", "feature", "enhancement":
-				return "Type: Feature"
-			case "type:bug", "bug":
-				return "Type: Bug"
-			case "type:docs":
-				return "Documentation"
-			case "type:refactor":
-				return "Refactor"
-			case "size:S":
-				return "Size: Small"
-			case "size:M":
-				return "Size: Medium"
-			case "size:L":
-				return "Size: Large"
-			case "size:XL":
-				return "Size: Extra Large"
-			case "priority:high":
-				return "Priority: High"
-			case "priority:medium":
-				return "Priority: Medium"
-			case "priority:low":
-				return "Priority: Low"
-			default:
-				return ""
-			}
-		},
+		"labelIcon":    LabelIcon,
+		"labelTooltip": LabelTooltip,
 	}
 
 	pages := []string{"board.html", "task.html"}
@@ -330,6 +276,47 @@ func (s *Server) Shutdown(ctx context.Context) error {
 
 func (s *Server) Handler() http.Handler {
 	return s.mux
+}
+
+// labelInfo holds the icon and tooltip for a label.
+type labelInfo struct {
+	Icon    string
+	Tooltip string
+}
+
+// labelData maps label strings to their icon and tooltip.
+// Multiple label strings can map to the same info (e.g. "type:feature", "feature", "enhancement").
+var labelData = map[string]labelInfo{
+	"type:feature":    {Icon: "✨", Tooltip: "Type: Feature"},
+	"feature":         {Icon: "✨", Tooltip: "Type: Feature"},
+	"enhancement":     {Icon: "✨", Tooltip: "Type: Feature"},
+	"type:bug":        {Icon: "🐛", Tooltip: "Type: Bug"},
+	"bug":             {Icon: "🐛", Tooltip: "Type: Bug"},
+	"type:docs":       {Icon: "📚", Tooltip: "Documentation"},
+	"type:refactor":   {Icon: "🔧", Tooltip: "Refactor"},
+	"size:S":          {Icon: "🐜", Tooltip: "Size: Small"},
+	"size:M":          {Icon: "🐕", Tooltip: "Size: Medium"},
+	"size:L":          {Icon: "🐘", Tooltip: "Size: Large"},
+	"size:XL":         {Icon: "🦕", Tooltip: "Size: Extra Large"},
+	"priority:high":   {Icon: "🔴", Tooltip: "Priority: High"},
+	"priority:medium": {Icon: "🟡", Tooltip: "Priority: Medium"},
+	"priority:low":    {Icon: "🟢", Tooltip: "Priority: Low"},
+}
+
+// LabelIcon returns the emoji icon for a given label string.
+func LabelIcon(label string) string {
+	if info, ok := labelData[label]; ok {
+		return info.Icon
+	}
+	return ""
+}
+
+// LabelTooltip returns the human-readable tooltip for a given label string.
+func LabelTooltip(label string) string {
+	if info, ok := labelData[label]; ok {
+		return info.Tooltip
+	}
+	return ""
 }
 
 // Hub returns the WebSocket hub for broadcasting messages
