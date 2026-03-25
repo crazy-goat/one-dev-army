@@ -22,6 +22,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"github.com/crazy-goat/one-dev-army/internal/plan"
 	"github.com/crazy-goat/one-dev-army/internal/prompts"
+	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
 
 var ErrAlreadyDone = errors.New("ticket already done")
@@ -144,14 +145,28 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	if resumeFrom <= 0 {
 		log.Printf("[Worker %d] [1/7] Technical planning for #%d...", w.id, task.Issue.Number)
 		stepStart := time.Now()
-		analysis, implPlan, err = w.technicalPlanning(ctx, task)
+		stepLogger, slErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "technical-planning")
+		if slErr != nil {
+			log.Printf("[Worker %d] Warning: failed to create step logger: %v", w.id, slErr)
+		}
+		if stepLogger != nil {
+			_ = stepLogger.Start()
+			defer stepLogger.Close()
+		}
+		analysis, implPlan, err = w.technicalPlanning(ctx, task, stepLogger)
 		if err != nil {
 			task.Status = StatusFailed
 			task.Result = &TaskResult{Error: fmt.Errorf("technical planning: %w", err)}
 			log.Printf("[Worker %d] ✗ FAILED technical planning: %v", w.id, err)
+			if stepLogger != nil {
+				_ = stepLogger.End(false, err.Error())
+			}
 			return task.Result.Error
 		}
 		log.Printf("[Worker %d] [1/7] Technical planning done (%s, analysis=%d chars, plan=%d chars)", w.id, time.Since(stepStart).Round(time.Second), len(analysis), len(implPlan))
+		if stepLogger != nil {
+			_ = stepLogger.End(true, fmt.Sprintf("analysis=%d chars, plan=%d chars", len(analysis), len(implPlan)))
+		}
 		w.reportStageComplete("analysis", EventSuccess, "technical planning completed")
 	} else {
 		log.Printf("[Worker %d] [1/7] Skipping technical-planning (completed previously)", w.id)
@@ -172,13 +187,27 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		task.Status = StatusCoding
 		log.Printf("[Worker %d] [2/7] Implementing #%d (includes tests)...", w.id, task.Issue.Number)
 		stepStart := time.Now()
-		if err := w.implement(ctx, task, implPlan); err != nil {
+		stepLogger, slErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "implement")
+		if slErr != nil {
+			log.Printf("[Worker %d] Warning: failed to create step logger: %v", w.id, slErr)
+		}
+		if stepLogger != nil {
+			_ = stepLogger.Start()
+			defer stepLogger.Close()
+		}
+		if err := w.implement(ctx, task, implPlan, stepLogger); err != nil {
 			task.Status = StatusFailed
 			task.Result = &TaskResult{Error: fmt.Errorf("implementing: %w", err)}
 			log.Printf("[Worker %d] ✗ FAILED implementing: %v", w.id, err)
+			if stepLogger != nil {
+				_ = stepLogger.End(false, err.Error())
+			}
 			return task.Result.Error
 		}
 		log.Printf("[Worker %d] [2/7] Implementation done (%s)", w.id, time.Since(stepStart).Round(time.Second))
+		if stepLogger != nil {
+			_ = stepLogger.End(true, "")
+		}
 		w.reportStageComplete("coding", EventSuccess, "implementation completed")
 	} else {
 		log.Printf("[Worker %d] [2/7] Skipping implement (completed previously)", w.id)
@@ -188,26 +217,50 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		task.Status = StatusReviewing
 		log.Printf("[Worker %d] [3/7] Code review #%d...", w.id, task.Issue.Number)
 		stepStart := time.Now()
-		approved, review, crErr := w.codeReview(ctx, task, "")
+		stepLogger, slErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "code-review")
+		if slErr != nil {
+			log.Printf("[Worker %d] Warning: failed to create step logger: %v", w.id, slErr)
+		}
+		if stepLogger != nil {
+			_ = stepLogger.Start()
+			defer stepLogger.Close()
+		}
+		approved, review, crErr := w.codeReview(ctx, task, "", stepLogger)
 		if crErr != nil {
 			task.Status = StatusFailed
 			task.Result = &TaskResult{Error: fmt.Errorf("code review: %w", crErr)}
 			log.Printf("[Worker %d] ✗ FAILED code review: %v", w.id, crErr)
+			if stepLogger != nil {
+				_ = stepLogger.End(false, crErr.Error())
+			}
 			return task.Result.Error
 		}
 		log.Printf("[Worker %d] [3/7] Code review done (%s, approved=%v)", w.id, time.Since(stepStart).Round(time.Second), approved)
 
 		if !approved {
-			// Retry with fixes
 			log.Printf("[Worker %d] Code review not approved, fixing...", w.id)
 			task.Status = StatusCoding
 			w.reportStageComplete("coding", EventInProgress, "fixing from AI review")
 			stepStart = time.Now()
-			if fixErr := w.fixFromReview(ctx, task, review); fixErr != nil {
+			fixLogger, fixErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "fix-from-review")
+			if fixErr != nil {
+				log.Printf("[Worker %d] Warning: failed to create fix logger: %v", w.id, fixErr)
+			}
+			if fixLogger != nil {
+				_ = fixLogger.Start()
+				defer fixLogger.Close()
+			}
+			if fixErr := w.fixFromReview(ctx, task, review, fixLogger); fixErr != nil {
 				task.Status = StatusFailed
 				task.Result = &TaskResult{Error: fmt.Errorf("fixing from review: %w", fixErr)}
 				log.Printf("[Worker %d] ✗ FAILED fixing from review: %v", w.id, fixErr)
+				if fixLogger != nil {
+					_ = fixLogger.End(false, fixErr.Error())
+				}
 				return task.Result.Error
+			}
+			if fixLogger != nil {
+				_ = fixLogger.End(true, "")
 			}
 			log.Printf("[Worker %d] Fix from review done (%s), pushing...", w.id, time.Since(stepStart).Round(time.Second))
 			if pushErr := w.brMgr.PushBranch(task.Branch); pushErr != nil {
@@ -216,10 +269,9 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 				log.Printf("[Worker %d] ✗ FAILED pushing fixes: %v", w.id, pushErr)
 				return task.Result.Error
 			}
-			// Re-run code review after fixes
 			log.Printf("[Worker %d] Re-running code review after fixes...", w.id)
 			stepStart = time.Now()
-			approved, _, crErr = w.codeReview(ctx, task, "")
+			approved, _, crErr = w.codeReview(ctx, task, "", nil)
 			if crErr != nil {
 				task.Status = StatusFailed
 				task.Result = &TaskResult{Error: fmt.Errorf("code review after fixes: %w", crErr)}
@@ -234,6 +286,9 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 				return task.Result.Error
 			}
 		}
+		if stepLogger != nil {
+			_ = stepLogger.End(true, fmt.Sprintf("approved=%v", approved))
+		}
 		w.reportStageComplete("code-review", EventSuccess, "code review approved")
 	} else {
 		log.Printf("[Worker %d] [3/7] Skipping code-review (completed previously)", w.id)
@@ -243,14 +298,28 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		task.Status = StatusCreatingPR
 		log.Printf("[Worker %d] [4/7] Creating PR for #%d...", w.id, task.Issue.Number)
 		stepStart := time.Now()
-		prURL, err = w.createPR(ctx, task)
+		stepLogger, slErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "create-pr")
+		if slErr != nil {
+			log.Printf("[Worker %d] Warning: failed to create step logger: %v", w.id, slErr)
+		}
+		if stepLogger != nil {
+			_ = stepLogger.Start()
+			defer stepLogger.Close()
+		}
+		prURL, err = w.createPR(ctx, task, stepLogger)
 		if err != nil {
 			task.Status = StatusFailed
 			task.Result = &TaskResult{Error: fmt.Errorf("creating PR: %w", err)}
 			log.Printf("[Worker %d] ✗ FAILED creating PR: %v", w.id, err)
+			if stepLogger != nil {
+				_ = stepLogger.End(false, err.Error())
+			}
 			return task.Result.Error
 		}
 		log.Printf("[Worker %d] [4/7] PR created: %s (%s)", w.id, prURL, time.Since(stepStart).Round(time.Second))
+		if stepLogger != nil {
+			_ = stepLogger.End(true, prURL)
+		}
 		w.reportStageComplete("create-pr", EventSuccess, "PR created: "+prURL)
 	} else {
 		log.Printf("[Worker %d] [4/7] Skipping create-pr (completed previously)", w.id)
@@ -271,26 +340,53 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			task.Status = StatusCheckingPipeline
 			log.Printf("[Worker %d] [5/7] Checking CI pipeline for #%d (attempt %d/%d)...", w.id, task.Issue.Number, pipelineAttempt+1, maxPipelineRetries)
 			stepStart := time.Now()
-			if err := w.checkPipeline(ctx, task); err != nil {
+			stepLogger, slErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "check-pipeline")
+			if slErr != nil {
+				log.Printf("[Worker %d] Warning: failed to create step logger: %v", w.id, slErr)
+			}
+			if stepLogger != nil {
+				_ = stepLogger.Start()
+				defer stepLogger.Close()
+			}
+			if err := w.checkPipeline(ctx, task, stepLogger); err != nil {
 				pipelineAttempt++
 				if pipelineAttempt >= maxPipelineRetries {
 					task.Status = StatusFailed
 					task.Result = &TaskResult{Error: fmt.Errorf("pipeline check: %w (after %d attempts)", err, pipelineAttempt)}
 					log.Printf("[Worker %d] ✗ FAILED pipeline check after %d attempts: %v", w.id, pipelineAttempt, err)
+					if stepLogger != nil {
+						_ = stepLogger.End(false, fmt.Sprintf("failed after %d attempts: %v", pipelineAttempt, err))
+					}
 					w.reportStageComplete("check-pipeline", EventFailed, err.Error())
 					return task.Result.Error
 				}
 				log.Printf("[Worker %d] Pipeline failed (attempt %d/%d), retrying from coding...", w.id, pipelineAttempt, maxPipelineRetries)
+				if stepLogger != nil {
+					stepLogger.Logf("Pipeline failed (attempt %d/%d), retrying from coding", pipelineAttempt, maxPipelineRetries)
+				}
 				w.reportStageComplete("check-pipeline", EventFailed, fmt.Sprintf("attempt %d/%d failed, retrying coding", pipelineAttempt, maxPipelineRetries))
 
-				// Fix from pipeline failure
 				task.Status = StatusCoding
 				w.reportStageComplete("coding", EventInProgress, fmt.Sprintf("fixing pipeline failure (attempt %d)", pipelineAttempt))
-				if fixErr := w.implement(ctx, task, implPlan); fixErr != nil {
+				fixLogger, fixErr := worker.NewStepLogger(artifactDir, task.Issue.Number, fmt.Sprintf("fix-pipeline-attempt-%d", pipelineAttempt))
+				if fixErr != nil {
+					log.Printf("[Worker %d] Warning: failed to create fix logger: %v", w.id, fixErr)
+				}
+				if fixLogger != nil {
+					_ = fixLogger.Start()
+					defer fixLogger.Close()
+				}
+				if fixErr := w.implement(ctx, task, implPlan, fixLogger); fixErr != nil {
 					task.Status = StatusFailed
 					task.Result = &TaskResult{Error: fmt.Errorf("fixing from pipeline failure: %w", fixErr)}
 					log.Printf("[Worker %d] ✗ FAILED fixing from pipeline failure: %v", w.id, fixErr)
+					if fixLogger != nil {
+						_ = fixLogger.End(false, fixErr.Error())
+					}
 					return task.Result.Error
+				}
+				if fixLogger != nil {
+					_ = fixLogger.End(true, "")
 				}
 				if pushErr := w.brMgr.PushBranch(task.Branch); pushErr != nil {
 					task.Status = StatusFailed
@@ -298,12 +394,13 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 					log.Printf("[Worker %d] ✗ FAILED pushing pipeline fixes: %v", w.id, pushErr)
 					return task.Result.Error
 				}
-				// PR already exists, just push — skip create-pr step
-				// Reset resumeFrom so check-pipeline runs again
 				resumeFrom = 4
 				continue
 			}
 			log.Printf("[Worker %d] [5/7] Pipeline checks passed (%s)", w.id, time.Since(stepStart).Round(time.Second))
+			if stepLogger != nil {
+				_ = stepLogger.End(true, "all checks passed")
+			}
 			w.reportStageComplete("check-pipeline", EventSuccess, "all CI checks passed")
 		} else {
 			log.Printf("[Worker %d] [5/7] Skipping check-pipeline (completed previously)", w.id)
@@ -322,33 +419,64 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	for {
 		task.Status = StatusAwaitingApproval
 		log.Printf("[Worker %d] [6/7] Awaiting user approval for #%d (PR: %s)", w.id, task.Issue.Number, prURL)
+		approvalLogger, alErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "awaiting-approval")
+		if alErr != nil {
+			log.Printf("[Worker %d] Warning: failed to create approval logger: %v", w.id, alErr)
+		}
+		if approvalLogger != nil {
+			_ = approvalLogger.Start()
+			defer approvalLogger.Close()
+			approvalLogger.Logf("PR URL: %s", prURL)
+		}
 		w.reportStageComplete("awaiting-approval", EventInProgress, "PR created, awaiting approval: "+prURL)
 
 		var decision UserDecision
 		if w.cfg.Load().YoloMode {
-			// YOLO mode: auto-approve without waiting for user
 			log.Printf("[Worker %d] YOLO mode enabled - auto-approving #%d", w.id, task.Issue.Number)
+			if approvalLogger != nil {
+				approvalLogger.Logf("YOLO mode enabled - auto-approving")
+			}
 			decision = UserDecision{Action: "approve"}
 		} else {
-			// Block until user sends decision or context canceled
 			select {
 			case decision = <-w.decisionCh:
 				log.Printf("[Worker %d] Received decision for #%d: %s", w.id, task.Issue.Number, decision.Action)
+				if approvalLogger != nil {
+					approvalLogger.Logf("Received decision: %s", decision.Action)
+					if decision.Reason != "" {
+						approvalLogger.Logf("Decision reason: %s", decision.Reason)
+					}
+				}
 			case <-ctx.Done():
+				if approvalLogger != nil {
+					approvalLogger.Logf("Context canceled: %v", ctx.Err())
+					_ = approvalLogger.End(false, ctx.Err().Error())
+				}
 				return ctx.Err()
 			}
 		}
 
 		if decision.Action == "approve" {
-			// Proceed to merge
 			task.Status = StatusMerging
 			log.Printf("[Worker %d] [7/7] Merging PR for #%d (branch: %s)", w.id, task.Issue.Number, task.Branch)
+			if approvalLogger != nil {
+				_ = approvalLogger.End(true, "user approved")
+			}
 			w.reportStageComplete("awaiting-approval", EventSuccess, "user approved")
+
+			mergeLogger, mlErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "merge")
+			if mlErr != nil {
+				log.Printf("[Worker %d] Warning: failed to create merge logger: %v", w.id, mlErr)
+			}
+			if mergeLogger != nil {
+				_ = mergeLogger.Start()
+				defer mergeLogger.Close()
+				mergeLogger.Logf("Merging branch: %s", task.Branch)
+			}
 
 			if err := w.gh.MergePR(task.Branch); err != nil {
 				log.Printf("[Worker %d] ✗ Merge failed for #%d: %v", w.id, task.Issue.Number, err)
 
-				// Close PR on merge failure
 				if closeErr := w.gh.ClosePR(task.Branch); closeErr != nil {
 					log.Printf("[Worker %d] Error closing PR for #%d: %v", w.id, task.Issue.Number, closeErr)
 				}
@@ -361,12 +489,21 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 					log.Printf("[Worker %d] Error adding comment to #%d: %v", w.id, task.Issue.Number, cmtErr)
 				}
 
+				if mergeLogger != nil {
+					mergeLogger.Logf("Merge failed: %v", err)
+					_ = mergeLogger.End(false, err.Error())
+				}
+
 				return task.Result.Error
+			}
+
+			if mergeLogger != nil {
+				mergeLogger.Logf("Merge successful")
+				_ = mergeLogger.End(true, "PR merged successfully")
 			}
 
 			w.reportStageComplete("merge", EventSuccess, "PR merged successfully")
 
-			// Checkout default branch to prepare for next ticket
 			if err := w.brMgr.CheckoutDefault(); err != nil {
 				log.Printf("[Worker %d] Warning: failed to checkout default branch after merge: %v", w.id, err)
 			}
@@ -394,40 +531,75 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 
 		w.reportStageComplete("awaiting-approval", EventFailed, "user declined: "+decision.Reason)
 
-		// Fix from decline feedback
-		if fixErr := w.fixFromReview(ctx, task, decision.Reason); fixErr != nil {
+		declineLogger, dlErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "fix-from-decline")
+		if dlErr != nil {
+			log.Printf("[Worker %d] Warning: failed to create decline fix logger: %v", w.id, dlErr)
+		}
+		if declineLogger != nil {
+			_ = declineLogger.Start()
+			defer declineLogger.Close()
+		}
+		if fixErr := w.fixFromReview(ctx, task, decision.Reason, declineLogger); fixErr != nil {
 			task.Status = StatusFailed
 			task.Result = &TaskResult{Error: fmt.Errorf("fixing from decline: %w", fixErr)}
 			log.Printf("[Worker %d] ✗ FAILED fixing from decline: %v", w.id, fixErr)
+			if declineLogger != nil {
+				_ = declineLogger.End(false, fixErr.Error())
+			}
 			return task.Result.Error
 		}
+		if declineLogger != nil {
+			_ = declineLogger.End(true, "")
+		}
 
-		// Push fixes
 		if pushErr := w.brMgr.PushBranch(task.Branch); pushErr != nil {
 			task.Status = StatusFailed
 			task.Result = &TaskResult{Error: fmt.Errorf("pushing fixes after decline: %w", pushErr)}
 			return task.Result.Error
 		}
 
-		// Re-run code review
 		task.Status = StatusReviewing
 		w.reportStageComplete("coding", EventSuccess, "fixes applied after decline")
 
-		approved, review, crErr := w.codeReview(ctx, task, prURL)
+		reReviewLogger, rrErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "code-review-after-decline")
+		if rrErr != nil {
+			log.Printf("[Worker %d] Warning: failed to create re-review logger: %v", w.id, rrErr)
+		}
+		if reReviewLogger != nil {
+			_ = reReviewLogger.Start()
+			defer reReviewLogger.Close()
+		}
+		approved, review, crErr := w.codeReview(ctx, task, prURL, reReviewLogger)
 		if crErr != nil {
 			task.Status = StatusFailed
 			task.Result = &TaskResult{Error: fmt.Errorf("code review after decline: %w", crErr)}
+			if reReviewLogger != nil {
+				_ = reReviewLogger.End(false, crErr.Error())
+			}
 			return task.Result.Error
 		}
 
 		if !approved {
-			// One more fix attempt
 			task.Status = StatusCoding
 			w.reportStageComplete("coding", EventInProgress, "fixing from re-review after decline")
-			if fixErr := w.fixFromReview(ctx, task, review); fixErr != nil {
+			reFixLogger, rfErr := worker.NewStepLogger(artifactDir, task.Issue.Number, "fix-from-re-review")
+			if rfErr != nil {
+				log.Printf("[Worker %d] Warning: failed to create re-fix logger: %v", w.id, rfErr)
+			}
+			if reFixLogger != nil {
+				_ = reFixLogger.Start()
+				defer reFixLogger.Close()
+			}
+			if fixErr := w.fixFromReview(ctx, task, review, reFixLogger); fixErr != nil {
 				task.Status = StatusFailed
 				task.Result = &TaskResult{Error: fmt.Errorf("fixing from re-review: %w", fixErr)}
+				if reFixLogger != nil {
+					_ = reFixLogger.End(false, fixErr.Error())
+				}
 				return task.Result.Error
+			}
+			if reFixLogger != nil {
+				_ = reFixLogger.End(true, "")
 			}
 			if pushErr := w.brMgr.PushBranch(task.Branch); pushErr != nil {
 				task.Status = StatusFailed
@@ -436,21 +608,23 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			}
 		}
 
+		if reReviewLogger != nil {
+			_ = reReviewLogger.End(true, fmt.Sprintf("approved=%v", approved))
+		}
 		w.reportStageComplete("code-review", EventSuccess, "code review passed after decline")
 		// Loop back to await approval again
 	}
 }
 
-func (w *Worker) technicalPlanning(ctx context.Context, task *Task) (analysis, implPlan string, err error) {
+func (w *Worker) technicalPlanning(ctx context.Context, task *Task, logger *worker.StepLogger) (analysis, implPlan string, err error) {
 	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPTechnicalPlanning), task.Issue.Number, task.Issue.Title, task.Issue.Body, task.Issue.Number)
 
-	// Use router to select model for planning category
 	llmModel := w.cfg.Load().LLM.Planning.Model
 	if w.router != nil {
 		llmModel = w.router.SelectModel(config.CategoryPlanning, config.ComplexityMedium, nil)
 	}
 
-	response, err := w.llmStep(ctx, task, "technical-planning", prompt, llmModel)
+	response, err := w.llmStep(ctx, task, "technical-planning", prompt, llmModel, logger)
 	if err != nil {
 		return "", "", err
 	}
@@ -460,10 +634,8 @@ func (w *Worker) technicalPlanning(ctx context.Context, task *Task) (analysis, i
 		return "", "", fmt.Errorf("%w: %s", ErrAlreadyDone, reason)
 	}
 
-	// Parse response to extract analysis and plan sections
 	analysis, implPlan = parseTechnicalPlanningResponse(response)
 
-	// Create/update plan.md with both analysis and plan
 	wt := &git.Worktree{
 		Name:   fmt.Sprintf("worker-%d", w.id),
 		Path:   w.repoDir,
@@ -523,13 +695,11 @@ func parseTechnicalPlanningResponse(response string) (analysis, plan string) {
 	return analysis, plan
 }
 
-func (w *Worker) implement(ctx context.Context, task *Task, planStr string) error {
+func (w *Worker) implement(ctx context.Context, task *Task, planStr string, logger *worker.StepLogger) error {
 	w.oc.SetDirectory(task.Worktree)
 
-	// Fetch all comments from GitHub issue to find technical planning
 	comments, err := w.gh.ListComments(task.Issue.Number)
 	if err == nil && len(comments) > 0 {
-		// Look for technical planning comment
 		for _, comment := range comments {
 			if strings.Contains(comment.Body, "## 📋 Technical Planning") {
 				planStr = comment.Body
@@ -549,14 +719,13 @@ func (w *Worker) implement(ctx context.Context, task *Task, planStr string) erro
 	}
 	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPImplementation), task.Issue.Number, task.Issue.Title, planStr, task.Worktree, testCmd, task.Issue.Number, task.Issue.Number, task.Issue.Number, task.Issue.Number, task.Issue.Number)
 
-	// Use router to select model for code category with complexity detection
 	llmModel := w.cfg.Load().LLM.Code.Model
 	if w.router != nil {
 		complexity := llm.DetectComplexity(planStr) //nolint:staticcheck // deprecated but still used
 		llmModel = w.router.SelectModel(config.CategoryCode, complexity, nil)
 	}
 
-	_, err = w.llmStep(ctx, task, "implement", prompt, llmModel)
+	_, err = w.llmStep(ctx, task, "implement", prompt, llmModel, logger)
 	if err != nil {
 		return err
 	}
@@ -575,7 +744,7 @@ func (w *Worker) ensureCommit(task *Task) {
 	_ = out
 }
 
-func (w *Worker) fixFromReview(ctx context.Context, task *Task, review string) error {
+func (w *Worker) fixFromReview(ctx context.Context, task *Task, review string, logger *worker.StepLogger) error {
 	w.oc.SetDirectory(task.Worktree)
 
 	testCmd := w.cfg.Load().Tools.TestCmd
@@ -584,13 +753,12 @@ func (w *Worker) fixFromReview(ctx context.Context, task *Task, review string) e
 	}
 	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPFixFromReview), task.Issue.Number, task.Issue.Title, task.Worktree, testCmd, review)
 
-	// Use router to select model for code category
 	llmModel := w.cfg.Load().LLM.Code.Model
 	if w.router != nil {
 		llmModel = w.router.SelectModel(config.CategoryCode, config.ComplexityMedium, nil)
 	}
 
-	_, err := w.llmStep(ctx, task, "fix-from-review", prompt, llmModel)
+	_, err := w.llmStep(ctx, task, "fix-from-review", prompt, llmModel, logger)
 	if err != nil {
 		return err
 	}
@@ -616,7 +784,7 @@ type crResult struct {
 	Verdict     string   `json:"verdict"`
 }
 
-func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (approved bool, review string, err error) {
+func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string, logger *worker.StepLogger) (approved bool, review string, err error) {
 	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPCodeReview), task.Issue.Number, task.Issue.Title, prURL, w.gh.Repo, task.Issue.Number)
 
 	sessionTitle := fmt.Sprintf("code-review-%d", task.Issue.Number)
@@ -642,10 +810,8 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (appr
 		}
 	}
 
-	// Capture the prompt in chat history
 	task.AddChatMessage("user", prompt)
 
-	// Use router to select model for code category with high complexity (code review is important)
 	llmModel := w.cfg.Load().LLM.Code.Model
 	if w.router != nil {
 		hints := map[string]any{"stage": "code-review"}
@@ -664,11 +830,15 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (appr
 	reviewJSON, _ := json.Marshal(result)
 	review = string(reviewJSON)
 
-	// Capture the response in chat history
 	task.AddChatMessage("assistant", review)
 
 	if w.store != nil && stepID > 0 {
 		_ = w.store.FinishStep(stepID, review)
+	}
+
+	if logger != nil {
+		logger.Logf("Code review result: approved=%v, issues=%d, suggestions=%d", result.Approved, len(result.Issues), len(result.Suggestions))
+		logger.Logf("Verdict: %s", result.Verdict)
 	}
 
 	log.Printf("[Worker %d] Code review result: %s", w.id, review)
@@ -676,11 +846,9 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (appr
 	return result.Approved, review, nil
 }
 
-func (w *Worker) createPR(_ context.Context, task *Task) (string, error) {
-	// Check if PR already exists
+func (w *Worker) createPR(_ context.Context, task *Task, logger *worker.StepLogger) (string, error) {
 	if existingBranch, err := w.gh.FindPRBranch(task.Issue.Number); err == nil && existingBranch != "" {
 		log.Printf("[Worker %d] PR already exists for issue #%d (branch: %s)", w.id, task.Issue.Number, existingBranch)
-		// Return empty - CreatePR below will get the existing PR URL
 	}
 
 	var stepID int64
@@ -693,11 +861,22 @@ func (w *Worker) createPR(_ context.Context, task *Task) (string, error) {
 		}
 	}
 
+	if logger != nil {
+		logger.Logf("Pushing branch: %s", task.Branch)
+	}
+
 	if err := w.brMgr.PushBranch(task.Branch); err != nil {
 		if w.store != nil && stepID > 0 {
 			_ = w.store.FailStep(stepID, err.Error())
 		}
+		if logger != nil {
+			logger.Logf("Push failed: %v", err)
+		}
 		return "", fmt.Errorf("pushing branch: %w", err)
+	}
+
+	if logger != nil {
+		logger.Logf("Branch pushed successfully")
 	}
 
 	body := fmt.Sprintf("Closes #%d\n\n%s", task.Issue.Number, task.Issue.Body)
@@ -708,10 +887,16 @@ func (w *Worker) createPR(_ context.Context, task *Task) (string, error) {
 			if w.store != nil && stepID > 0 {
 				_ = w.store.FinishStep(stepID, existingURL)
 			}
+			if logger != nil {
+				logger.Logf("Using existing PR: %s", existingURL)
+			}
 			return existingURL, nil
 		}
 		if w.store != nil && stepID > 0 {
 			_ = w.store.FailStep(stepID, err.Error())
+		}
+		if logger != nil {
+			logger.Logf("PR creation failed: %v", err)
 		}
 		return "", fmt.Errorf("creating PR: %w", err)
 	}
@@ -719,10 +904,15 @@ func (w *Worker) createPR(_ context.Context, task *Task) (string, error) {
 	if w.store != nil && stepID > 0 {
 		_ = w.store.FinishStep(stepID, prURL)
 	}
+
+	if logger != nil {
+		logger.Logf("PR created: %s", prURL)
+	}
+
 	return prURL, nil
 }
 
-func (w *Worker) checkPipeline(ctx context.Context, task *Task) error {
+func (w *Worker) checkPipeline(ctx context.Context, task *Task, logger *worker.StepLogger) error {
 	cfg := w.cfg.Load()
 	interval := time.Duration(cfg.Pipeline.CheckInterval) * time.Second
 	if interval == 0 {
@@ -733,6 +923,10 @@ func (w *Worker) checkPipeline(ctx context.Context, task *Task) error {
 		timeout = 30 * time.Minute
 	}
 
+	if logger != nil {
+		logger.Logf("Starting pipeline check (timeout: %s, interval: %s)", timeout, interval)
+	}
+
 	deadline := time.Now().Add(timeout)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -740,26 +934,44 @@ func (w *Worker) checkPipeline(ctx context.Context, task *Task) error {
 	for {
 		select {
 		case <-ctx.Done():
+			if logger != nil {
+				logger.Logf("Pipeline check canceled: %v", ctx.Err())
+			}
 			return ctx.Err()
 		case <-ticker.C:
 			if time.Now().After(deadline) {
+				if logger != nil {
+					logger.Logf("Pipeline check timed out after %s", timeout)
+				}
 				return w.handlePipelineFailure(task, "CI checks timed out after "+timeout.String())
 			}
 
 			result, err := w.gh.GetPRChecks(task.Branch)
 			if err != nil {
 				log.Printf("[Worker %d] Error checking PR checks: %v", w.id, err)
+				if logger != nil {
+					logger.Logf("Error checking PR checks: %v", err)
+				}
 				continue
 			}
 
 			switch result.Status {
 			case "pass":
 				log.Printf("[Worker %d] All CI checks passed for #%d", w.id, task.Issue.Number)
+				if logger != nil {
+					logger.Logf("All CI checks passed")
+				}
 				return nil
 			case "fail":
+				if logger != nil {
+					logger.Logf("CI checks failed: %s", worker.Truncate(result.Logs, 500))
+				}
 				return w.handlePipelineFailure(task, result.Logs)
 			case "pending":
 				log.Printf("[Worker %d] CI checks still pending for #%d...", w.id, task.Issue.Number)
+				if logger != nil {
+					logger.Logf("CI checks still pending...")
+				}
 			}
 		}
 	}
@@ -784,7 +996,7 @@ func (w *Worker) handlePipelineFailure(task *Task, logs string) error {
 	return errors.New("CI pipeline checks failed")
 }
 
-func (w *Worker) llmStep(_ context.Context, task *Task, stepName, prompt, llm string) (string, error) {
+func (w *Worker) llmStep(_ context.Context, task *Task, stepName, prompt, llm string, logger *worker.StepLogger) (string, error) {
 	sessionTitle := fmt.Sprintf("%s-%d", stepName, task.Issue.Number)
 	session, err := w.oc.CreateSession(sessionTitle)
 	if err != nil {
@@ -809,7 +1021,6 @@ func (w *Worker) llmStep(_ context.Context, task *Task, stepName, prompt, llm st
 		}
 	}
 
-	// Capture the prompt in chat history
 	task.AddChatMessage("user", prompt)
 
 	model := opencode.ParseModelRef(llm)
@@ -821,9 +1032,12 @@ func (w *Worker) llmStep(_ context.Context, task *Task, stepName, prompt, llm st
 		return "", fmt.Errorf("sending message: %w", err)
 	}
 
+	if logger != nil {
+		logger.LogLLMResponse(msg)
+	}
+
 	response := extractText(msg)
 
-	// Capture the response in chat history
 	task.AddChatMessage("assistant", response)
 
 	if w.store != nil && stepID > 0 {
