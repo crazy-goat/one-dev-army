@@ -5183,6 +5183,7 @@ func TestBoardTemplate_ProcessingPanel_Idle(t *testing.T) {
 		CurrentTicket: nil,
 		Paused:        true,
 		Processing:    false,
+		TotalTickets:  5,
 	}
 
 	// Execute the content template
@@ -5221,6 +5222,101 @@ func TestBoardTemplate_ProcessingPanel_Idle(t *testing.T) {
 	// Verify idle message contains "Worker ready"
 	if !strings.Contains(output, "Worker ready") {
 		t.Error("template should display 'Worker ready' message when idle")
+	}
+}
+
+// TestBoardTemplate_ProcessingPanel_EmptySprint tests that the processing panel shows empty sprint state when TotalTickets is 0
+func TestBoardTemplate_ProcessingPanel_EmptySprint(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	data := boardData{
+		Active:        "board",
+		CurrentTicket: nil,
+		Paused:        true,
+		Processing:    false,
+		TotalTickets:  0,
+	}
+
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	output := buf.String()
+
+	if !strings.Contains(output, `processing-panel-idle`) {
+		t.Error("empty sprint panel should have idle class")
+	}
+	if !strings.Contains(output, "Sprint") {
+		t.Error("empty sprint should show Sprint badge")
+	}
+	if !strings.Contains(output, "No tickets in sprint") {
+		t.Error("empty sprint should show 'No tickets in sprint' message")
+	}
+	if !strings.Contains(output, "processing-cta") {
+		t.Error("empty sprint should show CTA button")
+	}
+	if !strings.Contains(output, "New Ticket") {
+		t.Error("empty sprint CTA should say 'New Ticket'")
+	}
+	if strings.Contains(output, "Worker ready") {
+		t.Error("empty sprint should NOT show 'Worker ready' message")
+	}
+}
+
+// TestBuildBoardData_TotalTickets tests that TotalTickets is computed correctly
+func TestBuildBoardData_TotalTickets(t *testing.T) {
+	tests := []struct {
+		name     string
+		data     boardData
+		expected int
+	}{
+		{
+			name:     "empty sprint has zero total",
+			data:     boardData{},
+			expected: 0,
+		},
+		{
+			name: "counts all columns",
+			data: boardData{
+				Blocked:       []taskCard{{ID: 1}},
+				Backlog:       []taskCard{{ID: 2}, {ID: 3}},
+				Plan:          []taskCard{{ID: 4}},
+				Code:          []taskCard{{ID: 5}},
+				AIReview:      []taskCard{{ID: 6}},
+				CheckPipeline: []taskCard{{ID: 7}},
+				Approve:       []taskCard{{ID: 8}},
+				Merge:         []taskCard{{ID: 9}},
+				Done:          []taskCard{{ID: 10}},
+				Failed:        []taskCard{{ID: 11}},
+			},
+			expected: 11,
+		},
+		{
+			name: "only done and failed",
+			data: boardData{
+				Done:   []taskCard{{ID: 1}, {ID: 2}},
+				Failed: []taskCard{{ID: 3}},
+			},
+			expected: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			total := len(tt.data.Blocked) + len(tt.data.Backlog) + len(tt.data.Plan) +
+				len(tt.data.Code) + len(tt.data.AIReview) + len(tt.data.CheckPipeline) +
+				len(tt.data.Approve) + len(tt.data.Merge) + len(tt.data.Done) + len(tt.data.Failed)
+			if total != tt.expected {
+				t.Errorf("expected TotalTickets=%d, got %d", tt.expected, total)
+			}
+		})
 	}
 }
 
