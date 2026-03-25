@@ -55,6 +55,9 @@
 .processing-priority-high{border-color:rgba(182,2,5,0.3);background:rgba(182,2,5,0.1)}
 .processing-priority-medium{border-color:rgba(251,202,4,0.3);background:rgba(251,202,4,0.1)}
 .processing-priority-low{border-color:rgba(14,138,22,0.3);background:rgba(14,138,22,0.1)}
+.processing-panel.idle{background:rgba(108,117,125,0.06);border-color:rgba(108,117,125,0.15)}
+.processing-panel.idle .processing-indicator{background:#6c757d;animation:none}
+.processing-panel.idle .processing-idle-text{color:var(--muted);font-size:.85rem;font-style:italic}
 .empty-state{color:var(--muted);font-size:.85rem;text-align:center;padding:2rem 1rem;font-style:italic}
 </style>
 
@@ -117,7 +120,12 @@
   </div>
 </div>
 {{else}}
-<div class="processing-panel" id="processing-panel" style="display:none"></div>
+<div class="processing-panel idle" id="processing-panel">
+  <div class="processing-panel-content">
+    <span class="processing-indicator"></span>
+    <span class="processing-idle-text">No active ticket</span>
+  </div>
+</div>
 {{end}}
 
 <div class="board" id="board-container" hx-get="/api/board-data" hx-swap="innerHTML" hx-trigger="refresh">
