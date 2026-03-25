@@ -5171,8 +5171,8 @@ func TestBoardTemplate_ProcessingPanel_Visible(t *testing.T) {
 	}
 }
 
-// TestBoardTemplate_ProcessingPanel_Hidden tests that the processing panel is hidden when CurrentTicket is nil
-func TestBoardTemplate_ProcessingPanel_Hidden(t *testing.T) {
+// TestBoardTemplate_ProcessingPanel_Idle tests that the processing panel shows idle state when CurrentTicket is nil
+func TestBoardTemplate_ProcessingPanel_Idle(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
 
@@ -5197,14 +5197,29 @@ func TestBoardTemplate_ProcessingPanel_Hidden(t *testing.T) {
 
 	output := buf.String()
 
-	// Verify processing panel is present but hidden
+	// Verify processing panel is present
 	if !strings.Contains(output, `id="processing-panel"`) {
 		t.Error("template should contain processing-panel element")
 	}
 
-	// Verify panel has display:none style
-	if !strings.Contains(output, `id="processing-panel" style="display:none"`) {
-		t.Error("processing panel should be hidden (display:none) when CurrentTicket is nil")
+	// Verify panel does NOT have display:none style (should always be visible)
+	if strings.Contains(output, `id="processing-panel" style="display:none"`) {
+		t.Error("processing panel should not be hidden (no display:none) when CurrentTicket is nil")
+	}
+
+	// Verify panel has idle class
+	if !strings.Contains(output, `processing-panel-idle`) {
+		t.Error("processing panel should have processing-panel-idle class when CurrentTicket is nil")
+	}
+
+	// Verify idle message is displayed
+	if !strings.Contains(output, "No active ticket") {
+		t.Error("template should display 'No active ticket' message when idle")
+	}
+
+	// Verify idle message contains "Worker ready"
+	if !strings.Contains(output, "Worker ready") {
+		t.Error("template should display 'Worker ready' message when idle")
 	}
 }
 

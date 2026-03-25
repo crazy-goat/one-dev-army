@@ -342,7 +342,7 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
         if (!panel) return;
         
         if (workerStatus.active && !workerStatus.paused && workerStatus.issueId) {
-            panel.style.display = 'flex';
+            panel.className = 'processing-panel';
             panel.innerHTML = '<div class="processing-panel-content">' +
                 '<span class="processing-indicator"></span>' +
                 '<a href="/task/' + workerStatus.issueId + '" class="processing-ticket">' +
@@ -353,8 +353,11 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
                 (workerStatus.step ? '<span class="processing-badge">' + workerStatus.step + '</span>' : '') +
                 '</div></div>';
         } else {
-            panel.style.display = 'none';
-            panel.innerHTML = '';
+            panel.className = 'processing-panel processing-panel-idle';
+            panel.innerHTML = '<div class="processing-panel-content">' +
+                '<span class="processing-indicator"></span>' +
+                '<span class="processing-idle-text">No active ticket &mdash; Worker ready</span>' +
+                '</div>';
         }
     }
     
