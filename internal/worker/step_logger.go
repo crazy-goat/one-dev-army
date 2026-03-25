@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
 
@@ -21,7 +20,7 @@ type StepLogger struct {
 }
 
 func NewStepLogger(artifactDir string, issueNum int, stepName string) (*StepLogger, error) {
-	logDir := filepath.Join(artifactDir, strconv.Itoa(issueNum), "logs")
+	logDir := filepath.Join(artifactDir, "logs")
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return nil, fmt.Errorf("creating log directory %s: %w", logDir, err)
 	}
