@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -390,6 +391,112 @@ func TestStepLogger_Truncate(t *testing.T) {
 		result := Truncate(tt.input, tt.maxLen)
 		if result != tt.expected {
 			t.Errorf("Truncate(%q, %d) = %q, want %q", tt.input, tt.maxLen, result, tt.expected)
+		}
+	}
+}
+
+func TestStepLogger_Write(t *testing.T) {
+	tmpDir := t.TempDir()
+	artifactDir := filepath.Join(tmpDir, ".oda", "artifacts")
+
+	logger, err := NewStepLogger(artifactDir, 400, "test-step")
+	if err != nil {
+		t.Fatalf("NewStepLogger failed: %v", err)
+	}
+
+	if err := logger.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	n, err := logger.Write([]byte("streaming chunk 1"))
+	if err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+	if n != 17 {
+		t.Errorf("expected 17 bytes written, got %d", n)
+	}
+
+	n, err = logger.Write([]byte(" chunk 2"))
+	if err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+	if n != 8 {
+		t.Errorf("expected 8 bytes written, got %d", n)
+	}
+
+	logger.End(true, "")
+	logger.Close()
+
+	entries, _ := os.ReadDir(logger.logDir)
+	content, _ := os.ReadFile(filepath.Join(logger.logDir, entries[0].Name()))
+
+	if !strings.Contains(string(content), "streaming chunk 1 chunk 2") {
+		t.Error("log should contain streamed chunks concatenated")
+	}
+}
+
+func TestStepLogger_Write_NilSafety(t *testing.T) {
+	var logger *StepLogger
+
+	n, err := logger.Write([]byte("test"))
+	if err != nil {
+		t.Errorf("Write on nil logger should not error, got: %v", err)
+	}
+	if n != 4 {
+		t.Errorf("Write on nil logger should return len(p)=%d, got %d", 4, n)
+	}
+
+	logger, _ = NewStepLogger(t.TempDir(), 1, "test")
+
+	n, err = logger.Write([]byte("test"))
+	if err != nil {
+		t.Errorf("Write before Start should not error, got: %v", err)
+	}
+	if n != 4 {
+		t.Errorf("Write before Start should return len(p)=%d, got %d", 4, n)
+	}
+}
+
+func TestStepLogger_ImplementsIOWriter(_ *testing.T) {
+	var _ io.Writer = (*StepLogger)(nil)
+}
+
+func TestStepLogger_ConcurrentWrite(t *testing.T) {
+	tmpDir := t.TempDir()
+	artifactDir := filepath.Join(tmpDir, ".oda", "artifacts")
+
+	logger, err := NewStepLogger(artifactDir, 401, "test-step")
+	if err != nil {
+		t.Fatalf("NewStepLogger failed: %v", err)
+	}
+
+	if err := logger.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	done := make(chan bool, 10)
+	for i := range 10 {
+		go func(n int) {
+			chunk := fmt.Sprintf("chunk-%d ", n)
+			logger.Write([]byte(chunk))
+			done <- true
+		}(i)
+	}
+
+	for range 10 {
+		<-done
+	}
+
+	logger.End(true, "")
+	logger.Close()
+
+	entries, _ := os.ReadDir(logger.logDir)
+	content, _ := os.ReadFile(filepath.Join(logger.logDir, entries[0].Name()))
+
+	for i := range 10 {
+		expected := fmt.Sprintf("chunk-%d", i)
+		if !strings.Contains(string(content), expected) {
+			t.Errorf("log should contain '%s'", expected)
 		}
 	}
 }

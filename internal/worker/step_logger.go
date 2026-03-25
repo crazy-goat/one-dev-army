@@ -125,6 +125,21 @@ func (l *StepLogger) Logf(format string, args ...any) {
 	l.logf(format, args...)
 }
 
+func (l *StepLogger) Write(p []byte) (int, error) {
+	if l == nil {
+		return len(p), nil
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.file == nil {
+		return len(p), nil
+	}
+
+	return l.file.Write(p)
+}
+
 func (l *StepLogger) End(success bool, output string) error {
 	if l == nil {
 		return nil
