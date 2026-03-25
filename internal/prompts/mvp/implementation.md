@@ -7,39 +7,48 @@ Working directory: %s
 
 Test command: %s
 
+ARTIFACT — Save coding notes to file:
+Before starting implementation, READ the planning artifact at: .oda/artifacts/%d/01-planning.md
+Save your coding notes, decisions, and progress to: .oda/artifacts/%d/02-coding.md
+
+CRITICAL: Save coding notes to the artifact file using file write tools BEFORE returning your response.
+
 STEP-BY-STEP WORKFLOW:
 
 1. READ AGENTS.md FIRST
    - Read the AGENTS.md file in the working directory for project-specific rules
    - Note the exact lint command and any other requirements
 
-2. ESTABLISH BASELINE
+2. READ PLANNING ARTIFACT
+   - Read .oda/artifacts/%d/01-planning.md to understand the technical plan
+
+3. ESTABLISH BASELINE
    - Run the test command BEFORE making any changes
    - Verify tests pass in the current state (baseline)
 
-3. IMPLEMENT CHANGES
+4. IMPLEMENT CHANGES
    - Read existing files before modifying them
    - Make all necessary code changes according to the plan
    - Create new files as needed
    - Verify your implementation matches the plan
 
-4. TEST-FIX-LINT-FIX LOOP (REPEAT UNTIL CLEAN)
+5. TEST-FIX-LINT-FIX LOOP (REPEAT UNTIL CLEAN)
    - Run the test command
    - If tests fail, fix the code and re-run tests
    - Run the lint command (from AGENTS.md)
    - If lint errors exist, fix them and re-run lint
    - Do NOT proceed until both tests AND lint pass
 
-5. ATOMIC COMMITS
+6. ATOMIC COMMITS
    - Make focused, atomic commits (one logical change per commit)
    - Use descriptive commit messages referencing the issue number
    - Example: "feat: add user authentication for #123"
 
-6. PUSH CHANGES
+7. PUSH CHANGES
    - Push the branch: git push
    - Verify the push succeeded
 
-7. FINAL VERIFICATION
+8. FINAL VERIFICATION
    - Run "git status" and verify the working tree is clean
    - If there are any uncommitted changes, commit and push them
    - Run tests one final time to confirm everything passes
