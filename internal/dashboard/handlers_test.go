@@ -4643,13 +4643,20 @@ func TestHandleYoloToggle_EnablesWhenDisabled(t *testing.T) {
 		t.Error("response should contain lightning bolt icon when enabling")
 	}
 
-	// Verify config file now has yolo_mode: true
+	// Verify config file is UNCHANGED (still yolo_mode: false)
 	cfg, err := config.Load(tempDir)
 	if err != nil {
 		t.Fatalf("failed to load config after toggle: %v", err)
 	}
-	if !cfg.YoloMode {
-		t.Error("expected config to have yolo_mode: true after toggle")
+	if cfg.YoloMode {
+		t.Error("expected config file to remain unchanged with yolo_mode: false (runtime-only toggle)")
+	}
+
+	// Verify runtime override is set to true
+	if srv.yoloOverride == nil {
+		t.Error("expected yoloOverride to be set after toggle")
+	} else if !*srv.yoloOverride {
+		t.Errorf("expected yoloOverride to be true, got %v", *srv.yoloOverride)
 	}
 }
 
@@ -4694,13 +4701,20 @@ func TestHandleYoloToggle_DisablesWhenEnabled(t *testing.T) {
 		t.Error("response should contain lock icon when disabling")
 	}
 
-	// Verify config file now has yolo_mode: false
+	// Verify config file is UNCHANGED (still yolo_mode: true)
 	cfg, err := config.Load(tempDir)
 	if err != nil {
 		t.Fatalf("failed to load config after toggle: %v", err)
 	}
-	if cfg.YoloMode {
-		t.Error("expected config to have yolo_mode: false after toggle")
+	if !cfg.YoloMode {
+		t.Error("expected config file to remain unchanged with yolo_mode: true (runtime-only toggle)")
+	}
+
+	// Verify runtime override is set to false
+	if srv.yoloOverride == nil {
+		t.Error("expected yoloOverride to be set after toggle")
+	} else if *srv.yoloOverride {
+		t.Errorf("expected yoloOverride to be false, got %v", *srv.yoloOverride)
 	}
 }
 
@@ -4719,6 +4733,50 @@ func TestHandleYoloToggle_NoRootDir(t *testing.T) {
 	// Should return 500
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("expected status 500 when rootDir is empty, got %d", rec.Code)
+	}
+}
+
+// TestHandleYoloToggle_RuntimeOverrideInBoardData tests that the runtime YOLO override
+// is reflected in board data without modifying the config file
+func TestHandleYoloToggle_RuntimeOverrideInBoardData(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create config with yolo_mode: false
+	configContent := `yolo_mode: false
+`
+	if err := os.MkdirAll(filepath.Join(tempDir, ".oda"), 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, ".oda", "config.yaml"), []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tempDir
+	defer srv.wizardStore.Stop()
+
+	// Toggle YOLO via handler
+	req := httptest.NewRequest(http.MethodPost, "/api/yolo/toggle", nil)
+	rec := httptest.NewRecorder()
+	srv.handleYoloToggle(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Call buildBoardData and verify YoloMode reflects the runtime override
+	data := srv.buildBoardData(nil)
+	if !data.YoloMode {
+		t.Error("expected buildBoardData to return YoloMode=true after toggle (runtime override)")
+	}
+
+	// Verify config file on disk is unchanged
+	cfg, err := config.Load(tempDir)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+	if cfg.YoloMode {
+		t.Error("expected config file to remain unchanged with yolo_mode: false")
 	}
 }
 
