@@ -156,7 +156,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 		},
 		"labelIcon": func(label string) string {
 			switch label {
-			case "type:feature", "enhancement":
+			case "type:feature", "feature", "enhancement":
 				return "✨"
 			case "type:bug", "bug":
 				return "🐛"
@@ -184,7 +184,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 		},
 		"labelTooltip": func(label string) string {
 			switch label {
-			case "type:feature", "enhancement":
+			case "type:feature", "feature", "enhancement":
 				return "Type: Feature"
 			case "type:bug", "bug":
 				return "Type: Bug"
