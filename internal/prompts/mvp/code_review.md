@@ -26,13 +26,10 @@ APPROVAL THRESHOLD:
 - approved=true: Code is production-ready, all critical and major issues resolved
 - approved=false: Any critical or major issues found, or significant concerns remain
 
-Set "already_done" to true ONLY if the issue was already fully implemented before this PR (extremely rare).
-
 OUTPUT FORMAT — Respond with valid JSON only:
 
 {
   "approved": bool,
-  "already_done": bool,
   "issues": [
     "[critical] Description of critical issue that must be fixed",
     "[major] Description of major issue that should be fixed",
