@@ -294,8 +294,8 @@
 </style>
 
 <script>
-// Model data from server
-const availableModels = {{if .AvailableModels}}[
+// Model data from server - use window object to avoid redeclaration errors on HTMX swaps
+window.availableModels = {{if .AvailableModels}}[
   {{range .AvailableModels}}
   { id: {{.ID | json}}, providerID: {{.ProviderID | json}}, name: {{.Name | json}} },
   {{end}}
@@ -383,15 +383,15 @@ function initializeModelDropdowns() {
 }
 
 function filterModels(query) {
-  if (!availableModels || availableModels.length === 0) {
+  if (!window.availableModels || window.availableModels.length === 0) {
     return [];
   }
   
   if (!query) {
-    return availableModels;
+    return window.availableModels;
   }
   
-  return availableModels.filter(function(model) {
+  return window.availableModels.filter(function(model) {
     return model.name.toLowerCase().includes(query) ||
            model.id.toLowerCase().includes(query) ||
            model.providerID.toLowerCase().includes(query);
