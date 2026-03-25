@@ -32,3 +32,4 @@ api/opencode.yaml
 
 # Git worktrees
 .worktrees/
+.oda/artifacts/
