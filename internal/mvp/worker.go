@@ -535,7 +535,6 @@ var crSchema = json.RawMessage(`{
 	"type": "object",
 	"properties": {
 		"approved":     {"type": "boolean"},
-		"already_done": {"type": "boolean"},
 		"issues":       {"type": "array", "items": {"type": "string"}},
 		"suggestions":  {"type": "array", "items": {"type": "string"}},
 		"verdict":      {"type": "string"}
@@ -545,7 +544,6 @@ var crSchema = json.RawMessage(`{
 
 type crResult struct {
 	Approved    bool     `json:"approved"`
-	AlreadyDone bool     `json:"already_done"`
 	Issues      []string `json:"issues"`
 	Suggestions []string `json:"suggestions"`
 	Verdict     string   `json:"verdict"`
@@ -607,11 +605,6 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL string) (appr
 	}
 
 	log.Printf("[Worker %d] Code review result: %s", w.id, review)
-
-	if result.AlreadyDone {
-		log.Printf("[Worker %d] Code review detected ticket already done: %s", w.id, result.Verdict)
-		return false, "", fmt.Errorf("%w: %s", ErrAlreadyDone, result.Verdict)
-	}
 
 	return result.Approved, review, nil
 }
