@@ -81,11 +81,11 @@
   <div class="board-actions">
     {{if .Paused}}
     <form method="post" action="/api/sprint/start" style="display:inline">
-      <button type="submit" class="btn btn-success">Start Sprint</button>
+      <button type="submit" class="btn btn-success">Start Worker</button>
     </form>
     {{else}}
     <form method="post" action="/api/sprint/pause" style="display:inline">
-      <button type="submit" class="btn btn-danger">Pause Sprint</button>
+      <button type="submit" class="btn btn-danger">Pause Worker</button>
     </form>
     {{end}}
     <button type="button" id="sync-btn" class="btn" onclick="triggerSync()">
