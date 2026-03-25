@@ -283,3 +283,71 @@ func TestBuildIssueGenerationPrompt_ContainsPriorityAndComplexityInstructions(t 
 		t.Error("Prompt should explain complexity scale")
 	}
 }
+
+// TestReleaseNotesSchema_ValidJSON verifies the ReleaseNotesSchema is valid JSON
+func TestReleaseNotesSchema_ValidJSON(t *testing.T) {
+	var schema map[string]any
+	if err := json.Unmarshal(ReleaseNotesSchema, &schema); err != nil {
+		t.Fatalf("ReleaseNotesSchema is not valid JSON: %v", err)
+	}
+
+	// Verify type is object
+	if schema["type"] != "object" {
+		t.Errorf("Schema type should be 'object', got %v", schema["type"])
+	}
+
+	// Verify properties exist
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("Schema properties should be an object")
+	}
+
+	requiredProps := []string{"title", "description"}
+	for _, prop := range requiredProps {
+		if _, exists := props[prop]; !exists {
+			t.Errorf("Schema should have %q property", prop)
+		}
+	}
+
+	// Verify required fields
+	required, ok := schema["required"].([]any)
+	if !ok {
+		t.Fatal("Schema required should be an array")
+	}
+	if len(required) != 2 {
+		t.Errorf("Schema should have 2 required fields, got %d", len(required))
+	}
+
+	// Verify additionalProperties is false
+	if schema["additionalProperties"] != false {
+		t.Error("Schema should not allow additional properties")
+	}
+}
+
+// TestBuildReleaseNotesPrompt_ContainsRequiredInfo verifies the prompt includes necessary context
+func TestBuildReleaseNotesPrompt_ContainsRequiredInfo(t *testing.T) {
+	issues := []string{"#1: Fix bug", "#2: Add feature"}
+	prompt := BuildReleaseNotesPrompt("Sprint 1", "v1.0.0", issues)
+
+	if !strings.Contains(prompt, "v1.0.0") {
+		t.Error("Prompt should contain version")
+	}
+	if !strings.Contains(prompt, "Sprint 1") {
+		t.Error("Prompt should contain milestone title")
+	}
+	if !strings.Contains(prompt, "#1: Fix bug") {
+		t.Error("Prompt should contain issue list")
+	}
+	if !strings.Contains(prompt, "What's New") {
+		t.Error("Prompt should mention release notes sections")
+	}
+}
+
+// TestBuildReleaseNotesPrompt_EmptyIssues handles the case of no closed issues
+func TestBuildReleaseNotesPrompt_EmptyIssues(t *testing.T) {
+	prompt := BuildReleaseNotesPrompt("Sprint 1", "v1.0.0", []string{})
+
+	if !strings.Contains(prompt, "No closed issues") {
+		t.Error("Prompt should indicate no closed issues")
+	}
+}

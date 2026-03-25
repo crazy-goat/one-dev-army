@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/crazy-goat/one-dev-army/internal/version"
@@ -16,6 +17,7 @@ type tagClientInterface interface {
 	createTagObject(tagName, message, commitSHA string) (string, error)
 	createTagReference(tagName, tagSHA string) error
 	getBranchSHA(branch string) (string, error)
+	createRelease(tagName, title, body string) error
 }
 
 // tagRef represents a git tag reference
@@ -34,6 +36,7 @@ type mockTagClient struct {
 	tagRefErr    error
 	branchSHA    string
 	branchErr    error
+	releaseErr   error
 	calls        []string
 }
 
@@ -80,6 +83,11 @@ func (m *mockTagClient) getBranchSHA(branch string) (string, error) {
 		return "", m.branchErr
 	}
 	return m.branchSHA, nil
+}
+
+func (m *mockTagClient) createRelease(tagName, _, _ string) error {
+	m.calls = append(m.calls, "createRelease:"+tagName)
+	return m.releaseErr
 }
 
 // getLatestTagLogic implements the core logic for GetLatestTag using the interface
@@ -612,5 +620,67 @@ func TestTagResultParsing(t *testing.T) {
 
 	if result.SHA != "def789abc123" {
 		t.Errorf("Expected SHA %q, got %q", "def789abc123", result.SHA)
+	}
+}
+
+// createReleaseLogic implements the core logic for CreateRelease using the interface
+func createReleaseLogic(client tagClientInterface, tagName, title, body string) error {
+	return client.createRelease(tagName, title, body)
+}
+
+func TestCreateReleaseLogic(t *testing.T) {
+	tests := []struct {
+		name        string
+		tagName     string
+		title       string
+		body        string
+		releaseErr  error
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "successful release creation",
+			tagName:     "v1.0.0",
+			title:       "Release v1.0.0",
+			body:        "## What's New\n\n- Initial release",
+			expectError: false,
+		},
+		{
+			name:        "release creation fails",
+			tagName:     "v1.0.0",
+			title:       "Release v1.0.0",
+			body:        "## What's New\n\n- Initial release",
+			releaseErr:  errors.New("API error"),
+			expectError: true,
+			errorMsg:    "API error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mc := newMockTagClient()
+			mc.releaseErr = tt.releaseErr
+
+			err := createReleaseLogic(mc, tt.tagName, tt.title, tt.body)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("createReleaseLogic() expected error, got nil")
+					return
+				}
+				if tt.errorMsg != "" && !containsStr(err.Error(), tt.errorMsg) {
+					t.Errorf("createReleaseLogic() error = %q, should contain %q", err.Error(), tt.errorMsg)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("createReleaseLogic() unexpected error: %v", err)
+			}
+
+			// Verify the method was called
+			if !slices.Contains(mc.calls, "createRelease:"+tt.tagName) {
+				t.Errorf("createRelease() was not called for tag %q", tt.tagName)
+			}
+		})
 	}
 }

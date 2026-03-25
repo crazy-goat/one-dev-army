@@ -1,7 +1,10 @@
 package github
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
+	"strconv"
 	"time"
 )
 
@@ -51,4 +54,45 @@ func (c *Client) CreateNextSprint(_ string) (string, error) {
 	}
 
 	return title, nil
+}
+
+// GetClosedIssuesForMilestone returns closed issues assigned to a specific milestone
+// that were actually completed (merged via PR), not just manually closed
+func (c *Client) GetClosedIssuesForMilestone(milestoneNumber int) ([]Issue, error) {
+	// Use gh CLI to list closed issues for the milestone
+	// We need to fetch more fields to determine if issue was merged or just closed
+	out, err := c.gh("issue", "list",
+		"--milestone", strconv.Itoa(milestoneNumber),
+		"--state", "closed",
+		"--json", "number,title,state,labels,updatedAt")
+	if err != nil {
+		return nil, fmt.Errorf("listing closed issues for milestone %d: %w", milestoneNumber, err)
+	}
+
+	var issues []Issue
+	if err := json.Unmarshal(out, &issues); err != nil {
+		return nil, fmt.Errorf("parsing closed issues for milestone %d: %w", milestoneNumber, err)
+	}
+
+	// Filter only issues that were actually merged (not just manually closed)
+	var mergedIssues []Issue
+	for _, issue := range issues {
+		// Check if this issue was closed via merged PR
+		isMerged, _, err := c.GetIssuePRStatus(issue.Number)
+		if err != nil {
+			// If we can't determine status, include it anyway (better to include than miss)
+			log.Printf("[GitHub] Warning: could not determine PR status for issue #%d: %v", issue.Number, err)
+			mergedIssues = append(mergedIssues, issue)
+			continue
+		}
+
+		if isMerged {
+			mergedIssues = append(mergedIssues, issue)
+			log.Printf("[GitHub] Issue #%d was merged, including in release notes", issue.Number)
+		} else {
+			log.Printf("[GitHub] Issue #%d was closed but not merged, skipping", issue.Number)
+		}
+	}
+
+	return mergedIssues, nil
 }

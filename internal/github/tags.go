@@ -133,3 +133,19 @@ func (c *Client) CreateTag(tagName, branch, message string) error {
 
 	return nil
 }
+
+// CreateRelease creates a new GitHub release for the given tag
+func (c *Client) CreateRelease(tagName, title, body string) error {
+	// Create the release using gh CLI
+	_, err := c.ghNoRepo("api", "repos/"+c.Repo+"/releases",
+		"-f", "tag_name="+tagName,
+		"-f", "name="+title,
+		"-f", "body="+body,
+		"-f", "draft=false",
+		"-f", "prerelease=false")
+	if err != nil {
+		return fmt.Errorf("creating release for tag %s: %w", tagName, err)
+	}
+
+	return nil
+}

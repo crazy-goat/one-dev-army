@@ -220,6 +220,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/sprint/close", s.handleSprintCloseLegacy)
 	// Sprint close with version bump workflow
 	s.mux.HandleFunc("GET /sprint/close", s.handleSprintClosePage)
+	s.mux.HandleFunc("POST /api/sprint/close/preview", s.handleSprintClosePreview)
 	s.mux.HandleFunc("POST /api/sprint/close/confirm", s.handleSprintCloseConfirm)
 	s.mux.HandleFunc("POST /epic", s.handleAddEpic)
 	s.mux.HandleFunc("POST /sync", s.handleSync)

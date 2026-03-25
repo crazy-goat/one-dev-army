@@ -159,6 +159,57 @@ func BuildTechnicalPlanningPrompt(wizardType WizardType, idea string, codebaseCo
 	return BuildIssueGenerationPrompt(wizardType, idea, codebaseContext, language)
 }
 
+// ReleaseNotes represents the structured output for release notes generation
+type ReleaseNotes struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
+// ReleaseNotesSchema is the JSON schema for structured LLM output for release notes
+var ReleaseNotesSchema = json.RawMessage(`{
+	"type": "object",
+	"properties": {
+		"title": {
+			"type": "string",
+			"description": "Concise release title, 5-15 words, summarizing the main theme of this release"
+		},
+		"description": {
+			"type": "string",
+			"description": "Release notes in markdown format. Include sections: What's New, Bug Fixes, Improvements, and Breaking Changes (if any). Group related items together."
+		}
+	},
+	"required": ["title", "description"],
+	"additionalProperties": false
+}`)
+
+// BuildReleaseNotesPrompt creates the prompt for generating release notes
+// milestoneTitle: the title of the milestone being closed
+// version: the new version tag (e.g., "v1.2.3")
+// closedIssues: list of closed issues with their titles and numbers
+func BuildReleaseNotesPrompt(milestoneTitle, version string, closedIssues []string) string {
+	issuesList := "No closed issues."
+	if len(closedIssues) > 0 {
+		issuesList = strings.Join(closedIssues, "\n")
+	}
+
+	return fmt.Sprintf(`Generate release notes for version %s (milestone: %s).
+
+Closed Issues:
+%s
+
+Based on these closed issues, create:
+1. A concise, engaging release title that captures the main theme
+2. Well-organized release notes in markdown format with these sections:
+   - What's New (features and enhancements)
+   - Bug Fixes
+   - Improvements (performance, refactoring, etc.)
+   - Breaking Changes (if any issues indicate breaking changes)
+
+If there are no closed issues, create a generic release note about routine maintenance and improvements.
+
+Output must be valid JSON matching the provided schema.`, version, milestoneTitle, issuesList)
+}
+
 // GetCodebaseContext gathers context about the existing codebase
 // This is a placeholder implementation that can be enhanced to:
 // - Read key configuration files (package.json, go.mod, etc.)

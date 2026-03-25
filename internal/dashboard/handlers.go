@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log"
 	"net/http"
 	"os"
@@ -898,6 +899,17 @@ func (s *Server) handleSprintClosePage(w http.ResponseWriter, r *http.Request) {
 	// Get error from query param (if redirected back due to error)
 	errorMsg := r.URL.Query().Get("error")
 
+	// Load YOLO mode status
+	yoloMode := false
+	if s.rootDir != "" {
+		if cfg, err := config.Load(s.rootDir); err == nil {
+			yoloMode = cfg.YoloMode
+		}
+	}
+	if s.yoloOverride != nil {
+		yoloMode = *s.yoloOverride
+	}
+
 	data := struct {
 		Active         string
 		OpenCodePort   int
@@ -906,6 +918,7 @@ func (s *Server) handleSprintClosePage(w http.ResponseWriter, r *http.Request) {
 		NewVersion     string
 		BumpType       string
 		Error          string
+		YoloMode       bool
 	}{
 		Active:         "close-sprint",
 		OpenCodePort:   s.webPort,
@@ -914,6 +927,7 @@ func (s *Server) handleSprintClosePage(w http.ResponseWriter, r *http.Request) {
 		NewVersion:     newVersion,
 		BumpType:       bumpType,
 		Error:          errorMsg,
+		YoloMode:       yoloMode,
 	}
 
 	if s.pool != nil {
@@ -1001,6 +1015,76 @@ func (s *Server) handleSprintCloseConfirm(w http.ResponseWriter, r *http.Request
 
 	log.Printf("[Dashboard] Created tag %s for milestone %s", tagName, milestone.Title)
 
+	// Get closed issues for this milestone to generate release notes
+	closedIssues, err := s.gh.GetClosedIssuesForMilestone(milestone.Number)
+	if err != nil {
+		log.Printf("[Dashboard] Warning: failed to get closed issues for milestone %s: %v", milestone.Title, err)
+		// Continue without release notes generation
+	}
+
+	// Generate release notes using LLM if we have closed issues and opencode client is available
+	var releaseTitle, releaseBody string
+	if len(closedIssues) > 0 && s.oc != nil {
+		// Format closed issues for the prompt
+		issueList := make([]string, len(closedIssues))
+		for i, issue := range closedIssues {
+			issueList[i] = fmt.Sprintf("#%d: %s", issue.Number, issue.Title)
+		}
+
+		// Create LLM session for release notes generation
+		llmSession, err := s.oc.CreateSession("Release Notes Generation")
+		if err != nil {
+			log.Printf("[Dashboard] Warning: failed to create LLM session for release notes: %v", err)
+		} else {
+			defer func() {
+				if err := s.oc.DeleteSession(llmSession.ID); err != nil {
+					log.Printf("[Dashboard] Warning: failed to delete LLM session %s: %v", llmSession.ID, err)
+				}
+			}()
+
+			// Build prompt and generate release notes
+			prompt := BuildReleaseNotesPrompt(milestone.Title, tagName, issueList)
+			model := opencode.ParseModelRef(s.wizardLLM)
+
+			ctx, cancel := context.WithTimeout(r.Context(), LLMRequestTimeout)
+			defer cancel()
+
+			var result ReleaseNotes
+			if err := s.oc.SendMessageStructured(ctx, llmSession.ID, prompt, model, ReleaseNotesSchema, &result); err != nil {
+				log.Printf("[Dashboard] Warning: failed to generate release notes with LLM: %v", err)
+			} else {
+				releaseTitle = result.Title
+				releaseBody = result.Description
+				log.Printf("[Dashboard] Generated release notes with LLM for %s", tagName)
+			}
+		}
+	}
+
+	// Fallback to default release notes if LLM generation failed or wasn't possible
+	if releaseTitle == "" {
+		releaseTitle = fmt.Sprintf("Release %s - %s", tagName, milestone.Title)
+	}
+	if releaseBody == "" {
+		if len(closedIssues) > 0 {
+			var body strings.Builder
+			fmt.Fprintf(&body, "## Closed Issues in %s\n\n", milestone.Title)
+			for _, issue := range closedIssues {
+				fmt.Fprintf(&body, "- #%d: %s\n", issue.Number, issue.Title)
+			}
+			releaseBody = body.String()
+		} else {
+			releaseBody = fmt.Sprintf("Release %s - %s\n\nNo issues were closed in this sprint.", tagName, milestone.Title)
+		}
+	}
+
+	// Create GitHub release
+	if err := s.gh.CreateRelease(tagName, releaseTitle, releaseBody); err != nil {
+		log.Printf("[Dashboard] Warning: failed to create release for tag %s: %v", tagName, err)
+		// Don't fail the operation if release creation fails
+	} else {
+		log.Printf("[Dashboard] Created release %s for tag %s", releaseTitle, tagName)
+	}
+
 	// Close the milestone via GitHub API
 	if err := s.gh.CloseMilestone(milestone.Number); err != nil {
 		log.Printf("[Dashboard] Error closing milestone %s: %v", milestone.Title, err)
@@ -1055,9 +1139,168 @@ func (s *Server) handleSprintCloseConfirm(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// Redirect to board with success message
-	// Note: We could add a flash message system, but for now just redirect
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	// Log the generated release notes for visibility
+	log.Printf("[Dashboard] Release Title: %s", releaseTitle)
+	log.Printf("[Dashboard] Release Body:\n%s", releaseBody)
+
+	// Redirect to GitHub release page
+	releaseURL := fmt.Sprintf("https://github.com/%s/releases/tag/%s", s.gh.Repo, tagName)
+	log.Printf("[Dashboard] Redirecting to release: %s", releaseURL)
+	http.Redirect(w, r, releaseURL, http.StatusSeeOther)
+}
+
+// handleSprintClosePreview generates release notes preview without actually closing sprint
+func (s *Server) handleSprintClosePreview(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	// Get active milestone
+	if s.gh == nil || s.gh.GetActiveMilestone() == nil {
+		http.Error(w, "no active milestone", http.StatusBadRequest)
+		return
+	}
+
+	milestone := s.gh.GetActiveMilestone()
+
+	// Get form data
+	currentVersion := r.FormValue("current_version")
+	bumpType := r.FormValue("bump_type")
+
+	// Validate bump type
+	if bumpType != bumpTypeMajor && bumpType != bumpTypeMinor && bumpType != bumpTypePatch {
+		bumpType = bumpTypePatch
+	}
+
+	// Calculate new version
+	var newVersion string
+	if v, err := version.Parse(currentVersion); err == nil {
+		switch bumpType {
+		case bumpTypeMajor:
+			newVersion = v.BumpMajor().String()
+		case bumpTypeMinor:
+			newVersion = v.BumpMinor().String()
+		case bumpTypePatch:
+			newVersion = v.BumpPatch().String()
+		}
+	} else {
+		fallbackVersion := version.Version{Major: 0, Minor: 0, Patch: 0}
+		switch bumpType {
+		case bumpTypeMajor:
+			newVersion = fallbackVersion.BumpMajor().String()
+		case bumpTypeMinor:
+			newVersion = fallbackVersion.BumpMinor().String()
+		case bumpTypePatch:
+			newVersion = fallbackVersion.BumpPatch().String()
+		}
+	}
+
+	tagName := "v" + newVersion
+
+	// Get closed issues for this milestone
+	closedIssues, err := s.gh.GetClosedIssuesForMilestone(milestone.Number)
+	if err != nil {
+		log.Printf("[Dashboard] Warning: failed to get closed issues for milestone %s: %v", milestone.Title, err)
+	}
+
+	// Generate release notes using LLM
+	var releaseTitle, releaseBody string
+	var llmGenerated bool
+
+	if len(closedIssues) > 0 && s.oc != nil {
+		issueList := make([]string, len(closedIssues))
+		for i, issue := range closedIssues {
+			issueList[i] = fmt.Sprintf("#%d: %s", issue.Number, issue.Title)
+		}
+
+		llmSession, err := s.oc.CreateSession("Release Notes Preview")
+		if err != nil {
+			log.Printf("[Dashboard] Warning: failed to create LLM session for preview: %v", err)
+		} else {
+			defer func() {
+				if err := s.oc.DeleteSession(llmSession.ID); err != nil {
+					log.Printf("[Dashboard] Warning: failed to delete LLM session %s: %v", llmSession.ID, err)
+				}
+			}()
+
+			prompt := BuildReleaseNotesPrompt(milestone.Title, tagName, issueList)
+			model := opencode.ParseModelRef(s.wizardLLM)
+
+			ctx, cancel := context.WithTimeout(r.Context(), LLMRequestTimeout)
+			defer cancel()
+
+			var result ReleaseNotes
+			if err := s.oc.SendMessageStructured(ctx, llmSession.ID, prompt, model, ReleaseNotesSchema, &result); err != nil {
+				log.Printf("[Dashboard] Warning: failed to generate release notes with LLM: %v", err)
+			} else {
+				releaseTitle = result.Title
+				releaseBody = result.Description
+				llmGenerated = true
+			}
+		}
+	}
+
+	// Fallback
+	if releaseTitle == "" {
+		releaseTitle = fmt.Sprintf("Release %s - %s", tagName, milestone.Title)
+	}
+	if releaseBody == "" {
+		if len(closedIssues) > 0 {
+			var body strings.Builder
+			fmt.Fprintf(&body, "## Closed Issues in %s\n\n", milestone.Title)
+			for _, issue := range closedIssues {
+				fmt.Fprintf(&body, "- #%d: %s\n", issue.Number, issue.Title)
+			}
+			releaseBody = body.String()
+		} else {
+			releaseBody = fmt.Sprintf("Release %s - %s\n\nNo issues were closed in this sprint.", tagName, milestone.Title)
+		}
+	}
+
+	// Prepare issues data
+	issuesData := make([]map[string]any, len(closedIssues))
+	for i, issue := range closedIssues {
+		issuesData[i] = map[string]any{
+			"number": issue.Number,
+			"title":  issue.Title,
+		}
+	}
+
+	// Return HTML response for HTMX with markdown in data attribute
+	w.Header().Set("Content-Type", "text/html")
+
+	fmt.Fprintf(w, `<div class="preview-header">
+  <h3>%s</h3>
+  <span class="preview-tag">%s</span>
+</div>
+<div class="preview-content" data-markdown="%s">
+  <pre class="markdown-raw"><code>%s</code></pre>
+</div>
+<div class="preview-footer">
+  Based on %d merged issue(s) • %s
+</div>
+<script>
+  // Render markdown using marked.js
+  (function() {
+    const content = document.querySelector('.preview-content');
+    const rawMarkdown = content.getAttribute('data-markdown');
+    if (rawMarkdown && typeof marked !== 'undefined') {
+      content.innerHTML = marked.parse(rawMarkdown);
+    }
+  })();
+</script>`,
+		html.EscapeString(releaseTitle),
+		html.EscapeString(tagName),
+		html.EscapeString(releaseBody),
+		html.EscapeString(releaseBody),
+		len(closedIssues),
+		func() string {
+			if llmGenerated {
+				return "Generated by LLM"
+			}
+			return "Auto-generated"
+		}())
 }
 
 type taskDetailData struct {
