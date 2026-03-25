@@ -1,12 +1,15 @@
 package mvp
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
+	"github.com/crazy-goat/one-dev-army/internal/prompts"
 )
 
 func TestSlug(t *testing.T) {
@@ -424,5 +427,34 @@ func TestWorker_CreateArtifactDir(t *testing.T) {
 				t.Errorf("createArtifactDir() second call error = %v, want no error", err)
 			}
 		})
+	}
+}
+
+func TestTechnicalPlanningPromptFormat(t *testing.T) {
+	promptTemplate := prompts.MustGet(prompts.MVPTechnicalPlanning)
+
+	// Verify the prompt template can be formatted with 4 arguments
+	formatted := fmt.Sprintf(promptTemplate, 123, "Test Title", "Test Body", 123)
+
+	// Verify the formatted prompt contains the artifact path pattern
+	expectedArtifactPath := ".oda/artifacts/123/01-planning.md"
+	if !strings.Contains(formatted, expectedArtifactPath) {
+		t.Errorf("formatted prompt does not contain expected artifact path %q", expectedArtifactPath)
+	}
+
+	// Verify all format specifiers were replaced (no %! patterns indicating missing args)
+	if strings.Contains(formatted, "%!") {
+		t.Errorf("formatted prompt contains unreplaced format specifiers: %s", formatted)
+	}
+
+	// Verify the prompt contains key sections
+	if !strings.Contains(formatted, "ARTIFACT") {
+		t.Error("formatted prompt does not contain 'ARTIFACT' section")
+	}
+	if !strings.Contains(formatted, "RESPONSE to orchestrator") {
+		t.Error("formatted prompt does not contain 'RESPONSE to orchestrator' section")
+	}
+	if !strings.Contains(formatted, "CRITICAL: Save the complete analysis to the artifact file") {
+		t.Error("formatted prompt does not contain artifact save instruction")
 	}
 }

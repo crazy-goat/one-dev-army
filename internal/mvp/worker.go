@@ -389,7 +389,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 }
 
 func (w *Worker) technicalPlanning(ctx context.Context, task *Task) (analysis, implPlan string, err error) {
-	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPTechnicalPlanning), task.Issue.Number, task.Issue.Title, task.Issue.Body)
+	prompt := fmt.Sprintf(prompts.MustGet(prompts.MVPTechnicalPlanning), task.Issue.Number, task.Issue.Title, task.Issue.Body, task.Issue.Number)
 
 	// Use router to select model for planning category
 	llmModel := w.cfg.Load().LLM.Planning.Model
