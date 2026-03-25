@@ -80,6 +80,11 @@ func (s *Server) buildBoardData(_ *http.Request) boardData {
 		}
 	}
 
+	// Check runtime override (takes precedence over config file)
+	if s.yoloOverride != nil {
+		yoloMode = *s.yoloOverride
+	}
+
 	data := boardData{
 		Active:       "board",
 		OpenCodePort: s.webPort,
@@ -2001,20 +2006,26 @@ func (s *Server) handleYoloToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Toggle YOLO mode
-	cfg.YoloMode = !cfg.YoloMode
-
-	// Save config
-	if err := config.SaveConfig(s.rootDir, cfg); err != nil {
-		log.Printf("[Dashboard] Error saving config after YOLO toggle: %v", err)
-		http.Error(w, "failed to save configuration", http.StatusInternalServerError)
-		return
+	// Determine current state from runtime override or config
+	currentYolo := cfg.YoloMode
+	if s.yoloOverride != nil {
+		currentYolo = *s.yoloOverride
 	}
 
-	log.Printf("[Dashboard] YOLO mode toggled to: %v", cfg.YoloMode)
+	// Toggle YOLO mode
+	newYolo := !currentYolo
+	s.yoloOverride = &newYolo
+
+	// Propagate in-memory to workers (no file save)
+	cfg.YoloMode = newYolo
+	if s.configPropagator != nil {
+		s.configPropagator.Propagate(cfg)
+	}
+
+	log.Printf("[Dashboard] YOLO mode toggled to: %v (runtime only)", newYolo)
 
 	// Return the updated toggle HTML fragment
-	if cfg.YoloMode {
+	if newYolo {
 		_, _ = fmt.Fprint(w, `<div class="yolo-mode-container yolo-enabled" id="yolo-mode-container" hx-post="/api/yolo/toggle" hx-swap="outerHTML" title="Click to disable YOLO mode">
   <span class="yolo-mode-icon">⚡</span>
   <span>YOLO MODE</span>

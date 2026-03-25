@@ -43,6 +43,7 @@ type Server struct {
 	modelsCache      []opencode.ProviderModel
 	brMgr            *git.BranchManager
 	configPropagator *config.ConfigPropagator
+	yoloOverride     *bool // Runtime YOLO mode override (nil = use config file)
 }
 
 func NewServer(port int, webPort int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string, brMgr *git.BranchManager, configPropagator *config.ConfigPropagator) (*Server, error) {
