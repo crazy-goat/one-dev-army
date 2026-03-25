@@ -152,24 +152,6 @@ function triggerSync() {
 
 {{define "board-columns"}}
   <div class="stacked-column">
-    <div class="column col-blocked">
-      <div class="column-title">Blocked <span class="count">{{len .Blocked}}</span></div>
-      {{range .Blocked}}
-      <div class="card">
-        <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>
-        <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
-        <div class="card-title">{{.Title}}</div>
-        {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
-        {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
-        <div class="card-actions">
-          <form method="post" action="/unblock/{{.ID}}"><button type="submit" class="btn btn-success">Unblock</button></form>
-        </div>
-      </div>
-      {{else}}
-      <div class="empty-state">No blocked tickets</div>
-      {{end}}
-    </div>
-
     <div class="column">
       <div class="column-title">Backlog <span class="count">{{len .Backlog}}</span></div>
       {{range .Backlog}}
@@ -185,6 +167,24 @@ function triggerSync() {
       </div>
       {{else}}
       <div class="empty-state">No tickets in backlog</div>
+      {{end}}
+    </div>
+
+    <div class="column col-blocked">
+      <div class="column-title">Blocked <span class="count">{{len .Blocked}}</span></div>
+      {{range .Blocked}}
+      <div class="card">
+        <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>
+        <div class="card-id"><a href="/task/{{.ID}}">#{{.ID}}</a></div>
+        <div class="card-title">{{.Title}}</div>
+        {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
+        {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
+        <div class="card-actions">
+          <form method="post" action="/unblock/{{.ID}}"><button type="submit" class="btn btn-success">Unblock</button></form>
+        </div>
+      </div>
+      {{else}}
+      <div class="empty-state">No blocked tickets</div>
       {{end}}
     </div>
   </div>
