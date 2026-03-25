@@ -966,8 +966,16 @@ func (s *Server) handleSprintCloseConfirm(w http.ResponseWriter, r *http.Request
 			newVersion = v.BumpPatch().String()
 		}
 	} else {
-		// Fallback: if current version is invalid, start from 0.0.0
-		newVersion = "0.0.0"
+		// Fallback: if current version is invalid, start from 0.0.0 and apply bump
+		fallbackVersion := version.Version{Major: 0, Minor: 0, Patch: 0}
+		switch bumpType {
+		case bumpTypeMajor:
+			newVersion = fallbackVersion.BumpMajor().String()
+		case bumpTypeMinor:
+			newVersion = fallbackVersion.BumpMinor().String()
+		case bumpTypePatch:
+			newVersion = fallbackVersion.BumpPatch().String()
+		}
 	}
 
 	// Check if tag already exists
@@ -987,7 +995,7 @@ func (s *Server) handleSprintCloseConfirm(w http.ResponseWriter, r *http.Request
 	tagMessage := fmt.Sprintf("Release %s - %s", tagName, milestone.Title)
 	if err := s.gh.CreateTag(tagName, "master", tagMessage); err != nil {
 		log.Printf("[Dashboard] Error creating tag %s: %v", tagName, err)
-		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=Failed+to+create+tag: "+err.Error(), http.StatusSeeOther)
+		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=Failed+to+create+tag", http.StatusSeeOther)
 		return
 	}
 
@@ -996,7 +1004,7 @@ func (s *Server) handleSprintCloseConfirm(w http.ResponseWriter, r *http.Request
 	// Close the milestone via GitHub API
 	if err := s.gh.CloseMilestone(milestone.Number); err != nil {
 		log.Printf("[Dashboard] Error closing milestone %s: %v", milestone.Title, err)
-		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=Failed+to+close+milestone: "+err.Error(), http.StatusSeeOther)
+		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=Failed+to+close+milestone", http.StatusSeeOther)
 		return
 	}
 
@@ -1006,7 +1014,7 @@ func (s *Server) handleSprintCloseConfirm(w http.ResponseWriter, r *http.Request
 	newSprintTitle, err := s.gh.CreateNextSprint(milestone.Title)
 	if err != nil {
 		log.Printf("[Dashboard] Error creating next sprint after closing %s: %v", milestone.Title, err)
-		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=Failed+to+create+next+sprint: "+err.Error(), http.StatusSeeOther)
+		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=Failed+to+create+next+sprint", http.StatusSeeOther)
 		return
 	}
 
@@ -1016,7 +1024,7 @@ func (s *Server) handleSprintCloseConfirm(w http.ResponseWriter, r *http.Request
 	newMilestone, err := s.gh.GetOldestOpenMilestone()
 	if err != nil {
 		log.Printf("[Dashboard] Error reloading milestones after closing %s: %v", milestone.Title, err)
-		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=Failed+to+reload+milestones: "+err.Error(), http.StatusSeeOther)
+		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=Failed+to+reload+milestones", http.StatusSeeOther)
 		return
 	}
 
