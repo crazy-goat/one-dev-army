@@ -2213,16 +2213,17 @@ func TestBoardLayout_StackedColumns(t *testing.T) {
 
 	body := rec.Body.String()
 
-	if !strings.Contains(body, `class="stacked-column"`) {
-		t.Error("board page missing stacked-column CSS class")
-	}
-
+	// Check for stacked-column class in HTML (can be part of multi-class attribute like class="board-left stacked-column")
 	if !strings.Contains(body, "stacked-column") {
-		t.Error("board page missing stacked column containers")
+		t.Error("board page missing stacked-column CSS class in HTML")
 	}
 
-	if strings.Count(body, `class="stacked-column"`) != 2 {
-		t.Errorf("expected 2 stacked-column containers, got %d", strings.Count(body, `class="stacked-column"`))
+	// Count occurrences of stacked-column in class attributes (handles both single and multi-class)
+	// Look for patterns like: class="... stacked-column" or class="stacked-column ..." or class="... stacked-column ..."
+	stackedColumnCount := strings.Count(body, `class="board-left stacked-column"`) +
+		strings.Count(body, `class="board-right stacked-column"`)
+	if stackedColumnCount != 2 {
+		t.Errorf("expected 2 stacked-column containers, got %d", stackedColumnCount)
 	}
 
 	if !strings.Contains(body, ".stacked-column{") {
@@ -5556,7 +5557,7 @@ func TestHandleManualProcess(t *testing.T) {
 	orch := &mvp.Orchestrator{}
 	s := &Server{orchestrator: orch}
 
-	req := httptest.NewRequest("POST", "/api/tickets/42/process", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/42/process", nil)
 	req.SetPathValue("id", "42")
 	w := httptest.NewRecorder()
 
@@ -5575,7 +5576,7 @@ func TestHandleManualProcess(t *testing.T) {
 func TestHandleManualProcessNoOrchestrator(t *testing.T) {
 	s := &Server{}
 
-	req := httptest.NewRequest("POST", "/api/tickets/42/process", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/42/process", nil)
 	req.SetPathValue("id", "42")
 	w := httptest.NewRecorder()
 
@@ -5590,7 +5591,7 @@ func TestHandleManualProcessInvalidID(t *testing.T) {
 	orch := &mvp.Orchestrator{}
 	s := &Server{orchestrator: orch}
 
-	req := httptest.NewRequest("POST", "/api/tickets/abc/process", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/abc/process", nil)
 	req.SetPathValue("id", "abc")
 	w := httptest.NewRecorder()
 

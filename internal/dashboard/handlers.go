@@ -549,7 +549,7 @@ func (s *Server) handleManualProcess(w http.ResponseWriter, r *http.Request) {
 	if err := s.orchestrator.QueueManualProcess(issueNum); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"success": false,
 			"error":   err.Error(),
 		})
@@ -558,7 +558,7 @@ func (s *Server) handleManualProcess(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[Dashboard] Manual process queued for #%d", issueNum)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
 		"message": fmt.Sprintf("Ticket #%d queued for processing", issueNum),
 	})

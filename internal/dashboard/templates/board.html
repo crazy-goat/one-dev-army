@@ -9,8 +9,11 @@
 .board-left .column{flex:1 1 50%;min-height:0;overflow-y:auto;scroll-behavior:smooth}
 .board-right{display:flex;flex-direction:column;gap:0.5rem;min-height:0}
 .board-right .column{flex:1 1 50%;min-height:0;overflow-y:auto;scroll-behavior:smooth}
+.stacked-column{display:flex;flex-direction:column;gap:0.5rem;min-height:0;height:calc(100vh - 200px)}
+.stacked-column .column{flex:1 1 50%;min-height:0;overflow-y:auto;scroll-behavior:smooth}
+.stacked-column .column-title{position:sticky;top:0;background:var(--surface);z-index:1}
 .board-center{display:flex;flex-direction:column;gap:1rem;min-height:0}
-.board-center-columns{display:grid;grid-template-columns:repeat(6,1fr);gap:1rem;flex:0 0 auto;height:180px}
+.board-center-columns{display:grid;grid-template-columns:repeat(8,1fr);gap:1rem;flex:0 0 auto;height:180px}
 .board-center .column{min-height:0;overflow-y:auto;scroll-behavior:smooth;height:100%}
 .column{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem}
 .column-title{font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.75rem;display:flex;justify-content:space-between;align-items:center}
@@ -230,7 +233,7 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
 
 {{define "board-columns"}}
   <!-- Left column: Backlog + Blocked -->
-  <div class="board-left">
+  <div class="board-left stacked-column">
     <div class="column">
       <div class="column-title">Backlog <span class="count">{{len .Backlog}}</span></div>
       {{range .Backlog}}
@@ -413,7 +416,7 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
   </div>
 
   <!-- Right column: Done + Failed -->
-  <div class="board-right">
+  <div class="board-right stacked-column">
     <div class="column">
       <div class="column-title">Done <span class="count">{{len .Done}}</span></div>
       {{range .Done}}
