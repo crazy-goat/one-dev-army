@@ -166,7 +166,7 @@ func TestGetLastCompletedStep_Migration(t *testing.T) {
 	store := openTestStore(t)
 
 	// Insert old "analyze" step
-	stepID, err := store.InsertStep(100, "analyze", "test prompt", "session-1")
+	stepID, err := store.InsertStep(100, "analyze", "test prompt", "session-1", "")
 	if err != nil {
 		t.Fatalf("inserting analyze step: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestGetLastCompletedStep_Migration(t *testing.T) {
 	}
 
 	// Insert old "plan" step
-	stepID2, err := store.InsertStep(101, "plan", "test prompt 2", "session-2")
+	stepID2, err := store.InsertStep(101, "plan", "test prompt 2", "session-2", "")
 	if err != nil {
 		t.Fatalf("inserting plan step: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestGetLastCompletedStep_Migration(t *testing.T) {
 	}
 
 	// Insert new "technical-planning" step
-	stepID3, err := store.InsertStep(102, "technical-planning", "test prompt 3", "session-3")
+	stepID3, err := store.InsertStep(102, "technical-planning", "test prompt 3", "session-3", "")
 	if err != nil {
 		t.Fatalf("inserting technical-planning step: %v", err)
 	}
@@ -224,7 +224,7 @@ func TestGetStepResponse_Migration(t *testing.T) {
 	store := openTestStore(t)
 
 	// Insert old "plan" step
-	stepID, err := store.InsertStep(200, "plan", "test prompt", "session-1")
+	stepID, err := store.InsertStep(200, "plan", "test prompt", "session-1", "")
 	if err != nil {
 		t.Fatalf("inserting plan step: %v", err)
 	}
@@ -242,7 +242,7 @@ func TestGetStepResponse_Migration(t *testing.T) {
 	}
 
 	// Insert new "technical-planning" step
-	stepID2, err := store.InsertStep(201, "technical-planning", "test prompt 2", "session-2")
+	stepID2, err := store.InsertStep(201, "technical-planning", "test prompt 2", "session-2", "")
 	if err != nil {
 		t.Fatalf("inserting technical-planning step: %v", err)
 	}
@@ -826,7 +826,7 @@ func TestConcurrentMixedWrites_NoBusyErrors(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 			// InsertStep and FinishStep
-			stepID, err := store.InsertStep(n, "test-step", "test prompt", "session-1")
+			stepID, err := store.InsertStep(n, "test-step", "test prompt", "session-1", "")
 			if err != nil {
 				errors <- err
 				return

@@ -16,7 +16,7 @@ func TestStepLogger_CreatesLogFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	artifactDir := filepath.Join(tmpDir, ".oda", "artifacts")
 
-	logger, err := NewStepLogger(artifactDir, 123, "test-step")
+	logger, err := NewStepLogger(artifactDir, 123, "test-step", "")
 	if err != nil {
 		t.Fatalf("NewStepLogger failed: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestStepLogger_StartAndEnd(t *testing.T) {
 	tmpDir := t.TempDir()
 	artifactDir := filepath.Join(tmpDir, ".oda", "artifacts")
 
-	logger, err := NewStepLogger(artifactDir, 456, "technical-planning")
+	logger, err := NewStepLogger(artifactDir, 456, "technical-planning", "")
 	if err != nil {
 		t.Fatalf("NewStepLogger failed: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestStepLogger_EndFailure(t *testing.T) {
 	tmpDir := t.TempDir()
 	artifactDir := filepath.Join(tmpDir, ".oda", "artifacts")
 
-	logger, err := NewStepLogger(artifactDir, 789, "implement")
+	logger, err := NewStepLogger(artifactDir, 789, "implement", "")
 	if err != nil {
 		t.Fatalf("NewStepLogger failed: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestStepLogger_LogLLMResponse_TextOnly(t *testing.T) {
 	tmpDir := t.TempDir()
 	artifactDir := filepath.Join(tmpDir, ".oda", "artifacts")
 
-	logger, err := NewStepLogger(artifactDir, 100, "test-step")
+	logger, err := NewStepLogger(artifactDir, 100, "test-step", "")
 	if err != nil {
 		t.Fatalf("NewStepLogger failed: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestStepLogger_LogLLMResponse_WithToolCall(t *testing.T) {
 	tmpDir := t.TempDir()
 	artifactDir := filepath.Join(tmpDir, ".oda", "artifacts")
 
-	logger, err := NewStepLogger(artifactDir, 101, "test-step")
+	logger, err := NewStepLogger(artifactDir, 101, "test-step", "")
 	if err != nil {
 		t.Fatalf("NewStepLogger failed: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestStepLogger_LogLLMResponse_WithToolResult(t *testing.T) {
 	tmpDir := t.TempDir()
 	artifactDir := filepath.Join(tmpDir, ".oda", "artifacts")
 
-	logger, err := NewStepLogger(artifactDir, 102, "test-step")
+	logger, err := NewStepLogger(artifactDir, 102, "test-step", "")
 	if err != nil {
 		t.Fatalf("NewStepLogger failed: %v", err)
 	}
@@ -255,7 +255,7 @@ func TestStepLogger_LogLLMResponse_WithToolError(t *testing.T) {
 	tmpDir := t.TempDir()
 	artifactDir := filepath.Join(tmpDir, ".oda", "artifacts")
 
-	logger, err := NewStepLogger(artifactDir, 103, "test-step")
+	logger, err := NewStepLogger(artifactDir, 103, "test-step", "")
 	if err != nil {
 		t.Fatalf("NewStepLogger failed: %v", err)
 	}
@@ -300,7 +300,7 @@ func TestStepLogger_NilSafety(t *testing.T) {
 	logger.End(true, "")
 	logger.Close()
 
-	logger, _ = NewStepLogger(t.TempDir(), 1, "test")
+	logger, _ = NewStepLogger(t.TempDir(), 1, "test", "")
 	logger.LogLLMResponse(nil)
 	logger.Logf("test")
 	logger.End(true, "")
@@ -311,7 +311,7 @@ func TestStepLogger_Logf(t *testing.T) {
 	tmpDir := t.TempDir()
 	artifactDir := filepath.Join(tmpDir, ".oda", "artifacts")
 
-	logger, err := NewStepLogger(artifactDir, 200, "test-step")
+	logger, err := NewStepLogger(artifactDir, 200, "test-step", "")
 	if err != nil {
 		t.Fatalf("NewStepLogger failed: %v", err)
 	}
@@ -341,7 +341,7 @@ func TestStepLogger_ConcurrentWrites(t *testing.T) {
 	tmpDir := t.TempDir()
 	artifactDir := filepath.Join(tmpDir, ".oda", "artifacts")
 
-	logger, err := NewStepLogger(artifactDir, 300, "test-step")
+	logger, err := NewStepLogger(artifactDir, 300, "test-step", "")
 	if err != nil {
 		t.Fatalf("NewStepLogger failed: %v", err)
 	}
@@ -399,7 +399,7 @@ func TestStepLogger_Write(t *testing.T) {
 	tmpDir := t.TempDir()
 	artifactDir := filepath.Join(tmpDir, ".oda", "artifacts")
 
-	logger, err := NewStepLogger(artifactDir, 400, "test-step")
+	logger, err := NewStepLogger(artifactDir, 400, "test-step", "")
 	if err != nil {
 		t.Fatalf("NewStepLogger failed: %v", err)
 	}
@@ -446,7 +446,7 @@ func TestStepLogger_Write_NilSafety(t *testing.T) {
 		t.Errorf("Write on nil logger should return len(p)=%d, got %d", 4, n)
 	}
 
-	logger, _ = NewStepLogger(t.TempDir(), 1, "test")
+	logger, _ = NewStepLogger(t.TempDir(), 1, "test", "")
 
 	n, err = logger.Write([]byte("test"))
 	if err != nil {
@@ -461,11 +461,95 @@ func TestStepLogger_ImplementsIOWriter(_ *testing.T) {
 	var _ io.Writer = (*StepLogger)(nil)
 }
 
+func TestStepLogger_ProviderModelInLog(t *testing.T) {
+	dir := t.TempDir()
+	logger, err := NewStepLogger(dir, 42, "implement", "anthropic/claude-sonnet-4")
+	if err != nil {
+		t.Fatalf("NewStepLogger: %v", err)
+	}
+	defer logger.Close()
+
+	if err := logger.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	_ = logger.End(true, "")
+
+	files, _ := filepath.Glob(filepath.Join(dir, "logs", "*.log"))
+	if len(files) != 1 {
+		t.Fatalf("expected 1 log file, got %d", len(files))
+	}
+	content, _ := os.ReadFile(files[0])
+	logStr := string(content)
+
+	if !strings.Contains(logStr, "Provider: anthropic") {
+		t.Errorf("log should contain 'Provider: anthropic', got:\n%s", logStr)
+	}
+	if !strings.Contains(logStr, "Model: claude-sonnet-4") {
+		t.Errorf("log should contain 'Model: claude-sonnet-4', got:\n%s", logStr)
+	}
+}
+
+func TestStepLogger_NoModelOmitsProviderModel(t *testing.T) {
+	dir := t.TempDir()
+	logger, err := NewStepLogger(dir, 42, "create-pr", "")
+	if err != nil {
+		t.Fatalf("NewStepLogger: %v", err)
+	}
+	defer logger.Close()
+
+	if err := logger.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	_ = logger.End(true, "")
+
+	files, _ := filepath.Glob(filepath.Join(dir, "logs", "*.log"))
+	if len(files) != 1 {
+		t.Fatalf("expected 1 log file, got %d", len(files))
+	}
+	content, _ := os.ReadFile(files[0])
+	logStr := string(content)
+
+	if strings.Contains(logStr, "Provider:") {
+		t.Errorf("log should NOT contain 'Provider:' for empty model, got:\n%s", logStr)
+	}
+	if strings.Contains(logStr, "Model:") {
+		t.Errorf("log should NOT contain 'Model:' for empty model, got:\n%s", logStr)
+	}
+}
+
+func TestStepLogger_ModelWithoutProvider(t *testing.T) {
+	dir := t.TempDir()
+	logger, err := NewStepLogger(dir, 42, "test-step", "gpt-4o")
+	if err != nil {
+		t.Fatalf("NewStepLogger: %v", err)
+	}
+	defer logger.Close()
+
+	if err := logger.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	_ = logger.End(true, "")
+
+	files, _ := filepath.Glob(filepath.Join(dir, "logs", "*.log"))
+	if len(files) != 1 {
+		t.Fatalf("expected 1 log file, got %d", len(files))
+	}
+	content, _ := os.ReadFile(files[0])
+	logStr := string(content)
+
+	if strings.Contains(logStr, "Provider:") {
+		t.Errorf("log should NOT contain 'Provider:' for model without slash, got:\n%s", logStr)
+	}
+	if !strings.Contains(logStr, "Model: gpt-4o") {
+		t.Errorf("log should contain 'Model: gpt-4o', got:\n%s", logStr)
+	}
+}
+
 func TestStepLogger_ConcurrentWrite(t *testing.T) {
 	tmpDir := t.TempDir()
 	artifactDir := filepath.Join(tmpDir, ".oda", "artifacts")
 
-	logger, err := NewStepLogger(artifactDir, 401, "test-step")
+	logger, err := NewStepLogger(artifactDir, 401, "test-step", "")
 	if err != nil {
 		t.Fatalf("NewStepLogger failed: %v", err)
 	}

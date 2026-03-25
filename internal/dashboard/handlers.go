@@ -484,7 +484,7 @@ func (s *Server) recordStep(issueNum int, stepName, response string) {
 	if s.store == nil {
 		return
 	}
-	id, err := s.store.InsertStep(issueNum, stepName, stepName, "")
+	id, err := s.store.InsertStep(issueNum, stepName, stepName, "", "")
 	if err != nil {
 		log.Printf("[Dashboard] failed to insert %s step for #%d: %v", stepName, issueNum, err)
 		return

@@ -402,7 +402,7 @@ func (o *Orchestrator) recordStep(issueNumber int, stepName, response string) {
 	if o.store == nil {
 		return
 	}
-	id, err := o.store.InsertStep(issueNumber, stepName, stepName, "")
+	id, err := o.store.InsertStep(issueNumber, stepName, stepName, "", "")
 	if err != nil {
 		log.Printf("[Orchestrator] failed to insert %s step for #%d: %v", stepName, issueNumber, err)
 		return
