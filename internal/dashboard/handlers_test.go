@@ -50,9 +50,9 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 		},
 		"labelIcon": func(label string) string {
 			switch label {
-			case "type:feature":
+			case "type:feature", "enhancement":
 				return "✨"
-			case "type:bug":
+			case "type:bug", "bug":
 				return "🐛"
 			case "type:docs":
 				return "📚"
@@ -78,10 +78,10 @@ func parseTemplatesFromDisk(templateDir string) (map[string]*template.Template, 
 		},
 		"labelTooltip": func(label string) string {
 			switch label {
-			case "type:feature":
-				return "Feature"
-			case "type:bug":
-				return "Bug"
+			case "type:feature", "enhancement":
+				return "Type: Feature"
+			case "type:bug", "bug":
+				return "Type: Bug"
 			case "type:docs":
 				return "Documentation"
 			case "type:refactor":
@@ -4731,6 +4731,8 @@ func TestLabelIcon(t *testing.T) {
 	}{
 		{"type:feature", "type:feature", "✨"},
 		{"type:bug", "type:bug", "🐛"},
+		{"enhancement", "enhancement", "✨"},
+		{"bug", "bug", "🐛"},
 		{"type:docs", "type:docs", "📚"},
 		{"type:refactor", "type:refactor", "🔧"},
 		{"size:S", "size:S", "🐜"},
@@ -4751,9 +4753,9 @@ func TestLabelIcon(t *testing.T) {
 			funcMap := template.FuncMap{
 				"labelIcon": func(label string) string {
 					switch label {
-					case "type:feature":
+					case "type:feature", "enhancement":
 						return "✨"
-					case "type:bug":
+					case "type:bug", "bug":
 						return "🐛"
 					case "type:docs":
 						return "📚"
@@ -4803,8 +4805,10 @@ func TestLabelTooltip(t *testing.T) {
 		label    string
 		expected string
 	}{
-		{"type:feature", "type:feature", "Feature"},
-		{"type:bug", "type:bug", "Bug"},
+		{"type:feature", "type:feature", "Type: Feature"},
+		{"type:bug", "type:bug", "Type: Bug"},
+		{"enhancement", "enhancement", "Type: Feature"},
+		{"bug", "bug", "Type: Bug"},
 		{"type:docs", "type:docs", "Documentation"},
 		{"type:refactor", "type:refactor", "Refactor"},
 		{"size:S", "size:S", "Size: Small"},
@@ -4825,10 +4829,10 @@ func TestLabelTooltip(t *testing.T) {
 			funcMap := template.FuncMap{
 				"labelTooltip": func(label string) string {
 					switch label {
-					case "type:feature":
-						return "Feature"
-					case "type:bug":
-						return "Bug"
+					case "type:feature", "enhancement":
+						return "Type: Feature"
+					case "type:bug", "bug":
+						return "Type: Bug"
 					case "type:docs":
 						return "Documentation"
 					case "type:refactor":
@@ -4928,7 +4932,7 @@ func TestBoardTemplate_LabelIcons(t *testing.T) {
 	}
 
 	// Verify tooltips are present
-	if !strings.Contains(output, `title="Feature"`) {
+	if !strings.Contains(output, `title="Type: Feature"`) {
 		t.Error("template should contain tooltip for feature label")
 	}
 	if !strings.Contains(output, `title="Size: Medium"`) {
