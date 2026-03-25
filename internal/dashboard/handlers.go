@@ -451,19 +451,19 @@ func (s *Server) handleRetryFresh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Clear DB steps BEFORE changing stage (cleanup must happen first)
+	if s.store != nil {
+		if err := s.store.DeleteSteps(issueNum); err != nil {
+			log.Printf("[Dashboard] Error deleting steps for #%d: %v", issueNum, err)
+		}
+	}
+
 	// Set stage label to backlog (removes all stage labels) via orchestrator
 	err := s.orchestrator.ChangeStage(issueNum, github.StageBacklog, github.ReasonManualRetryFresh)
 	if err != nil {
 		log.Printf("[Dashboard] Error setting Backlog stage on #%d: %v", issueNum, err)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
-	}
-
-	// Clear DB steps
-	if s.store != nil {
-		if err := s.store.DeleteSteps(issueNum); err != nil {
-			log.Printf("[Dashboard] Error deleting steps for #%d: %v", issueNum, err)
-		}
 	}
 
 	log.Printf("[Dashboard] Retry fresh #%d — PR closed, local branch deleted, steps cleared, moved to Backlog", issueNum)
