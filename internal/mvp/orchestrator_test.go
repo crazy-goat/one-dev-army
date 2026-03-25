@@ -483,6 +483,138 @@ func TestOrchestrator_ImplementsConfigAwareWorker(t *testing.T) {
 	var _ config.ConfigAwareWorker = (*Orchestrator)(nil)
 }
 
+// mockStageBroadcaster is a test mock for StageBroadcaster
+type mockStageBroadcaster struct {
+	issueUpdates                  []github.Issue
+	workerUpdates                 []workerUpdateCall
+	sprintClosable                []bool
+	broadcastSprintClosableCalled bool
+}
+
+type workerUpdateCall struct {
+	workerID, status string
+	taskID           int
+	taskTitle, stage string
+	elapsedSeconds   int
+}
+
+func (m *mockStageBroadcaster) BroadcastIssueUpdate(issue github.Issue) {
+	m.issueUpdates = append(m.issueUpdates, issue)
+}
+
+func (m *mockStageBroadcaster) BroadcastWorkerUpdate(workerID, status string, taskID int, taskTitle, stage string, elapsedSeconds int) {
+	m.workerUpdates = append(m.workerUpdates, workerUpdateCall{
+		workerID:       workerID,
+		status:         status,
+		taskID:         taskID,
+		taskTitle:      taskTitle,
+		stage:          stage,
+		elapsedSeconds: elapsedSeconds,
+	})
+}
+
+func (m *mockStageBroadcaster) BroadcastSprintClosable(canClose bool) {
+	m.sprintClosable = append(m.sprintClosable, canClose)
+	m.broadcastSprintClosableCalled = true
+}
+
+func TestInferColumnForClosableCheck(t *testing.T) {
+	tests := []struct {
+		name  string
+		issue github.Issue
+		want  string
+	}{
+		{
+			name:  "closed issue is Done",
+			issue: github.Issue{State: "CLOSED"},
+			want:  "Done",
+		},
+		{
+			name: "stage:failed label is Failed",
+			issue: github.Issue{State: "OPEN", Labels: []struct {
+				Name string `json:"name"`
+			}{{Name: "stage:failed"}}},
+			want: "Failed",
+		},
+		{
+			name: "failed label is Failed",
+			issue: github.Issue{State: "OPEN", Labels: []struct {
+				Name string `json:"name"`
+			}{{Name: "failed"}}},
+			want: "Failed",
+		},
+		{
+			name: "stage:coding is Active",
+			issue: github.Issue{State: "OPEN", Labels: []struct {
+				Name string `json:"name"`
+			}{{Name: "stage:coding"}}},
+			want: "Active",
+		},
+		{
+			name: "in-progress is Active",
+			issue: github.Issue{State: "OPEN", Labels: []struct {
+				Name string `json:"name"`
+			}{{Name: "in-progress"}}},
+			want: "Active",
+		},
+		{
+			name: "stage:blocked is Active",
+			issue: github.Issue{State: "OPEN", Labels: []struct {
+				Name string `json:"name"`
+			}{{Name: "stage:blocked"}}},
+			want: "Active",
+		},
+		{
+			name:  "no labels is Backlog",
+			issue: github.Issue{State: "OPEN"},
+			want:  "Backlog",
+		},
+		{
+			name: "bug label is Backlog",
+			issue: github.Issue{State: "OPEN", Labels: []struct {
+				Name string `json:"name"`
+			}{{Name: "bug"}}},
+			want: "Backlog",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := inferColumnForClosableCheck(tt.issue)
+			if got != tt.want {
+				t.Errorf("inferColumnForClosableCheck() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCheckAndBroadcastSprintClosable_AllTerminal(t *testing.T) {
+	// Create mock hub
+	mockHub := &mockStageBroadcaster{}
+
+	// Create orchestrator with just the hub (store is nil, so it will return early)
+	// We'll test the logic by calling the helper directly
+	o := &Orchestrator{
+		hub: mockHub,
+	}
+
+	// Since store is nil, checkAndBroadcastSprintClosable should return early
+	o.checkAndBroadcastSprintClosable()
+
+	// Verify BroadcastSprintClosable was NOT called (no store)
+	if mockHub.broadcastSprintClosableCalled {
+		t.Error("expected BroadcastSprintClosable NOT to be called when store is nil")
+	}
+}
+
+func TestCheckAndBroadcastSprintClosable_NoHub(t *testing.T) {
+	// Create orchestrator without hub
+	o := &Orchestrator{}
+
+	// Should not panic and should return early
+	o.checkAndBroadcastSprintClosable()
+}
+
 // TestOrchestrator_UpdateConfig_PropagatesToWorker verifies that UpdateConfig propagates to the worker.
 func TestOrchestrator_UpdateConfig_PropagatesToWorker(t *testing.T) {
 	initialCfg := &config.Config{

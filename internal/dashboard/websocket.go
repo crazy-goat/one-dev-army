@@ -74,11 +74,12 @@ var upgrader = websocket.Upgrader{
 type MessageType string
 
 const (
-	MessageTypeIssueUpdate  MessageType = "issue_update"
-	MessageTypeSyncComplete MessageType = "sync_complete"
-	MessageTypeWorkerUpdate MessageType = "worker_update"
-	MessageTypePing         MessageType = "ping"
-	MessageTypePong         MessageType = "pong"
+	MessageTypeIssueUpdate    MessageType = "issue_update"
+	MessageTypeSyncComplete   MessageType = "sync_complete"
+	MessageTypeWorkerUpdate   MessageType = "worker_update"
+	MessageTypeSprintClosable MessageType = "can_close_sprint"
+	MessageTypePing           MessageType = "ping"
+	MessageTypePong           MessageType = "pong"
 )
 
 // Message represents a WebSocket message
@@ -109,6 +110,11 @@ type WorkerUpdatePayload struct {
 	TaskTitle      string `json:"task_title"`
 	Stage          string `json:"stage"`
 	ElapsedSeconds int    `json:"elapsed_seconds"`
+}
+
+// SprintClosablePayload represents the payload for can_close_sprint messages
+type SprintClosablePayload struct {
+	CanClose bool `json:"can_close"`
 }
 
 // Client represents a single WebSocket connection
@@ -343,6 +349,33 @@ func (h *Hub) BroadcastWorkerUpdate(workerID, status string, taskID int, taskTit
 
 	h.Broadcast(msgBytes)
 	h.logf("Broadcast worker update (worker=%s, task=#%d, stage=%s) to %d clients", workerID, taskID, stage, h.ClientCount())
+}
+
+// BroadcastSprintClosable sends a sprint closable status update to all clients
+func (h *Hub) BroadcastSprintClosable(canClose bool) {
+	payload := SprintClosablePayload{
+		CanClose: canClose,
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		h.logf("Error marshaling sprint closable payload: %v", err)
+		return
+	}
+
+	msg := Message{
+		Type:    MessageTypeSprintClosable,
+		Payload: payloadBytes,
+	}
+
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		h.logf("Error marshaling sprint closable message: %v", err)
+		return
+	}
+
+	h.Broadcast(msgBytes)
+	h.logf("Broadcast sprint closable (canClose=%v) to %d clients", canClose, h.ClientCount())
 }
 
 // readPump pumps messages from the WebSocket connection to the hub
