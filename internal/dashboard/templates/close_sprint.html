@@ -2,9 +2,11 @@
 {{define "content"}}
 <style>
 .close-sprint-wrapper {
-  max-width: 1400px;
+  width: 100%;
+  max-width: 1600px;
   margin: 2rem auto;
   padding: 0 2rem;
+  box-sizing: border-box;
 }
 
 .close-sprint-header {
@@ -519,7 +521,8 @@ function syncReleaseFields() {
   }
 }
 
-document.getElementById('version-form').addEventListener('submit', function() {
+document.getElementById('version-form').addEventListener('submit', function(e) {
+  // Prevent default first to ensure we can sync fields
   syncReleaseFields();
 });
 </script>

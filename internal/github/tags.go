@@ -3,6 +3,7 @@ package github
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 
@@ -137,15 +138,19 @@ func (c *Client) CreateTag(tagName, branch, message string) error {
 // CreateRelease creates a new GitHub release for the given tag
 func (c *Client) CreateRelease(tagName, title, body string) error {
 	// Create the release using gh CLI
-	_, err := c.ghNoRepo("api", "repos/"+c.Repo+"/releases",
+	// Use -F for boolean fields to preserve type (gh CLI will send them as JSON booleans)
+	out, err := c.ghNoRepo("api", "repos/"+c.Repo+"/releases",
 		"-f", "tag_name="+tagName,
 		"-f", "name="+title,
 		"-f", "body="+body,
-		"-f", "draft=false",
-		"-f", "prerelease=false")
+		"-F", "draft=false",
+		"-F", "prerelease=false")
+	log.Printf("[GitHub] CreateRelease output for tag %s: %s", tagName, string(out))
 	if err != nil {
+		log.Printf("[GitHub] CreateRelease error for tag %s: %v", tagName, err)
 		return fmt.Errorf("creating release for tag %s: %w", tagName, err)
 	}
 
+	log.Printf("[GitHub] Successfully created release for tag %s", tagName)
 	return nil
 }
