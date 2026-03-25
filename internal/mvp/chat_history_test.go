@@ -277,9 +277,7 @@ func TestTaskChatHistory_ConcurrentAccess(t *testing.T) {
 	// Add messages concurrently
 	var wg sync.WaitGroup
 	for i := range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for j := range 10 {
 				role := "user"
 				if j%2 == 0 {
@@ -287,7 +285,7 @@ func TestTaskChatHistory_ConcurrentAccess(t *testing.T) {
 				}
 				task.AddChatMessage(role, fmt.Sprintf("Message %d-%d", i, j))
 			}
-		}()
+		})
 	}
 
 	// Read messages concurrently
