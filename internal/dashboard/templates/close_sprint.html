@@ -25,7 +25,7 @@
   display: grid;
   grid-template-columns: 400px 1fr;
   gap: 2rem;
-  align-items: start;
+  align-items: stretch;
 }
 
 .left-panel {
@@ -253,6 +253,52 @@
   margin: 1.5rem 0;
 }
 
+.preview-title-input {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  margin-bottom: 1rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.preview-title-input:focus {
+  border-color: var(--accent);
+}
+
+.preview-body-textarea {
+  width: 100%;
+  min-height: 250px;
+  padding: 0.75rem;
+  font-size: 0.9rem;
+  font-family: monospace;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s;
+  line-height: 1.5;
+}
+
+.preview-body-textarea:focus {
+  border-color: var(--accent);
+}
+
+.preview-edit-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .markdown-raw {
   display: none;
 }
@@ -336,6 +382,8 @@
 
       <form method="post" action="/api/sprint/close/confirm" id="version-form">
         <input type="hidden" name="current_version" value="{{.CurrentVersion}}">
+        <input type="hidden" name="release_title" id="release-title-hidden">
+        <input type="hidden" name="release_body" id="release-body-hidden">
 
         <div class="bump-options">
           <label class="bump-option {{if eq .BumpType "major"}}selected{{end}}">
@@ -452,6 +500,24 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
+});
+
+function syncReleaseFields() {
+  const titleInput = document.getElementById('release-title-input');
+  const bodyInput = document.getElementById('release-body-input');
+  const titleHidden = document.getElementById('release-title-hidden');
+  const bodyHidden = document.getElementById('release-body-hidden');
+  
+  if (titleInput && titleHidden) {
+    titleHidden.value = titleInput.value;
+  }
+  if (bodyInput && bodyHidden) {
+    bodyHidden.value = bodyInput.value;
+  }
+}
+
+document.getElementById('version-form').addEventListener('submit', function() {
+  syncReleaseFields();
 });
 </script>
 {{end}}

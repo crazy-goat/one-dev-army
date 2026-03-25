@@ -1015,66 +1015,16 @@ func (s *Server) handleSprintCloseConfirm(w http.ResponseWriter, r *http.Request
 
 	log.Printf("[Dashboard] Created tag %s for milestone %s", tagName, milestone.Title)
 
-	// Get closed issues for this milestone to generate release notes
-	closedIssues, err := s.gh.GetClosedIssuesForMilestone(milestone.Number)
-	if err != nil {
-		log.Printf("[Dashboard] Warning: failed to get closed issues for milestone %s: %v", milestone.Title, err)
-		// Continue without release notes generation
-	}
+	// Read release notes from form (user may have edited them in preview)
+	releaseTitle := r.FormValue("release_title")
+	releaseBody := r.FormValue("release_body")
 
-	// Generate release notes using LLM if we have closed issues and opencode client is available
-	var releaseTitle, releaseBody string
-	if len(closedIssues) > 0 && s.oc != nil {
-		// Format closed issues for the prompt
-		issueList := make([]string, len(closedIssues))
-		for i, issue := range closedIssues {
-			issueList[i] = fmt.Sprintf("#%d: %s", issue.Number, issue.Title)
-		}
-
-		// Create LLM session for release notes generation
-		llmSession, err := s.oc.CreateSession("Release Notes Generation")
-		if err != nil {
-			log.Printf("[Dashboard] Warning: failed to create LLM session for release notes: %v", err)
-		} else {
-			defer func() {
-				if err := s.oc.DeleteSession(llmSession.ID); err != nil {
-					log.Printf("[Dashboard] Warning: failed to delete LLM session %s: %v", llmSession.ID, err)
-				}
-			}()
-
-			// Build prompt and generate release notes
-			prompt := BuildReleaseNotesPrompt(milestone.Title, tagName, issueList)
-			model := opencode.ParseModelRef(s.wizardLLM)
-
-			ctx, cancel := context.WithTimeout(r.Context(), LLMRequestTimeout)
-			defer cancel()
-
-			var result ReleaseNotes
-			if err := s.oc.SendMessageStructured(ctx, llmSession.ID, prompt, model, ReleaseNotesSchema, &result); err != nil {
-				log.Printf("[Dashboard] Warning: failed to generate release notes with LLM: %v", err)
-			} else {
-				releaseTitle = result.Title
-				releaseBody = result.Description
-				log.Printf("[Dashboard] Generated release notes with LLM for %s", tagName)
-			}
-		}
-	}
-
-	// Fallback to default release notes if LLM generation failed or wasn't possible
+	// Fallback to defaults if not provided
 	if releaseTitle == "" {
 		releaseTitle = fmt.Sprintf("Release %s - %s", tagName, milestone.Title)
 	}
 	if releaseBody == "" {
-		if len(closedIssues) > 0 {
-			var body strings.Builder
-			fmt.Fprintf(&body, "## Closed Issues in %s\n\n", milestone.Title)
-			for _, issue := range closedIssues {
-				fmt.Fprintf(&body, "- #%d: %s\n", issue.Number, issue.Title)
-			}
-			releaseBody = body.String()
-		} else {
-			releaseBody = fmt.Sprintf("Release %s - %s\n\nNo issues were closed in this sprint.", tagName, milestone.Title)
-		}
+		releaseBody = "Release " + tagName
 	}
 
 	// Create GitHub release
@@ -1267,32 +1217,28 @@ func (s *Server) handleSprintClosePreview(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// Return HTML response for HTMX with markdown in data attribute
+	// Return HTML response for HTMX with editable fields
 	w.Header().Set("Content-Type", "text/html")
 
 	fmt.Fprintf(w, `<div class="preview-header">
-  <h3>%s</h3>
+  <h3>Release Notes Preview</h3>
   <span class="preview-tag">%s</span>
 </div>
-<div class="preview-content" data-markdown="%s">
-  <pre class="markdown-raw"><code>%s</code></pre>
+<div>
+  <div class="preview-edit-label">Title</div>
+  <input type="text" class="preview-title-input" id="release-title-input" value="%s" 
+         oninput="syncReleaseFields()">
+</div>
+<div>
+  <div class="preview-edit-label">Description (Markdown)</div>
+  <textarea class="preview-body-textarea" id="release-body-input" 
+            oninput="syncReleaseFields()">%s</textarea>
 </div>
 <div class="preview-footer">
   Based on %d merged issue(s) • %s
-</div>
-<script>
-  // Render markdown using marked.js
-  (function() {
-    const content = document.querySelector('.preview-content');
-    const rawMarkdown = content.getAttribute('data-markdown');
-    if (rawMarkdown && typeof marked !== 'undefined') {
-      content.innerHTML = marked.parse(rawMarkdown);
-    }
-  })();
-</script>`,
-		html.EscapeString(releaseTitle),
+</div>`,
 		html.EscapeString(tagName),
-		html.EscapeString(releaseBody),
+		html.EscapeString(releaseTitle),
 		html.EscapeString(releaseBody),
 		len(closedIssues),
 		func() string {
