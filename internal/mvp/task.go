@@ -16,6 +16,7 @@ const (
 	StatusCoding           TaskStatus = "coding"
 	StatusReviewing        TaskStatus = "reviewing"
 	StatusCreatingPR       TaskStatus = "creating_pr"
+	StatusCheckingPipeline TaskStatus = "checking_pipeline"
 	StatusAwaitingApproval TaskStatus = "awaiting_approval"
 	StatusMerging          TaskStatus = "merging"
 	StatusDone             TaskStatus = "done"

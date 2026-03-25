@@ -73,7 +73,7 @@ func (w *Worker) reportStageComplete(stage string, status EventStatus, output st
 	w.orchestrator.HandleWorkerEvent(event)
 }
 
-var stepOrder = []string{"technical-planning", "implement", "code-review", "create-pr", "awaiting-approval", "merge"}
+var stepOrder = []string{"technical-planning", "implement", "code-review", "create-pr", "check-pipeline", "awaiting-approval", "merge"}
 
 func stepIndex(name string) int {
 	for i, s := range stepOrder {
@@ -142,7 +142,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	_ = artifactDir
 
 	if resumeFrom <= 0 {
-		log.Printf("[Worker %d] [1/4] Technical planning for #%d...", w.id, task.Issue.Number)
+		log.Printf("[Worker %d] [1/7] Technical planning for #%d...", w.id, task.Issue.Number)
 		stepStart := time.Now()
 		analysis, implPlan, err = w.technicalPlanning(ctx, task)
 		if err != nil {
@@ -151,10 +151,10 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			log.Printf("[Worker %d] ✗ FAILED technical planning: %v", w.id, err)
 			return task.Result.Error
 		}
-		log.Printf("[Worker %d] [1/4] Technical planning done (%s, analysis=%d chars, plan=%d chars)", w.id, time.Since(stepStart).Round(time.Second), len(analysis), len(implPlan))
+		log.Printf("[Worker %d] [1/7] Technical planning done (%s, analysis=%d chars, plan=%d chars)", w.id, time.Since(stepStart).Round(time.Second), len(analysis), len(implPlan))
 		w.reportStageComplete("analysis", EventSuccess, "technical planning completed")
 	} else {
-		log.Printf("[Worker %d] [1/4] Skipping technical-planning (completed previously)", w.id)
+		log.Printf("[Worker %d] [1/7] Skipping technical-planning (completed previously)", w.id)
 		if w.store != nil {
 			// Try to get combined response from new step name
 			response, _ := w.store.GetStepResponse(task.Issue.Number, "technical-planning")
@@ -170,7 +170,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 
 	if resumeFrom <= 1 {
 		task.Status = StatusCoding
-		log.Printf("[Worker %d] [2/4] Implementing #%d (includes tests)...", w.id, task.Issue.Number)
+		log.Printf("[Worker %d] [2/7] Implementing #%d (includes tests)...", w.id, task.Issue.Number)
 		stepStart := time.Now()
 		if err := w.implement(ctx, task, implPlan); err != nil {
 			task.Status = StatusFailed
@@ -178,15 +178,15 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			log.Printf("[Worker %d] ✗ FAILED implementing: %v", w.id, err)
 			return task.Result.Error
 		}
-		log.Printf("[Worker %d] [2/4] Implementation done (%s)", w.id, time.Since(stepStart).Round(time.Second))
+		log.Printf("[Worker %d] [2/7] Implementation done (%s)", w.id, time.Since(stepStart).Round(time.Second))
 		w.reportStageComplete("coding", EventSuccess, "implementation completed")
 	} else {
-		log.Printf("[Worker %d] [2/4] Skipping implement (completed previously)", w.id)
+		log.Printf("[Worker %d] [2/7] Skipping implement (completed previously)", w.id)
 	}
 
 	if resumeFrom <= 2 {
 		task.Status = StatusReviewing
-		log.Printf("[Worker %d] [3/4] Code review #%d...", w.id, task.Issue.Number)
+		log.Printf("[Worker %d] [3/7] Code review #%d...", w.id, task.Issue.Number)
 		stepStart := time.Now()
 		approved, review, crErr := w.codeReview(ctx, task, "")
 		if crErr != nil {
@@ -195,7 +195,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			log.Printf("[Worker %d] ✗ FAILED code review: %v", w.id, crErr)
 			return task.Result.Error
 		}
-		log.Printf("[Worker %d] [3/4] Code review done (%s, approved=%v)", w.id, time.Since(stepStart).Round(time.Second), approved)
+		log.Printf("[Worker %d] [3/7] Code review done (%s, approved=%v)", w.id, time.Since(stepStart).Round(time.Second), approved)
 
 		if !approved {
 			// Retry with fixes
@@ -236,12 +236,12 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		}
 		w.reportStageComplete("code-review", EventSuccess, "code review approved")
 	} else {
-		log.Printf("[Worker %d] [3/4] Skipping code-review (completed previously)", w.id)
+		log.Printf("[Worker %d] [3/7] Skipping code-review (completed previously)", w.id)
 	}
 
 	if resumeFrom <= 3 {
 		task.Status = StatusCreatingPR
-		log.Printf("[Worker %d] [4/4] Creating PR for #%d...", w.id, task.Issue.Number)
+		log.Printf("[Worker %d] [4/7] Creating PR for #%d...", w.id, task.Issue.Number)
 		stepStart := time.Now()
 		prURL, err = w.createPR(ctx, task)
 		if err != nil {
@@ -250,17 +250,35 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 			log.Printf("[Worker %d] ✗ FAILED creating PR: %v", w.id, err)
 			return task.Result.Error
 		}
-		log.Printf("[Worker %d] [4/4] PR created: %s (%s)", w.id, prURL, time.Since(stepStart).Round(time.Second))
+		log.Printf("[Worker %d] [4/7] PR created: %s (%s)", w.id, prURL, time.Since(stepStart).Round(time.Second))
 		w.reportStageComplete("create-pr", EventSuccess, "PR created: "+prURL)
 	} else {
-		log.Printf("[Worker %d] [4/4] Skipping create-pr (completed previously)", w.id)
+		log.Printf("[Worker %d] [4/7] Skipping create-pr (completed previously)", w.id)
 		if w.store != nil {
 			prURL, _ = w.store.GetStepResponse(task.Issue.Number, "create-pr")
 		}
 	}
 
+	// === CHECK PIPELINE ===
+	if resumeFrom <= 4 {
+		task.Status = StatusCheckingPipeline
+		log.Printf("[Worker %d] [5/7] Checking CI pipeline for #%d...", w.id, task.Issue.Number)
+		stepStart := time.Now()
+		if err := w.checkPipeline(ctx, task); err != nil {
+			task.Status = StatusFailed
+			task.Result = &TaskResult{Error: fmt.Errorf("pipeline check: %w", err)}
+			log.Printf("[Worker %d] ✗ FAILED pipeline check: %v", w.id, err)
+			w.reportStageComplete("check-pipeline", EventFailed, err.Error())
+			return task.Result.Error
+		}
+		log.Printf("[Worker %d] [5/7] Pipeline checks passed (%s)", w.id, time.Since(stepStart).Round(time.Second))
+		w.reportStageComplete("check-pipeline", EventSuccess, "all CI checks passed")
+	} else {
+		log.Printf("[Worker %d] [5/7] Skipping check-pipeline (completed previously)", w.id)
+	}
+
 	// If resuming from awaiting-approval or later, recover prURL from store
-	if resumeFrom >= 4 && prURL == "" && w.store != nil {
+	if resumeFrom >= 5 && prURL == "" && w.store != nil {
 		prURL, _ = w.store.GetStepResponse(task.Issue.Number, "create-pr")
 	}
 
@@ -269,8 +287,8 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 	// User approve → merge → done. User decline → fix → re-review → wait again.
 	for {
 		task.Status = StatusAwaitingApproval
-		log.Printf("[Worker %d] [5/6] Awaiting user approval for #%d (PR: %s)", w.id, task.Issue.Number, prURL)
-		w.reportStageComplete("create-pr", EventSuccess, "PR created, awaiting approval: "+prURL)
+		log.Printf("[Worker %d] [6/7] Awaiting user approval for #%d (PR: %s)", w.id, task.Issue.Number, prURL)
+		w.reportStageComplete("awaiting-approval", EventInProgress, "PR created, awaiting approval: "+prURL)
 
 		var decision UserDecision
 		if w.cfg.Load().YoloMode {
@@ -290,7 +308,7 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 		if decision.Action == "approve" {
 			// Proceed to merge
 			task.Status = StatusMerging
-			log.Printf("[Worker %d] [6/6] Merging PR for #%d (branch: %s)", w.id, task.Issue.Number, task.Branch)
+			log.Printf("[Worker %d] [7/7] Merging PR for #%d (branch: %s)", w.id, task.Issue.Number, task.Branch)
 			w.reportStageComplete("awaiting-approval", EventSuccess, "user approved")
 
 			if err := w.gh.MergePR(task.Branch); err != nil {
@@ -668,6 +686,68 @@ func (w *Worker) createPR(_ context.Context, task *Task) (string, error) {
 		_ = w.store.FinishStep(stepID, prURL)
 	}
 	return prURL, nil
+}
+
+func (w *Worker) checkPipeline(ctx context.Context, task *Task) error {
+	cfg := w.cfg.Load()
+	interval := time.Duration(cfg.Pipeline.CheckInterval) * time.Second
+	if interval == 0 {
+		interval = 10 * time.Second
+	}
+	timeout := time.Duration(cfg.Pipeline.CheckTimeout) * time.Second
+	if timeout == 0 {
+		timeout = 30 * time.Minute
+	}
+
+	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if time.Now().After(deadline) {
+				return w.handlePipelineFailure(task, "CI checks timed out after "+timeout.String())
+			}
+
+			result, err := w.gh.GetPRChecks(task.Branch)
+			if err != nil {
+				log.Printf("[Worker %d] Error checking PR checks: %v", w.id, err)
+				continue
+			}
+
+			switch result.Status {
+			case "pass":
+				log.Printf("[Worker %d] All CI checks passed for #%d", w.id, task.Issue.Number)
+				return nil
+			case "fail":
+				return w.handlePipelineFailure(task, result.Logs)
+			case "pending":
+				log.Printf("[Worker %d] CI checks still pending for #%d...", w.id, task.Issue.Number)
+			}
+		}
+	}
+}
+
+func (w *Worker) handlePipelineFailure(task *Task, logs string) error {
+	artifactDir := filepath.Join(w.repoDir, ".oda", "artifacts", strconv.Itoa(task.Issue.Number))
+	if err := os.MkdirAll(artifactDir, 0o755); err != nil {
+		log.Printf("[Worker %d] Warning: failed to create artifact dir: %v", w.id, err)
+	}
+
+	logPath := filepath.Join(artifactDir, "pipeline-fail.log")
+	if err := os.WriteFile(logPath, []byte(logs), 0o644); err != nil {
+		log.Printf("[Worker %d] Warning: failed to save pipeline failure log: %v", w.id, err)
+	}
+
+	comment := fmt.Sprintf("## CI Pipeline Failed\n\nPipeline checks failed. Logs saved to `%s`.\n\n```\n%s\n```", logPath, logs)
+	if err := w.gh.AddComment(task.Issue.Number, comment); err != nil {
+		log.Printf("[Worker %d] Warning: failed to add pipeline failure comment: %v", w.id, err)
+	}
+
+	return fmt.Errorf("CI pipeline checks failed")
 }
 
 func (w *Worker) llmStep(_ context.Context, task *Task, stepName, prompt, llm string) (string, error) {

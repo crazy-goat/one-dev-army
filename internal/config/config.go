@@ -45,7 +45,9 @@ type Tools struct {
 }
 
 type Pipeline struct {
-	MaxRetries int `yaml:"max_retries"`
+	MaxRetries    int `yaml:"max_retries"`
+	CheckInterval int `yaml:"check_interval"`
+	CheckTimeout  int `yaml:"check_timeout"`
 }
 
 type Sprint struct {
@@ -74,6 +76,9 @@ func Load(rootDir string, _ ...string) (*Config, error) {
 
 	// Apply default LLM config if not fully specified
 	cfg.applyLLMDefaults()
+
+	// Apply pipeline defaults
+	cfg.applyPipelineDefaults()
 
 	return &cfg, nil
 }
@@ -132,5 +137,15 @@ func (cfg *Config) applyLLMDefaults() {
 	// If CodeHeavy model is empty, use defaults
 	if cfg.LLM.CodeHeavy.Model == "" {
 		cfg.LLM.CodeHeavy.Model = defaults.CodeHeavy.Model
+	}
+}
+
+// applyPipelineDefaults fills in missing Pipeline configuration with defaults
+func (cfg *Config) applyPipelineDefaults() {
+	if cfg.Pipeline.CheckInterval == 0 {
+		cfg.Pipeline.CheckInterval = 10
+	}
+	if cfg.Pipeline.CheckTimeout == 0 {
+		cfg.Pipeline.CheckTimeout = 1800
 	}
 }

@@ -181,6 +181,51 @@ func (c *Client) ClosePR(branch string) error {
 	return nil
 }
 
+type PRCheck struct {
+	Name       string `json:"name"`
+	State      string `json:"state"`
+	Conclusion string `json:"conclusion"`
+}
+
+type PRChecksResult struct {
+	Status string
+	Logs   string
+}
+
+func (c *Client) GetPRChecks(branch string) (*PRChecksResult, error) {
+	var checks []PRCheck
+	err := c.ghJSON(&checks, "pr", "checks", branch, "--json", "name,state,conclusion")
+	if err != nil {
+		return nil, fmt.Errorf("getting PR checks for %s: %w", branch, err)
+	}
+
+	if len(checks) == 0 {
+		return &PRChecksResult{Status: "pending"}, nil
+	}
+
+	var failed []string
+	allComplete := true
+	for _, check := range checks {
+		if check.State != "SUCCESS" && check.State != "FAILURE" && check.Conclusion == "" {
+			allComplete = false
+		}
+		if check.Conclusion == "failure" || check.State == "FAILURE" {
+			failed = append(failed, fmt.Sprintf("- %s: %s", check.Name, check.Conclusion))
+		}
+	}
+
+	if !allComplete {
+		return &PRChecksResult{Status: "pending"}, nil
+	}
+
+	if len(failed) > 0 {
+		logs := "## Failed CI Checks\n\n" + strings.Join(failed, "\n")
+		return &PRChecksResult{Status: "fail", Logs: logs}, nil
+	}
+
+	return &PRChecksResult{Status: "pass"}, nil
+}
+
 func (c *Client) FindPRBranch(issueNumber int) (string, error) {
 	out, err := c.gh("pr", "list", "--json", "headRefName,number",
 		"-q", fmt.Sprintf(".[] | select(.headRefName | startswith(\"oda-%d-\")) | .headRefName", issueNumber))
