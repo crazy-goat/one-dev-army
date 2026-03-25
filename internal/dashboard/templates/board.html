@@ -51,6 +51,12 @@
 .processing-panel-idle{background:rgba(108,117,125,0.08);border-color:rgba(108,117,125,0.2)}
 .processing-panel-idle .processing-indicator{background:#6c757d;animation:none}
 .processing-idle-text{color:var(--muted);font-size:.85rem}
+.processing-empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:.75rem;width:100%;padding:1rem 0}
+.processing-empty-icon{font-size:2rem;line-height:1}
+.processing-empty-title{color:var(--text);font-size:1rem;font-weight:600}
+.processing-empty-subtitle{color:var(--muted);font-size:.85rem}
+.processing-empty-cta{display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .8rem;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:.8rem;font-weight:500;text-decoration:none;cursor:pointer;transition:opacity .15s}
+.processing-empty-cta:hover{opacity:.85}
 .processing-panel-content{display:flex;flex-direction:column;align-items:flex-start;gap:.5rem;width:100%;min-width:0}
 .processing-indicator{width:8px;height:8px;border-radius:50%;background:#3498db;flex-shrink:0;animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -365,7 +371,7 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
     </div>
 
     <!-- Processing Panel at the bottom of center column -->
-    <div class="processing-panel{{if not .CurrentTicket}} processing-panel-idle{{end}}" id="processing-panel">
+    <div class="processing-panel{{if not .CurrentTicket}} processing-panel-idle{{end}}" id="processing-panel" data-total-tickets="{{.TotalTickets}}">
       <div class="processing-panel-content">
         <span class="processing-indicator"></span>
         {{if .CurrentTicket}}
@@ -389,7 +395,16 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
           <span class="processing-title">{{.CurrentTicket.Title}}</span>
         </a>
         {{else}}
-        <span class="processing-idle-text">No active ticket &mdash; Worker ready</span>
+          {{if eq .TotalTickets 0}}
+          <div class="processing-empty-state">
+            <span class="processing-empty-icon">📋</span>
+            <span class="processing-empty-title">Sprint is empty</span>
+            <span class="processing-empty-subtitle">No tickets in this sprint yet</span>
+            <a href="/wizard" class="processing-empty-cta">+ Create First Ticket</a>
+          </div>
+          {{else}}
+          <span class="processing-idle-text">No active ticket &mdash; Worker ready</span>
+          {{end}}
         {{end}}
       </div>
     </div>

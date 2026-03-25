@@ -355,9 +355,21 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
                 '</a></div>';
         } else {
             panel.className = 'processing-panel processing-panel-idle';
+            var totalTickets = parseInt(panel.getAttribute('data-total-tickets') || '0', 10);
+            var idleContent;
+            if (totalTickets === 0) {
+                idleContent = '<div class="processing-empty-state">' +
+                    '<span class="processing-empty-icon">📋</span>' +
+                    '<span class="processing-empty-title">Sprint is empty</span>' +
+                    '<span class="processing-empty-subtitle">No tickets in this sprint yet</span>' +
+                    '<a href="/wizard" class="processing-empty-cta">+ Create First Ticket</a>' +
+                    '</div>';
+            } else {
+                idleContent = '<span class="processing-idle-text">No active ticket &mdash; Worker ready</span>';
+            }
             panel.innerHTML = '<div class="processing-panel-content">' +
                 '<span class="processing-indicator"></span>' +
-                '<span class="processing-idle-text">No active ticket &mdash; Worker ready</span>' +
+                idleContent +
                 '</div>';
         }
     }

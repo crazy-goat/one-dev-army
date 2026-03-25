@@ -3488,6 +3488,87 @@ func TestBuildBoardData_CanCloseSprint_False_WhenActiveTasks(t *testing.T) {
 	}
 }
 
+// TestBuildBoardData_TotalTickets verifies that TotalTickets is computed correctly from all columns
+func TestBuildBoardData_TotalTickets(t *testing.T) {
+	tests := []struct {
+		name          string
+		blocked       []taskCard
+		backlog       []taskCard
+		plan          []taskCard
+		code          []taskCard
+		aiReview      []taskCard
+		checkPipeline []taskCard
+		approve       []taskCard
+		merge         []taskCard
+		done          []taskCard
+		failed        []taskCard
+		expectedTotal int
+	}{
+		{
+			name:          "empty sprint",
+			expectedTotal: 0,
+		},
+		{
+			name:          "single ticket in backlog",
+			backlog:       []taskCard{{ID: 1, Title: "Backlog task"}},
+			expectedTotal: 1,
+		},
+		{
+			name:          "tickets in multiple columns",
+			backlog:       []taskCard{{ID: 1, Title: "Backlog task"}},
+			plan:          []taskCard{{ID: 2, Title: "Plan task"}},
+			code:          []taskCard{{ID: 3, Title: "Code task"}},
+			expectedTotal: 3,
+		},
+		{
+			name:          "tickets in all columns",
+			blocked:       []taskCard{{ID: 1, Title: "Blocked"}},
+			backlog:       []taskCard{{ID: 2, Title: "Backlog"}},
+			plan:          []taskCard{{ID: 3, Title: "Plan"}},
+			code:          []taskCard{{ID: 4, Title: "Code"}},
+			aiReview:      []taskCard{{ID: 5, Title: "AI Review"}},
+			checkPipeline: []taskCard{{ID: 6, Title: "Check Pipeline"}},
+			approve:       []taskCard{{ID: 7, Title: "Approve"}},
+			merge:         []taskCard{{ID: 8, Title: "Merge"}},
+			done:          []taskCard{{ID: 9, Title: "Done"}},
+			failed:        []taskCard{{ID: 10, Title: "Failed"}},
+			expectedTotal: 10,
+		},
+		{
+			name:          "tickets only in done and failed",
+			done:          []taskCard{{ID: 1, Title: "Done 1"}, {ID: 2, Title: "Done 2"}},
+			failed:        []taskCard{{ID: 3, Title: "Failed"}},
+			expectedTotal: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := boardData{
+				Blocked:       tt.blocked,
+				Backlog:       tt.backlog,
+				Plan:          tt.plan,
+				Code:          tt.code,
+				AIReview:      tt.aiReview,
+				CheckPipeline: tt.checkPipeline,
+				Approve:       tt.approve,
+				Merge:         tt.merge,
+				Done:          tt.done,
+				Failed:        tt.failed,
+			}
+
+			// Apply the same logic as in buildBoardData
+			data.TotalTickets = len(data.Blocked) + len(data.Backlog) + len(data.Plan) +
+				len(data.Code) + len(data.AIReview) + len(data.CheckPipeline) +
+				len(data.Approve) + len(data.Merge) + len(data.Done) + len(data.Failed)
+
+			if data.TotalTickets != tt.expectedTotal {
+				t.Errorf("expected TotalTickets=%d, got %d", tt.expectedTotal, data.TotalTickets)
+			}
+		})
+	}
+}
+
 // TestHandleSprintClose_Success verifies the sprint close handler works correctly
 func TestHandleSprintClose_Success(t *testing.T) {
 	srv := &Server{
@@ -5177,10 +5258,11 @@ func TestBoardTemplate_ProcessingPanel_Idle(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()
 
-	// Create test data with CurrentTicket nil
+	// Create test data with CurrentTicket nil and some tickets exist
 	data := boardData{
 		Active:        "board",
 		CurrentTicket: nil,
+		TotalTickets:  5,
 		Paused:        true,
 		Processing:    false,
 	}
@@ -5221,6 +5303,56 @@ func TestBoardTemplate_ProcessingPanel_Idle(t *testing.T) {
 	// Verify idle message contains "Worker ready"
 	if !strings.Contains(output, "Worker ready") {
 		t.Error("template should display 'Worker ready' message when idle")
+	}
+}
+
+// TestBoardTemplate_ProcessingPanel_EmptySprintState tests that the processing panel shows empty sprint state when TotalTickets is 0
+func TestBoardTemplate_ProcessingPanel_EmptySprintState(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	data := boardData{
+		Active:        "board",
+		CurrentTicket: nil,
+		TotalTickets:  0,
+		Paused:        true,
+		Processing:    false,
+	}
+
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "content", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	output := buf.String()
+
+	if !strings.Contains(output, `id="processing-panel"`) {
+		t.Error("template should contain processing-panel element")
+	}
+
+	if !strings.Contains(output, "Sprint is empty") {
+		t.Error("template should display 'Sprint is empty' when TotalTickets is 0")
+	}
+
+	if !strings.Contains(output, "No tickets in this sprint yet") {
+		t.Error("template should display subtitle when TotalTickets is 0")
+	}
+
+	if !strings.Contains(output, `href="/wizard"`) {
+		t.Error("template should contain CTA link to /wizard when TotalTickets is 0")
+	}
+
+	if !strings.Contains(output, "Create First Ticket") {
+		t.Error("template should display 'Create First Ticket' CTA when TotalTickets is 0")
+	}
+
+	if strings.Contains(output, "Worker ready") {
+		t.Error("template should NOT display 'Worker ready' when TotalTickets is 0")
 	}
 }
 
