@@ -2097,12 +2097,12 @@ func TestBoardActions_ContainsExpectedButtons(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// Verify board-actions section contains expected sprint control buttons
-	// Note: Start Sprint and Pause Sprint are mutually exclusive (conditional on .Paused)
-	hasStartSprint := strings.Contains(body, "Start Sprint")
-	hasPauseSprint := strings.Contains(body, "Pause Sprint")
-	if !hasStartSprint && !hasPauseSprint {
-		t.Error("board-actions section missing both Start Sprint and Pause Sprint buttons - should have one")
+	// Verify board-actions section contains expected worker control buttons
+	// Note: Start Worker and Pause Worker are mutually exclusive (conditional on .Paused)
+	hasStartWorker := strings.Contains(body, "Start Worker")
+	hasPauseWorker := strings.Contains(body, "Pause Worker")
+	if !hasStartWorker && !hasPauseWorker {
+		t.Error("board-actions section missing both Start Worker and Pause Worker buttons - should have one")
 	}
 
 	// These buttons should always be present
