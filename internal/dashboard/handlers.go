@@ -2200,6 +2200,20 @@ func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
 	if s.pool != nil {
 		workerCount = len(s.pool())
 	}
+
+	// Load config to get yolo mode status (same pattern as buildBoardData)
+	yoloMode := false
+	if s.rootDir != "" {
+		if cfg, err := config.Load(s.rootDir); err == nil {
+			yoloMode = cfg.YoloMode
+		}
+	}
+
+	// Check runtime override (takes precedence over config file)
+	if s.yoloOverride != nil {
+		yoloMode = *s.yoloOverride
+	}
+
 	data := struct {
 		Active             string
 		OpenCodePort       int
@@ -2210,6 +2224,7 @@ func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
 		IsPage             bool
 		ShowBreakdownStep  bool
 		NeedsTypeSelection bool
+		YoloMode           bool
 	}{
 		Active:             "wizard",
 		OpenCodePort:       s.webPort,
@@ -2220,6 +2235,7 @@ func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
 		IsPage:             true,
 		ShowBreakdownStep:  false,
 		NeedsTypeSelection: needsTypeSelection,
+		YoloMode:           yoloMode,
 	}
 
 	if session != nil {
