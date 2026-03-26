@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 import type { Card } from '../../api/types'
 import {
   useApproveMergeIssue,
+  useBlockIssue,
   useDeclineIssue,
   useRetryIssue,
   useRetryFreshIssue,
@@ -34,19 +35,24 @@ function labelIcon(label: string): string | null {
 
 interface TaskCardProps {
   card: Card
+  /** Human-readable column label (e.g. "Backlog", "AI Review"). */
   column: string
+  /** Snake_case API column key (e.g. "backlog", "ai_review"). */
+  columnKey: string
 }
 
-export function TaskCard({ card, column }: TaskCardProps) {
+export function TaskCard({ card, column, columnKey }: TaskCardProps) {
   const approveMerge = useApproveMergeIssue()
   const decline = useDeclineIssue()
   const retry = useRetryIssue()
   const retryFresh = useRetryFreshIssue()
   const unblock = useUnblockIssue()
+  const block = useBlockIssue()
   const process = useProcessIssue()
 
   const [declineOpen, setDeclineOpen] = useState(false)
   const [declineReason, setDeclineReason] = useState('')
+  const [processConfirmOpen, setProcessConfirmOpen] = useState(false)
 
   const iconLabels = card.labels.filter((l) => labelIcon(l) !== null)
   const textLabels = card.labels.filter((l) => labelIcon(l) === null)
@@ -59,7 +65,13 @@ export function TaskCard({ card, column }: TaskCardProps) {
     )
   }
 
-  // Column-specific card border colors
+  const handleProcessConfirm = () => {
+    process.mutate(card.id, {
+      onSuccess: () => setProcessConfirmOpen(false),
+    })
+  }
+
+  // Column-specific card border colors (keyed by display label)
   const borderColor: Record<string, string> = {
     Blocked: 'border-red-500/50',
     Failed: 'border-red-500/60',
@@ -130,7 +142,7 @@ export function TaskCard({ card, column }: TaskCardProps) {
       )}
 
       {/* Merged / Closed badge for Done column */}
-      {column === 'Done' && (
+      {columnKey === 'done' && (
         <div className="mt-1">
           {card.is_merged ? (
             <span className="inline-flex items-center gap-1 bg-violet-600 text-white text-[0.65rem] px-1.5 py-0.5 rounded">
@@ -170,7 +182,7 @@ export function TaskCard({ card, column }: TaskCardProps) {
 
       {/* Action buttons */}
       <div className="flex gap-1.5 mt-2 flex-wrap">
-        {column === 'Approve' && (
+        {columnKey === 'approve' && (
           <>
             <button
               type="button"
@@ -190,7 +202,7 @@ export function TaskCard({ card, column }: TaskCardProps) {
           </>
         )}
 
-        {column === 'Failed' && (
+        {columnKey === 'failed' && (
           <>
             <button
               type="button"
@@ -211,7 +223,7 @@ export function TaskCard({ card, column }: TaskCardProps) {
           </>
         )}
 
-        {column === 'Blocked' && (
+        {columnKey === 'blocked' && (
           <button
             type="button"
             onClick={() => unblock.mutate(card.id)}
@@ -222,15 +234,26 @@ export function TaskCard({ card, column }: TaskCardProps) {
           </button>
         )}
 
-        {column === 'Backlog' && (
-          <button
-            type="button"
-            onClick={() => process.mutate(card.id)}
-            disabled={process.isPending}
-            className="px-2 py-1 text-xs rounded bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors disabled:opacity-50"
-          >
-            {process.isPending ? 'Queuing...' : '\u25B6 Process'}
-          </button>
+        {/* MISSING 1: Block button in Backlog column */}
+        {columnKey === 'backlog' && (
+          <>
+            <button
+              type="button"
+              onClick={() => setProcessConfirmOpen(true)}
+              disabled={process.isPending}
+              className="px-2 py-1 text-xs rounded bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors disabled:opacity-50"
+            >
+              {process.isPending ? 'Queuing...' : '\u25B6 Process'}
+            </button>
+            <button
+              type="button"
+              onClick={() => block.mutate(card.id)}
+              disabled={block.isPending}
+              className="px-2 py-1 text-xs rounded bg-red-600 hover:bg-red-500 text-white font-medium transition-colors disabled:opacity-50"
+            >
+              {block.isPending ? 'Blocking...' : '\uD83D\uDEAB Block'}
+            </button>
+          </>
         )}
       </div>
 
@@ -272,6 +295,44 @@ export function TaskCard({ card, column }: TaskCardProps) {
                 className="px-3 py-1.5 text-sm rounded bg-red-600 hover:bg-red-500 text-white font-medium transition-colors disabled:opacity-50"
               >
                 Decline &amp; Send Back
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MISSING 13: Process confirmation modal */}
+      {processConfirmOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setProcessConfirmOpen(false)
+          }}
+        >
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-[400px] max-w-[90vw]">
+            <h3 className="text-white font-semibold mb-1">
+              Process #{card.id}?
+            </h3>
+            <p className="text-gray-400 text-sm mb-4">{card.title}</p>
+            <p className="text-gray-500 text-sm mb-4">
+              This will queue the ticket for automated processing through the
+              full pipeline (plan, code, review, merge).
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setProcessConfirmOpen(false)}
+                className="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleProcessConfirm}
+                disabled={process.isPending}
+                className="px-3 py-1.5 text-sm rounded bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors disabled:opacity-50"
+              >
+                {process.isPending ? 'Queuing...' : 'Confirm & Process'}
               </button>
             </div>
           </div>

@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { marked } from 'marked'
 import type { WizardSession } from '../../api/types'
 
 interface RefinePreviewProps {
   session: WizardSession
   onBack: () => void
   onCreateIssue: (title: string, addToSprint: boolean) => void
+  /** Called when the user clicks "Regenerate" to re-refine the description. */
+  onRegenerate?: (description: string) => void
   isLoading: boolean
 }
 
@@ -21,10 +24,17 @@ const complexityColors: Record<string, string> = {
   XL: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
 }
 
+// Configure marked for safe rendering
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+})
+
 export function RefinePreview({
   session,
   onBack,
   onCreateIssue,
+  onRegenerate,
   isLoading,
 }: RefinePreviewProps) {
   const [title, setTitle] = useState(
@@ -32,8 +42,15 @@ export function RefinePreview({
   )
   const [addToSprint, setAddToSprint] = useState(session.add_to_sprint)
   const [showRaw, setShowRaw] = useState(false)
+  const [description, setDescription] = useState(
+    session.technical_planning || session.refined_description || '',
+  )
 
-  const description = session.technical_planning || session.refined_description || ''
+  // Render markdown to HTML
+  const renderedHtml = useMemo(() => {
+    if (!description) return ''
+    return marked(description) as string
+  }, [description])
 
   return (
     <div>
@@ -122,21 +139,33 @@ export function RefinePreview({
               Edit
             </button>
           </div>
+          {/* MISSING 4: Regenerate button */}
+          {onRegenerate && (
+            <button
+              type="button"
+              onClick={() => onRegenerate(description)}
+              disabled={isLoading}
+              className="ml-auto px-2 py-0.5 text-xs rounded border border-yellow-600/40 bg-yellow-600/10 text-yellow-400 hover:bg-yellow-600/20 transition-colors disabled:opacity-50"
+            >
+              {isLoading ? 'Regenerating...' : '\u21BB Regenerate'}
+            </button>
+          )}
         </div>
 
         {showRaw ? (
+          /* MISSING 3: Description editing — removed readOnly */
           <textarea
             value={description}
-            readOnly
+            onChange={(e) => setDescription(e.target.value)}
             rows={12}
             className="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded-lg text-gray-300 text-sm font-mono resize-y focus:outline-none focus:border-blue-500"
           />
         ) : (
-          <div className="min-h-[200px] max-h-[400px] overflow-y-auto p-4 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-300 leading-relaxed">
-            <pre className="whitespace-pre-wrap break-words font-sans">
-              {description}
-            </pre>
-          </div>
+          /* MISSING 5: Markdown rendering with marked */
+          <div
+            className="min-h-[200px] max-h-[400px] overflow-y-auto p-4 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none"
+            dangerouslySetInnerHTML={{ __html: renderedHtml }}
+          />
         )}
       </div>
 

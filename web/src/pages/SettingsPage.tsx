@@ -51,13 +51,11 @@ export default function SettingsPage() {
     setFeedback(null)
     saveSettings.mutate(
       {
-        config: {
-          setup: { model: models.setup },
-          planning: { model: models.planning },
-          orchestration: { model: models.orchestration },
-          code: { model: models.code },
-          code_heavy: { model: models.code_heavy },
-        },
+        setup_model: models.setup,
+        planning_model: models.planning,
+        orchestration_model: models.orchestration,
+        code_model: models.code,
+        code_heavy_model: models.code_heavy,
         yolo_mode: yoloMode,
         sprint_auto_start: sprintAutoStart,
       },

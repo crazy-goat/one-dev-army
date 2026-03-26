@@ -13,19 +13,21 @@ export function useBoard() {
   })
 }
 
-export function useIssue(id: number) {
+export function useIssue(id: number, refetchInterval?: number) {
   return useQuery({
     queryKey: ['issue', id],
     queryFn: () => api.getIssue(id),
     enabled: id > 0,
+    refetchInterval,
   })
 }
 
-export function useIssueSteps(id: number) {
+export function useIssueSteps(id: number, refetchInterval?: number) {
   return useQuery({
     queryKey: ['issue-steps', id],
     queryFn: () => api.getIssueSteps(id),
     enabled: id > 0,
+    refetchInterval,
   })
 }
 
@@ -42,6 +44,7 @@ export function useWorkers() {
     queryKey: ['workers'],
     queryFn: api.getWorkers,
     refetchInterval: 5_000,
+    select: (data) => data,
   })
 }
 

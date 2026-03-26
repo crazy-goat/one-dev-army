@@ -6,19 +6,20 @@ import { ProcessingPanel } from '../components/board/ProcessingPanel'
 
 /**
  * Ordered column definitions for the Kanban board.
- * Keys must match the `columns` map returned by the Go API.
+ * `key` must match the snake_case keys returned by the Go API (`columns` map).
+ * `label` is the human-readable display name.
  */
 const COLUMNS = [
-  { key: 'Backlog', empty: 'No tickets in backlog' },
-  { key: 'Blocked', empty: 'No blocked tickets' },
-  { key: 'Plan', empty: 'No tickets in planning' },
-  { key: 'Code', empty: 'No tickets in coding' },
-  { key: 'AI Review', empty: 'No tickets in AI review' },
-  { key: 'Pipeline', empty: 'No tickets in pipeline' },
-  { key: 'Approve', empty: 'No tickets awaiting approval' },
-  { key: 'Merge', empty: 'No tickets merging' },
-  { key: 'Done', empty: 'No completed tickets' },
-  { key: 'Failed', empty: 'No failed tickets' },
+  { key: 'backlog', label: 'Backlog', empty: 'No tickets in backlog' },
+  { key: 'blocked', label: 'Blocked', empty: 'No blocked tickets' },
+  { key: 'plan', label: 'Plan', empty: 'No tickets in planning' },
+  { key: 'code', label: 'Code', empty: 'No tickets in coding' },
+  { key: 'ai_review', label: 'AI Review', empty: 'No tickets in AI review' },
+  { key: 'check_pipeline', label: 'Pipeline', empty: 'No tickets in pipeline' },
+  { key: 'approve', label: 'Approve', empty: 'No tickets awaiting approval' },
+  { key: 'merge', label: 'Merge', empty: 'No tickets merging' },
+  { key: 'done', label: 'Done', empty: 'No completed tickets' },
+  { key: 'failed', label: 'Failed', empty: 'No failed tickets' },
 ] as const
 
 const EMPTY_CARDS: Card[] = []
@@ -73,6 +74,22 @@ export default function BoardPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* MISSING 2: Plan Sprint button (placeholder — v2 API not yet available) */}
+          {board.can_plan_sprint && (
+            <button
+              type="button"
+              className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+              title="Plan Sprint — assigns backlog tickets to the current sprint"
+              onClick={() => {
+                // Plan sprint API doesn't exist in v2 yet; show alert as placeholder
+                window.alert(
+                  'Plan Sprint is not yet available in the SPA. Use the classic dashboard for now.',
+                )
+              }}
+            >
+              Plan Sprint
+            </button>
+          )}
           {board.can_close_sprint && (
             <Link
               to="/sprint/close"
@@ -95,10 +112,11 @@ export default function BoardPage() {
       {/* Kanban columns — horizontal scroll */}
       <div className="flex-1 min-h-0 overflow-x-auto">
         <div className="grid grid-cols-10 gap-3 min-w-[1600px] h-full">
-          {COLUMNS.map(({ key, empty }) => (
+          {COLUMNS.map(({ key, label, empty }) => (
             <Column
               key={key}
-              title={key}
+              title={label}
+              columnKey={key}
               cards={board.columns[key] ?? EMPTY_CARDS}
               emptyText={empty}
             />

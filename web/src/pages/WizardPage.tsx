@@ -66,11 +66,34 @@ export default function WizardPage() {
         title: title || undefined,
         add_to_sprint: addToSprint,
       })
-      setCreatedIssues(result.created_issues)
+      // Go API returns { success: true, issue: CreatedIssue }
+      setCreatedIssues([result.issue])
       setStep('confirm')
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Failed to create issue',
+      )
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // MISSING 4: Regenerate handler — re-refine with current description
+  const handleRegenerate = async (currentDescription: string) => {
+    if (!session) return
+    setIsLoading(true)
+    setError(null)
+    try {
+      const refined = await api.refineWizardSession(session.id, {
+        idea: currentDescription,
+        language: session.language,
+      })
+      setSession((prev) =>
+        prev ? { ...prev, ...refined, add_to_sprint: prev.add_to_sprint } : refined,
+      )
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to regenerate',
       )
     } finally {
       setIsLoading(false)
@@ -112,6 +135,7 @@ export default function WizardPage() {
           session={session}
           onBack={() => setStep('idea')}
           onCreateIssue={handleCreateIssue}
+          onRegenerate={handleRegenerate}
           isLoading={isLoading}
         />
       )}

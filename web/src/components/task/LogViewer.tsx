@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useSSE } from '../../hooks/useSSE'
 
 interface LogViewerProps {
@@ -18,12 +19,17 @@ export function LogViewer({ issueNumber }: LogViewerProps) {
   >([])
   const [connected, setConnected] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)
+  const queryClient = useQueryClient()
 
   const handleEvent = useCallback((data: unknown) => {
     const event = data as StreamEvent
 
     if (event.done) {
       setConnected(false)
+      // MISSING 8: Invalidate queries on stream done so page refreshes with final data
+      void queryClient.invalidateQueries({ queryKey: ['issue', issueNumber] })
+      void queryClient.invalidateQueries({ queryKey: ['issue-steps', issueNumber] })
+      void queryClient.invalidateQueries({ queryKey: ['board'] })
       return
     }
 
@@ -44,7 +50,7 @@ export function LogViewer({ issueNumber }: LogViewerProps) {
         return updated
       })
     }
-  }, [])
+  }, [issueNumber, queryClient])
 
   useSSE(`/api/v2/issues/${String(issueNumber)}/stream`, handleEvent)
 

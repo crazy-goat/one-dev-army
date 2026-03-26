@@ -96,6 +96,12 @@ export interface SprintCloseResult {
 }
 
 // Workers
+export interface WorkersResponse {
+  workers: WorkerInfo[]
+  paused: boolean
+  active: boolean
+}
+
 export interface WorkerInfo {
   id: string
   status: string

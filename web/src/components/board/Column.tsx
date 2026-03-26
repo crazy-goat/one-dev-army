@@ -3,11 +3,13 @@ import { TaskCard } from './TaskCard'
 
 interface ColumnProps {
   title: string
+  /** The snake_case API key for this column (e.g. "backlog", "ai_review"). */
+  columnKey: string
   cards: Card[]
   emptyText?: string
 }
 
-/** Column header color mapping. */
+/** Column header color mapping (keyed by display label). */
 const titleColor: Record<string, string> = {
   Backlog: 'text-gray-400',
   Blocked: 'text-red-400',
@@ -21,7 +23,7 @@ const titleColor: Record<string, string> = {
   Failed: 'text-red-500',
 }
 
-export function Column({ title, cards, emptyText }: ColumnProps) {
+export function Column({ title, columnKey, cards, emptyText }: ColumnProps) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg p-3 min-w-0 flex flex-col">
       {/* Column header */}
@@ -40,7 +42,7 @@ export function Column({ title, cards, emptyText }: ColumnProps) {
       <div className="flex flex-col gap-2 overflow-y-auto flex-1 min-h-0">
         {cards.length > 0 ? (
           cards.map((card) => (
-            <TaskCard key={card.id} card={card} column={title} />
+            <TaskCard key={card.id} card={card} column={title} columnKey={columnKey} />
           ))
         ) : (
           <p className="text-gray-600 text-sm text-center py-8 italic">

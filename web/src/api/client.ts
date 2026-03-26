@@ -57,7 +57,10 @@ export const api = {
   // Board & Issues
   getBoard: () => request<Board>('/board'),
   getIssue: (id: number) => request<IssueDetail>(`/issues/${id}`),
-  getIssueSteps: (id: number) => request<TaskStep[]>(`/issues/${id}/steps`),
+  getIssueSteps: (id: number) =>
+    request<{ issue_number: number; steps: TaskStep[] }>(`/issues/${id}/steps`).then(
+      (res) => res.steps,
+    ),
 
   // Sprint
   getSprintStatus: () => request<SprintStatus>('/sprint/status'),
@@ -89,7 +92,8 @@ export const api = {
     post<SuccessResponse>(`/issues/${id}/process`),
 
   // Workers
-  getWorkers: () => request<WorkerInfo[]>('/workers'),
+  getWorkers: () =>
+    request<{ workers: WorkerInfo[]; paused: boolean; active: boolean }>('/workers'),
   toggleWorkers: () => post<SuccessResponse>('/workers/toggle'),
 
   // Settings
@@ -117,7 +121,7 @@ export const api = {
     id: string,
     data: { title?: string; add_to_sprint?: boolean },
   ) =>
-    post<{ session: WizardSession; created_issues: CreatedIssue[] }>(
+    post<{ success: boolean; issue: CreatedIssue }>(
       `/wizard/sessions/${id}/create`,
       data,
     ),

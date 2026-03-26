@@ -1,10 +1,15 @@
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { Link } from 'react-router'
-import type { CurrentTicket } from '../../api/types'
+import type { CurrentTicket, LogStreamPayload } from '../../api/types'
+import { useAppContext } from '../../App'
 
 interface ProcessingPanelProps {
   currentTicket?: CurrentTicket
   totalTickets: number
 }
+
+/** Maximum number of log lines to keep in the mini viewer. */
+const MAX_LOG_LINES = 20
 
 function priorityBadge(priority: string) {
   const colors: Record<string, string> = {
@@ -46,6 +51,41 @@ export function ProcessingPanel({
   currentTicket,
   totalTickets,
 }: ProcessingPanelProps) {
+  const { onLogStream } = useAppContext()
+  const [logLines, setLogLines] = useState<string[]>([])
+  const logContainerRef = useRef<HTMLDivElement>(null)
+
+  // MISSING 12: Subscribe to log_stream WebSocket messages
+  const handleLogStream = useCallback((payload: LogStreamPayload) => {
+    if (!currentTicket || payload.issue_number !== currentTicket.number) return
+    const line = payload.message || ''
+    setLogLines((prev) => {
+      const updated = [...prev, line]
+      // Keep only the last MAX_LOG_LINES
+      return updated.length > MAX_LOG_LINES
+        ? updated.slice(updated.length - MAX_LOG_LINES)
+        : updated
+    })
+  }, [currentTicket])
+
+  useEffect(() => {
+    const unsub = onLogStream(handleLogStream)
+    return unsub
+  }, [onLogStream, handleLogStream])
+
+  // Clear log lines when ticket changes
+  useEffect(() => {
+    setLogLines([])
+  }, [currentTicket?.number])
+
+  // Auto-scroll log viewer
+  useEffect(() => {
+    const el = logContainerRef.current
+    if (el) {
+      el.scrollTop = el.scrollHeight
+    }
+  }, [logLines])
+
   if (!currentTicket) {
     return (
       <div className="bg-gray-500/8 border border-gray-500/20 rounded-lg p-4">
@@ -107,6 +147,20 @@ export function ProcessingPanel({
       <div className="mt-2 text-xs text-blue-400 capitalize">
         {currentTicket.status}
       </div>
+
+      {/* MISSING 12: Mini log viewer */}
+      {logLines.length > 0 && (
+        <div
+          ref={logContainerRef}
+          className="mt-3 max-h-[120px] overflow-y-auto bg-gray-950 border border-gray-800 rounded p-2 font-mono text-xs text-gray-400 leading-relaxed"
+        >
+          {logLines.map((line, i) => (
+            <div key={`log-${String(i)}`} className="whitespace-pre-wrap break-words">
+              {line}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

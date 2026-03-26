@@ -8,12 +8,18 @@ export default function TaskPage() {
   const { id } = useParams<{ id: string }>()
   const issueNumber = Number(id)
 
+  // First fetch without auto-refresh to get initial data
   const {
     data: issue,
     isLoading: issueLoading,
     error: issueError,
   } = useIssue(issueNumber)
-  const { data: steps } = useIssueSteps(issueNumber)
+
+  // MISSING 7: Auto-refresh when task is NOT active so the page updates
+  // when the task finishes. When active, SSE handles live updates.
+  const isActive = issue?.is_active ?? false
+  const autoRefresh = !isActive ? 5000 : undefined
+  const { data: steps } = useIssueSteps(issueNumber, autoRefresh)
 
   if (issueLoading) {
     return (
