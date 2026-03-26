@@ -33,6 +33,9 @@ import (
 //go:embed skills/*
 var skillsFS embed.FS
 
+//go:embed all:web/dist
+var spaDistFS embed.FS
+
 func main() {
 	// Define flags
 	var debugWebSocket bool
@@ -408,7 +411,12 @@ func runServe(dir string, debugWebSocket bool) error {
 		}
 	}()
 
-	srv, err := dashboard.NewServer(cfg.Dashboard.Port, cfg.OpenCode.WebPort, store, pool.Workers, gh, orchestrator, oc, cfg.LLM.Planning.Model, hub, syncService, dir, brMgr, configPropagator)
+	spaFS, err := fs.Sub(spaDistFS, "web/dist")
+	if err != nil {
+		return fmt.Errorf("creating SPA sub filesystem: %w", err)
+	}
+
+	srv, err := dashboard.NewServer(cfg.Dashboard.Port, cfg.OpenCode.WebPort, store, pool.Workers, gh, orchestrator, oc, cfg.LLM.Planning.Model, hub, syncService, dir, brMgr, configPropagator, spaFS)
 	if err != nil {
 		return fmt.Errorf("creating dashboard server: %w", err)
 	}

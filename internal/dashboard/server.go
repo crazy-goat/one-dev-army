@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"time"
@@ -45,9 +46,10 @@ type Server struct {
 	configPropagator *config.ConfigPropagator
 	yoloOverride     *bool // Runtime YOLO mode override (nil = use config file)
 	logStreamManager *LogStreamManager
+	spaFS            fs.FS // Embedded React SPA filesystem (served under /new/)
 }
 
-func NewServer(port int, webPort int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string, brMgr *git.BranchManager, configPropagator *config.ConfigPropagator) (*Server, error) {
+func NewServer(port int, webPort int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string, brMgr *git.BranchManager, configPropagator *config.ConfigPropagator, spaFS fs.FS) (*Server, error) {
 	tmpls, err := parseTemplates()
 	if err != nil {
 		return nil, err
@@ -77,6 +79,7 @@ func NewServer(port int, webPort int, store *db.Store, pool func() []worker.Work
 		brMgr:            brMgr,
 		configPropagator: configPropagator,
 		logStreamManager: NewLogStreamManager(hub, rootDir, 0),
+		spaFS:            spaFS,
 	}
 
 	if s.wizardLLM == "" {
@@ -280,6 +283,43 @@ func (s *Server) routes() {
 
 	// YOLO mode toggle endpoint
 	s.mux.HandleFunc("POST /api/yolo/toggle", s.handleYoloToggle)
+
+	// React SPA under /new/
+	s.serveSPA()
+}
+
+// serveSPA registers a handler that serves the embedded React SPA under /new/.
+// Static assets (JS, CSS, images) are served directly. All other paths fall back
+// to index.html so that React Router can handle client-side routing.
+func (s *Server) serveSPA() {
+	if s.spaFS == nil {
+		return
+	}
+
+	fileServer := http.FileServer(http.FS(s.spaFS))
+
+	s.mux.HandleFunc("GET /new/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		path := r.PathValue("path")
+		if path == "" {
+			path = "index.html"
+		}
+
+		// Try to serve the requested static file.
+		if f, err := s.spaFS.Open(path); err == nil {
+			f.Close()
+			http.StripPrefix("/new/", fileServer).ServeHTTP(w, r)
+			return
+		}
+
+		// SPA fallback: return index.html for client-side routing.
+		indexBytes, err := fs.ReadFile(s.spaFS, "index.html")
+		if err != nil {
+			http.Error(w, "SPA not available", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(indexBytes)
+	})
 }
 
 func (s *Server) Start() error {
