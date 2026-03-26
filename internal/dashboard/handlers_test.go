@@ -6139,3 +6139,94 @@ func TestBoardTemplate_CSSLayout(t *testing.T) {
 		t.Error("processing-panel should NOT have max-height:250px (grid row handles sizing)")
 	}
 }
+
+// TestHandleWorkerToggle_Success_Start tests toggling from paused to running
+func TestHandleWorkerToggle_Success_Start(t *testing.T) {
+	orch := &mvp.Orchestrator{}
+	// Manually set paused to true to simulate initial state
+	orch.Pause()
+	s := &Server{orchestrator: orch}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/worker/toggle", nil)
+	w := httptest.NewRecorder()
+
+	s.handleWorkerToggle(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp["success"] != true {
+		t.Errorf("success = %v, want true", resp["success"])
+	}
+
+	// After toggle from paused, should be unpaused (running)
+	if resp["paused"] != false {
+		t.Errorf("paused = %v, want false", resp["paused"])
+	}
+
+	if resp["message"] != "Worker started" {
+		t.Errorf("message = %v, want 'Worker started'", resp["message"])
+	}
+}
+
+// TestHandleWorkerToggle_Success_Pause tests toggling from running to paused
+func TestHandleWorkerToggle_Success_Pause(t *testing.T) {
+	orch := &mvp.Orchestrator{}
+	orch.Start() // Start first so we can pause
+	s := &Server{orchestrator: orch}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/worker/toggle", nil)
+	w := httptest.NewRecorder()
+
+	s.handleWorkerToggle(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp["success"] != true {
+		t.Errorf("success = %v, want true", resp["success"])
+	}
+
+	if resp["paused"] != true {
+		t.Errorf("paused = %v, want true", resp["paused"])
+	}
+}
+
+// TestHandleWorkerToggle_NoOrchestrator tests error handling when orchestrator is nil
+func TestHandleWorkerToggle_NoOrchestrator(t *testing.T) {
+	s := &Server{orchestrator: nil}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/worker/toggle", nil)
+	w := httptest.NewRecorder()
+
+	s.handleWorkerToggle(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp["success"] != false {
+		t.Errorf("success = %v, want false", resp["success"])
+	}
+
+	if resp["error"] != "orchestrator not configured" {
+		t.Errorf("error = %v, want 'orchestrator not configured'", resp["error"])
+	}
+}
