@@ -76,7 +76,7 @@ func NewServer(port int, webPort int, store *db.Store, pool func() []worker.Work
 		rootDir:          rootDir,
 		brMgr:            brMgr,
 		configPropagator: configPropagator,
-		logStreamManager: NewLogStreamManager(hub, rootDir),
+		logStreamManager: NewLogStreamManager(hub, rootDir, 0),
 	}
 
 	if s.wizardLLM == "" {

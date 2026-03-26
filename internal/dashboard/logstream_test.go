@@ -11,7 +11,7 @@ func TestNewLogStreamManager(t *testing.T) {
 	hub := NewHub(false)
 	rootDir := "/tmp/test"
 
-	lsm := NewLogStreamManager(hub, rootDir)
+	lsm := NewLogStreamManager(hub, rootDir, 0) // 0 uses default
 
 	if lsm == nil {
 		t.Fatal("Expected LogStreamManager to be created")
@@ -38,10 +38,22 @@ func TestNewLogStreamManager(t *testing.T) {
 	}
 }
 
+func TestNewLogStreamManager_CustomInterval(t *testing.T) {
+	hub := NewHub(false)
+	rootDir := "/tmp/test"
+	customInterval := 1 * time.Second
+
+	lsm := NewLogStreamManager(hub, rootDir, customInterval)
+
+	if lsm.pollInterval != customInterval {
+		t.Errorf("Expected pollInterval to be %v, got %v", customInterval, lsm.pollInterval)
+	}
+}
+
 func TestLogStreamManager_StartMonitoring(t *testing.T) {
 	tempDir := t.TempDir()
 	hub := NewHub(false)
-	lsm := NewLogStreamManager(hub, tempDir)
+	lsm := NewLogStreamManager(hub, tempDir, 0)
 
 	err := lsm.StartMonitoring(123)
 	if err != nil {
@@ -63,7 +75,7 @@ func TestLogStreamManager_StartMonitoring(t *testing.T) {
 func TestLogStreamManager_StopMonitoring(t *testing.T) {
 	tempDir := t.TempDir()
 	hub := NewHub(false)
-	lsm := NewLogStreamManager(hub, tempDir)
+	lsm := NewLogStreamManager(hub, tempDir, 0)
 
 	// Start monitoring
 	lsm.StartMonitoring(123)
@@ -83,7 +95,7 @@ func TestLogStreamManager_StopMonitoring(t *testing.T) {
 func TestLogStreamManager_StartMonitoring_SwitchIssue(t *testing.T) {
 	tempDir := t.TempDir()
 	hub := NewHub(false)
-	lsm := NewLogStreamManager(hub, tempDir)
+	lsm := NewLogStreamManager(hub, tempDir, 0)
 
 	// Start monitoring first issue
 	err := lsm.StartMonitoring(100)
@@ -121,7 +133,7 @@ func TestLogStreamManager_extractStepName(t *testing.T) {
 		{"myfile.log", "myfile"},
 	}
 
-	lsm := NewLogStreamManager(nil, "/tmp")
+	lsm := NewLogStreamManager(nil, "/tmp", 0)
 
 	for _, test := range tests {
 		result := lsm.extractStepName(test.filename)
@@ -200,7 +212,7 @@ func TestLogStreamManager_parseLogLine(t *testing.T) {
 		},
 	}
 
-	lsm := NewLogStreamManager(nil, "/tmp")
+	lsm := NewLogStreamManager(nil, "/tmp", 0)
 
 	for _, test := range tests {
 		result := lsm.parseLogLine(test.line, test.stepName, test.filename)
@@ -251,9 +263,7 @@ func TestLogStreamManager_poll(t *testing.T) {
 	go hub.Run()
 	defer hub.Stop()
 
-	lsm := NewLogStreamManager(hub, tempDir)
-	// Reduce poll interval for faster testing
-	lsm.pollInterval = 50 * time.Millisecond
+	lsm := NewLogStreamManager(hub, tempDir, 50*time.Millisecond)
 
 	// Start monitoring
 	if err := lsm.StartMonitoring(123); err != nil {
@@ -284,7 +294,7 @@ func TestLogStreamManager_poll(t *testing.T) {
 func TestLogStreamManager_ConcurrentAccess(t *testing.T) {
 	tempDir := t.TempDir()
 	hub := NewHub(false)
-	lsm := NewLogStreamManager(hub, tempDir)
+	lsm := NewLogStreamManager(hub, tempDir, 10*time.Millisecond)
 
 	// Test concurrent Start/Stop operations
 	done := make(chan bool)

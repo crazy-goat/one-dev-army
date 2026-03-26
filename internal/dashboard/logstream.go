@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"bufio"
+	"context"
 	"log"
 	"os"
 	"path/filepath"
@@ -40,6 +41,9 @@ type fileState struct {
 }
 
 // LogStreamManager manages real-time log streaming for active tasks.
+// It uses a WebSocket-first strategy with Server-Sent Events (SSE) as a fallback
+// for clients that cannot establish WebSocket connections. This provides
+// reliable real-time log delivery with automatic reconnection support.
 type LogStreamManager struct {
 	hub     *Hub
 	rootDir string
@@ -56,6 +60,9 @@ type LogStreamManager struct {
 	// Control channels
 	stopCh chan struct{}
 
+	// Goroutine management - ensures clean shutdown before restart
+	monitorWg sync.WaitGroup
+
 	// Configuration
 	pollInterval time.Duration
 
@@ -65,13 +72,19 @@ type LogStreamManager struct {
 }
 
 // NewLogStreamManager creates a new log stream manager.
-func NewLogStreamManager(hub *Hub, rootDir string) *LogStreamManager {
+// The pollInterval parameter controls how frequently log files are checked for updates.
+// If zero or negative, defaults to 500ms.
+func NewLogStreamManager(hub *Hub, rootDir string, pollInterval time.Duration) *LogStreamManager {
+	if pollInterval <= 0 {
+		pollInterval = 500 * time.Millisecond
+	}
+
 	return &LogStreamManager{
 		hub:          hub,
 		rootDir:      rootDir,
 		fileStates:   make(map[string]*fileState),
 		stopCh:       make(chan struct{}),
-		pollInterval: 500 * time.Millisecond,
+		pollInterval: pollInterval,
 		timestampRe:  regexp.MustCompile(`^\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\]\s*(.*)$`),
 		levelRe:      regexp.MustCompile(`(?i)\b(ERROR|WARN|WARNING|INFO|DEBUG)\b`),
 	}
@@ -80,11 +93,18 @@ func NewLogStreamManager(hub *Hub, rootDir string) *LogStreamManager {
 // StartMonitoring begins monitoring logs for a specific issue.
 func (m *LogStreamManager) StartMonitoring(issueNumber int) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
-	// Stop any existing monitoring
+	// Stop any existing monitoring and wait for goroutine to exit
 	if m.active {
 		m.stopInternal()
+		m.mu.Unlock()
+
+		// Wait for the old monitor goroutine to fully stop before proceeding
+		// This prevents race conditions when recreating the stop channel
+		// This must be done outside the lock to avoid deadlock
+		m.monitorWg.Wait()
+
+		m.mu.Lock()
 	}
 
 	m.issueNumber = issueNumber
@@ -96,22 +116,34 @@ func (m *LogStreamManager) StartMonitoring(issueNumber int) error {
 	log.Printf("[LogStreamManager] Started monitoring for issue #%d", issueNumber)
 
 	// Start the monitoring goroutine
+	m.monitorWg.Add(1)
 	go m.monitor()
 
+	m.mu.Unlock()
 	return nil
 }
 
 // StopMonitoring stops the current log monitoring.
 func (m *LogStreamManager) StopMonitoring() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	if !m.active {
+		m.mu.Unlock()
 		return
 	}
 
 	m.stopInternal()
-	log.Printf("[LogStreamManager] Stopped monitoring for issue #%d", m.issueNumber)
+	m.mu.Unlock()
+
+	// Wait for the monitor goroutine to fully stop
+	// This must be done outside the lock to avoid deadlock
+	m.monitorWg.Wait()
+
+	m.mu.Lock()
+	issueNumber := m.issueNumber
+	m.mu.Unlock()
+
+	log.Printf("[LogStreamManager] Stopped monitoring for issue #%d", issueNumber)
 }
 
 // stopInternal stops monitoring without acquiring lock (must be called with lock held).
@@ -138,21 +170,46 @@ func (m *LogStreamManager) GetCurrentIssue() int {
 
 // monitor is the main monitoring loop.
 func (m *LogStreamManager) monitor() {
+	defer m.monitorWg.Done()
+
+	// Capture the current stopCh value to avoid race conditions
+	// when StartMonitoring replaces the channel
+	m.mu.RLock()
+	stopCh := m.stopCh
+	m.mu.RUnlock()
+
+	// Create a context that can be canceled via stopCh
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Listen for stop signal to cancel context
+	go func() {
+		select {
+		case <-stopCh:
+			cancel()
+		case <-ctx.Done():
+			// Context already canceled, nothing to do
+		}
+	}()
+
 	ticker := time.NewTicker(m.pollInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-m.stopCh:
+		case <-ctx.Done():
+			return
+		case <-stopCh:
 			return
 		case <-ticker.C:
-			m.poll()
+			m.poll(ctx)
 		}
 	}
 }
 
 // poll checks for new log files and reads new content.
-func (m *LogStreamManager) poll() {
+// The context parameter allows for cancellation and timeout control following Go best practices.
+func (m *LogStreamManager) poll(ctx context.Context) {
 	m.mu.RLock()
 	logDir := m.logDir
 	issueNumber := m.issueNumber
@@ -160,6 +217,13 @@ func (m *LogStreamManager) poll() {
 
 	if logDir == "" {
 		return
+	}
+
+	// Check if context is canceled before proceeding
+	select {
+	case <-ctx.Done():
+		return
+	default:
 	}
 
 	// Check if log directory exists
@@ -193,6 +257,12 @@ func (m *LogStreamManager) poll() {
 
 	// Process each log file
 	for _, filename := range logFiles {
+		// Check context before processing each file
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 		m.processFile(filename, logDir, issueNumber)
 	}
 }

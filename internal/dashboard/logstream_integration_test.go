@@ -37,9 +37,7 @@ func TestLogStreamManager_Integration(t *testing.T) {
 	go hub.Run()
 	defer hub.Stop()
 
-	lsm := NewLogStreamManager(hub, tempDir)
-	// Reduce poll interval for faster testing
-	lsm.pollInterval = 50 * time.Millisecond
+	lsm := NewLogStreamManager(hub, tempDir, 50*time.Millisecond)
 
 	// Create test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +140,7 @@ func TestLogStreamManager_TaskSwitching(t *testing.T) {
 	os.WriteFile(filepath.Join(logDir2, "step2.log"), []byte("[2026-03-26 12:00:00] Issue 200 log\n"), 0644)
 
 	hub := NewHub(false)
-	lsm := NewLogStreamManager(hub, tempDir)
+	lsm := NewLogStreamManager(hub, tempDir, 0)
 
 	// Start monitoring first issue
 	if err := lsm.StartMonitoring(100); err != nil {
