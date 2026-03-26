@@ -9,15 +9,16 @@ import (
 )
 
 type Config struct {
-	GitHub    GitHub    `yaml:"github"`
-	Dashboard Dashboard `yaml:"dashboard"`
-	Workers   Workers   `yaml:"workers"`
-	OpenCode  OpenCode  `yaml:"opencode"`
-	Tools     Tools     `yaml:"tools"`
-	Pipeline  Pipeline  `yaml:"pipeline"`
-	Sprint    Sprint    `yaml:"sprint"`
-	LLM       LLMConfig `yaml:"llm"`
-	YoloMode  bool      `yaml:"yolo_mode"`
+	GitHub         GitHub    `yaml:"github"`
+	Dashboard      Dashboard `yaml:"dashboard"`
+	Workers        Workers   `yaml:"workers"`
+	OpenCode       OpenCode  `yaml:"opencode"`
+	Tools          Tools     `yaml:"tools"`
+	Pipeline       Pipeline  `yaml:"pipeline"`
+	Sprint         Sprint    `yaml:"sprint"`
+	LLM            LLMConfig `yaml:"llm"`
+	YoloMode       bool      `yaml:"yolo_mode"`
+	UseNewFrontend bool      `yaml:"use_new_frontend"`
 }
 
 type GitHub struct {

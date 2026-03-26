@@ -344,6 +344,38 @@ func TestValidateAndFallbackModels(t *testing.T) {
 	}
 }
 
+func TestLoad_UseNewFrontend(t *testing.T) {
+	configWithNewFE := `github:
+  repo: "owner/repo"
+use_new_frontend: true
+`
+	configWithoutNewFE := `github:
+  repo: "owner/repo"
+`
+
+	tests := []struct {
+		name string
+		cfg  string
+		want bool
+	}{
+		{"explicitly true", configWithNewFE, true},
+		{"default false", configWithoutNewFE, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := setupConfigDir(t, tt.cfg)
+			cfg, err := config.Load(dir)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if cfg.UseNewFrontend != tt.want {
+				t.Errorf("use_new_frontend = %v, want %v", cfg.UseNewFrontend, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoad_YoloMode(t *testing.T) {
 	configWithYoloTrue := `github:
   repo: "owner/repo"
