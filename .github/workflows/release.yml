@@ -39,10 +39,15 @@ jobs:
           chmod +x oda-linux-amd64
           ./oda-linux-amd64 --help
 
+      - name: Compress Linux binary
+        run: |
+          tar -czf oda-linux-amd64.tar.gz oda-linux-amd64
+          ls -lh oda-linux-amd64.tar.gz
+
       - name: Upload binary to release
         uses: softprops/action-gh-release@v2
         with:
-          files: oda-linux-amd64
+          files: oda-linux-amd64.tar.gz
           name: Release ${{ github.ref_name }}
           generate_release_notes: true
         env:
