@@ -2565,6 +2565,48 @@ func TestWizardStepIndicator_NoDuplicateInContent(t *testing.T) {
 	}
 }
 
+// TestWizardPage_ContainerScrolling verifies the wizard page container has proper scrolling CSS
+func TestWizardPage_ContainerScrolling(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Request the wizard page
+	req := httptest.NewRequest(http.MethodGet, "/wizard?type=feature", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleWizardPage(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify overflow-y: auto is present for scrolling
+	if !strings.Contains(body, "overflow-y: auto") {
+		t.Error("wizard page container missing overflow-y: auto for scrolling")
+	}
+
+	// Verify max-height is present to constrain the container
+	if !strings.Contains(body, "max-height:") {
+		t.Error("wizard page container missing max-height property")
+	}
+
+	// Verify calc() is used for responsive height
+	if !strings.Contains(body, "calc(100vh") {
+		t.Error("wizard page container should use calc(100vh - 200px) for responsive height")
+	}
+
+	// Verify flex layout is used for proper content organization
+	if !strings.Contains(body, "display: flex") {
+		t.Error("wizard page container missing display: flex for layout")
+	}
+
+	if !strings.Contains(body, "flex-direction: column") {
+		t.Error("wizard page container missing flex-direction: column")
+	}
+}
+
 // TestHandleWizardRefine_ParsesAddToSprint verifies that the add_to_sprint form value is parsed and stored in session
 func TestHandleWizardRefine_ParsesAddToSprint(t *testing.T) {
 	srv := createTestServerWithTemplates(t)

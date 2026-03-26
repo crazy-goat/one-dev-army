@@ -2225,6 +2225,7 @@ func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
 		ShowBreakdownStep  bool
 		NeedsTypeSelection bool
 		YoloMode           bool
+		Language           string
 	}{
 		Active:             "wizard",
 		OpenCodePort:       s.webPort,
@@ -2236,12 +2237,14 @@ func (s *Server) handleWizardPage(w http.ResponseWriter, r *http.Request) {
 		ShowBreakdownStep:  false,
 		NeedsTypeSelection: needsTypeSelection,
 		YoloMode:           yoloMode,
+		Language:           "",
 	}
 
 	if session != nil {
 		data.SessionID = session.ID
 		data.Type = string(session.Type)
 		data.ShowBreakdownStep = session.Type == WizardTypeFeature && !session.SkipBreakdown
+		data.Language = session.Language
 	}
 
 	s.render(w, "wizard_page.html", data)
