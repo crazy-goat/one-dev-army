@@ -6285,3 +6285,202 @@ func TestHandleWorkerToggle_NoOrchestrator(t *testing.T) {
 		t.Errorf("error = %v, want 'orchestrator not configured'", resp["error"])
 	}
 }
+
+// TestHandleSettings_SprintAutoStart tests that SprintAutoStart is correctly loaded from config
+func TestHandleSettings_SprintAutoStart(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	odaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(odaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a config file with sprint auto_start enabled
+	configContent := `llm:
+  setup:
+    model: test-provider/test-model
+  planning:
+    model: test-provider/test-model
+  orchestration:
+    model: test-provider/test-model
+  code:
+    model: test-provider/test-model
+  code-heavy:
+    model: test-provider/test-model
+sprint:
+  auto_start: true
+`
+	configPath := filepath.Join(odaDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Test GET /settings
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleSettings(rec, req)
+
+	// Should return 200 OK
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify the checkbox is checked in the response
+	body := rec.Body.String()
+	if !strings.Contains(body, `id="sprint_auto_start"`) {
+		t.Error("response should contain sprint_auto_start checkbox")
+	}
+	if !strings.Contains(body, `name="sprint_auto_start"`) {
+		t.Error("response should contain sprint_auto_start form field")
+	}
+}
+
+// TestHandleSaveSettings_SprintAutoStart tests saving sprint_auto_start setting
+func TestHandleSaveSettings_SprintAutoStart(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	odaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(odaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a minimal config file with sprint auto_start initially false
+	configContent := `llm:
+  setup:
+    model: test-provider/test-model
+  planning:
+    model: test-provider/test-model
+  orchestration:
+    model: test-provider/test-model
+  code:
+    model: test-provider/test-model
+  code-heavy:
+    model: test-provider/test-model
+sprint:
+  auto_start: false
+`
+	configPath := filepath.Join(odaDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Test POST /settings with sprint_auto_start enabled
+	form := url.Values{}
+	form.Set("setup_model", "test-provider/test-model")
+	form.Set("planning_model", "test-provider/test-model")
+	form.Set("orchestration_model", "test-provider/test-model")
+	form.Set("code_model", "test-provider/test-model")
+	form.Set("code_heavy_model", "test-provider/test-model")
+	form.Set("sprint_auto_start", "on") // Enable auto_start
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	// Should return 200 OK
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify success message
+	body := rec.Body.String()
+	if !strings.Contains(body, "Settings saved successfully") {
+		t.Error("response should contain success message")
+	}
+
+	// Verify config was saved with auto_start: true
+	savedData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to read saved config: %v", err)
+	}
+
+	savedContent := string(savedData)
+	if !strings.Contains(savedContent, "auto_start: true") {
+		t.Errorf("saved config should contain 'auto_start: true', got:\n%s", savedContent)
+	}
+}
+
+// TestHandleSaveSettings_SprintAutoStartDisabled tests saving with sprint_auto_start unchecked
+func TestHandleSaveSettings_SprintAutoStartDisabled(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	odaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(odaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a config file with sprint auto_start initially true
+	configContent := `llm:
+  setup:
+    model: test-provider/test-model
+  planning:
+    model: test-provider/test-model
+  orchestration:
+    model: test-provider/test-model
+  code:
+    model: test-provider/test-model
+  code-heavy:
+    model: test-provider/test-model
+sprint:
+  auto_start: true
+`
+	configPath := filepath.Join(odaDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	defer srv.wizardStore.Stop()
+
+	// Test POST /settings without sprint_auto_start (unchecked)
+	form := url.Values{}
+	form.Set("setup_model", "test-provider/test-model")
+	form.Set("planning_model", "test-provider/test-model")
+	form.Set("orchestration_model", "test-provider/test-model")
+	form.Set("code_model", "test-provider/test-model")
+	form.Set("code_heavy_model", "test-provider/test-model")
+	// Note: sprint_auto_start is NOT set, simulating unchecked checkbox
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.handleSaveSettings(rec, req)
+
+	// Should return 200 OK
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify config was saved with auto_start: false
+	savedData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to read saved config: %v", err)
+	}
+
+	savedContent := string(savedData)
+	if !strings.Contains(savedContent, "auto_start: false") {
+		t.Errorf("saved config should contain 'auto_start: false', got:\n%s", savedContent)
+	}
+}

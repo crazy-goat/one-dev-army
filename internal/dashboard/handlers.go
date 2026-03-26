@@ -2486,6 +2486,7 @@ type settingsData struct {
 	WorkerCount     int
 	Config          config.LLMConfig
 	YoloMode        bool
+	SprintAutoStart bool
 	Success         bool
 	Errors          []string
 	AvailableModels []opencode.ProviderModel
@@ -2512,6 +2513,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, _ *http.Request) {
 		WorkerCount:     workerCount,
 		Config:          cfg.LLM,
 		YoloMode:        cfg.YoloMode,
+		SprintAutoStart: cfg.Sprint.AutoStart,
 		AvailableModels: s.modelsCache,
 	}
 
@@ -2571,6 +2573,9 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	// Parse yolo_mode checkbox (checkbox returns "on" when checked, empty when unchecked)
 	cfg.YoloMode = r.FormValue("yolo_mode") == "on"
 
+	// Parse sprint_auto_start checkbox (checkbox returns "on" when checked, empty when unchecked)
+	cfg.Sprint.AutoStart = r.FormValue("sprint_auto_start") == "on"
+
 	// Note: We intentionally do NOT call ValidateAndFallbackModels here.
 	// The user's exact selections are saved to config. Runtime fallback
 	// happens in the LLM router when models are actually used.
@@ -2608,6 +2613,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		WorkerCount:     workerCount,
 		Config:          cfg.LLM,
 		YoloMode:        cfg.YoloMode,
+		SprintAutoStart: cfg.Sprint.AutoStart,
 		Success:         true,
 		AvailableModels: s.modelsCache,
 	}
@@ -2634,6 +2640,7 @@ func (s *Server) renderSettingsWithErrors(w http.ResponseWriter, _ *http.Request
 		WorkerCount:     workerCount,
 		Config:          cfg.LLM,
 		YoloMode:        cfg.YoloMode,
+		SprintAutoStart: cfg.Sprint.AutoStart,
 		Errors:          errors,
 		AvailableModels: s.modelsCache,
 	}

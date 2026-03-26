@@ -76,6 +76,18 @@
       </div>
     </div>
     
+    <!-- Sprint Settings -->
+    <div class="category-section">
+      <h2>Sprint Settings</h2>
+      <div class="form-group checkbox-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="sprint_auto_start" name="sprint_auto_start" value="on" {{if .SprintAutoStart}}checked{{end}}>
+          <span class="checkbox-text">Auto-start sprints</span>
+        </label>
+        <small>When enabled, new sprints automatically start upon creation</small>
+      </div>
+    </div>
+    
     <div class="form-actions">
       <button type="submit" class="btn btn-primary">Save Settings</button>
     </div>
