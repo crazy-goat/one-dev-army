@@ -1,1 +1,1 @@
-{"root":["./src/App.tsx","./src/main.tsx","./src/vite-env.d.ts"],"version":"5.9.3"}
+{"root":["./src/App.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/api/client.ts","./src/api/queries.ts","./src/api/types.ts","./src/components/layout/Footer.tsx","./src/components/layout/Navbar.tsx","./src/hooks/useSSE.ts","./src/hooks/useWebSocket.ts","./src/lib/websocket.ts"],"version":"5.9.3"}
