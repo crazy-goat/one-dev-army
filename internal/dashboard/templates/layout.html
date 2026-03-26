@@ -623,7 +623,11 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
     function toggleWorkerComplete(event) {
         if (event.detail.successful) {
             try {
-                const response = JSON.parse(event.detail.xhr.response);
+                // Response might already be parsed by HTMX or might be a JSON string
+                let response = event.detail.xhr.response;
+                if (typeof response === 'string') {
+                    response = JSON.parse(response);
+                }
                 if (response.success) {
                     workerStatus.paused = response.paused;
                     workerStatus.active = response.active;
@@ -681,6 +685,10 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
         refreshBoard: refreshBoard,
         handleWorkerUpdate: handleWorkerUpdate
     };
+    
+    // Expose worker toggle functions for HTMX
+    window.toggleWorkerOptimistic = toggleWorkerOptimistic;
+    window.toggleWorkerComplete = toggleWorkerComplete;
     
     // Auto-connect on page load
     document.addEventListener('DOMContentLoaded', connect);
