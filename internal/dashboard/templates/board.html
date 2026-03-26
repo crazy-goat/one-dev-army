@@ -51,7 +51,7 @@
 .badge-merged{background:#6f42c1;color:white;font-size:.65rem;padding:.1rem .4rem;border-radius:4px;display:inline-flex;align-items:center;gap:.25rem}
 .badge-closed{background:#6c757d;color:white;font-size:.65rem;padding:.1rem .4rem;border-radius:4px;display:inline-flex;align-items:center;gap:.25rem}
 .processing-panel-title{font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.5rem;display:flex;align-items:center;gap:.5rem}
-.processing-panel{background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.2);border-radius:8px;padding:.5rem 1rem;display:flex;align-items:center;min-height:0;z-index:10;overflow-y:auto}
+.processing-panel{background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.2);border-radius:8px;padding:1rem 1rem .5rem;display:flex;align-items:flex-start;min-height:0;z-index:10;overflow-y:auto}
 .processing-panel-idle{background:rgba(108,117,125,0.08);border-color:rgba(108,117,125,0.2)}
 .processing-panel-idle .processing-indicator{background:#6c757d;animation:none}
 .processing-idle-text{color:var(--muted);font-size:.85rem}
@@ -335,6 +335,10 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
         <div class="processing-panel-title">Processing</div>
         <span class="processing-indicator"></span>
         {{if .CurrentTicket}}
+        <a href="/task/{{.CurrentTicket.Number}}" class="processing-ticket">
+          <span class="processing-id">#{{.CurrentTicket.Number}}</span>
+          <span class="processing-title">{{.CurrentTicket.Title}}</span>
+        </a>
         <div class="processing-labels">
           {{if .CurrentTicket.Priority}}
           <span class="processing-badge processing-priority-{{.CurrentTicket.Priority}}">
@@ -350,10 +354,6 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
           <span class="processing-badge">📏 {{.CurrentTicket.Size}}</span>
           {{end}}
         </div>
-        <a href="/task/{{.CurrentTicket.Number}}" class="processing-ticket">
-          <span class="processing-id">#{{.CurrentTicket.Number}}</span>
-          <span class="processing-title">{{.CurrentTicket.Title}}</span>
-        </a>
         {{else}}
         {{if eq .TotalTickets 0}}
         <div class="processing-empty-labels">
