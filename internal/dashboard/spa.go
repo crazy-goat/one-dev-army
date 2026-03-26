@@ -10,7 +10,7 @@ import (
 )
 
 // serveReactApp serves the React SPA index.html for all /new/* routes.
-func (s *Server) serveReactApp(w http.ResponseWriter, _ *http.Request) {
+func (*Server) serveReactApp(w http.ResponseWriter, _ *http.Request) {
 	data, err := web.DistFS.ReadFile("dist/index.html")
 	if err != nil {
 		log.Printf("[Dashboard] Failed to read React index.html: %v", err)
