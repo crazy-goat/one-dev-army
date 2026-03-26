@@ -80,6 +80,7 @@ const (
 	MessageTypeSprintClosable MessageType = "can_close_sprint"
 	MessageTypePing           MessageType = "ping"
 	MessageTypePong           MessageType = "pong"
+	MessageTypeLogStream      MessageType = "log_stream"
 )
 
 // Message represents a WebSocket message
@@ -115,6 +116,16 @@ type WorkerUpdatePayload struct {
 // SprintClosablePayload represents the payload for can_close_sprint messages
 type SprintClosablePayload struct {
 	CanClose bool `json:"can_close"`
+}
+
+// LogStreamPayload represents the payload for log_stream messages
+type LogStreamPayload struct {
+	IssueNumber int    `json:"issue_number"`
+	Step        string `json:"step"`
+	Timestamp   string `json:"timestamp"`
+	Message     string `json:"message"`
+	Level       string `json:"level"`
+	File        string `json:"file"`
 }
 
 // Client represents a single WebSocket connection
@@ -376,6 +387,38 @@ func (h *Hub) BroadcastSprintClosable(canClose bool) {
 
 	h.Broadcast(msgBytes)
 	h.logf("Broadcast sprint closable (canClose=%v) to %d clients", canClose, h.ClientCount())
+}
+
+// BroadcastLogStream sends a log stream message to all clients
+func (h *Hub) BroadcastLogStream(issueNumber int, step, timestamp, message, level, file string) {
+	payload := LogStreamPayload{
+		IssueNumber: issueNumber,
+		Step:        step,
+		Timestamp:   timestamp,
+		Message:     message,
+		Level:       level,
+		File:        file,
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		h.logf("Error marshaling log stream payload: %v", err)
+		return
+	}
+
+	msg := Message{
+		Type:    MessageTypeLogStream,
+		Payload: payloadBytes,
+	}
+
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		h.logf("Error marshaling log stream message: %v", err)
+		return
+	}
+
+	h.Broadcast(msgBytes)
+	h.logf("Broadcast log stream for #%d (step=%s) to %d clients", issueNumber, step, h.ClientCount())
 }
 
 // readPump pumps messages from the WebSocket connection to the hub

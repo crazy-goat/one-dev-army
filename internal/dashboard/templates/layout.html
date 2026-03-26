@@ -536,6 +536,23 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
         var panel = document.getElementById('processing-panel');
         if (!panel) return;
         
+        var currentIssue = parseInt(panel.getAttribute('data-issue-number') || '0', 10);
+        var newIssue = workerStatus.issueId || 0;
+        
+        // Check if issue changed
+        if (currentIssue !== newIssue) {
+            // Clear existing log stream
+            clearLogStream();
+            
+            // Update panel data
+            panel.setAttribute('data-issue-number', newIssue);
+            
+            // Initialize new log stream if there's an active issue
+            if (newIssue > 0 && workerStatus.active && !workerStatus.paused) {
+                setTimeout(initLogStream, 100); // Small delay to let panel update
+            }
+        }
+        
         if (workerStatus.active && !workerStatus.paused && workerStatus.issueId) {
             panel.className = 'processing-panel';
             panel.innerHTML = '<div class="processing-panel-content">' +
@@ -546,7 +563,20 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
                 '<a href="/task/' + workerStatus.issueId + '" class="processing-ticket">' +
                 '<span class="processing-id">#' + workerStatus.issueId + '</span>' +
                 '<span class="processing-title">' + (workerStatus.issueTitle || '') + '</span>' +
-                '</a></div>';
+                '</a>' +
+                '<div class="log-stream-container" id="log-stream-container" style="display: none;">' +
+                '<div class="log-stream-header">' +
+                '<span>Live Logs</span>' +
+                '<div class="log-stream-status">' +
+                '<span class="log-stream-status-indicator" id="log-status-indicator"></span>' +
+                '<span id="log-status-text">Connecting...</span>' +
+                '</div>' +
+                '</div>' +
+                '<div class="log-stream-content" id="log-stream-content">' +
+                '<div class="log-stream-empty">Waiting for logs...</div>' +
+                '</div>' +
+                '</div>' +
+                '</div>';
         } else {
             var totalTickets = parseInt(panel.getAttribute('data-total-tickets') || '0', 10);
             panel.className = 'processing-panel processing-panel-idle';
@@ -689,6 +719,397 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
     // Expose worker toggle functions for HTMX
     window.toggleWorkerOptimistic = toggleWorkerOptimistic;
     window.toggleWorkerComplete = toggleWorkerComplete;
+    
+    // LogStreamClient - Real-time log streaming with dual transport support
+    function LogStreamClient(options) {
+        this.options = Object.assign({
+            maxLines: 100,
+            healthCheckInterval: 30000, // 30 seconds
+            reconnectBaseDelay: 1000,   // 1 second
+            reconnectMaxDelay: 30000, // 30 seconds
+            onLogEntry: null,
+            onConnectionChange: null,
+            onError: null
+        }, options);
+        
+        this.ws = null;
+        this.sse = null;
+        this.buffer = []; // Circular buffer
+        this.isConnected = false;
+        this.connectionType = null; // 'websocket' or 'sse'
+        this.reconnectDelay = this.options.reconnectBaseDelay;
+        this.reconnectTimer = null;
+        this.healthCheckTimer = null;
+        this.lastLogTime = Date.now();
+        this.currentIssue = null;
+        this.isManualClose = false;
+    }
+
+    LogStreamClient.prototype.connect = function() {
+        if (this.isConnected || this.isManualClose) return;
+        
+        // Try WebSocket first
+        this.connectWebSocket();
+    };
+
+    LogStreamClient.prototype.connectWebSocket = function() {
+        var self = this;
+        
+        if (typeof window.WebSocket === 'undefined') {
+            this.connectSSE();
+            return;
+        }
+        
+        var wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        var wsUrl = wsProtocol + '//' + window.location.host + '/ws';
+        
+        try {
+            this.ws = new WebSocket(wsUrl);
+            
+            this.ws.onopen = function() {
+                console.log('[LogStreamClient] WebSocket connected');
+                self.onConnected('websocket');
+            };
+            
+            this.ws.onmessage = function(event) {
+                var msg = JSON.parse(event.data);
+                if (msg.type === 'log_stream') {
+                    var payload = JSON.parse(msg.payload);
+                    self.handleLogEntry(payload);
+                }
+            };
+            
+            this.ws.onclose = function() {
+                console.log('[LogStreamClient] WebSocket disconnected');
+                self.onDisconnected();
+                if (!self.isManualClose) {
+                    self.connectSSE(); // Fallback to SSE
+                }
+            };
+            
+            this.ws.onerror = function(error) {
+                console.error('[LogStreamClient] WebSocket error:', error);
+                self.onError('websocket', error);
+            };
+        } catch (err) {
+            console.error('[LogStreamClient] WebSocket connection failed:', err);
+            this.connectSSE();
+        }
+    };
+
+    LogStreamClient.prototype.connectSSE = function() {
+        var self = this;
+        
+        if (!this.currentIssue) {
+            console.log('[LogStreamClient] No issue to monitor, skipping SSE connection');
+            return;
+        }
+        
+        var sseUrl = '/api/logs/' + this.currentIssue + '/stream?follow=true';
+        
+        try {
+            this.sse = new EventSource(sseUrl);
+            
+            this.sse.onopen = function() {
+                console.log('[LogStreamClient] SSE connected');
+                self.onConnected('sse');
+            };
+            
+            this.sse.addEventListener('log:new', function(event) {
+                var data = JSON.parse(event.data);
+                self.handleLogEntry({
+                    issue_number: self.currentIssue,
+                    step: data.step,
+                    timestamp: data.timestamp,
+                    message: data.message,
+                    level: 'info',
+                    file: data.file
+                });
+            });
+            
+            this.sse.onerror = function(error) {
+                console.error('[LogStreamClient] SSE error:', error);
+                self.onError('sse', error);
+                self.sse.close();
+                self.scheduleReconnect();
+            };
+        } catch (err) {
+            console.error('[LogStreamClient] SSE connection failed:', err);
+            this.scheduleReconnect();
+        }
+    };
+
+    LogStreamClient.prototype.onConnected = function(type) {
+        this.isConnected = true;
+        this.connectionType = type;
+        this.reconnectDelay = this.options.reconnectBaseDelay;
+        this.lastLogTime = Date.now();
+        
+        this.startHealthCheck();
+        
+        if (this.options.onConnectionChange) {
+            this.options.onConnectionChange('connected', type);
+        }
+    };
+
+    LogStreamClient.prototype.onDisconnected = function() {
+        this.isConnected = false;
+        this.connectionType = null;
+        this.stopHealthCheck();
+        
+        if (this.options.onConnectionChange) {
+            this.options.onConnectionChange('disconnected', null);
+        }
+    };
+
+    LogStreamClient.prototype.onError = function(type, error) {
+        if (this.options.onError) {
+            this.options.onError(type, error);
+        }
+    };
+
+    LogStreamClient.prototype.handleLogEntry = function(entry) {
+        this.lastLogTime = Date.now();
+        
+        // Add to circular buffer
+        this.buffer.push(entry);
+        if (this.buffer.length > this.options.maxLines) {
+            this.buffer.shift();
+        }
+        
+        if (this.options.onLogEntry) {
+            this.options.onLogEntry(entry);
+        }
+    };
+
+    LogStreamClient.prototype.startHealthCheck = function() {
+        var self = this;
+        this.stopHealthCheck();
+        
+        this.healthCheckTimer = setInterval(function() {
+            var timeSinceLastLog = Date.now() - self.lastLogTime;
+            if (timeSinceLastLog > self.options.healthCheckInterval && self.isConnected) {
+                console.log('[LogStreamClient] Health check failed - no logs for ' + timeSinceLastLog + 'ms');
+                self.disconnect();
+                self.scheduleReconnect();
+            }
+        }, this.options.healthCheckInterval);
+    };
+
+    LogStreamClient.prototype.stopHealthCheck = function() {
+        if (this.healthCheckTimer) {
+            clearInterval(this.healthCheckTimer);
+            this.healthCheckTimer = null;
+        }
+    };
+
+    LogStreamClient.prototype.scheduleReconnect = function() {
+        var self = this;
+        
+        if (this.reconnectTimer || this.isManualClose) return;
+        
+        console.log('[LogStreamClient] Reconnecting in ' + this.reconnectDelay + 'ms...');
+        
+        if (this.options.onConnectionChange) {
+            this.options.onConnectionChange('reconnecting', null);
+        }
+        
+        this.reconnectTimer = setTimeout(function() {
+            self.reconnectTimer = null;
+            self.connect();
+        }, this.reconnectDelay);
+        
+        // Exponential backoff with jitter
+        var jitter = Math.random() * 1000;
+        this.reconnectDelay = Math.min(
+            (this.reconnectDelay * 2) + jitter,
+            this.options.reconnectMaxDelay
+        );
+    };
+
+    LogStreamClient.prototype.setIssue = function(issueNumber) {
+        if (this.currentIssue === issueNumber) return;
+        
+        this.currentIssue = issueNumber;
+        this.buffer = []; // Clear buffer
+        
+        if (this.isConnected) {
+            this.disconnect();
+            if (issueNumber) {
+                this.connect();
+            }
+        }
+    };
+
+    LogStreamClient.prototype.disconnect = function() {
+        this.isManualClose = true;
+        this.stopHealthCheck();
+        
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+        
+        if (this.ws) {
+            this.ws.close();
+            this.ws = null;
+        }
+        
+        if (this.sse) {
+            this.sse.close();
+            this.sse = null;
+        }
+        
+        this.onDisconnected();
+        this.isManualClose = false;
+    };
+
+    LogStreamClient.prototype.getBuffer = function() {
+        return this.buffer.slice();
+    };
+
+    LogStreamClient.prototype.getConnectionStatus = function() {
+        if (!this.isConnected) {
+            if (this.reconnectTimer) {
+                return { state: 'reconnecting', type: null };
+            }
+            return { state: 'disconnected', type: null };
+        }
+        return { state: 'connected', type: this.connectionType };
+    };
+
+    // Expose to global scope
+    window.LogStreamClient = LogStreamClient;
+    
+    // Log Stream integration
+    var logStreamClient = null;
+    
+    function initLogStream() {
+        var panel = document.getElementById('processing-panel');
+        if (!panel) return;
+        
+        var issueNumber = parseInt(panel.getAttribute('data-issue-number'), 10);
+        if (!issueNumber) return;
+        
+        // Initialize LogStreamClient
+        logStreamClient = new LogStreamClient({
+            maxLines: 100,
+            onLogEntry: handleLogEntry,
+            onConnectionChange: handleConnectionChange,
+            onError: handleLogStreamError
+        });
+        
+        logStreamClient.setIssue(issueNumber);
+        logStreamClient.connect();
+        
+        // Show log container
+        var container = document.getElementById('log-stream-container');
+        if (container) {
+            container.style.display = 'block';
+        }
+    }
+    
+    function handleLogEntry(entry) {
+        var content = document.getElementById('log-stream-content');
+        if (!content) return;
+        
+        // Remove empty state if present
+        var emptyState = content.querySelector('.log-stream-empty');
+        if (emptyState) {
+            emptyState.remove();
+        }
+        
+        // Create log line element
+        var line = document.createElement('div');
+        line.className = 'log-line';
+        
+        // Format timestamp (show only time part)
+        var timeStr = entry.timestamp ? entry.timestamp.split(' ')[1] || entry.timestamp : '';
+        
+        // Determine log level class
+        var levelClass = 'log-level-info';
+        if (entry.level === 'error') levelClass = 'log-level-error';
+        else if (entry.level === 'warn') levelClass = 'log-level-warn';
+        else if (entry.level === 'debug') levelClass = 'log-level-debug';
+        
+        line.innerHTML = 
+            '<span class="log-timestamp">' + (timeStr || '') + '</span>' +
+            '<span class="log-step">' + (entry.step || '') + '</span>' +
+            '<span class="log-message ' + levelClass + '">' + escapeHtml(entry.message) + '</span>';
+        
+        content.appendChild(line);
+        
+        // Auto-scroll to bottom (unless user has scrolled up)
+        var isScrolledToBottom = content.scrollHeight - content.clientHeight <= content.scrollTop + 10;
+        if (isScrolledToBottom) {
+            content.scrollTop = content.scrollHeight;
+        }
+        
+        // Limit DOM elements (remove old lines)
+        while (content.children.length > 100) {
+            content.removeChild(content.firstChild);
+        }
+    }
+    
+    function handleConnectionChange(state, type) {
+        var indicator = document.getElementById('log-status-indicator');
+        var statusText = document.getElementById('log-status-text');
+        
+        if (!indicator || !statusText) return;
+        
+        indicator.className = 'log-stream-status-indicator';
+        
+        switch (state) {
+            case 'connected':
+                indicator.classList.add('connected');
+                statusText.textContent = type === 'websocket' ? 'Live (WebSocket)' : 'Live (SSE)';
+                break;
+            case 'disconnected':
+                statusText.textContent = 'Disconnected';
+                break;
+            case 'reconnecting':
+                indicator.classList.add('reconnecting');
+                statusText.textContent = 'Reconnecting...';
+                break;
+        }
+    }
+    
+    function handleLogStreamError(type, error) {
+        console.error('[LogStream] Error (' + type + '):', error);
+        
+        var content = document.getElementById('log-stream-content');
+        if (!content) return;
+        
+        // Show error message
+        var errorDiv = document.createElement('div');
+        errorDiv.className = 'log-stream-error';
+        errorDiv.textContent = 'Connection error. Retrying...';
+        content.appendChild(errorDiv);
+    }
+    
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function clearLogStream() {
+        if (logStreamClient) {
+            logStreamClient.disconnect();
+            logStreamClient = null;
+        }
+        
+        var container = document.getElementById('log-stream-container');
+        var content = document.getElementById('log-stream-content');
+        
+        if (container) {
+            container.style.display = 'none';
+        }
+        
+        if (content) {
+            content.innerHTML = '<div class="log-stream-empty">Waiting for logs...</div>';
+        }
+    }
     
     // Auto-connect on page load
     document.addEventListener('DOMContentLoaded', connect);

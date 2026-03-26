@@ -27,21 +27,29 @@ type StageBroadcaster interface {
 	BroadcastSprintClosable(canClose bool)
 }
 
+// LogStreamManagerInterface defines the interface for log stream management.
+type LogStreamManagerInterface interface {
+	StartMonitoring(issueNumber int) error
+	StopMonitoring()
+	IsMonitoring() bool
+}
+
 type Orchestrator struct {
-	cfg         atomic.Pointer[config.Config]
-	worker      *Worker
-	gh          *github.Client
-	oc          *opencode.Client
-	brMgr       *git.BranchManager
-	store       *db.Store
-	hub         StageBroadcaster
-	router      *llm.Router
-	running     bool
-	paused      bool
-	processing  bool
-	currentTask *Task
-	manualNext  int
-	mu          sync.Mutex
+	cfg              atomic.Pointer[config.Config]
+	worker           *Worker
+	gh               *github.Client
+	oc               *opencode.Client
+	brMgr            *git.BranchManager
+	store            *db.Store
+	hub              StageBroadcaster
+	router           *llm.Router
+	running          bool
+	paused           bool
+	processing       bool
+	currentTask      *Task
+	manualNext       int
+	mu               sync.Mutex
+	logStreamManager LogStreamManagerInterface
 }
 
 func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client, brMgr *git.BranchManager, store *db.Store, hub StageBroadcaster, router *llm.Router) *Orchestrator {
@@ -149,6 +157,13 @@ func (o *Orchestrator) UpdateConfig(cfg *config.Config) {
 
 // Compile-time interface check: ensure Orchestrator implements ConfigAwareWorker.
 var _ config.ConfigAwareWorker = (*Orchestrator)(nil)
+
+// SetLogStreamManager sets the log stream manager for monitoring task logs.
+func (o *Orchestrator) SetLogStreamManager(lsm LogStreamManagerInterface) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.logStreamManager = lsm
+}
 
 func (o *Orchestrator) Run(ctx context.Context) error {
 	o.mu.Lock()
@@ -292,7 +307,19 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		o.currentTask = task
 		o.mu.Unlock()
 
+		// Start log monitoring for this issue
+		if o.logStreamManager != nil {
+			if err := o.logStreamManager.StartMonitoring(nextIssue.Number); err != nil {
+				log.Printf("[Orchestrator] Error starting log monitoring for #%d: %v", nextIssue.Number, err)
+			}
+		}
+
 		processErr := o.worker.Process(ctx, task)
+
+		// Stop log monitoring
+		if o.logStreamManager != nil {
+			o.logStreamManager.StopMonitoring()
+		}
 
 		o.mu.Lock()
 		o.processing = false
