@@ -345,6 +345,7 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
 </footer>
 <script>
 (function() {
+    console.log('[Layout] Script starting...');
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = wsProtocol + '//' + window.location.host + '/ws';
     let ws = null;
@@ -1147,6 +1148,7 @@ function triggerSync() {
             text.textContent = 'Sync';
         });
 }
+})();
 </script>
 </body>
 </html>{{end}}
