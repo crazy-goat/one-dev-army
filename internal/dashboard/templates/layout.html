@@ -118,8 +118,7 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
 
 /* Idle state */
 .worker-status-container.idle {
-  border-color: var(--muted);
-  border-style: dashed;
+  border: 2px dashed var(--muted);
 }
 .worker-status-container.idle .worker-status-text {
   color: var(--muted);
@@ -131,8 +130,7 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
 
 /* Running state */
 .worker-status-container.running {
-  border-color: var(--green);
-  border-style: solid;
+  border: 2px solid var(--green);
   box-shadow: 0 0 0 1px var(--green);
 }
 .worker-status-container.running .worker-status-text {
@@ -146,8 +144,7 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
 
 /* Paused state */
 .worker-status-container.paused {
-  border-color: var(--orange);
-  border-style: solid;
+  border: 2px solid var(--orange);
   box-shadow: 0 0 0 1px var(--orange);
 }
 .worker-status-container.paused .worker-status-text {
@@ -176,6 +173,73 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
 .worker-status-container:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Worker status tooltip */
+.worker-status-tooltip {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: .5rem;
+  padding: .75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.3);
+  min-width: 200px;
+  z-index: 1000;
+  opacity: 1;
+}
+
+.worker-status-tooltip-header {
+  font-weight: 600;
+  font-size: .9rem;
+  margin-bottom: .5rem;
+  padding-bottom: .5rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.worker-status-tooltip-content {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+.worker-status-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: .8rem;
+}
+
+.worker-status-label {
+  min-width: 60px;
+  color: var(--muted);
+}
+
+.worker-status-value {
+  font-weight: 500;
+  flex: 1;
+}
+
+.worker-status-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 1rem;
+  border: 6px solid transparent;
+  border-top-color: var(--surface);
+}
+
+.worker-status-tooltip::before {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: calc(1rem - 1px);
+  border: 7px solid transparent;
+  border-top-color: var(--border);
 }
 
 /* YOLO mode indicator */
@@ -423,7 +487,7 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
             stateLabel = 'Running';
             stateColor = 'var(--green)';
             ariaLabel = `Worker is running${workerStatus.step ? ', step: ' + workerStatus.step : ''}. Click to pause worker.`;
-        } else if (workerStatus.paused && workerStatus.active) {
+        } else if (workerStatus.paused) {
             container.classList.add('paused');
             stateLabel = 'Paused';
             stateColor = 'var(--orange)';
