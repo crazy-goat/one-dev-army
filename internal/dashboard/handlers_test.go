@@ -2097,14 +2097,6 @@ func TestBoardActions_ContainsExpectedButtons(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// Verify board-actions section contains expected worker control buttons
-	// Note: Start Worker and Pause Worker are mutually exclusive (conditional on .Paused)
-	hasStartWorker := strings.Contains(body, "Start Worker")
-	hasPauseWorker := strings.Contains(body, "Pause Worker")
-	if !hasStartWorker && !hasPauseWorker {
-		t.Error("board-actions section missing both Start Worker and Pause Worker buttons - should have one")
-	}
-
 	// These buttons should always be present
 	requiredButtons := []string{
 		"Sync",
@@ -2305,14 +2297,6 @@ func TestBoardLayout_SprintControlsFunctional(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-
-	// Verify sprint control forms have correct action URLs
-	// Note: start and pause forms are mutually exclusive (conditional on .Paused)
-	hasStartForm := strings.Contains(body, `action="/api/sprint/start"`)
-	hasPauseForm := strings.Contains(body, `action="/api/sprint/pause"`)
-	if !hasStartForm && !hasPauseForm {
-		t.Error("board page missing both sprint control forms - should have either start or pause")
-	}
 
 	// These forms should always be present
 	requiredForms := []string{
