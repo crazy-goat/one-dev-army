@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	v2api "github.com/crazy-goat/one-dev-army/internal/api/v2"
 	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/db"
 	"github.com/crazy-goat/one-dev-army/internal/git"
@@ -200,7 +201,11 @@ func parseTemplates() (map[string]*template.Template, error) {
 }
 
 func (s *Server) routes() {
-	s.mux.HandleFunc("GET /{$}", s.handleBoard)
+	// API v2 endpoints for React frontend
+	v2Handler := v2api.NewHandler(s.store, s.gh, s.orchestrator, s.rootDir, s.brMgr, s.configPropagator, &s.yoloOverride)
+	v2Handler.Register(s.mux)
+
+	s.mux.HandleFunc("GET /{$}", s.handleRoot)
 	s.mux.HandleFunc("GET /api/current-task", s.handleCurrentTask)
 	s.mux.HandleFunc("GET /api/sprint/status", s.handleSprintStatus)
 	s.mux.HandleFunc("POST /api/sprint/start", s.handleSprintStart)
@@ -341,4 +346,35 @@ func (s *Server) GetAvailableModelIDs() []string {
 // handleWebSocket handles WebSocket upgrade requests
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ServeWs(s.hub, w, r)
+}
+
+// handleRoot serves the root path with feature flag check.
+// If UseNewFrontend is enabled (config or cookie override), redirects to /new/.
+// Otherwise serves the old HTMX dashboard.
+func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
+	useNew := false
+
+	// Check config flag
+	if s.rootDir != "" {
+		if cfg, err := config.Load(s.rootDir); err == nil {
+			useNew = cfg.UseNewFrontend
+		}
+	}
+
+	// Cookie override takes precedence
+	if cookie, err := r.Cookie("oda_dashboard_version"); err == nil {
+		switch cookie.Value {
+		case "new":
+			useNew = true
+		case "old":
+			useNew = false
+		}
+	}
+
+	if useNew {
+		http.Redirect(w, r, "/new/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	s.handleBoard(w, r)
 }

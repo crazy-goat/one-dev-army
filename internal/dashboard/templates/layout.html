@@ -156,6 +156,9 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
     </div>
   </div>
   {{end}}
+  <div style="margin-left:auto;display:flex;align-items:center;gap:.75rem">
+    <a href="/new/" class="btn" style="font-size:.75rem;padding:.2rem .5rem">Try New Version</a>
+  </div>
   <div hx-get="/api/rate-limit" hx-trigger="load, every 30s" hx-swap="innerHTML">
     <span class="rate-limit-unknown">GitHub API: Loading...</span>
   </div>
