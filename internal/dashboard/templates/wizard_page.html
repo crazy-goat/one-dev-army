@@ -22,7 +22,10 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  overflow: hidden;
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+  display: flex;
+  flex-direction: column;
 }
 
 .wizard-page-header {
