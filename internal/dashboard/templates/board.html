@@ -70,6 +70,128 @@
 .processing-cta{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .8rem;font-size:.8rem;font-weight:500;color:var(--accent);background:var(--surface);border:1px solid var(--border);border-radius:6px;text-decoration:none;margin-top:.5rem;cursor:pointer;transition:background .15s,border-color .15s}
 .processing-cta:hover{background:var(--border);border-color:var(--accent)}
 .empty-state{color:var(--muted);font-size:.85rem;text-align:center;padding:2rem 1rem;font-style:italic}
+
+/* Log stream styles */
+.log-stream-container {
+    width: 100%;
+    margin-top: 0.75rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.log-stream-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 0.6rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.75rem;
+}
+
+.log-stream-status {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.log-stream-status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+}
+
+.log-stream-status-indicator.connected {
+    background: var(--green);
+    animation: pulse 2s infinite;
+}
+
+.log-stream-status-indicator.reconnecting {
+    background: var(--orange);
+    animation: pulse 1s infinite;
+}
+
+.log-stream-status-indicator.error {
+    background: var(--red);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.log-stream-content {
+    max-height: 200px;
+    overflow-y: auto;
+    font-family: 'SF Mono', Monaco, Inconsolata, 'Fira Code', monospace;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    padding: 0.5rem;
+}
+
+.log-stream-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.log-stream-content::-webkit-scrollbar-track {
+    background: var(--surface);
+}
+
+.log-stream-content::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+
+.log-line {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.15rem 0;
+    color: var(--text);
+}
+
+.log-line:hover {
+    background: var(--surface);
+}
+
+.log-timestamp {
+    color: var(--muted);
+    flex-shrink: 0;
+    min-width: 70px;
+}
+
+.log-step {
+    color: var(--accent);
+    flex-shrink: 0;
+    min-width: 80px;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+}
+
+.log-message {
+    flex: 1;
+    word-break: break-word;
+}
+
+.log-level-error { color: var(--red); }
+.log-level-warn { color: var(--orange); }
+.log-level-info { color: var(--text); }
+.log-level-debug { color: var(--muted); }
+
+.log-stream-empty {
+    color: var(--muted);
+    font-style: italic;
+    text-align: center;
+    padding: 1rem;
+}
+
+.log-stream-error {
+    color: var(--red);
+    text-align: center;
+    padding: 1rem;
+}
 </style>
 
 <div class="board-header">
@@ -327,7 +449,7 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
     </div>
 
     <!-- Processing Panel at the bottom of center column -->
-    <div class="processing-panel{{if not .CurrentTicket}} processing-panel-idle{{end}}" id="processing-panel" data-total-tickets="{{.TotalTickets}}">
+    <div class="processing-panel{{if not .CurrentTicket}} processing-panel-idle{{end}}" id="processing-panel" data-total-tickets="{{.TotalTickets}}" data-issue-number="{{if .CurrentTicket}}{{.CurrentTicket.Number}}{{else}}0{{end}}">
       <div class="processing-panel-content">
         <div class="processing-panel-title">Processing</div>
         {{if .CurrentTicket}}
@@ -350,6 +472,20 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
           <span class="processing-id">#{{.CurrentTicket.Number}}</span>
           <span class="processing-title">{{.CurrentTicket.Title}}</span>
         </a>
+        
+        <!-- Log Stream Container -->
+        <div class="log-stream-container" id="log-stream-container" style="display: none;">
+          <div class="log-stream-header">
+            <span>Live Logs</span>
+            <div class="log-stream-status">
+              <span class="log-stream-status-indicator" id="log-status-indicator"></span>
+              <span id="log-status-text">Connecting...</span>
+            </div>
+          </div>
+          <div class="log-stream-content" id="log-stream-content">
+            <div class="log-stream-empty">Waiting for logs...</div>
+          </div>
+        </div>
         {{else}}
         {{if eq .TotalTickets 0}}
         <div class="processing-empty-labels">

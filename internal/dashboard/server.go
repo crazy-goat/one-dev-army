@@ -44,6 +44,7 @@ type Server struct {
 	brMgr            *git.BranchManager
 	configPropagator *config.ConfigPropagator
 	yoloOverride     *bool // Runtime YOLO mode override (nil = use config file)
+	logStreamManager *LogStreamManager
 }
 
 func NewServer(port int, webPort int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string, brMgr *git.BranchManager, configPropagator *config.ConfigPropagator) (*Server, error) {
@@ -75,6 +76,7 @@ func NewServer(port int, webPort int, store *db.Store, pool func() []worker.Work
 		rootDir:          rootDir,
 		brMgr:            brMgr,
 		configPropagator: configPropagator,
+		logStreamManager: NewLogStreamManager(hub, rootDir, 0),
 	}
 
 	if s.wizardLLM == "" {
@@ -350,6 +352,11 @@ func LabelTooltip(label string) string {
 // Hub returns the WebSocket hub for broadcasting messages
 func (s *Server) Hub() *Hub {
 	return s.hub
+}
+
+// LogStreamManager returns the log stream manager instance
+func (s *Server) LogStreamManager() *LogStreamManager {
+	return s.logStreamManager
 }
 
 // GetAvailableModelIDs returns a list of available model IDs from the cache

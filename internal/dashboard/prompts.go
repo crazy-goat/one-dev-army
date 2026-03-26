@@ -16,11 +16,18 @@ type GeneratedIssue struct {
 	Complexity  string `json:"complexity"`
 }
 
+// Priority constants for issue generation
+const (
+	PriorityHigh   = "high"
+	PriorityMedium = "medium"
+	PriorityLow    = "low"
+)
+
 // PriorityLabel returns the GitHub label for the priority (e.g. "priority:high").
 // Returns empty string if the priority is not recognized.
 func (g GeneratedIssue) PriorityLabel() string {
 	switch strings.ToLower(g.Priority) {
-	case "high":
+	case PriorityHigh:
 		return "priority:high"
 	case "medium":
 		return "priority:medium"

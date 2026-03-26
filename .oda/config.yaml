@@ -8,8 +8,8 @@ opencode:
     url: http://localhost:5002
     web_port: 5001
 tools:
-    lint_cmd: ""
-    test_cmd: go test ./...
+    lint_cmd: golangci-lint run ./...
+    test_cmd: go test -race ./...
     e2e_cmd: ""
 pipeline:
     max_retries: 5
@@ -17,14 +17,14 @@ pipeline:
     check_timeout: 1800
 sprint:
     tasks_per_sprint: 10
-    auto_start: false
+    auto_start: true
 llm:
     setup:
         model: nexos-ai/Claude Haiku 4.5
     planning:
         model: nexos-ai/Kimi K2.5
     orchestration:
-        model: "openrouter/stepfun/step-3.5-flash:free"
+        model: openrouter/stepfun/step-3.5-flash:free
     code:
         model: nexos-ai/Kimi K2.5
     code-heavy:

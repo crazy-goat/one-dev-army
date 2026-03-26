@@ -413,6 +413,9 @@ func runServe(dir string, debugWebSocket bool) error {
 		return fmt.Errorf("creating dashboard server: %w", err)
 	}
 
+	// Wire up log stream manager to orchestrator
+	orchestrator.SetLogStreamManager(srv.LogStreamManager())
+
 	fmt.Printf("Dashboard: http://localhost:%d\n", cfg.Dashboard.Port)
 	fmt.Println("Press Ctrl+C to stop")
 	fmt.Println()
