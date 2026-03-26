@@ -301,7 +301,7 @@
 // Model data from server - use window object to avoid redeclaration errors on HTMX swaps
 window.availableModels = {{if .AvailableModels}}[
   {{range .AvailableModels}}
-  { id: {{.ID | json}}, providerID: {{.ProviderID | json}}, name: {{.Name | json}} },
+  { id: "{{.ID}}", providerID: "{{.ProviderID}}", name: "{{.Name}}" },
   {{end}}
 ]{{else}}[]{{end}};
 
