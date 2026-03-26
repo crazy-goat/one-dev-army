@@ -694,6 +694,67 @@ func (c *Client) CloseMilestone(number int) error {
 	return nil
 }
 
+// GetMostRecentlyClosedSprint returns the most recently closed milestone (sprint)
+// sorted by closed_at date (most recent first). Returns nil if no closed milestones exist.
+func (c *Client) GetMostRecentlyClosedSprint() (*Milestone, error) {
+	// List all milestones including closed ones
+	var milestones []Milestone
+	if err := c.ghNoRepoJSON(&milestones, "api", "repos/"+c.Repo+"/milestones", "-f", "state=closed"); err != nil {
+		return nil, fmt.Errorf("listing closed milestones: %w", err)
+	}
+
+	if len(milestones) == 0 {
+		return nil, nil
+	}
+
+	// Sort by due date, most recent first
+	sort.Slice(milestones, func(i, j int) bool {
+		return milestones[i].DueOn.After(milestones[j].DueOn)
+	})
+
+	return &milestones[0], nil
+}
+
+// GetClosedTicketsForSprint returns all closed (merged) tickets from a specific sprint/milestone
+// Only returns issues that were actually merged via PR, not just manually closed
+func (c *Client) GetClosedTicketsForSprint(milestoneNumber int) ([]Issue, error) {
+	// Use the existing ListIssuesWithPRStatus which already handles PR merge detection
+	// We need to get the milestone title first
+	var milestoneTitle string
+	milestones, err := c.ListMilestones()
+	if err != nil {
+		return nil, fmt.Errorf("listing milestones: %w", err)
+	}
+
+	for _, m := range milestones {
+		if m.Number == milestoneNumber {
+			milestoneTitle = m.Title
+			break
+		}
+	}
+
+	if milestoneTitle == "" {
+		return nil, fmt.Errorf("milestone %d not found", milestoneNumber)
+	}
+
+	// Get all issues for this milestone with PR status
+	allIssues, err := c.ListIssuesWithPRStatus(milestoneTitle)
+	if err != nil {
+		return nil, fmt.Errorf("listing issues for sprint: %w", err)
+	}
+
+	// Filter only closed issues that were merged via PR
+	var closedTickets []Issue
+	for _, issue := range allIssues {
+		if issue.State == "closed" && issue.PRMerged {
+			closedTickets = append(closedTickets, issue)
+		}
+	}
+
+	log.Printf("[GitHub] Found %d closed/merged tickets in sprint %s", len(closedTickets), milestoneTitle)
+	return closedTickets, nil
+}
+
 func parseJSON(data []byte, v any) error {
 	if err := json.Unmarshal(data, v); err != nil {
 		return fmt.Errorf("parsing JSON: %w", err)

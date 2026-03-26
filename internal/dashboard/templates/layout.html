@@ -382,7 +382,7 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
                 
                 // Handle sprint closable updates
                 if (msg.type === 'can_close_sprint' && msg.payload) {
-                    const payload = JSON.parse(msg.payload);
+                    const payload = msg.payload;
                     const closeForm = document.getElementById('close-sprint-form');
                     if (closeForm) {
                         closeForm.style.display = payload.can_close ? 'inline' : 'none';
@@ -391,7 +391,7 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
                 
                 // Handle worker status updates
                 if (msg.type === 'worker_update' && msg.payload) {
-                    const payload = JSON.parse(msg.payload);
+                    const payload = msg.payload;
                     handleWorkerUpdate({
                         active: payload.status === 'active',
                         paused: false,
@@ -774,7 +774,7 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
             this.ws.onmessage = function(event) {
                 var msg = JSON.parse(event.data);
                 if (msg.type === 'log_stream') {
-                    var payload = JSON.parse(msg.payload);
+                    var payload = msg.payload;
                     self.handleLogEntry(payload);
                 }
             };

@@ -84,7 +84,13 @@ func main() {
 				os.Exit(1)
 			}
 			return
-		case "--help", "-h", "help":
+		case "sprint":
+			if err := runSprint(args[1:], absDir); err != nil {
+				fmt.Fprintf(os.Stderr, "error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "--help", "-h", "help": //nolint:goconst // multiple uses of help flag strings
 			printUsage()
 			return
 		default:
@@ -108,6 +114,7 @@ func printUsage() {
 	fmt.Println("  (none)    Start the ODA agent and dashboard")
 	fmt.Println("  init      Initialize a new ODA project in the current directory")
 	fmt.Println("  issue     Manage GitHub issues (create, list, etc.)")
+	fmt.Println("  sprint    Manage sprints (cleanup, etc.)")
 	fmt.Println("  help      Show this help message")
 	fmt.Println()
 	fmt.Println("Options:")
@@ -145,6 +152,22 @@ func runIssue(args []string, dir string) error {
 	defer func() { _ = store.Close() }()
 
 	return cmd.IssueCommand(args, gh, cfg.Dashboard.Port, store)
+}
+
+func runSprint(args []string, dir string) error {
+	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
+		cmd.PrintSprintUsage()
+		return nil
+	}
+
+	cfg, err := config.Load(dir)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	gh := github.NewClient(cfg.GitHub.Repo)
+
+	return cmd.SprintCommand(args, gh, dir)
 }
 
 func runServe(dir string, debugWebSocket bool) error {
