@@ -5676,7 +5676,7 @@ func TestBoardTemplate_ProcessingPanel_LayoutOrder(t *testing.T) {
 
 	output := buf.String()
 
-	// Verify that processing-ticket appears before processing-labels in the HTML
+	// Verify that processing-labels appears before processing-ticket in the HTML (badges at top)
 	labelsIdx := strings.Index(output, `class="processing-labels"`)
 	ticketIdx := strings.Index(output, `class="processing-ticket"`)
 
@@ -5688,8 +5688,8 @@ func TestBoardTemplate_ProcessingPanel_LayoutOrder(t *testing.T) {
 		t.Error("template should contain processing-ticket element")
 	}
 
-	if labelsIdx != -1 && ticketIdx != -1 && ticketIdx > labelsIdx {
-		t.Error("processing-ticket should appear BEFORE processing-labels in the HTML structure")
+	if labelsIdx != -1 && ticketIdx != -1 && labelsIdx > ticketIdx {
+		t.Error("processing-labels should appear BEFORE processing-ticket in the HTML structure (badges at top)")
 	}
 
 	// Verify new CSS classes are present
