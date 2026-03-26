@@ -2701,6 +2701,60 @@ func (s *Server) handleWorkerStatus(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
+// handleWorkerToggle toggles the worker state between running and paused
+func (s *Server) handleWorkerToggle(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if s.orchestrator == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   "orchestrator not configured",
+			"paused":  true,
+		}); err != nil {
+			log.Printf("[Dashboard] Error encoding JSON: %v", err)
+		}
+		return
+	}
+
+	isPaused := s.orchestrator.IsPaused()
+
+	if isPaused {
+		s.orchestrator.Start()
+		log.Println("[Dashboard] Worker started via toggle")
+	} else {
+		s.orchestrator.Pause()
+		log.Println("[Dashboard] Worker paused via toggle")
+	}
+
+	newPaused := s.orchestrator.IsPaused()
+	isProcessing := s.orchestrator.IsProcessing()
+
+	if s.hub != nil {
+		status := "paused"
+		if !newPaused {
+			status = "active"
+		}
+		s.hub.BroadcastWorkerUpdate("worker-1", status, 0, "", "", 0)
+	}
+
+	statusMsg := "started"
+	if newPaused {
+		statusMsg = "paused"
+	}
+
+	response := map[string]any{
+		"success": true,
+		"paused":  newPaused,
+		"active":  isProcessing,
+		"message": "Worker " + statusMsg,
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("[Dashboard] Error encoding JSON: %v", err)
+	}
+}
+
 // handleYoloToggle toggles the YOLO mode setting and returns an HTMX fragment
 func (s *Server) handleYoloToggle(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

@@ -269,6 +269,9 @@ func (s *Server) routes() {
 	// Worker status endpoint
 	s.mux.HandleFunc("GET /api/worker-status", s.handleWorkerStatus)
 
+	// Worker toggle endpoint
+	s.mux.HandleFunc("POST /api/worker/toggle", s.handleWorkerToggle)
+
 	// Settings endpoints
 	s.mux.HandleFunc("GET /settings", s.handleSettings)
 	s.mux.HandleFunc("POST /settings", s.handleSaveSettings)

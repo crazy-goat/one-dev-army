@@ -84,6 +84,13 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
 .worker-status-tooltip::after{content:'';position:absolute;top:100%;right:1rem;border:6px solid transparent;border-top-color:var(--surface)}
 .worker-status-tooltip::before{content:'';position:absolute;top:100%;right:calc(1rem - 1px);border:7px solid transparent;border-top-color:var(--border)}
 
+/* Clickable worker status */
+.worker-status-container.clickable{cursor:pointer;transition:background-color .2s,border-color .2s,transform .1s}
+.worker-status-container.clickable:hover{background:var(--border);border-color:var(--accent)}
+.worker-status-container.clickable:active{transform:scale(.95)}
+.worker-status-container.running{border-color:var(--green);box-shadow:0 0 0 1px var(--green)}
+.worker-status-container.paused{border-color:var(--orange);box-shadow:0 0 0 1px var(--orange)}
+
 /* YOLO mode indicator */
 .yolo-mode-container{position:relative;display:inline-flex;align-items:center;gap:.5rem;padding:.25rem .5rem;border-radius:4px;background:var(--red);border:1px solid var(--red);color:#fff;font-weight:600;font-size:.75rem;margin-right:.75rem;animation:yolo-pulse 2s ease-in-out infinite;cursor:pointer;transition:opacity .2s}
 .yolo-mode-container:hover{opacity:.8}
@@ -127,7 +134,12 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
     </button>
   </div>
   <div class="footer-right" style="display:flex;align-items:center;gap:.75rem">
-  <div class="worker-status-container" id="worker-status-container">
+  <div class="worker-status-container clickable" id="worker-status-container"
+       hx-post="/api/worker/toggle"
+       hx-swap="none"
+       hx-trigger="click"
+       hx-on::before-request="toggleWorkerOptimistic()"
+       hx-on::after-request="toggleWorkerComplete(event)">
     <div class="worker-status-dot" id="worker-status-dot"></div>
     <span style="font-size:.75rem;color:var(--muted)">Worker</span>
     <div class="worker-status-tooltip" id="worker-status-tooltip">
@@ -293,19 +305,23 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
     
     function updateWorkerStatusUI() {
         const dot = document.getElementById('worker-status-dot');
+        const container = document.getElementById('worker-status-container');
         const stateEl = document.getElementById('worker-tooltip-state');
         const stepEl = document.getElementById('worker-tooltip-step');
         const issueEl = document.getElementById('worker-tooltip-issue');
         const timeEl = document.getElementById('worker-tooltip-time');
         
-        if (!dot) return;
+        if (!dot || !container) return;
         
-        // Update dot appearance
         dot.classList.remove('active', 'paused');
+        container.classList.remove('running', 'paused');
+        
         if (workerStatus.active && !workerStatus.paused) {
             dot.classList.add('active');
+            container.classList.add('running');
         } else if (workerStatus.paused && workerStatus.active) {
             dot.classList.add('paused');
+            container.classList.add('paused');
         }
         
         // Update tooltip content
@@ -409,6 +425,56 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
             .then(response => response.json())
             .then(data => handleWorkerUpdate(data))
             .catch(err => console.error('[WorkerStatus] Error fetching status:', err));
+    }
+    
+    // Worker toggle functionality
+    function toggleWorkerOptimistic() {
+        const container = document.getElementById('worker-status-container');
+        const dot = document.getElementById('worker-status-dot');
+        
+        if (workerStatus.paused) {
+            container.classList.remove('paused');
+            container.classList.add('running');
+            dot.classList.remove('paused');
+            dot.classList.add('active');
+        } else {
+            container.classList.remove('running');
+            container.classList.add('paused');
+            dot.classList.remove('active');
+            dot.classList.add('paused');
+        }
+    }
+    
+    function toggleWorkerComplete(event) {
+        if (event.detail.successful) {
+            try {
+                const response = JSON.parse(event.detail.xhr.response);
+                if (response.success) {
+                    workerStatus.paused = response.paused;
+                    workerStatus.active = response.active;
+                    updateWorkerStatusUI();
+                    refreshBoard();
+                } else {
+                    handleToggleError(response.error || 'Unknown error');
+                }
+            } catch (e) {
+                console.error('[WorkerToggle] Error parsing response:', e);
+                handleToggleError('Invalid response');
+            }
+        } else {
+            handleToggleError('Network error');
+        }
+    }
+    
+    function handleToggleError(errorMsg) {
+        console.error('[WorkerToggle] Error:', errorMsg);
+        fetchWorkerStatus();
+        const container = document.getElementById('worker-status-container');
+        const originalBorder = container.style.borderColor;
+        container.style.borderColor = 'var(--red)';
+        setTimeout(() => {
+            container.style.borderColor = originalBorder;
+        }, 2000);
     }
     
     // Fetch initial status on page load
