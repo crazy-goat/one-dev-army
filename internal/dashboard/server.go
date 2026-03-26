@@ -256,6 +256,9 @@ func (s *Server) routes() {
 
 	// YOLO mode toggle endpoint
 	s.mux.HandleFunc("POST /api/yolo/toggle", s.handleYoloToggle)
+
+	// React SPA routes
+	s.registerReactRoutes()
 }
 
 func (s *Server) Start() error {
