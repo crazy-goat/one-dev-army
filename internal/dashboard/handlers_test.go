@@ -4170,6 +4170,77 @@ func TestHandleSettings_WithModels(t *testing.T) {
 	}
 }
 
+// TestSettings_ModelIDRendering verifies that model IDs are rendered without extra quotes
+// This test addresses issue #450 where the json template function was causing double-escaping
+func TestSettings_ModelIDRendering(t *testing.T) {
+	// Create a temporary directory for config
+	tmpDir := t.TempDir()
+
+	// Create .oda directory
+	tmpOdaDir := filepath.Join(tmpDir, ".oda")
+	if err := os.MkdirAll(tmpOdaDir, 0755); err != nil {
+		t.Fatalf("failed to create .oda directory: %v", err)
+	}
+
+	// Create a minimal config file
+	configPath := filepath.Join(tmpOdaDir, "config.yaml")
+	configContent := `llm:
+  code:
+    model: test-provider/test-model
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Create server with templates and mock models cache
+	srv := createTestServerWithTemplates(t)
+	srv.rootDir = tmpDir
+	// Use a model ID with special characters that was causing the bug
+	srv.modelsCache = []opencode.ProviderModel{
+		{ID: "openrouter/stepfun/step-3.5-flash:free", ProviderID: "openrouter", Name: "Step 3.5 Flash"},
+	}
+	defer srv.wizardStore.Stop()
+
+	// Test GET /settings
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleSettings(rec, req)
+
+	// Should return 200 OK
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	// Verify response contains the model ID without extra quotes
+	body := rec.Body.String()
+
+	// The model ID should appear with proper escaping but WITHOUT extra quotes around the whole ID
+	// Correct: "openrouter\/stepfun\/step-3.5-flash:free" (slashes escaped for JS)
+	// Bug #450 would produce: "\"openrouter\\/stepfun\\/step-3.5-flash:free\"" (extra quotes)
+	expectedModelID := `"openrouter\/stepfun\/step-3.5-flash:free"`
+	if !strings.Contains(body, expectedModelID) {
+		// Find where the model ID appears and show context
+		idx := strings.Index(body, "openrouter")
+		if idx == -1 {
+			t.Fatalf("response body does not contain expected model ID at all")
+		}
+		start := idx - 20
+		start = max(start, 0)
+		end := idx + 80
+		end = min(end, len(body))
+		t.Errorf("response should contain model ID with proper escaping\nexpected: %s\nactual context: %s",
+			expectedModelID, body[start:end])
+	}
+
+	// Make sure we don't have the buggy pattern with escaped quotes (the actual bug #450)
+	// The buggy pattern would be: { id: "\"openrouter...\"" (quotes inside quotes)
+	buggyPattern := `"\\"openrouter`
+	if strings.Contains(body, buggyPattern) {
+		t.Error("response contains model ID with extra escaped quotes (bug #450)")
+	}
+}
+
 // TestHandleSaveSettings_InvalidModel verifies that invalid models are saved as-is (fallback happens at runtime)
 func TestHandleSaveSettings_InvalidModel(t *testing.T) {
 	// Create a temporary directory for config
