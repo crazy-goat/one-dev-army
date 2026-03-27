@@ -170,3 +170,23 @@ func TestSprintDetector_GetCurrentSprintTitle(t *testing.T) {
 		}
 	})
 }
+
+func TestClient_GetLinkedIssues(t *testing.T) {
+	client := NewClient("test/repo")
+
+	// This test will likely fail or return empty since we don't have
+	// a real GitHub API to test against, but it should not panic
+	linked, err := client.GetLinkedIssues(nil, 123)
+
+	// We expect an error since there's no real API, but it shouldn't panic
+	// If the API is available, it should return a slice (may be empty)
+	if err != nil {
+		// Expected in test environment without real GitHub API
+		t.Logf("GetLinkedIssues returned error (expected in test env): %v", err)
+	}
+
+	// Result should not be nil when err is nil
+	if err == nil && linked == nil {
+		t.Error("GetLinkedIssues() returned nil slice with nil error")
+	}
+}

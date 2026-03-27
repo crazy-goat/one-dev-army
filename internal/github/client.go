@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -151,4 +153,126 @@ func (c *Client) GetLastTag(ctx context.Context) (*TagInfo, error) {
 		Tag: tags[0].Name,
 		SHA: tags[0].Commit.SHA,
 	}, nil
+}
+
+// LinkedIssue represents a linked issue relationship
+type LinkedIssue struct {
+	Number       int    `json:"number"`
+	Relationship string `json:"relationship"` // blocked_by, blocks, relates_to
+}
+
+// GetLinkedIssues fetches linked issues using GitHub GraphQL API
+// Falls back to parsing issue body if GraphQL not available
+func (c *Client) GetLinkedIssues(ctx context.Context, issueNumber int) ([]LinkedIssue, error) {
+	// Try GraphQL API first (GitHub Linked Issues)
+	linked, err := c.getLinkedIssuesGraphQL(ctx, issueNumber)
+	if err == nil {
+		return linked, nil
+	}
+
+	// Fallback: parse issue body for #123 references
+	return c.getLinkedIssuesFromBody(ctx, issueNumber)
+}
+
+func (c *Client) getLinkedIssuesGraphQL(ctx context.Context, issueNumber int) ([]LinkedIssue, error) {
+	// Parse owner and repo from c.Repo
+	parts := strings.Split(c.Repo, "/")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid repo format: %s", c.Repo)
+	}
+	owner, repo := parts[0], parts[1]
+
+	// GraphQL query for linked issues
+	query := fmt.Sprintf(`{
+		repository(owner: "%s", name: "%s") {
+			issue(number: %d) {
+				trackedIssues(first: 100) {
+					nodes {
+						number
+					}
+				}
+				trackedInIssues(first: 100) {
+					nodes {
+						number
+					}
+				}
+			}
+		}
+	}`, owner, repo, issueNumber)
+
+	// Execute GraphQL query using gh api graphql
+	output, err := c.gh("api", "graphql", "-f", "query="+query)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse response
+	var result struct {
+		Data struct {
+			Repository struct {
+				Issue struct {
+					TrackedIssues struct {
+						Nodes []struct {
+							Number int `json:"number"`
+						} `json:"nodes"`
+					} `json:"trackedIssues"`
+					TrackedInIssues struct {
+						Nodes []struct {
+							Number int `json:"number"`
+						} `json:"nodes"`
+					} `json:"trackedInIssues"`
+				} `json:"issue"`
+			} `json:"repository"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(output, &result); err != nil {
+		return nil, err
+	}
+
+	var linked []LinkedIssue
+	for _, node := range result.Data.Repository.Issue.TrackedIssues.Nodes {
+		linked = append(linked, LinkedIssue{
+			Number:       node.Number,
+			Relationship: "blocks",
+		})
+	}
+	for _, node := range result.Data.Repository.Issue.TrackedInIssues.Nodes {
+		linked = append(linked, LinkedIssue{
+			Number:       node.Number,
+			Relationship: "blocked_by",
+		})
+	}
+
+	return linked, nil
+}
+
+func (c *Client) getLinkedIssuesFromBody(ctx context.Context, issueNumber int) ([]LinkedIssue, error) {
+	// Get issue details
+	issue, err := c.GetIssue(issueNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse body for #123 references
+	re := regexp.MustCompile(`#(\d+)`)
+	matches := re.FindAllStringSubmatch(issue.Body, -1)
+
+	var linked []LinkedIssue
+	seen := make(map[int]bool)
+
+	for _, match := range matches {
+		if len(match) > 1 {
+			num, _ := strconv.Atoi(match[1])
+			if num > 0 && num != issueNumber && !seen[num] {
+				seen[num] = true
+				linked = append(linked, LinkedIssue{
+					Number:       num,
+					Relationship: "relates_to",
+				})
+			}
+		}
+	}
+
+	return linked, nil
 }
