@@ -5319,9 +5319,9 @@ func TestHandleBoard_SprintNameInHeader(t *testing.T) {
 
 	output := buf.String()
 
-	// Verify the h1 contains the sprint name
-	if !strings.Contains(output, "<h1>Sprint 2026-03-25 07:54</h1>") {
-		t.Errorf("expected h1 to contain sprint name 'Sprint 2026-03-25 07:54', got: %s", output)
+	// Verify the h1 contains just "Sprint" (without timestamp)
+	if !strings.Contains(output, "<h1>Sprint</h1>") {
+		t.Errorf("expected h1 to contain 'Sprint' (without timestamp), got: %s", output)
 	}
 
 	// Verify the old subtitle p element is NOT present
