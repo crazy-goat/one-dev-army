@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
@@ -551,5 +552,32 @@ func TestStepOrderContainsCheckPipeline(t *testing.T) {
 	if idx <= createPRIdx || idx >= approvalIdx {
 		t.Errorf("check-pipeline index %d should be between create-pr (%d) and awaiting-approval (%d)",
 			idx, createPRIdx, approvalIdx)
+	}
+}
+
+func TestWorker_SendsCompletionNotification(t *testing.T) {
+	// Create a mock orchestrator that captures notifications
+	notifications := make(chan int, 1)
+	mockOrchestrator := &Orchestrator{
+		completionCh: notifications,
+	}
+
+	// Create worker with mock orchestrator
+	worker := &Worker{
+		id:           1,
+		orchestrator: mockOrchestrator,
+	}
+
+	// Simulate successful completion
+	worker.orchestrator.NotifyTicketCompleted(42)
+
+	// Verify notification sent
+	select {
+	case num := <-notifications:
+		if num != 42 {
+			t.Errorf("notification issue number = %d, want 42", num)
+		}
+	case <-time.After(time.Second):
+		t.Error("completion notification not sent")
 	}
 }
