@@ -37,11 +37,11 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!settings) return
     setModels({
-      setup: settings.config.setup.model,
-      planning: settings.config.planning.model,
-      orchestration: settings.config.orchestration.model,
-      code: settings.config.code.model,
-      code_heavy: settings.config.code_heavy.model,
+      setup: settings.config.Setup.Model,
+      planning: settings.config.Planning.Model,
+      orchestration: settings.config.Orchestration.Model,
+      code: settings.config.Code.Model,
+      code_heavy: settings.config.CodeHeavy.Model,
     })
     setYoloMode(settings.yolo_mode)
     setSprintAutoStart(settings.sprint_auto_start)

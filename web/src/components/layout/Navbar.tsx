@@ -43,7 +43,7 @@ export function Navbar() {
         {/* Left: Logo + Navigation */}
         <div className="flex items-center gap-6">
           <Link to="/" className="text-xl font-bold text-white">
-            \u2694\uFE0F ODA
+            ⚔️ ODA
           </Link>
           <div className="flex gap-1">
             {NAV_LINKS.map(({ path, label }) => (
@@ -66,7 +66,7 @@ export function Navbar() {
         <div className="flex items-center gap-4">
           {board?.sprint_name && (
             <span className="text-sm text-gray-400">
-              \uD83C\uDFC3 {board.sprint_name}
+              🏃 {board.sprint_name}
             </span>
           )}
 
@@ -127,7 +127,7 @@ export function Navbar() {
               }`}
               disabled={startSprint.isPending || pauseSprint.isPending}
             >
-              {board.paused ? '\u25B6 Start' : '\u23F8 Pause'}
+              {board.paused ? '▶ Start' : '⏸ Pause'}
             </button>
           )}
           <button
@@ -136,7 +136,7 @@ export function Navbar() {
             className="px-3 py-1.5 rounded text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
             disabled={triggerSync.isPending}
           >
-            \uD83D\uDD04 Sync
+            🔄 Sync
           </button>
           {board && board.opencode_port > 0 && (
             <button
@@ -144,7 +144,7 @@ export function Navbar() {
               onClick={() => window.open(`http://localhost:${board.opencode_port}`, '_blank')}
               className="px-3 py-1.5 rounded text-sm font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors"
             >
-              \uD83D\uDCAC Chat
+              💬 Chat
             </button>
           )}
         </div>

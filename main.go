@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -151,12 +153,23 @@ func runIssue(args []string, dir string) error {
 }
 
 func runServe(dir string, debugWebSocket bool) error {
-	const (
-		opencodeURL  = "http://localhost:5002"
-		opencodePort = 5002
-	)
+	// Load config first to get opencode URL from configuration
+	cfg, err := config.Load(dir)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
 
-	var err error
+	// Parse port from opencode URL
+	opencodeURL := cfg.OpenCode.URL
+	parsedURL, err := url.Parse(opencodeURL)
+	if err != nil {
+		return fmt.Errorf("parsing opencode URL: %w", err)
+	}
+	opencodePort, err := strconv.Atoi(parsedURL.Port())
+	if err != nil {
+		return fmt.Errorf("parsing opencode port from URL %s: %w", opencodeURL, err)
+	}
+
 	var spawnedServer *opencode.Server
 
 	// Deploy embedded skills to .opencode/skills/
@@ -240,11 +253,6 @@ func runServe(dir string, debugWebSocket bool) error {
 		return errors.New("preflight checks failed")
 	}
 	fmt.Println()
-
-	cfg, err := config.Load(dir)
-	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
-	}
 
 	// Create ReloadManager for dynamic config reloading
 	reloadManager := config.NewReloadManager(dir)

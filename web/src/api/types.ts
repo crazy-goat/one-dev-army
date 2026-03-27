@@ -121,11 +121,11 @@ export interface Settings {
 }
 
 export interface LLMConfig {
-  setup: ModelConfig
-  planning: ModelConfig
-  orchestration: ModelConfig
-  code: ModelConfig
-  code_heavy: ModelConfig
+  Setup: ModelConfig
+  Planning: ModelConfig
+  Orchestration: ModelConfig
+  Code: ModelConfig
+  CodeHeavy: ModelConfig
 }
 
 export interface ModelConfig {

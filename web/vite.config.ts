@@ -17,9 +17,26 @@ export default defineConfig({
     },
   },
   server: {
+    port: 5173,
     proxy: {
-      '/api': 'http://localhost:3000',
-      '/ws': { target: 'ws://localhost:3000', ws: true },
+      '/api': {
+        target: 'http://localhost:7000',
+        rewrite: (path) => {
+          // Map /api/v2/settings to /api/v2/settings (no change needed)
+          return path
+        },
+      },
+      '/ws': { target: 'ws://localhost:7000', ws: true },
+      '/task': 'http://localhost:7000',
+      '/wizard': 'http://localhost:7000',
+      '/settings': 'http://localhost:7000',
+      '/sprint': 'http://localhost:7000',
+      '/decline': 'http://localhost:7000',
+      '/approve-merge': 'http://localhost:7000',
+      '/block': 'http://localhost:7000',
+      '/unblock': 'http://localhost:7000',
+      '/sync': 'http://localhost:7000',
+      '/plan-sprint': 'http://localhost:7000',
     },
   },
 })
