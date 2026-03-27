@@ -26,6 +26,24 @@
 .stream-box{background:#1a1a2e;border:1px solid var(--border);border-radius:4px;padding:.75rem;font-size:.85rem;white-space:pre-wrap;word-break:break-word;min-height:100px;max-height:500px;overflow-y:auto;font-family:monospace;color:#e0e0e0}
 .stream-cursor{display:inline-block;width:8px;height:1em;background:var(--accent);animation:blink 1s step-end infinite}
 @keyframes blink{50%{opacity:0}}
+.restart-actions{margin:1rem 0;padding:1rem;background:var(--surface);border:1px solid var(--border);border-radius:8px}
+.restart-actions h3{margin:0 0 .75rem 0;font-size:1rem;color:var(--text)}
+.restart-actions .btn-group{display:flex;gap:.75rem;flex-wrap:wrap}
+.restart-actions .btn{padding:.5rem 1rem;border:none;border-radius:4px;font-size:.9rem;cursor:pointer;transition:opacity .2s;display:inline-flex;align-items:center;gap:.5rem}
+.restart-actions .btn:hover:not(:disabled){opacity:.8}
+.restart-actions .btn:disabled{opacity:.5;cursor:not-allowed}
+.restart-actions .btn-secondary{background:var(--accent);color:#fff}
+.restart-actions .btn-danger{background:#e74c3c;color:#fff}
+.restart-actions .spinner{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin 1s linear infinite;display:none}
+.restart-actions .btn.loading .spinner{display:inline-block}
+.restart-actions .btn.loading .btn-text{display:none}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.restart-actions .help-text{margin:.5rem 0 0 0;font-size:.85rem;color:var(--muted)}
+#notification-container{position:fixed;top:1rem;right:1rem;z-index:1000}
+.notification{padding:1rem;margin-bottom:.5rem;border-radius:4px;color:#fff;font-size:.9rem;animation:slideIn .3s ease-out}
+.notification.success{background:var(--green)}
+.notification.error{background:#e74c3c}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
 </style>
 
 <div class="task-header">
@@ -35,6 +53,43 @@
   </div>
   {{if .IsActive}}<span class="task-status active">{{.Status}}</span>{{end}}
 </div>
+
+<!-- Restart Actions -->
+<div class="restart-actions">
+  <h3>Task Actions</h3>
+  <div class="btn-group">
+    <button 
+      class="btn btn-secondary"
+      hx-post="/api/task/{{.IssueNumber}}/restart-stage"
+      hx-swap="none"
+      hx-confirm="Are you sure you want to restart the current stage? This will re-run the current step without losing previous progress."
+      onclick="showRestartLoading(this)"
+      {{if .IsActive}}disabled{{end}}>
+      <span class="spinner"></span>
+      <span class="btn-text">Restart Current Stage</span>
+    </button>
+    
+    <button 
+      class="btn btn-danger"
+      hx-post="/api/task/{{.IssueNumber}}/restart-full"
+      hx-swap="none"
+      hx-confirm="WARNING: This will restart the task from the beginning and ALL progress will be lost. Are you sure?"
+      onclick="showRestartLoading(this)"
+      {{if .IsActive}}disabled{{end}}>
+      <span class="spinner"></span>
+      <span class="btn-text">Restart From Beginning</span>
+    </button>
+  </div>
+  
+  {{if .IsActive}}
+  <p class="help-text">
+    Restart options are disabled while the task is actively being processed.
+  </p>
+  {{end}}
+</div>
+
+<!-- Notification Container -->
+<div id="notification-container"></div>
 
 <div class="steps">
   {{range .Steps}}
@@ -193,4 +248,59 @@
 setTimeout(function(){ location.reload(); }, 5000);
 </script>
 {{end}}
+
+<script>
+// Handle restart button loading state
+function showRestartLoading(btn) {
+  btn.classList.add('loading');
+  btn.disabled = true;
+}
+
+// Handle HTMX events for restart actions
+document.body.addEventListener('htmx:afterRequest', function(evt) {
+  const btn = evt.detail.elt;
+  if (btn.classList.contains('btn')) {
+    // Reset button state
+    btn.classList.remove('loading');
+    btn.disabled = false;
+    
+    // Show notification
+    const response = evt.detail.xhr;
+    let data;
+    try {
+      data = JSON.parse(response.responseText);
+    } catch (e) {
+      data = { success: false, error: 'Invalid response' };
+    }
+    
+    if (response.status >= 200 && response.status < 300 && data.success) {
+      showNotification(data.message || 'Restart successful', 'success');
+      // Reload page after short delay to show updated state
+      setTimeout(function() { location.reload(); }, 1500);
+    } else {
+      showNotification(data.error || 'Restart failed', 'error');
+    }
+  }
+});
+
+// Show notification
+function showNotification(message, type) {
+  const container = document.getElementById('notification-container');
+  const notification = document.createElement('div');
+  notification.className = 'notification ' + type;
+  notification.textContent = message;
+  
+  container.appendChild(notification);
+  
+  // Remove after 5 seconds
+  setTimeout(function() {
+    notification.style.opacity = '0';
+    notification.style.transform = 'translateX(100%)';
+    notification.style.transition = 'all 0.3s ease-out';
+    setTimeout(function() {
+      notification.remove();
+    }, 300);
+  }, 5000);
+}
+</script>
 {{end}}

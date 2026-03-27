@@ -21,6 +21,22 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/prompts"
 )
 
+// Stage label constants to avoid string duplication (goconst)
+const (
+	stageLabelAnalysis         = "stage:analysis"
+	stageLabelCoding           = "stage:coding"
+	stageLabelCodeReview       = "stage:code-review"
+	stageLabelCreatePR         = "stage:create-pr"
+	stageLabelCheckPipeline    = "stage:check-pipeline"
+	stageLabelAwaitingApproval = "stage:awaiting-approval"
+)
+
+// Step name constants to avoid string duplication (goconst)
+const (
+	stepNameCheckPipeline    = "check-pipeline"
+	stepNameAwaitingApproval = "awaiting-approval"
+)
+
 type StageBroadcaster interface {
 	BroadcastIssueUpdate(issue github.Issue)
 	BroadcastWorkerUpdate(workerID, status string, taskID int, taskTitle, stage string, elapsedSeconds int)
@@ -539,7 +555,7 @@ func getStageLabel(issue github.Issue) string {
 // These stages indicate the worker was interrupted (e.g. ODA restart) and should resume.
 func isWorkerStage(stage string) bool {
 	switch stage {
-	case "stage:analysis", "stage:coding", "stage:code-review", "stage:create-pr", "stage:check-pipeline", "stage:awaiting-approval":
+	case stageLabelAnalysis, stageLabelCoding, stageLabelCodeReview, stageLabelCreatePR, stageLabelCheckPipeline, stageLabelAwaitingApproval:
 		return true
 	default:
 		return false
@@ -578,7 +594,7 @@ func (o *Orchestrator) HandleWorkerEvent(event WorkerEvent) {
 
 	// Clear task steps when retrying from check-pipeline failure to coding
 	// This ensures worker starts from implement step, not from check-pipeline
-	if event.Stage == "check-pipeline" && event.Status == EventFailed && nextStage == github.StageCode {
+	if event.Stage == stepNameCheckPipeline && event.Status == EventFailed && nextStage == github.StageCode {
 		if o.store != nil {
 			log.Printf("[Orchestrator] Clearing task steps for #%d after pipeline failure - will retry from implement", event.IssueNumber)
 			if err := o.store.DeleteStepsFrom(event.IssueNumber, "implement"); err != nil {
@@ -617,14 +633,14 @@ func (*Orchestrator) decideNextStage(event WorkerEvent) (github.Stage, github.St
 		if event.Status == EventSuccess {
 			return github.StageCheckPipeline, github.ReasonWorkerCompletedCreatePR, true
 		}
-	case "check-pipeline":
+	case stepNameCheckPipeline:
 		if event.Status == EventSuccess {
 			return github.StageApprove, github.ReasonWorkerCompletedCheckPipeline, true
 		}
 		if event.Status == EventFailed {
 			return github.StageCode, github.ReasonCheckPipelineFailed, true
 		}
-	case "awaiting-approval":
+	case stepNameAwaitingApproval:
 		if event.Status == EventSuccess {
 			return github.StageMerge, github.ReasonManualMerge, true
 		}
@@ -665,6 +681,9 @@ func (o *Orchestrator) ChangeStage(issueNumber int, toStage github.Stage, reason
 	}
 
 	// Update GitHub
+	if o.gh == nil {
+		return errors.New("github client not configured")
+	}
 	updatedIssue, err := o.gh.SetStageLabel(issueNumber, toStage)
 	if err != nil {
 		return fmt.Errorf("setting stage %s on #%d: %w", toLabel, issueNumber, err)
@@ -746,10 +765,10 @@ func inferColumnForClosableCheck(issue github.Issue) string {
 	for _, l := range labels {
 		lower := strings.ToLower(l)
 		switch lower {
-		case "stage:blocked", "blocked", "stage:merging", "stage:awaiting-approval",
-			"awaiting-approval", "stage:create-pr", "stage:code-review",
-			"stage:coding", "stage:testing", "in-progress",
-			"stage:analysis", "stage:planning", "stage:check-pipeline":
+		case "stage:blocked", "blocked", "stage:merging", stageLabelAwaitingApproval,
+			"awaiting-approval", stageLabelCreatePR, stageLabelCodeReview,
+			stageLabelCoding, "stage:testing", "in-progress",
+			stageLabelAnalysis, "stage:planning", stageLabelCheckPipeline:
 			return "Active"
 		}
 	}
@@ -803,5 +822,113 @@ func (o *Orchestrator) CheckoutDefault() {
 	}
 	if err := o.brMgr.CheckoutDefault(); err != nil {
 		log.Printf("[Orchestrator] Warning: failed to checkout default branch: %v", err)
+	}
+}
+
+// RestartCurrentStage restarts the current stage of a task without losing previous progress.
+// This is used when an LLM session hangs or fails during a specific stage.
+func (o *Orchestrator) RestartCurrentStage(issueNumber int) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	// Check if task is currently being processed
+	if o.currentTask != nil && o.currentTask.Issue.Number == issueNumber {
+		return errors.New("cannot restart stage while task is actively being processed")
+	}
+
+	// Get current stage from cache
+	if o.store == nil {
+		return errors.New("store not configured")
+	}
+
+	issue, err := o.store.GetIssueCache(issueNumber)
+	if err != nil {
+		return fmt.Errorf("getting issue from cache: %w", err)
+	}
+
+	currentStage := getStageLabel(issue)
+	if currentStage == "" {
+		return fmt.Errorf("issue #%d has no stage label", issueNumber)
+	}
+
+	// Only allow restart for worker stages
+	if !isWorkerStage(currentStage) {
+		return fmt.Errorf("cannot restart stage %s: not an active worker stage", currentStage)
+	}
+
+	// Map stage label to step name
+	stepName := stageToStepName(currentStage)
+	if stepName == "" {
+		return fmt.Errorf("unknown stage: %s", currentStage)
+	}
+
+	// Delete steps for current stage and beyond
+	if err := o.store.DeleteStepsFrom(issueNumber, stepName); err != nil {
+		return fmt.Errorf("deleting steps from %s: %w", stepName, err)
+	}
+
+	// Clear any active LLM session
+	if o.currentTask != nil && o.currentTask.Issue.Number == issueNumber {
+		o.currentTask.SetSessionID("")
+	}
+
+	log.Printf("[Orchestrator] Restarted current stage for #%d (stage: %s, step: %s)",
+		issueNumber, currentStage, stepName)
+
+	// Broadcast update
+	if o.hub != nil {
+		o.hub.BroadcastIssueUpdate(issue)
+	}
+
+	return nil
+}
+
+// RestartFromBeginning performs a full restart of a task from the initial stage.
+// This clears all progress and moves the task back to backlog.
+func (o *Orchestrator) RestartFromBeginning(issueNumber int) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	// Check if task is currently being processed
+	if o.currentTask != nil && o.currentTask.Issue.Number == issueNumber {
+		return errors.New("cannot restart task while it is actively being processed")
+	}
+
+	// Clear all steps
+	if o.store != nil {
+		if err := o.store.DeleteSteps(issueNumber); err != nil {
+			return fmt.Errorf("deleting all steps: %w", err)
+		}
+	}
+
+	// Reset stage to backlog
+	if err := o.ChangeStage(issueNumber, github.StageBacklog, github.ReasonManualRetry); err != nil {
+		return fmt.Errorf("resetting stage to backlog: %w", err)
+	}
+
+	log.Printf("[Orchestrator] Full restart completed for #%d", issueNumber)
+
+	return nil
+}
+
+// stageToStepName maps a stage label to the corresponding step name
+func stageToStepName(stage string) string {
+	switch stage {
+	case stageLabelAnalysis:
+		return "technical-planning"
+	case stageLabelCoding:
+		return "implement"
+	case stageLabelCodeReview:
+		return "code-review"
+	case stageLabelCreatePR:
+		return "create-pr"
+	case stageLabelCheckPipeline:
+		return stepNameCheckPipeline
+	case stageLabelAwaitingApproval:
+		return stepNameAwaitingApproval
+	case "stage:merging":
+		return "merge"
+	default:
+		return ""
 	}
 }
