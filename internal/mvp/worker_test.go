@@ -1,14 +1,19 @@
 package mvp
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/crazy-goat/one-dev-army/internal/config"
+	"github.com/crazy-goat/one-dev-army/internal/git"
+	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
 	"github.com/crazy-goat/one-dev-army/internal/prompts"
 )
@@ -579,5 +584,69 @@ func TestWorker_SendsCompletionNotification(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Error("completion notification not sent")
+	}
+}
+
+func TestCreatePR_AlreadyDone(t *testing.T) {
+	env := []string{
+		"GIT_AUTHOR_NAME=test",
+		"GIT_AUTHOR_EMAIL=test@test.com",
+		"GIT_COMMITTER_NAME=test",
+		"GIT_COMMITTER_EMAIL=test@test.com",
+	}
+
+	runGit := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), env...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Create a bare repo to act as "origin"
+	bareDir := t.TempDir()
+	runGit(bareDir, "init", "--bare")
+
+	// Clone it to get a working repo with origin configured
+	repoDir := t.TempDir()
+	runGit(repoDir, "clone", bareDir, ".")
+	runGit(repoDir, "config", "user.name", "test")
+	runGit(repoDir, "config", "user.email", "test@test.com")
+
+	// Create an initial commit and push to origin
+	runGit(repoDir, "commit", "--allow-empty", "-m", "init")
+	runGit(repoDir, "push", "origin", "master")
+
+	// Create a branch but don't add any commits
+	runGit(repoDir, "checkout", "-b", "oda-999-test-issue")
+
+	// Create worker with BranchManager
+	brMgr := git.NewBranchManager(repoDir)
+	w := &Worker{
+		id:      1,
+		brMgr:   brMgr,
+		repoDir: repoDir,
+	}
+
+	// Create a task with the empty branch
+	task := &Task{
+		Issue: github.Issue{
+			Number: 999,
+			Title:  "Test Issue",
+			Body:   "Test body",
+		},
+		Branch: "oda-999-test-issue",
+	}
+
+	// Attempt to create PR - should return ErrAlreadyDone
+	_, err := w.createPR(context.Background(), task, nil)
+	if err == nil {
+		t.Fatal("createPR() = nil, want ErrAlreadyDone")
+	}
+
+	if !errors.Is(err, ErrAlreadyDone) {
+		t.Errorf("createPR() error = %v, want ErrAlreadyDone", err)
 	}
 }

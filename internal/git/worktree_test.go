@@ -504,3 +504,73 @@ func TestFindBranchByPrefix_EmptyRepo(t *testing.T) {
 		t.Errorf("FindBranchByPrefix(oda-) in non-repo = %q, want empty", got)
 	}
 }
+
+// TestHasCommitsDifferentFromMaster verifies the commit detection logic
+func TestHasCommitsDifferentFromMaster(t *testing.T) {
+	env := []string{
+		"GIT_AUTHOR_NAME=test",
+		"GIT_AUTHOR_EMAIL=test@test.com",
+		"GIT_COMMITTER_NAME=test",
+		"GIT_COMMITTER_EMAIL=test@test.com",
+	}
+
+	runGit := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), env...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	repoDir := setupRepo(t)
+	mgr := git.NewBranchManager(repoDir)
+
+	// Test 1: Branch with no commits different from master
+	t.Run("branch with no commits", func(t *testing.T) {
+		// Create a branch but don't add any commits
+		runGit(repoDir, "checkout", "-b", "empty-branch")
+
+		hasCommits, err := mgr.HasCommitsDifferentFromMaster("empty-branch")
+		if err != nil {
+			t.Fatalf("HasCommitsDifferentFromMaster: %v", err)
+		}
+		if hasCommits {
+			t.Errorf("HasCommitsDifferentFromMaster(empty-branch) = true, want false")
+		}
+
+		// Cleanup: switch back to master
+		runGit(repoDir, "checkout", "master")
+	})
+
+	// Test 2: Branch with commits different from master
+	t.Run("branch with commits", func(t *testing.T) {
+		// Create a branch and add a commit
+		runGit(repoDir, "checkout", "-b", "feature-branch")
+		if err := os.WriteFile(repoDir+"/feature.txt", []byte("feature work"), 0o644); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+		runGit(repoDir, "add", "feature.txt")
+		runGit(repoDir, "commit", "-m", "feature commit")
+
+		hasCommits, err := mgr.HasCommitsDifferentFromMaster("feature-branch")
+		if err != nil {
+			t.Fatalf("HasCommitsDifferentFromMaster: %v", err)
+		}
+		if !hasCommits {
+			t.Errorf("HasCommitsDifferentFromMaster(feature-branch) = false, want true")
+		}
+
+		// Cleanup: switch back to master
+		runGit(repoDir, "checkout", "master")
+	})
+
+	// Test 3: Non-existent branch
+	t.Run("non-existent branch", func(t *testing.T) {
+		_, err := mgr.HasCommitsDifferentFromMaster("non-existent-branch")
+		if err == nil {
+			t.Error("HasCommitsDifferentFromMaster(non-existent-branch) = nil, want error")
+		}
+	})
+}
