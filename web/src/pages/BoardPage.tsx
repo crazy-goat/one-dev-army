@@ -16,12 +16,6 @@ import { SprintProgressPanel } from '../components/board/SprintProgressPanel'
  * - Right (15%): Done + Failed (stacked vertically)
  */
 
-// Left side columns (stacked)
-const LEFT_COLUMNS = [
-  { key: 'backlog', label: 'Backlog', empty: 'No tickets in backlog' },
-  { key: 'blocked', label: 'Blocked', empty: 'No blocked tickets' },
-] as const
-
 // Center pipeline columns
 const CENTER_COLUMNS = [
   { key: 'plan', label: 'Plan', empty: 'No tickets in planning' },
@@ -115,17 +109,28 @@ export default function BoardPage() {
       <div className="flex-1 min-h-0 grid grid-cols-[15%_1fr_15%] gap-4">
         {/* Left: Backlog + Blocked (stacked) */}
         <div className="flex flex-col gap-4 min-h-0">
-          {LEFT_COLUMNS.map(({ key, label, empty }) => (
-            <div key={key} className="flex-1 min-h-0">
-              <Column
-                title={label}
-                columnKey={key}
-                cards={board.columns[key] ?? EMPTY_CARDS}
-                emptyText={empty}
-                yoloMode={board.yolo_mode}
-              />
-            </div>
-          ))}
+          <div className="flex-1 min-h-0">
+            <Column
+              title="Backlog"
+              columnKey="backlog"
+              cards={board.columns.backlog ?? EMPTY_CARDS}
+              emptyText="No tickets in backlog"
+              yoloMode={board.yolo_mode}
+            />
+          </div>
+          <div
+            className={
+              (board.columns.blocked?.length ?? 0) === 0 ? 'flex-shrink-0' : 'flex-1 min-h-0'
+            }
+          >
+            <Column
+              title="Blocked"
+              columnKey="blocked"
+              cards={board.columns.blocked ?? EMPTY_CARDS}
+              emptyText="No blocked tickets"
+              yoloMode={board.yolo_mode}
+            />
+          </div>
         </div>
 
         {/* Center: Pipeline columns + Processing Panel */}
