@@ -11,10 +11,11 @@ import (
 
 // mockGitHubClient is a test double for GitHubClient interface
 type mockGitHubClient struct {
-	mu        sync.Mutex
-	issues    []github.Issue
-	listErr   error
-	milestone string
+	mu              sync.Mutex
+	issues          []github.Issue
+	listErr         error
+	milestone       string
+	oldestMilestone *github.Milestone
 }
 
 func (m *mockGitHubClient) ListIssuesWithPRStatus(milestone string) ([]github.Issue, error) {
@@ -32,6 +33,15 @@ func (m *mockGitHubClient) ListIssuesWithPRStatus(milestone string) ([]github.Is
 
 func (*mockGitHubClient) AddLabel(_ int, _ string) error {
 	return nil
+}
+
+func (m *mockGitHubClient) GetOldestOpenMilestone() (*github.Milestone, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.oldestMilestone != nil {
+		return m.oldestMilestone, nil
+	}
+	return nil, nil
 }
 
 // mockStore is a test double for Store interface
@@ -110,6 +120,7 @@ func TestSyncService_StartStop(t *testing.T) {
 		issues: []github.Issue{
 			{Number: 1, Title: "Issue 1", State: "open"},
 		},
+		oldestMilestone: &github.Milestone{Number: 1, Title: "Sprint 1"},
 	}
 	store := &mockStore{}
 	service := NewSyncService(gh, store, nil, nil)
@@ -135,7 +146,9 @@ func TestSyncService_StartStop(t *testing.T) {
 }
 
 func TestSyncService_Start_AlreadyRunning(t *testing.T) {
-	gh := &mockGitHubClient{}
+	gh := &mockGitHubClient{
+		oldestMilestone: &github.Milestone{Number: 1, Title: "Sprint 1"},
+	}
 	store := &mockStore{}
 	service := NewSyncService(gh, store, nil, nil)
 	service.SetActiveMilestone("Sprint 1")
@@ -241,6 +254,7 @@ func TestSyncService_syncNow_Success(t *testing.T) {
 			{Number: 2, Title: "Issue 2", State: "closed"},
 			{Number: 3, Title: "Issue 3", State: "open"},
 		},
+		oldestMilestone: &github.Milestone{Number: 1, Title: "Sprint 1"},
 	}
 	store := &mockStore{}
 	service := NewSyncService(gh, store, nil, nil)
@@ -263,6 +277,7 @@ func TestSyncService_SyncNow_ManualTrigger(t *testing.T) {
 		issues: []github.Issue{
 			{Number: 1, Title: "Issue 1"},
 		},
+		oldestMilestone: &github.Milestone{Number: 1, Title: "Sprint 1"},
 	}
 	store := &mockStore{}
 	service := NewSyncService(gh, store, nil, nil)
@@ -338,6 +353,7 @@ func TestSyncService_syncNow_FetchesPRStatus(t *testing.T) {
 			{Number: 2, Title: "Merged Issue", State: "CLOSED", PRMerged: true, MergedAt: &mergedAt},
 			{Number: 3, Title: "Closed Issue", State: "CLOSED"},
 		},
+		oldestMilestone: &github.Milestone{Number: 1, Title: "Sprint 1"},
 	}
 	store := &mockStore{}
 	service := NewSyncService(gh, store, nil, nil)

@@ -143,3 +143,11 @@ Issues with these labels block new work:
 - Progress saved to SQLite database after each step
 - On restart, resumes from last completed step
 - Branch and worktree preserved across restarts
+
+### Milestone Auto-Detection
+
+The sync service automatically detects when a new sprint (milestone) is created:
+- Every 30 seconds, checks if the oldest open milestone has changed
+- When a new sprint is detected, immediately switches to sync issues from the new sprint
+- No restart required - seamless transition between sprints
+- Orchestrator independently fetches the latest milestone each iteration

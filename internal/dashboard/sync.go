@@ -13,6 +13,7 @@ import (
 type GitHubClient interface {
 	ListIssuesWithPRStatus(milestone string) ([]github.Issue, error)
 	AddLabel(issueNum int, label string) error
+	GetOldestOpenMilestone() (*github.Milestone, error)
 }
 
 // Store defines the interface for database operations needed by SyncService
@@ -150,14 +151,33 @@ func (s *SyncService) syncNow() {
 
 // doSync performs the actual synchronization work
 func (s *SyncService) doSync() {
-	milestone := s.GetActiveMilestone()
-	if milestone == "" {
-		log.Println("[SyncService] No active milestone set, skipping sync")
+	if s.gh == nil {
+		log.Println("[SyncService] No GitHub client set, skipping sync")
 		return
 	}
 
-	if s.gh == nil {
-		log.Println("[SyncService] No GitHub client set, skipping sync")
+	// Check for milestone change first
+	currentMilestone := s.GetActiveMilestone()
+	latestMilestone, err := s.gh.GetOldestOpenMilestone()
+	switch {
+	case err != nil:
+		log.Printf("[SyncService] Error checking for new milestone: %v", err)
+	case latestMilestone == nil:
+		// No open milestones at all
+		if currentMilestone != "" {
+			log.Printf("[SyncService] No open milestones found (was: %s), stopping sync", currentMilestone)
+			s.SetActiveMilestone("")
+		}
+		return
+	case latestMilestone.Title != currentMilestone:
+		log.Printf("[SyncService] Milestone change detected: %s (was: %s)",
+			latestMilestone.Title, currentMilestone)
+		s.SetActiveMilestone(latestMilestone.Title)
+	}
+
+	milestone := s.GetActiveMilestone()
+	if milestone == "" {
+		log.Println("[SyncService] No active milestone set, skipping sync")
 		return
 	}
 
