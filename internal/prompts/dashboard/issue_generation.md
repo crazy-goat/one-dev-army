@@ -34,6 +34,37 @@ The "description" field is a markdown document with exactly these sections:
 ## Acceptance Criteria
 [2-5 specific, verifiable criteria for completion, in English. Include edge cases and error scenarios where applicable — what should happen with invalid inputs, empty states, or error conditions.]
 
+MARKDOWN FORMATTING RULES:
+- Use ## for all section headings (Description, Tasks, Files to Modify, Acceptance Criteria)
+- Add blank line before and after each heading
+- Use proper list formatting: "- " for bullet lists, "1. " for numbered lists
+- Add blank line between list items for readability
+- Use ``` for code blocks with language identifier when applicable
+- Ensure all code blocks are properly closed
+- No trailing whitespace on any line
+- End document with a single newline
+
+EXAMPLE OF PROPER FORMATTING:
+
+## Description
+
+This is the description text.
+
+## Tasks
+
+1. First task with details
+2. Second task with details
+
+## Files to Modify
+
+- internal/example/file.go - Add new function
+- internal/example/other.go - Update existing logic
+
+## Acceptance Criteria
+
+- [ ] Criterion one
+- [ ] Criterion two
+
 CRITICAL RULES:
 - ALL text MUST be in English — title, description, tasks, criteria, everything
 - NO implementation code, algorithms, or design patterns

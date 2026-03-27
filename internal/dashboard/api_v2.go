@@ -1500,7 +1500,7 @@ func (s *Server) handleWizardCreateIssueV2(w http.ResponseWriter, r *http.Reques
 		title = title[:77] + "..."
 	}
 
-	issueBody := session.TechnicalPlanning
+	issueBody := CleanupMarkdown(session.TechnicalPlanning)
 	issueNum, err := s.gh.CreateIssue(title, issueBody, labels)
 	if err != nil {
 		log.Printf("[API v2] Error creating single issue: %v", err)
