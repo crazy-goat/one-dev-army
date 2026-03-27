@@ -41,9 +41,15 @@ function typeBadge(type: string) {
 }
 
 function sizeBadge(size: string) {
+  const sizeEmojis: Record<string, string> = {
+    S: '\uD83D\uDC1C',
+    M: '\uD83D\uDC15',
+    L: '\uD83D\uDC18',
+    XL: '\uD83E\uDD95',
+  }
   return (
     <span className="text-xs px-2 py-0.5 rounded border border-gray-700 bg-gray-800 text-gray-400">
-      \uD83D\uDCCF {size}
+      {sizeEmojis[size] ?? '\uD83D\uDCCF'} {size}
     </span>
   )
 }
