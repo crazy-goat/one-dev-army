@@ -19,7 +19,7 @@ const BASE = '/api/v2'
 export class ApiError extends Error {
   constructor(
     public status: number,
-    message: string,
+    message: string
   ) {
     super(message)
     this.name = 'ApiError'
@@ -32,7 +32,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
   })
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText })) as { error: string | undefined }
+    const body = (await res.json().catch(() => ({ error: res.statusText }))) as {
+      error: string | undefined
+    }
     throw new ApiError(res.status, body.error ?? res.statusText)
   }
   return res.json() as Promise<T>
@@ -59,7 +61,7 @@ export const api = {
   getIssue: (id: number) => request<IssueDetail>(`/issues/${id}`),
   getIssueSteps: (id: number) =>
     request<{ issue_number: number; steps: TaskStep[] }>(`/issues/${id}/steps`).then(
-      (res) => res.steps,
+      res => res.steps
     ),
 
   // Sprint
@@ -69,28 +71,20 @@ export const api = {
   planSprint: () => post<SuccessResponse>('/sprint/plan'),
   previewSprintClose: (bumpType: string) =>
     post<SprintClosePreview>('/sprint/close/preview', { bump_type: bumpType }),
-  confirmSprintClose: (data: {
-    bump_type: string
-    release_title: string
-    release_body: string
-  }) => post<SprintCloseResult>('/sprint/close/confirm', data),
+  confirmSprintClose: (data: { bump_type: string; release_title: string; release_body: string }) =>
+    post<SprintCloseResult>('/sprint/close/confirm', data),
 
   // Ticket Actions
-  approveIssue: (id: number) =>
-    post<SuccessResponse>(`/issues/${id}/approve`),
+  approveIssue: (id: number) => post<SuccessResponse>(`/issues/${id}/approve`),
   rejectIssue: (id: number) => post<SuccessResponse>(`/issues/${id}/reject`),
   retryIssue: (id: number) => post<SuccessResponse>(`/issues/${id}/retry`),
-  retryFreshIssue: (id: number) =>
-    post<SuccessResponse>(`/issues/${id}/retry-fresh`),
-  approveMergeIssue: (id: number) =>
-    post<SuccessResponse>(`/issues/${id}/approve-merge`),
+  retryFreshIssue: (id: number) => post<SuccessResponse>(`/issues/${id}/retry-fresh`),
+  approveMergeIssue: (id: number) => post<SuccessResponse>(`/issues/${id}/approve-merge`),
   declineIssue: (id: number, reason: string) =>
     post<SuccessResponse>(`/issues/${id}/decline`, { reason }),
   blockIssue: (id: number) => post<SuccessResponse>(`/issues/${id}/block`),
-  unblockIssue: (id: number) =>
-    post<SuccessResponse>(`/issues/${id}/unblock`),
-  processIssue: (id: number) =>
-    post<SuccessResponse>(`/issues/${id}/process`),
+  unblockIssue: (id: number) => post<SuccessResponse>(`/issues/${id}/unblock`),
+  processIssue: (id: number) => post<SuccessResponse>(`/issues/${id}/process`),
 
   // Workers
   getWorkers: () =>
@@ -99,8 +93,7 @@ export const api = {
 
   // Settings
   getSettings: () => request<Settings>('/settings'),
-  saveSettings: (config: unknown) =>
-    put<SuccessResponse>('/settings', config),
+  saveSettings: (config: unknown) => put<SuccessResponse>('/settings', config),
   toggleYolo: () => post<{ yolo_mode: boolean }>('/settings/yolo'),
 
   // Sync
@@ -110,22 +103,12 @@ export const api = {
   getRateLimit: () => request<RateLimit>('/rate-limit'),
 
   // Wizard
-  createWizardSession: (type: string) =>
-    post<WizardSession>('/wizard/sessions', { type }),
-  getWizardSession: (id: string) =>
-    request<WizardSession>(`/wizard/sessions/${id}`),
-  deleteWizardSession: (id: string) =>
-    del<SuccessResponse>(`/wizard/sessions/${id}`),
+  createWizardSession: (type: string) => post<WizardSession>('/wizard/sessions', { type }),
+  getWizardSession: (id: string) => request<WizardSession>(`/wizard/sessions/${id}`),
+  deleteWizardSession: (id: string) => del<SuccessResponse>(`/wizard/sessions/${id}`),
   refineWizardSession: (id: string, data: { idea: string; language?: string }) =>
     post<WizardSession>(`/wizard/sessions/${id}/refine`, data),
-  createWizardIssue: (
-    id: string,
-    data: { title?: string; add_to_sprint?: boolean },
-  ) =>
-    post<{ success: boolean; issue: CreatedIssue }>(
-      `/wizard/sessions/${id}/create`,
-      data,
-    ),
-  getWizardLogs: (id: string) =>
-    request<LLMLogEntry[]>(`/wizard/sessions/${id}/logs`),
+  createWizardIssue: (id: string, data: { title?: string; add_to_sprint?: boolean }) =>
+    post<{ success: boolean; issue: CreatedIssue }>(`/wizard/sessions/${id}/create`, data),
+  getWizardLogs: (id: string) => request<LLMLogEntry[]>(`/wizard/sessions/${id}/logs`),
 }

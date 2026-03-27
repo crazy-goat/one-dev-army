@@ -58,9 +58,7 @@ export default function BoardPage() {
     return (
       <div className="flex items-center justify-center flex-1 py-20">
         <div className="text-center">
-          <p className="text-red-400 mb-2">
-            Failed to load board: {error.message}
-          </p>
+          <p className="text-red-400 mb-2">Failed to load board: {error.message}</p>
           <button
             type="button"
             onClick={() => window.location.reload()}
@@ -73,16 +71,16 @@ export default function BoardPage() {
     )
   }
 
-  if (!board) {return null}
+  if (!board) {
+    return null
+  }
 
   return (
     <div className="flex flex-col gap-4 p-4 h-[calc(100vh-7rem)]">
       {/* Header row */}
       <div className="flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-bold text-white">
-            {board.sprint_name || 'Sprint Board'}
-          </h1>
+          <h1 className="text-lg font-bold text-white">{board.sprint_name || 'Sprint Board'}</h1>
           {board.yolo_mode && (
             <span className="text-xs bg-yellow-600/20 text-yellow-400 border border-yellow-600/30 px-2 py-0.5 rounded">
               YOLO

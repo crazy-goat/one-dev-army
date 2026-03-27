@@ -45,7 +45,7 @@ export function useWorkers() {
     queryKey: ['workers'],
     queryFn: api.getWorkers,
     refetchInterval: 5_000,
-    select: (data) => data,
+    select: data => data,
   })
 }
 
@@ -154,8 +154,7 @@ export function useApproveMergeIssue() {
 export function useDeclineIssue() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
-      api.declineIssue(id, reason),
+    mutationFn: ({ id, reason }: { id: number; reason: string }) => api.declineIssue(id, reason),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['board'] })
     },

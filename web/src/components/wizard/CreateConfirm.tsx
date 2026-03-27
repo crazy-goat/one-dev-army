@@ -5,26 +5,22 @@ interface CreateConfirmProps {
   onCreateAnother: () => void
 }
 
-export function CreateConfirm({
-  createdIssues,
-  onCreateAnother,
-}: CreateConfirmProps) {
-  const hasErrors = createdIssues.some((i) => !i.success)
-  const epic = createdIssues.find((i) => i.is_epic)
-  const subtasks = createdIssues.filter((i) => !i.is_epic)
+export function CreateConfirm({ createdIssues, onCreateAnother }: CreateConfirmProps) {
+  const hasErrors = createdIssues.some(i => !i.success)
+  const epic = createdIssues.find(i => i.is_epic)
+  const subtasks = createdIssues.filter(i => !i.is_epic)
   const isSingle = createdIssues.length === 1
 
   return (
     <div>
       <h2 className="text-xl font-bold text-white mb-6">
-        {'\u2705'}{' '}
-        {isSingle ? 'Issue Created Successfully' : 'Issues Created Successfully'}
+        {'\u2705'} {isSingle ? 'Issue Created Successfully' : 'Issues Created Successfully'}
       </h2>
 
       {hasErrors && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4 text-sm text-red-400">
-          <strong>{'\u26A0\uFE0F'} Some sub-tasks failed to create.</strong>{' '}
-          Check the list below for details.
+          <strong>{'\u26A0\uFE0F'} Some sub-tasks failed to create.</strong> Check the list below
+          for details.
         </div>
       )}
 
@@ -50,9 +46,7 @@ export function CreateConfirm({
           {/* Epic */}
           {epic && (
             <div className="mb-4">
-              <h3 className="text-sm font-semibold text-gray-400 mb-2">
-                {'\uD83D\uDCCB'} Epic
-              </h3>
+              <h3 className="text-sm font-semibold text-gray-400 mb-2">{'\uD83D\uDCCB'} Epic</h3>
               <div className="bg-gray-900 border-2 border-blue-500/40 rounded-lg p-4 bg-gradient-to-br from-gray-900 to-blue-500/5">
                 <a
                   href={epic.url}
@@ -60,9 +54,7 @@ export function CreateConfirm({
                   rel="noopener noreferrer"
                   className="flex items-center gap-3 text-gray-200 hover:text-white transition-colors"
                 >
-                  <span className="text-blue-400 font-semibold min-w-[3rem]">
-                    #{epic.number}
-                  </span>
+                  <span className="text-blue-400 font-semibold min-w-[3rem]">#{epic.number}</span>
                   <span className="flex-1">{epic.title}</span>
                   <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded font-semibold">
                     EPIC
@@ -83,9 +75,7 @@ export function CreateConfirm({
                   <div
                     key={issue.number || `err-${String(i)}`}
                     className={`bg-gray-900 border rounded-lg p-3 ${
-                      issue.success
-                        ? 'border-gray-800'
-                        : 'border-red-500/30 bg-red-500/5'
+                      issue.success ? 'border-gray-800' : 'border-red-500/30 bg-red-500/5'
                     }`}
                   >
                     {issue.success ? (
@@ -102,9 +92,7 @@ export function CreateConfirm({
                       </a>
                     ) : (
                       <div className="flex items-center gap-3 text-red-400">
-                        <span className="font-semibold min-w-[3rem]">
-                          {'\u274C'}
-                        </span>
+                        <span className="font-semibold min-w-[3rem]">{'\u274C'}</span>
                         <span className="flex-1">{issue.title}</span>
                         {issue.error !== undefined && issue.error !== '' && (
                           <span className="text-sm ml-auto">{issue.error}</span>

@@ -38,18 +38,18 @@ export function RefinePreview({
   onRegenerate,
   isLoading,
 }: RefinePreviewProps) {
-  const [title, setTitle] = useState(
-    session.custom_title ?? session.generated_title ?? '',
-  )
+  const [title, setTitle] = useState(session.custom_title ?? session.generated_title ?? '')
   const [addToSprint, setAddToSprint] = useState(session.add_to_sprint)
   const [showRaw, setShowRaw] = useState(false)
   const [description, setDescription] = useState(
-    session.technical_planning ?? session.refined_description ?? '',
+    session.technical_planning ?? session.refined_description ?? ''
   )
 
   // Render markdown to HTML
   const renderedHtml = useMemo(() => {
-    if (!description) {return ''}
+    if (!description) {
+      return ''
+    }
     return marked(description) as string
   }, [description])
 
@@ -59,27 +59,20 @@ export function RefinePreview({
 
       {/* Title */}
       <div className="mb-4">
-        <label
-          htmlFor="wizard-title"
-          className="block text-sm text-gray-400 mb-1"
-        >
+        <label htmlFor="wizard-title" className="block text-sm text-gray-400 mb-1">
           Issue Title:
         </label>
         <input
           id="wizard-title"
           type="text"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={e => setTitle(e.target.value)}
           maxLength={80}
           className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:border-blue-500 transition-colors"
         />
         <div className="flex justify-between mt-1 text-xs text-gray-500">
-          <span>
-            {title.length} / 80 characters
-          </span>
-          {title.length > 80 && (
-            <span className="text-red-400">Title too long</span>
-          )}
+          <span>{title.length} / 80 characters</span>
+          {title.length > 80 && <span className="text-red-400">Title too long</span>}
         </div>
       </div>
 
@@ -89,8 +82,7 @@ export function RefinePreview({
           {session.priority !== undefined && (
             <span
               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border capitalize ${
-                priorityColors[session.priority] ??
-                'bg-gray-800 text-gray-400 border-gray-700'
+                priorityColors[session.priority] ?? 'bg-gray-800 text-gray-400 border-gray-700'
               }`}
             >
               Priority: {session.priority}
@@ -99,8 +91,7 @@ export function RefinePreview({
           {session.complexity !== undefined && (
             <span
               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-                complexityColors[session.complexity] ??
-                'bg-gray-800 text-gray-400 border-gray-700'
+                complexityColors[session.complexity] ?? 'bg-gray-800 text-gray-400 border-gray-700'
               }`}
             >
               Size: {session.complexity}
@@ -157,7 +148,7 @@ export function RefinePreview({
           /* MISSING 3: Description editing — removed readOnly */
           <textarea
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={e => setDescription(e.target.value)}
             rows={12}
             className="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded-lg text-gray-300 text-sm font-mono resize-y focus:outline-none focus:border-blue-500"
           />
@@ -177,12 +168,10 @@ export function RefinePreview({
           <input
             type="checkbox"
             checked={addToSprint}
-            onChange={(e) => setAddToSprint(e.target.checked)}
+            onChange={e => setAddToSprint(e.target.checked)}
             className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500 cursor-pointer"
           />
-          <span className="text-sm text-gray-300">
-            Add to current sprint
-          </span>
+          <span className="text-sm text-gray-300">Add to current sprint</span>
         </label>
       </div>
 

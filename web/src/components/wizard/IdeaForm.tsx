@@ -38,32 +38,32 @@ declare global {
 
 // Map browser language codes to our supported languages
 const LANGUAGE_MAP: Record<string, string> = {
-  'en': 'en-US',
+  en: 'en-US',
   'en-US': 'en-US',
   'en-GB': 'en-US',
-  'pl': 'pl-PL',
+  pl: 'pl-PL',
   'pl-PL': 'pl-PL',
-  'de': 'de-DE',
+  de: 'de-DE',
   'de-DE': 'de-DE',
-  'es': 'es-ES',
+  es: 'es-ES',
   'es-ES': 'es-ES',
-  'fr': 'fr-FR',
+  fr: 'fr-FR',
   'fr-FR': 'fr-FR',
-  'pt': 'pt-PT',
+  pt: 'pt-PT',
   'pt-PT': 'pt-PT',
   'pt-BR': 'pt-PT',
-  'it': 'it-IT',
+  it: 'it-IT',
   'it-IT': 'it-IT',
-  'nl': 'nl-NL',
+  nl: 'nl-NL',
   'nl-NL': 'nl-NL',
-  'ru': 'ru-RU',
+  ru: 'ru-RU',
   'ru-RU': 'ru-RU',
-  'zh': 'zh-CN',
+  zh: 'zh-CN',
   'zh-CN': 'zh-CN',
   'zh-TW': 'zh-CN',
-  'ja': 'ja-JP',
+  ja: 'ja-JP',
   'ja-JP': 'ja-JP',
-  'ko': 'ko-KR',
+  ko: 'ko-KR',
   'ko-KR': 'ko-KR',
 }
 
@@ -82,14 +82,14 @@ const LANGUAGE_LABELS: Record<string, string> = {
   'ko-KR': '🇰🇷 한국어',
 }
 
-  // Get available languages based on browser Accept-Language header
+// Get available languages based on browser Accept-Language header
 function getAvailableLanguages(): string[] {
   const browserLanguages = navigator.languages
   const available = new Set<string>()
-  
+
   // Always add English
   available.add('en-US')
-  
+
   // Add languages from browser
   browserLanguages.forEach(lang => {
     const mapped = LANGUAGE_MAP[lang]
@@ -97,31 +97,26 @@ function getAvailableLanguages(): string[] {
       available.add(mapped)
     }
   })
-  
+
   return Array.from(available)
 }
 
 // Get default language (first from browser, fallback to English)
 function getDefaultLanguage(): string {
   const browserLanguages = navigator.languages
-  
+
   for (const lang of browserLanguages) {
     const mapped = LANGUAGE_MAP[lang]
     if (mapped !== undefined) {
       return mapped
     }
   }
-  
+
   return 'en-US'
 }
 
 interface IdeaFormProps {
-  onSubmit: (data: {
-    type: string
-    idea: string
-    language: string
-    addToSprint: boolean
-  }) => void
+  onSubmit: (data: { type: string; idea: string; language: string; addToSprint: boolean }) => void
   isLoading: boolean
 }
 
@@ -130,16 +125,17 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
   const [idea, setIdea] = useState('')
   const [language, setLanguage] = useState(() => getDefaultLanguage())
   const [addToSprint, setAddToSprint] = useState(true)
-  
+
   // Get available languages based on browser
   const availableLanguages = getAvailableLanguages()
-  
+
   // Speech recognition state
   const [isRecording, setIsRecording] = useState(false)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
 
   // Check if browser supports speech recognition
-  const supportsSpeechRecognition = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
+  const supportsSpeechRecognition =
+    'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
 
   // Initialize speech recognition
   const initRecognition = useCallback(() => {
@@ -150,10 +146,10 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
     recognition.continuous = true
     recognition.interimResults = true
     recognition.lang = language
-    
+
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let finalTranscript = ''
-      
+
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i]
         if (result?.[0]) {
@@ -163,27 +159,27 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
           }
         }
       }
-      
+
       if (finalTranscript) {
-        setIdea((prev) => {
+        setIdea(prev => {
           const newValue = prev + (prev ? ' ' : '') + finalTranscript
           return newValue
         })
       }
     }
-    
+
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error)
       setIsRecording(false)
     }
-    
+
     recognition.onend = () => {
       // If still recording, restart (handles pauses)
       if (isRecording && recognitionRef.current) {
         recognition.start()
       }
     }
-    
+
     return recognition
   }, [language, isRecording])
 
@@ -193,9 +189,9 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
       alert('Speech recognition is not supported in your browser. Please use Chrome or Edge.')
       return
     }
-    
+
     const recognition = initRecognition()
-    
+
     recognitionRef.current = recognition
     recognition.start()
     setIsRecording(true)
@@ -239,9 +235,7 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
   if (type === null) {
     return (
       <div>
-        <h2 className="text-xl font-bold text-white mb-6 text-center">
-          Select Issue Type
-        </h2>
+        <h2 className="text-xl font-bold text-white mb-6 text-center">Select Issue Type</h2>
         <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
           <button
             type="button"
@@ -250,9 +244,7 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
           >
             <div className="text-3xl mb-2">{'\u2728'}</div>
             <div className="font-semibold text-gray-200">Feature</div>
-            <div className="text-xs text-gray-500 mt-1">
-              New functionality or enhancement
-            </div>
+            <div className="text-xs text-gray-500 mt-1">New functionality or enhancement</div>
           </button>
           <button
             type="button"
@@ -261,9 +253,7 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
           >
             <div className="text-3xl mb-2">{'\uD83D\uDC1B'}</div>
             <div className="font-semibold text-gray-200">Bug</div>
-            <div className="text-xs text-gray-500 mt-1">
-              Something is not working correctly
-            </div>
+            <div className="text-xs text-gray-500 mt-1">Something is not working correctly</div>
           </button>
         </div>
       </div>
@@ -272,7 +262,9 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!idea.trim()) {return}
+    if (!idea.trim()) {
+      return
+    }
     onSubmit({ type, idea: idea.trim(), language, addToSprint })
   }
 
@@ -284,27 +276,24 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
 
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
-          <label
-            htmlFor="wizard-idea"
-            className="block text-sm text-gray-400 mb-2"
-          >
+          <label htmlFor="wizard-idea" className="block text-sm text-gray-400 mb-2">
             Describe your {type === 'bug' ? 'bug' : 'feature idea'}:
           </label>
           <div className="relative">
             <textarea
               id="wizard-idea"
               value={idea}
-              onChange={(e) => setIdea(e.target.value)}
+              onChange={e => setIdea(e.target.value)}
               rows={6}
               required
               className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 text-sm resize-y focus:outline-none focus:border-blue-500 transition-colors font-sans pr-12"
               placeholder={
                 type === 'bug'
                   ? 'Describe the bug, steps to reproduce, and expected behavior...'
-                  : 'Describe the feature, who it\'s for, and what problem it solves...'
+                  : "Describe the feature, who it's for, and what problem it solves..."
               }
             />
-            
+
             {/* Microphone button */}
             <button
               type="button"
@@ -319,8 +308,8 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
                 !supportsSpeechRecognition
                   ? 'Speech recognition not supported in this browser'
                   : isRecording
-                  ? 'Stop recording'
-                  : 'Start voice recording'
+                    ? 'Stop recording'
+                    : 'Start voice recording'
               }
             >
               {isRecording ? (
@@ -335,7 +324,7 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
               )}
             </button>
           </div>
-          
+
           {/* Recording indicator */}
           {isRecording && (
             <div className="flex items-center gap-2 mt-2 text-xs text-red-400">
@@ -347,19 +336,16 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
         </div>
 
         <div className="mb-4">
-          <label
-            htmlFor="wizard-language"
-            className="block text-sm text-gray-400 mb-2"
-          >
+          <label htmlFor="wizard-language" className="block text-sm text-gray-400 mb-2">
             Language:
           </label>
           <select
             id="wizard-language"
             value={language}
-            onChange={(e) => setLanguage(e.target.value)}
+            onChange={e => setLanguage(e.target.value)}
             className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:border-blue-500 transition-colors cursor-pointer"
           >
-            {availableLanguages.map((langCode) => (
+            {availableLanguages.map(langCode => (
               <option key={langCode} value={langCode}>
                 {LANGUAGE_LABELS[langCode] ?? langCode}
               </option>
@@ -372,12 +358,10 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
             <input
               type="checkbox"
               checked={addToSprint}
-              onChange={(e) => setAddToSprint(e.target.checked)}
+              onChange={e => setAddToSprint(e.target.checked)}
               className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500 cursor-pointer"
             />
-            <span className="text-sm text-gray-300">
-              Add to current sprint
-            </span>
+            <span className="text-sm text-gray-300">Add to current sprint</span>
           </label>
         </div>
 

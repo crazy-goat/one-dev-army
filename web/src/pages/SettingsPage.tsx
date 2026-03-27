@@ -36,7 +36,9 @@ export default function SettingsPage() {
 
   // Sync server state into local form state
   useEffect(() => {
-    if (!settings) {return}
+    if (!settings) {
+      return
+    }
     setModels({
       setup: settings.config.Setup.Model,
       planning: settings.config.Planning.Model,
@@ -61,20 +63,19 @@ export default function SettingsPage() {
         sprint_auto_start: sprintAutoStart,
       },
       {
-        onSuccess: () =>
-          setFeedback({ type: 'success', message: 'Settings saved successfully!' }),
-        onError: (err) =>
+        onSuccess: () => setFeedback({ type: 'success', message: 'Settings saved successfully!' }),
+        onError: err =>
           setFeedback({
             type: 'error',
             message: `Failed to save: ${err.message}`,
           }),
-      },
+      }
     )
   }
 
   const handleYoloToggle = () => {
     toggleYolo.mutate(undefined, {
-      onSuccess: (data) => setYoloMode(data.yolo_mode),
+      onSuccess: data => setYoloMode(data.yolo_mode),
     })
   }
 
@@ -93,9 +94,7 @@ export default function SettingsPage() {
     return (
       <div className="flex items-center justify-center flex-1 py-20">
         <div className="text-center">
-          <p className="text-red-400 mb-2">
-            Failed to load settings: {error.message}
-          </p>
+          <p className="text-red-400 mb-2">Failed to load settings: {error.message}</p>
           <button
             type="button"
             onClick={() => window.location.reload()}
@@ -108,13 +107,13 @@ export default function SettingsPage() {
     )
   }
 
-  if (!settings) {return null}
+  if (!settings) {
+    return null
+  }
 
   return (
     <div className="max-w-3xl mx-auto p-4 pb-12">
-      <h1 className="text-xl font-bold text-white mb-6">
-        LLM Configuration Settings
-      </h1>
+      <h1 className="text-xl font-bold text-white mb-6">LLM Configuration Settings</h1>
 
       {/* Feedback */}
       {feedback && (
@@ -133,8 +132,7 @@ export default function SettingsPage() {
       <section className="bg-gray-900 border border-gray-800 rounded-lg p-6 mb-6">
         <h2 className="text-lg font-semibold text-blue-400 mb-1">Models</h2>
         <p className="text-sm text-gray-500 mb-4">
-          Select a model for each operational mode. Each mode uses its own
-          dedicated model.
+          Select a model for each operational mode. Each mode uses its own dedicated model.
         </p>
 
         {MODEL_FIELDS.map(({ key, label }) => (
@@ -143,18 +141,14 @@ export default function SettingsPage() {
             label={label}
             value={models[key]}
             models={settings.available_models}
-            onChange={(modelId) =>
-              setModels((prev) => ({ ...prev, [key]: modelId }))
-            }
+            onChange={modelId => setModels(prev => ({ ...prev, [key]: modelId }))}
           />
         ))}
       </section>
 
       {/* Pipeline Settings */}
       <section className="bg-gray-900 border border-gray-800 rounded-lg p-6 mb-6">
-        <h2 className="text-lg font-semibold text-blue-400 mb-4">
-          Pipeline Settings
-        </h2>
+        <h2 className="text-lg font-semibold text-blue-400 mb-4">Pipeline Settings</h2>
         <YoloToggle
           label="Enable YOLO Mode"
           description="When enabled, tickets automatically transition from awaiting-approval to merge without requiring manual user approval."
@@ -166,9 +160,7 @@ export default function SettingsPage() {
 
       {/* Sprint Settings */}
       <section className="bg-gray-900 border border-gray-800 rounded-lg p-6 mb-6">
-        <h2 className="text-lg font-semibold text-blue-400 mb-4">
-          Sprint Settings
-        </h2>
+        <h2 className="text-lg font-semibold text-blue-400 mb-4">Sprint Settings</h2>
         <YoloToggle
           label="Auto-start sprints"
           description="When enabled, new sprints automatically start upon creation."

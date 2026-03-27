@@ -50,16 +50,16 @@ export default function WizardPage() {
       setSession({ ...refined, add_to_sprint: data.addToSprint })
       setStep('review')
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to refine idea',
-      )
+      setError(err instanceof Error ? err.message : 'Failed to refine idea')
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleCreateIssue = async (title: string, addToSprint: boolean) => {
-    if (!session) {return}
+    if (!session) {
+      return
+    }
     setIsLoading(true)
     setError(null)
     try {
@@ -71,9 +71,7 @@ export default function WizardPage() {
       setCreatedIssues([result.issue])
       setStep('confirm')
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to create issue',
-      )
+      setError(err instanceof Error ? err.message : 'Failed to create issue')
     } finally {
       setIsLoading(false)
     }
@@ -81,7 +79,9 @@ export default function WizardPage() {
 
   // MISSING 4: Regenerate handler — re-refine with current description
   const handleRegenerate = async (currentDescription: string) => {
-    if (!session) {return}
+    if (!session) {
+      return
+    }
     setIsLoading(true)
     setError(null)
     try {
@@ -89,13 +89,11 @@ export default function WizardPage() {
         idea: currentDescription,
         language: session.language,
       })
-      setSession((prev) =>
-        prev !== null ? { ...prev, ...refined, add_to_sprint: prev.add_to_sprint } : refined,
+      setSession(prev =>
+        prev !== null ? { ...prev, ...refined, add_to_sprint: prev.add_to_sprint } : refined
       )
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to regenerate',
-      )
+      setError(err instanceof Error ? err.message : 'Failed to regenerate')
     } finally {
       setIsLoading(false)
     }
@@ -128,7 +126,7 @@ export default function WizardPage() {
 
       {/* Step content */}
       {step === 'idea' && (
-        <IdeaForm onSubmit={(data) => void handleIdeaSubmit(data)} isLoading={isLoading} />
+        <IdeaForm onSubmit={data => void handleIdeaSubmit(data)} isLoading={isLoading} />
       )}
 
       {step === 'review' && session && (
@@ -136,16 +134,13 @@ export default function WizardPage() {
           session={session}
           onBack={() => setStep('idea')}
           onCreateIssue={(title, addToSprint) => void handleCreateIssue(title, addToSprint)}
-          onRegenerate={(desc) => void handleRegenerate(desc)}
+          onRegenerate={desc => void handleRegenerate(desc)}
           isLoading={isLoading}
         />
       )}
 
       {step === 'confirm' && (
-        <CreateConfirm
-          createdIssues={createdIssues}
-          onCreateAnother={handleReset}
-        />
+        <CreateConfirm createdIssues={createdIssues} onCreateAnother={handleReset} />
       )}
     </div>
   )

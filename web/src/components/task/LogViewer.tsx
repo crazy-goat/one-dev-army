@@ -15,43 +15,44 @@ interface StreamEvent {
 
 export function LogViewer({ issueNumber }: LogViewerProps) {
   const [lines, setLines] = useState<string[]>([])
-  const [history, setHistory] = useState<
-    { role: string; content: string }[]
-  >([])
+  const [history, setHistory] = useState<{ role: string; content: string }[]>([])
   const [connected, setConnected] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
-  const handleEvent = useCallback((data: unknown) => {
-    const event = data as StreamEvent
+  const handleEvent = useCallback(
+    (data: unknown) => {
+      const event = data as StreamEvent
 
-    if (event.done === true) {
-      setConnected(false)
-      // MISSING 8: Invalidate queries on stream done so page refreshes with final data
-      void queryClient.invalidateQueries({ queryKey: ['issue', issueNumber] })
-      void queryClient.invalidateQueries({ queryKey: ['issue-steps', issueNumber] })
-      void queryClient.invalidateQueries({ queryKey: ['board'] })
-      return
-    }
+      if (event.done === true) {
+        setConnected(false)
+        // MISSING 8: Invalidate queries on stream done so page refreshes with final data
+        void queryClient.invalidateQueries({ queryKey: ['issue', issueNumber] })
+        void queryClient.invalidateQueries({ queryKey: ['issue-steps', issueNumber] })
+        void queryClient.invalidateQueries({ queryKey: ['board'] })
+        return
+      }
 
-    if (event.history !== undefined) {
-      setHistory(event.history)
-      return
-    }
+      if (event.history !== undefined) {
+        setHistory(event.history)
+        return
+      }
 
-    if (event.delta !== undefined) {
-      setLines((prev) => {
-        const updated = [...prev]
-        const lastIdx = updated.length - 1
-        if (lastIdx >= 0 && !updated[lastIdx]!.endsWith('\n')) {
-          updated[lastIdx] = updated[lastIdx]! + event.delta!
-        } else {
-          updated.push(event.delta!)
-        }
-        return updated
-      })
-    }
-  }, [issueNumber, queryClient])
+      if (event.delta !== undefined) {
+        setLines(prev => {
+          const updated = [...prev]
+          const lastIdx = updated.length - 1
+          if (lastIdx >= 0 && !updated[lastIdx]!.endsWith('\n')) {
+            updated[lastIdx] = updated[lastIdx]! + event.delta!
+          } else {
+            updated.push(event.delta!)
+          }
+          return updated
+        })
+      }
+    },
+    [issueNumber, queryClient]
+  )
 
   useSSE(`/api/v2/issues/${String(issueNumber)}/stream`, handleEvent)
 
@@ -72,9 +73,7 @@ export function LogViewer({ issueNumber }: LogViewerProps) {
           <span
             className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`}
           />
-          <span className="text-gray-500">
-            {connected ? 'Connected' : 'Disconnected'}
-          </span>
+          <span className="text-gray-500">{connected ? 'Connected' : 'Disconnected'}</span>
         </div>
       </div>
 
@@ -100,9 +99,7 @@ export function LogViewer({ issueNumber }: LogViewerProps) {
             >
               {msg.role === 'user' ? 'User' : 'Assistant'}
             </div>
-            <div className="text-gray-300 whitespace-pre-wrap break-words">
-              {msg.content}
-            </div>
+            <div className="text-gray-300 whitespace-pre-wrap break-words">{msg.content}</div>
           </div>
         ))}
 
@@ -121,9 +118,7 @@ export function LogViewer({ issueNumber }: LogViewerProps) {
           </div>
         ) : (
           history.length === 0 && (
-            <p className="text-gray-600 italic text-center py-4">
-              Waiting for output...
-            </p>
+            <p className="text-gray-600 italic text-center py-4">Waiting for output...</p>
           )
         )}
       </div>

@@ -14,11 +14,17 @@ const statusColors: Record<string, string> = {
 }
 
 function formatDuration(start?: string, end?: string): string | null {
-  if (start === undefined || end === undefined) {return null}
+  if (start === undefined || end === undefined) {
+    return null
+  }
   const ms = new Date(end).getTime() - new Date(start).getTime()
-  if (ms < 1000) {return `${String(ms)}ms`}
+  if (ms < 1000) {
+    return `${String(ms)}ms`
+  }
   const secs = Math.floor(ms / 1000)
-  if (secs < 60) {return `${String(secs)}s`}
+  if (secs < 60) {
+    return `${String(secs)}s`
+  }
   const mins = Math.floor(secs / 60)
   const remainSecs = secs % 60
   return `${String(mins)}m ${String(remainSecs)}s`
@@ -38,16 +44,10 @@ function StepItem({ step }: { step: TaskStep }) {
         className="flex justify-between items-center w-full px-4 py-3 text-left hover:bg-white/[0.02] transition-colors"
       >
         <div className="flex items-center gap-3">
-          <span className="font-semibold text-sm text-gray-200">
-            {step.step_name}
-          </span>
-          {duration !== null && (
-            <span className="text-xs text-gray-500">{duration}</span>
-          )}
+          <span className="font-semibold text-sm text-gray-200">{step.step_name}</span>
+          {duration !== null && <span className="text-xs text-gray-500">{duration}</span>}
           {step.llm_model !== undefined && (
-            <span className="text-xs text-gray-600 font-mono">
-              {step.llm_model}
-            </span>
+            <span className="text-xs text-gray-600 font-mono">{step.llm_model}</span>
           )}
         </div>
         <span
@@ -62,9 +62,7 @@ function StepItem({ step }: { step: TaskStep }) {
         <div className="border-t border-gray-800 px-4 pb-4">
           {step.prompt !== undefined && (
             <div className="mt-3">
-              <h4 className="text-xs uppercase tracking-wider text-gray-500 mb-1.5">
-                Prompt
-              </h4>
+              <h4 className="text-xs uppercase tracking-wider text-gray-500 mb-1.5">Prompt</h4>
               <pre className="bg-gray-950 border border-gray-800 rounded p-3 text-sm text-gray-300 whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto font-mono">
                 {step.prompt}
               </pre>
@@ -73,9 +71,7 @@ function StepItem({ step }: { step: TaskStep }) {
 
           {step.response !== undefined && (
             <div className="mt-3">
-              <h4 className="text-xs uppercase tracking-wider text-gray-500 mb-1.5">
-                Response
-              </h4>
+              <h4 className="text-xs uppercase tracking-wider text-gray-500 mb-1.5">Response</h4>
               <pre className="bg-gray-950 border border-gray-800 rounded p-3 text-sm text-gray-300 whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto font-mono">
                 {step.response}
               </pre>
@@ -84,9 +80,7 @@ function StepItem({ step }: { step: TaskStep }) {
 
           {step.error_msg !== undefined && (
             <div className="mt-3">
-              <h4 className="text-xs uppercase tracking-wider text-red-500 mb-1.5">
-                Error
-              </h4>
+              <h4 className="text-xs uppercase tracking-wider text-red-500 mb-1.5">Error</h4>
               <pre className="bg-gray-950 border border-red-500/30 rounded p-3 text-sm text-red-400 whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto font-mono">
                 {step.error_msg}
               </pre>
@@ -100,16 +94,12 @@ function StepItem({ step }: { step: TaskStep }) {
 
 export function StepList({ steps }: StepListProps) {
   if (steps.length === 0) {
-    return (
-      <p className="text-gray-500 text-center py-12 italic">
-        No steps recorded yet
-      </p>
-    )
+    return <p className="text-gray-500 text-center py-12 italic">No steps recorded yet</p>
   }
 
   return (
     <div className="flex flex-col gap-3">
-      {steps.map((step) => (
+      {steps.map(step => (
         <StepItem key={step.id} step={step} />
       ))}
     </div>

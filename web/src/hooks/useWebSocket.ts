@@ -27,7 +27,7 @@ export function useWebSocketUpdates() {
     const ws = new OdaWebSocket(wsUrl)
     wsRef.current = ws
 
-    ws.onStatusChange((connected) => {
+    ws.onStatusChange(connected => {
       setWsConnected(connected)
     })
 
@@ -48,7 +48,7 @@ export function useWebSocketUpdates() {
           // Forward log_stream messages to registered handlers
           if (msg.payload !== null) {
             const payload = msg.payload as LogStreamPayload
-            logStreamHandlersRef.current.forEach((h) => h(payload))
+            logStreamHandlersRef.current.forEach(h => h(payload))
           }
           break
       }
@@ -61,9 +61,7 @@ export function useWebSocketUpdates() {
   const onLogStream = useCallback((handler: LogStreamHandler): (() => void) => {
     logStreamHandlersRef.current.push(handler)
     return () => {
-      logStreamHandlersRef.current = logStreamHandlersRef.current.filter(
-        (h) => h !== handler,
-      )
+      logStreamHandlersRef.current = logStreamHandlersRef.current.filter(h => h !== handler)
     }
   }, [])
 

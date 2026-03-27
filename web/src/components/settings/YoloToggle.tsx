@@ -6,13 +6,7 @@ interface YoloToggleProps {
   warning?: string
 }
 
-export function YoloToggle({
-  label,
-  description,
-  checked,
-  onChange,
-  warning,
-}: YoloToggleProps) {
+export function YoloToggle({ label, description, checked, onChange, warning }: YoloToggleProps) {
   return (
     <div className="flex flex-col gap-1">
       <label className="flex items-center gap-3 cursor-pointer">

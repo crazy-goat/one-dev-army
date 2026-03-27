@@ -48,9 +48,7 @@ export default function SprintClosePage() {
       setReleaseTitle(data.release_title)
       setReleaseBody(data.release_body)
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to generate preview',
-      )
+      setError(err instanceof Error ? err.message : 'Failed to generate preview')
     } finally {
       setIsLoadingPreview(false)
     }
@@ -67,9 +65,7 @@ export default function SprintClosePage() {
       })
       setResult(data)
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to close sprint',
-      )
+      setError(err instanceof Error ? err.message : 'Failed to close sprint')
     } finally {
       setIsClosing(false)
     }
@@ -81,9 +77,7 @@ export default function SprintClosePage() {
       <div className="max-w-2xl mx-auto p-4 py-12">
         <div className="text-center mb-8">
           <div className="text-4xl mb-4">{'\u2705'}</div>
-          <h1 className="text-2xl font-bold text-white mb-2">
-            Sprint Closed Successfully
-          </h1>
+          <h1 className="text-2xl font-bold text-white mb-2">Sprint Closed Successfully</h1>
           {result.warning !== undefined && (
             <p className="text-yellow-400 text-sm mt-2">{result.warning}</p>
           )}
@@ -139,9 +133,7 @@ export default function SprintClosePage() {
     <div className="max-w-5xl mx-auto p-4 py-8">
       {/* Header */}
       <div className="text-center mb-8">
-        <h1 className="text-2xl font-bold text-white mb-1">
-          Close Sprint &amp; Release
-        </h1>
+        <h1 className="text-2xl font-bold text-white mb-1">Close Sprint &amp; Release</h1>
         <p className="text-gray-500 text-sm">
           Select the version bump type and review the generated release notes
         </p>
@@ -174,7 +166,7 @@ export default function SprintClosePage() {
 
           {/* Bump options */}
           <div className="space-y-2 mb-6">
-            {BUMP_OPTIONS.map((opt) => (
+            {BUMP_OPTIONS.map(opt => (
               <label
                 key={opt.value}
                 className={`flex items-center p-3 bg-gray-950 border-2 rounded-lg cursor-pointer transition-all ${
@@ -192,9 +184,7 @@ export default function SprintClosePage() {
                   className="mr-3 accent-blue-500"
                 />
                 <div>
-                  <div className="text-sm font-medium text-gray-200">
-                    {opt.label}
-                  </div>
+                  <div className="text-sm font-medium text-gray-200">{opt.label}</div>
                   <div className="text-xs text-gray-500">{opt.description}</div>
                 </div>
               </label>
@@ -252,9 +242,7 @@ export default function SprintClosePage() {
           {isLoadingPreview ? (
             <div className="flex flex-col items-center justify-center h-[300px] text-gray-500">
               <div className="w-10 h-10 border-3 border-gray-700 border-t-blue-500 rounded-full animate-spin mb-4" />
-              <span className="text-sm">
-                Generating release notes with LLM...
-              </span>
+              <span className="text-sm">Generating release notes with LLM...</span>
             </div>
           ) : preview ? (
             <>
@@ -274,7 +262,7 @@ export default function SprintClosePage() {
                 <input
                   type="text"
                   value={releaseTitle}
-                  onChange={(e) => setReleaseTitle(e.target.value)}
+                  onChange={e => setReleaseTitle(e.target.value)}
                   className="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded-lg text-gray-200 text-sm font-semibold focus:outline-none focus:border-blue-500 transition-colors"
                 />
               </div>
@@ -286,7 +274,7 @@ export default function SprintClosePage() {
                 </label>
                 <textarea
                   value={releaseBody}
-                  onChange={(e) => setReleaseBody(e.target.value)}
+                  onChange={e => setReleaseBody(e.target.value)}
                   rows={12}
                   className="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded-lg text-gray-300 text-sm font-mono resize-y focus:outline-none focus:border-blue-500 transition-colors leading-relaxed"
                 />
@@ -299,14 +287,9 @@ export default function SprintClosePage() {
                     Closed Issues ({preview.closed_issues.length})
                   </h4>
                   <div className="space-y-1">
-                    {preview.closed_issues.map((issue) => (
-                      <div
-                        key={issue.number}
-                        className="text-sm text-gray-400 flex gap-2"
-                      >
-                        <span className="text-blue-400 font-mono">
-                          #{issue.number}
-                        </span>
+                    {preview.closed_issues.map(issue => (
+                      <div key={issue.number} className="text-sm text-gray-400 flex gap-2">
+                        <span className="text-blue-400 font-mono">#{issue.number}</span>
                         <span>{issue.title}</span>
                       </div>
                     ))}
@@ -324,8 +307,8 @@ export default function SprintClosePage() {
             <div className="flex flex-col items-center justify-center h-[300px] text-gray-600 text-center">
               <div className="text-4xl mb-4 opacity-50">{'\uD83D\uDCE6'}</div>
               <p className="text-sm">
-                Select a version bump type and click &quot;Preview Release
-                Notes&quot; to generate release notes.
+                Select a version bump type and click &quot;Preview Release Notes&quot; to generate
+                release notes.
               </p>
             </div>
           )}

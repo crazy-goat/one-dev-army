@@ -48,26 +48,28 @@ function sizeBadge(size: string) {
   )
 }
 
-export function ProcessingPanel({
-  currentTicket,
-  totalTickets,
-}: ProcessingPanelProps) {
+export function ProcessingPanel({ currentTicket, totalTickets }: ProcessingPanelProps) {
   const { onLogStream } = useAppContext()
   const [logLines, setLogLines] = useState<string[]>([])
   const logContainerRef = useRef<HTMLDivElement>(null)
 
   // MISSING 12: Subscribe to log_stream WebSocket messages
-  const handleLogStream = useCallback((payload: LogStreamPayload) => {
-    if (payload.issue_number !== currentTicket?.number) {return}
-    const line = payload.message || ''
-    setLogLines((prev) => {
-      const updated = [...prev, line]
-      // Keep only the last MAX_LOG_LINES
-      return updated.length > MAX_LOG_LINES
-        ? updated.slice(updated.length - MAX_LOG_LINES)
-        : updated
-    })
-  }, [currentTicket])
+  const handleLogStream = useCallback(
+    (payload: LogStreamPayload) => {
+      if (payload.issue_number !== currentTicket?.number) {
+        return
+      }
+      const line = payload.message || ''
+      setLogLines(prev => {
+        const updated = [...prev, line]
+        // Keep only the last MAX_LOG_LINES
+        return updated.length > MAX_LOG_LINES
+          ? updated.slice(updated.length - MAX_LOG_LINES)
+          : updated
+      })
+    },
+    [currentTicket]
+  )
 
   useEffect(() => {
     const unsub = onLogStream(handleLogStream)
@@ -95,12 +97,8 @@ export function ProcessingPanel({
         </div>
         {totalTickets === 0 ? (
           <div className="flex flex-col gap-1">
-            <span className="text-lg font-semibold text-gray-200">
-              No tickets in sprint
-            </span>
-            <span className="text-sm text-gray-500">
-              Create your first ticket to get started
-            </span>
+            <span className="text-lg font-semibold text-gray-200">No tickets in sprint</span>
+            <span className="text-sm text-gray-500">Create your first ticket to get started</span>
             <Link
               to="/wizard"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-400 bg-gray-800 border border-gray-700 rounded-md mt-2 hover:bg-gray-700 hover:border-blue-500 transition-colors w-fit"
@@ -109,9 +107,7 @@ export function ProcessingPanel({
             </Link>
           </div>
         ) : (
-          <span className="text-sm text-gray-500">
-            No active ticket &mdash; Worker ready
-          </span>
+          <span className="text-sm text-gray-500">No active ticket &mdash; Worker ready</span>
         )}
       </div>
     )
@@ -132,22 +128,15 @@ export function ProcessingPanel({
       </div>
 
       {/* Ticket info */}
-      <Link
-        to={`/task/${String(currentTicket.number)}`}
-        className="block group"
-      >
-        <span className="text-xs text-gray-500 font-medium">
-          #{currentTicket.number}
-        </span>
+      <Link to={`/task/${String(currentTicket.number)}`} className="block group">
+        <span className="text-xs text-gray-500 font-medium">#{currentTicket.number}</span>
         <span className="block text-xl font-semibold text-gray-100 leading-snug group-hover:text-white transition-colors line-clamp-2">
           {currentTicket.title}
         </span>
       </Link>
 
       {/* Status */}
-      <div className="mt-2 text-xs text-blue-400 capitalize">
-        {currentTicket.status}
-      </div>
+      <div className="mt-2 text-xs text-blue-400 capitalize">{currentTicket.status}</div>
 
       {/* MISSING 12: Mini log viewer */}
       {logLines.length > 0 && (

@@ -15,22 +15,39 @@ import type { Card } from '../../api/types'
 /** Maps known GitHub labels to emoji icons. */
 function labelIcon(label: string): string | null {
   const lower = label.toLowerCase()
-  if (
-    lower === 'type:feature' ||
-    lower === 'feature' ||
-    lower === 'enhancement'
-  )
-    {return '\u2728'}
-  if (lower === 'type:bug' || lower === 'bug') {return '\uD83D\uDC1B'}
-  if (lower === 'type:docs') {return '\uD83D\uDCDA'}
-  if (lower === 'type:refactor') {return '\uD83D\uDD27'}
-  if (lower === 'size:s') {return '\uD83D\uDC1C'}
-  if (lower === 'size:m') {return '\uD83D\uDC15'}
-  if (lower === 'size:l') {return '\uD83D\uDC18'}
-  if (lower === 'size:xl') {return '\uD83E\uDD95'}
-  if (lower === 'priority:high') {return '\uD83D\uDD34'}
-  if (lower === 'priority:medium') {return '\uD83D\uDFE1'}
-  if (lower === 'priority:low') {return '\uD83D\uDFE2'}
+  if (lower === 'type:feature' || lower === 'feature' || lower === 'enhancement') {
+    return '\u2728'
+  }
+  if (lower === 'type:bug' || lower === 'bug') {
+    return '\uD83D\uDC1B'
+  }
+  if (lower === 'type:docs') {
+    return '\uD83D\uDCDA'
+  }
+  if (lower === 'type:refactor') {
+    return '\uD83D\uDD27'
+  }
+  if (lower === 'size:s') {
+    return '\uD83D\uDC1C'
+  }
+  if (lower === 'size:m') {
+    return '\uD83D\uDC15'
+  }
+  if (lower === 'size:l') {
+    return '\uD83D\uDC18'
+  }
+  if (lower === 'size:xl') {
+    return '\uD83E\uDD95'
+  }
+  if (lower === 'priority:high') {
+    return '\uD83D\uDD34'
+  }
+  if (lower === 'priority:medium') {
+    return '\uD83D\uDFE1'
+  }
+  if (lower === 'priority:low') {
+    return '\uD83D\uDFE2'
+  }
   return null
 }
 
@@ -55,14 +72,16 @@ export function TaskCard({ card, column, columnKey }: TaskCardProps) {
   const [declineReason, setDeclineReason] = useState('')
   const [processConfirmOpen, setProcessConfirmOpen] = useState(false)
 
-  const iconLabels = card.labels.filter((l) => labelIcon(l) !== null)
-  const textLabels = card.labels.filter((l) => labelIcon(l) === null)
+  const iconLabels = card.labels.filter(l => labelIcon(l) !== null)
+  const textLabels = card.labels.filter(l => labelIcon(l) === null)
 
   const handleDecline = () => {
-    if (!declineReason.trim()) {return}
+    if (!declineReason.trim()) {
+      return
+    }
     decline.mutate(
       { id: card.id, reason: declineReason },
-      { onSuccess: () => setDeclineOpen(false) },
+      { onSuccess: () => setDeclineOpen(false) }
     )
   }
 
@@ -102,7 +121,7 @@ export function TaskCard({ card, column, columnKey }: TaskCardProps) {
       {/* Emoji icons top-right */}
       {iconLabels.length > 0 && (
         <div className="absolute top-2 right-2 flex gap-0.5 flex-wrap justify-end max-w-[5rem]">
-          {iconLabels.map((l) => (
+          {iconLabels.map(l => (
             <span key={l} className="text-base leading-none" title={l}>
               {labelIcon(l)}
             </span>
@@ -120,10 +139,7 @@ export function TaskCard({ card, column, columnKey }: TaskCardProps) {
 
       {/* Title */}
       <div className="mt-0.5 mr-16 text-gray-200 leading-snug">
-        <Link
-          to={`/task/${String(card.id)}`}
-          className="hover:text-white transition-colors"
-        >
+        <Link to={`/task/${String(card.id)}`} className="hover:text-white transition-colors">
           {card.title}
         </Link>
       </div>
@@ -160,7 +176,7 @@ export function TaskCard({ card, column, columnKey }: TaskCardProps) {
       {/* Text labels */}
       {textLabels.length > 0 && (
         <div className="flex gap-1 flex-wrap mt-1.5">
-          {textLabels.map((l) => (
+          {textLabels.map(l => (
             <span
               key={l}
               className="text-[0.65rem] px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-400"
@@ -177,9 +193,7 @@ export function TaskCard({ card, column, columnKey }: TaskCardProps) {
       )}
 
       {/* Worker */}
-      {card.worker !== undefined && (
-        <div className="text-xs text-blue-400 mt-1">{card.worker}</div>
-      )}
+      {card.worker !== undefined && <div className="text-xs text-blue-400 mt-1">{card.worker}</div>}
 
       {/* Action buttons */}
       <div className="flex gap-1.5 mt-2 flex-wrap">
@@ -262,21 +276,21 @@ export function TaskCard({ card, column, columnKey }: TaskCardProps) {
       {declineOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {setDeclineOpen(false)}
+          onClick={e => {
+            if (e.target === e.currentTarget) {
+              setDeclineOpen(false)
+            }
           }}
         >
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-[500px] max-w-[90vw]">
-            <h3 className="text-white font-semibold mb-1">
-              Decline #{card.id}
-            </h3>
+            <h3 className="text-white font-semibold mb-1">Decline #{card.id}</h3>
             <p className="text-gray-400 text-sm mb-4">{card.title}</p>
             <label className="text-sm font-semibold text-gray-300 block mb-1">
               What needs to be fixed?
             </label>
             <textarea
               value={declineReason}
-              onChange={(e) => setDeclineReason(e.target.value)}
+              onChange={e => setDeclineReason(e.target.value)}
               rows={5}
               className="w-full p-2 border border-gray-700 rounded-md bg-gray-800 text-gray-200 text-sm resize-y focus:outline-none focus:border-blue-500"
               placeholder="Describe what's wrong and what the AI should fix..."
@@ -306,18 +320,18 @@ export function TaskCard({ card, column, columnKey }: TaskCardProps) {
       {processConfirmOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {setProcessConfirmOpen(false)}
+          onClick={e => {
+            if (e.target === e.currentTarget) {
+              setProcessConfirmOpen(false)
+            }
           }}
         >
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-[400px] max-w-[90vw]">
-            <h3 className="text-white font-semibold mb-1">
-              Process #{card.id}?
-            </h3>
+            <h3 className="text-white font-semibold mb-1">Process #{card.id}?</h3>
             <p className="text-gray-400 text-sm mb-4">{card.title}</p>
             <p className="text-gray-500 text-sm mb-4">
-              This will queue the ticket for automated processing through the
-              full pipeline (plan, code, review, merge).
+              This will queue the ticket for automated processing through the full pipeline (plan,
+              code, review, merge).
             </p>
             <div className="flex gap-2 justify-end">
               <button

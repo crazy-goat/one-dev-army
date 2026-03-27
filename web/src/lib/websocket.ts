@@ -35,7 +35,7 @@ export class OdaWebSocket {
   private setConnected(value: boolean) {
     if (this._connected !== value) {
       this._connected = value
-      this.statusHandlers.forEach((h) => h(value))
+      this.statusHandlers.forEach(h => h(value))
     }
   }
 
@@ -51,8 +51,10 @@ export class OdaWebSocket {
     this.ws.onmessage = (event: MessageEvent) => {
       try {
         const msg = JSON.parse(event.data as string) as WSMessage
-        if (msg.type === 'pong') {return}
-        this.handlers.forEach((h) => h(msg))
+        if (msg.type === 'pong') {
+          return
+        }
+        this.handlers.forEach(h => h(msg))
       } catch {
         /* ignore malformed frames */
       }
@@ -63,10 +65,7 @@ export class OdaWebSocket {
       this.setConnected(false)
       if (this.shouldReconnect) {
         setTimeout(() => this.connect(), this.reconnectDelay)
-        this.reconnectDelay = Math.min(
-          this.reconnectDelay * 2,
-          this.maxReconnectDelay,
-        )
+        this.reconnectDelay = Math.min(this.reconnectDelay * 2, this.maxReconnectDelay)
       }
     }
 
@@ -94,7 +93,7 @@ export class OdaWebSocket {
   onMessage(handler: MessageHandler): () => void {
     this.handlers.push(handler)
     return () => {
-      this.handlers = this.handlers.filter((h) => h !== handler)
+      this.handlers = this.handlers.filter(h => h !== handler)
     }
   }
 
@@ -102,7 +101,7 @@ export class OdaWebSocket {
   onStatusChange(handler: StatusHandler): () => void {
     this.statusHandlers.push(handler)
     return () => {
-      this.statusHandlers = this.statusHandlers.filter((h) => h !== handler)
+      this.statusHandlers = this.statusHandlers.filter(h => h !== handler)
     }
   }
 

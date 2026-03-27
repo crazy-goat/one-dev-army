@@ -13,11 +13,7 @@ export function StepIndicator({ currentStep, steps }: StepIndicatorProps) {
 
         return (
           <div key={label} className="flex items-center gap-2">
-            {i > 0 && (
-              <div
-                className={`w-8 h-px ${isCompleted ? 'bg-blue-500' : 'bg-gray-700'}`}
-              />
-            )}
+            {i > 0 && <div className={`w-8 h-px ${isCompleted ? 'bg-blue-500' : 'bg-gray-700'}`} />}
             <div className="flex items-center gap-1.5">
               <div
                 className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${
@@ -32,11 +28,7 @@ export function StepIndicator({ currentStep, steps }: StepIndicatorProps) {
               </div>
               <span
                 className={`text-xs font-medium ${
-                  isActive
-                    ? 'text-white'
-                    : isCompleted
-                      ? 'text-blue-400'
-                      : 'text-gray-500'
+                  isActive ? 'text-white' : isCompleted ? 'text-blue-400' : 'text-gray-500'
                 }`}
               >
                 {label}

@@ -42,7 +42,7 @@ export function Column({ title, columnKey, cards, emptyText }: ColumnProps) {
       {/* Cards */}
       <div className="flex flex-col gap-2 overflow-y-auto flex-1 min-h-0">
         {cards.length > 0 ? (
-          cards.map((card) => (
+          cards.map(card => (
             <TaskCard key={card.id} card={card} column={title} columnKey={columnKey} />
           ))
         ) : (

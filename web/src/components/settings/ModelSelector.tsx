@@ -9,12 +9,7 @@ interface ModelSelectorProps {
   onChange: (modelId: string) => void
 }
 
-export function ModelSelector({
-  label,
-  value,
-  models,
-  onChange,
-}: ModelSelectorProps) {
+export function ModelSelector({ label, value, models, onChange }: ModelSelectorProps) {
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(-1)
@@ -24,10 +19,10 @@ export function ModelSelector({
   // Filter models by search text
   const filtered = filter
     ? models.filter(
-        (m) =>
+        m =>
           m.name.toLowerCase().includes(filter.toLowerCase()) ||
           m.id.toLowerCase().includes(filter.toLowerCase()) ||
-          m.provider_id.toLowerCase().includes(filter.toLowerCase()),
+          m.provider_id.toLowerCase().includes(filter.toLowerCase())
       )
     : models
 
@@ -45,10 +40,7 @@ export function ModelSelector({
   // Close on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false)
       }
     }
@@ -63,14 +55,16 @@ export function ModelSelector({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!open) {return}
+    if (!open) {
+      return
+    }
 
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setSelectedIndex((prev) => Math.min(prev + 1, filtered.length - 1))
+      setSelectedIndex(prev => Math.min(prev + 1, filtered.length - 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      setSelectedIndex((prev) => Math.max(prev - 1, -1))
+      setSelectedIndex(prev => Math.max(prev - 1, -1))
     } else if (e.key === 'Enter') {
       e.preventDefault()
       const selected = filtered[selectedIndex]
@@ -85,15 +79,13 @@ export function ModelSelector({
 
   return (
     <div className="mb-4" ref={containerRef}>
-      <label className="block text-sm font-medium text-gray-300 mb-1">
-        {label}
-      </label>
+      <label className="block text-sm font-medium text-gray-300 mb-1">{label}</label>
       <div className="relative">
         <input
           ref={inputRef}
           type="text"
           value={open ? filter : value}
-          onChange={(e) => {
+          onChange={e => {
             setFilter(e.target.value)
             setSelectedIndex(-1)
           }}
@@ -119,7 +111,7 @@ export function ModelSelector({
                   <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-950 border-b border-gray-800">
                     {provider}
                   </div>
-                  {providerModels.map((m) => {
+                  {providerModels.map(m => {
                     const idx = filtered.indexOf(m)
                     return (
                       <button
