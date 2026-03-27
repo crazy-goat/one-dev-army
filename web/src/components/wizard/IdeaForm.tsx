@@ -36,20 +36,84 @@ declare global {
   }
 }
 
-const LANGUAGES = [
-  { value: 'en-US', label: '\uD83C\uDDFA\uD83C\uDDF8 English' },
-  { value: 'pl-PL', label: '\uD83C\uDDF5\uD83C\uDDF1 Polski' },
-  { value: 'de-DE', label: '\uD83C\uDDE9\uD83C\uDDEA Deutsch' },
-  { value: 'es-ES', label: '\uD83C\uDDEA\uD83C\uDDF8 Espa\u00F1ol' },
-  { value: 'fr-FR', label: '\uD83C\uDDEB\uD83C\uDDF7 Fran\u00E7ais' },
-  { value: 'pt-PT', label: '\uD83C\uDDF5\uD83C\uDDF9 Portugu\u00EAs' },
-  { value: 'it-IT', label: '\uD83C\uDDEE\uD83C\uDDF9 Italiano' },
-  { value: 'nl-NL', label: '\uD83C\uDDF3\uD83C\uDDF1 Nederlands' },
-  { value: 'ru-RU', label: '\uD83C\uDDF7\uD83C\uDDFA \u0420\u0443\u0441\u0441\u043A\u0438\u0439' },
-  { value: 'zh-CN', label: '\uD83C\uDDE8\uD83C\uDDF3 \u4E2D\u6587' },
-  { value: 'ja-JP', label: '\uD83C\uDDEF\uD83C\uDDF5 \u65E5\u672C\u8A9E' },
-  { value: 'ko-KR', label: '\uD83C\uDDF0\uD83C\uDDF7 \uD55C\uAD6D\uC5B4' },
-] as const
+// Map browser language codes to our supported languages
+const LANGUAGE_MAP: Record<string, string> = {
+  'en': 'en-US',
+  'en-US': 'en-US',
+  'en-GB': 'en-US',
+  'pl': 'pl-PL',
+  'pl-PL': 'pl-PL',
+  'de': 'de-DE',
+  'de-DE': 'de-DE',
+  'es': 'es-ES',
+  'es-ES': 'es-ES',
+  'fr': 'fr-FR',
+  'fr-FR': 'fr-FR',
+  'pt': 'pt-PT',
+  'pt-PT': 'pt-PT',
+  'pt-BR': 'pt-PT',
+  'it': 'it-IT',
+  'it-IT': 'it-IT',
+  'nl': 'nl-NL',
+  'nl-NL': 'nl-NL',
+  'ru': 'ru-RU',
+  'ru-RU': 'ru-RU',
+  'zh': 'zh-CN',
+  'zh-CN': 'zh-CN',
+  'zh-TW': 'zh-CN',
+  'ja': 'ja-JP',
+  'ja-JP': 'ja-JP',
+  'ko': 'ko-KR',
+  'ko-KR': 'ko-KR',
+}
+
+const LANGUAGE_LABELS: Record<string, string> = {
+  'en-US': '🇺🇸 English',
+  'pl-PL': '🇵🇱 Polski',
+  'de-DE': '🇩🇪 Deutsch',
+  'es-ES': '🇪🇸 Español',
+  'fr-FR': '🇫🇷 Français',
+  'pt-PT': '🇵🇹 Português',
+  'it-IT': '🇮🇹 Italiano',
+  'nl-NL': '🇳🇱 Nederlands',
+  'ru-RU': '🇷🇺 Русский',
+  'zh-CN': '🇨🇳 中文',
+  'ja-JP': '🇯🇵 日本語',
+  'ko-KR': '🇰🇷 한국어',
+}
+
+// Get available languages based on browser Accept-Language header
+function getAvailableLanguages(): string[] {
+  const browserLanguages = navigator.languages || [navigator.language || 'en-US']
+  const available = new Set<string>()
+  
+  // Always add English
+  available.add('en-US')
+  
+  // Add languages from browser
+  browserLanguages.forEach(lang => {
+    const mapped = LANGUAGE_MAP[lang]
+    if (mapped) {
+      available.add(mapped)
+    }
+  })
+  
+  return Array.from(available)
+}
+
+// Get default language (first from browser, fallback to English)
+function getDefaultLanguage(): string {
+  const browserLanguages = navigator.languages || [navigator.language || 'en-US']
+  
+  for (const lang of browserLanguages) {
+    const mapped = LANGUAGE_MAP[lang]
+    if (mapped) {
+      return mapped
+    }
+  }
+  
+  return 'en-US'
+}
 
 interface IdeaFormProps {
   onSubmit: (data: {
@@ -64,8 +128,11 @@ interface IdeaFormProps {
 export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
   const [type, setType] = useState<string | null>(null)
   const [idea, setIdea] = useState('')
-  const [language, setLanguage] = useState('en-US')
+  const [language, setLanguage] = useState(() => getDefaultLanguage())
   const [addToSprint, setAddToSprint] = useState(true)
+  
+  // Get available languages based on browser
+  const availableLanguages = getAvailableLanguages()
   
   // Speech recognition state
   const [isRecording, setIsRecording] = useState(false)
@@ -296,9 +363,9 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
             onChange={(e) => setLanguage(e.target.value)}
             className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:border-blue-500 transition-colors cursor-pointer"
           >
-            {LANGUAGES.map((l) => (
-              <option key={l.value} value={l.value}>
-                {l.label}
+            {availableLanguages.map((langCode) => (
+              <option key={langCode} value={langCode}>
+                {LANGUAGE_LABELS[langCode] || langCode}
               </option>
             ))}
           </select>
