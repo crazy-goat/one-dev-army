@@ -70,7 +70,7 @@ export default function TaskPage() {
             </span>{' '}
             {issue.issue_title}
           </h1>
-          {issue.is_active && issue.status && (
+          {issue.is_active && issue.status !== undefined && issue.status !== '' && (
             <span className="flex-shrink-0 px-3 py-1 rounded bg-green-600 text-white text-sm font-semibold">
               {issue.status}
             </span>

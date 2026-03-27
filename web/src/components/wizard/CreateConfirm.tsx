@@ -106,7 +106,7 @@ export function CreateConfirm({
                           {'\u274C'}
                         </span>
                         <span className="flex-1">{issue.title}</span>
-                        {issue.error && (
+                        {issue.error !== undefined && issue.error !== '' && (
                           <span className="text-sm ml-auto">{issue.error}</span>
                         )}
                       </div>

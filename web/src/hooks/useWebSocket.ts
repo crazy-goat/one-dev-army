@@ -46,7 +46,7 @@ export function useWebSocketUpdates() {
           break
         case 'log_stream':
           // Forward log_stream messages to registered handlers
-          if (msg.payload) {
+          if (msg.payload !== null) {
             const payload = msg.payload as LogStreamPayload
             logStreamHandlersRef.current.forEach((h) => h(payload))
           }

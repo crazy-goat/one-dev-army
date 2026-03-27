@@ -34,7 +34,7 @@ export function YoloToggle({
         <span className="text-sm font-medium text-gray-200">{label}</span>
       </label>
       <p className="text-xs text-gray-500 ml-14">{description}</p>
-      {warning && checked && (
+      {warning !== undefined && warning !== '' && checked && (
         <p className="text-xs text-yellow-400 ml-14 mt-1">{warning}</p>
       )}
     </div>

@@ -84,9 +84,9 @@ export function RefinePreview({
       </div>
 
       {/* Badges */}
-      {(session.priority ?? session.complexity) && (
+      {(session.priority !== undefined || session.complexity !== undefined) && (
         <div className="flex items-center gap-2 flex-wrap mb-4">
-          {session.priority && (
+          {session.priority !== undefined && (
             <span
               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border capitalize ${
                 priorityColors[session.priority] ??
@@ -96,7 +96,7 @@ export function RefinePreview({
               Priority: {session.priority}
             </span>
           )}
-          {session.complexity && (
+          {session.complexity !== undefined && (
             <span
               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
                 complexityColors[session.complexity] ??

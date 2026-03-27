@@ -90,7 +90,7 @@ export default function WizardPage() {
         language: session.language,
       })
       setSession((prev) =>
-        prev ? { ...prev, ...refined, add_to_sprint: prev.add_to_sprint } : refined,
+        prev !== null ? { ...prev, ...refined, add_to_sprint: prev.add_to_sprint } : refined,
       )
     } catch (err) {
       setError(
@@ -113,7 +113,7 @@ export default function WizardPage() {
       <StepIndicator currentStep={stepToNumber(step)} steps={STEP_LABELS} />
 
       {/* Error banner */}
-      {error && (
+      {error !== null && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-6 text-sm text-red-400 flex items-center justify-between">
           <span>{error}</span>
           <button

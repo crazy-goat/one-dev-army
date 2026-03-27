@@ -49,7 +49,7 @@ export function useSSE(url: string | null, onEvent: (data: unknown) => void) {
   }, [])
 
   useEffect(() => {
-    if (!url) {return}
+    if (url === null) {return}
 
     shouldReconnectRef.current = true
     reconnectDelayRef.current = 1000
@@ -57,7 +57,7 @@ export function useSSE(url: string | null, onEvent: (data: unknown) => void) {
 
     return () => {
       shouldReconnectRef.current = false
-      if (reconnectTimerRef.current) {
+      if (reconnectTimerRef.current !== null) {
         clearTimeout(reconnectTimerRef.current)
         reconnectTimerRef.current = null
       }

@@ -82,9 +82,9 @@ const LANGUAGE_LABELS: Record<string, string> = {
   'ko-KR': '🇰🇷 한국어',
 }
 
-// Get available languages based on browser Accept-Language header
+  // Get available languages based on browser Accept-Language header
 function getAvailableLanguages(): string[] {
-  const browserLanguages = navigator.languages || [navigator.language || 'en-US']
+  const browserLanguages = navigator.languages
   const available = new Set<string>()
   
   // Always add English
@@ -93,7 +93,7 @@ function getAvailableLanguages(): string[] {
   // Add languages from browser
   browserLanguages.forEach(lang => {
     const mapped = LANGUAGE_MAP[lang]
-    if (mapped) {
+    if (mapped !== undefined) {
       available.add(mapped)
     }
   })
@@ -103,11 +103,11 @@ function getAvailableLanguages(): string[] {
 
 // Get default language (first from browser, fallback to English)
 function getDefaultLanguage(): string {
-  const browserLanguages = navigator.languages || [navigator.language || 'en-US']
+  const browserLanguages = navigator.languages
   
   for (const lang of browserLanguages) {
     const mapped = LANGUAGE_MAP[lang]
-    if (mapped) {
+    if (mapped !== undefined) {
       return mapped
     }
   }
@@ -143,9 +143,9 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
 
   // Initialize speech recognition
   const initRecognition = useCallback(() => {
+    // We know one of these exists because we check supportsSpeechRecognition first
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, @typescript-eslint/strict-boolean-expressions
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SpeechRecognition) {return null}
-    
     const recognition = new SpeechRecognition()
     recognition.continuous = true
     recognition.interimResults = true
@@ -195,10 +195,6 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
     }
     
     const recognition = initRecognition()
-    if (!recognition) {
-      alert('Could not initialize speech recognition.')
-      return
-    }
     
     recognitionRef.current = recognition
     recognition.start()
@@ -240,7 +236,7 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
   }, [])
 
   // Type selection screen
-  if (!type) {
+  if (type === null) {
     return (
       <div>
         <h2 className="text-xl font-bold text-white mb-6 text-center">
