@@ -443,6 +443,22 @@ func (c *Client) CloseIssue(issueNum int) error {
 	return nil
 }
 
+// CloseIssueWithComment closes an issue and adds a comment explaining why.
+// This is a convenience method that combines AddComment and CloseIssue.
+func (c *Client) CloseIssueWithComment(issueNum int, comment string) error {
+	// Add comment first
+	if err := c.AddComment(issueNum, comment); err != nil {
+		return fmt.Errorf("adding comment before close: %w", err)
+	}
+
+	// Then close the issue
+	if err := c.CloseIssue(issueNum); err != nil {
+		return fmt.Errorf("closing issue: %w", err)
+	}
+
+	return nil
+}
+
 // UpdateIssueBody updates the body of an existing issue
 func (c *Client) UpdateIssueBody(issueNum int, body string) error {
 	_, err := c.gh("issue", "edit", strconv.Itoa(issueNum), "--body", body)
