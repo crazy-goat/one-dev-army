@@ -665,6 +665,9 @@ func (o *Orchestrator) ChangeStage(issueNumber int, toStage github.Stage, reason
 	}
 
 	// Update GitHub
+	if o.gh == nil {
+		return errors.New("github client not configured")
+	}
 	updatedIssue, err := o.gh.SetStageLabel(issueNumber, toStage)
 	if err != nil {
 		return fmt.Errorf("setting stage %s on #%d: %w", toLabel, issueNumber, err)
@@ -803,5 +806,113 @@ func (o *Orchestrator) CheckoutDefault() {
 	}
 	if err := o.brMgr.CheckoutDefault(); err != nil {
 		log.Printf("[Orchestrator] Warning: failed to checkout default branch: %v", err)
+	}
+}
+
+// RestartCurrentStage restarts the current stage of a task without losing previous progress.
+// This is used when an LLM session hangs or fails during a specific stage.
+func (o *Orchestrator) RestartCurrentStage(issueNumber int) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	// Check if task is currently being processed
+	if o.currentTask != nil && o.currentTask.Issue.Number == issueNumber {
+		return errors.New("cannot restart stage while task is actively being processed")
+	}
+
+	// Get current stage from cache
+	if o.store == nil {
+		return errors.New("store not configured")
+	}
+
+	issue, err := o.store.GetIssueCache(issueNumber)
+	if err != nil {
+		return fmt.Errorf("getting issue from cache: %w", err)
+	}
+
+	currentStage := getStageLabel(issue)
+	if currentStage == "" {
+		return fmt.Errorf("issue #%d has no stage label", issueNumber)
+	}
+
+	// Only allow restart for worker stages
+	if !isWorkerStage(currentStage) {
+		return fmt.Errorf("cannot restart stage %s: not an active worker stage", currentStage)
+	}
+
+	// Map stage label to step name
+	stepName := stageToStepName(currentStage)
+	if stepName == "" {
+		return fmt.Errorf("unknown stage: %s", currentStage)
+	}
+
+	// Delete steps for current stage and beyond
+	if err := o.store.DeleteStepsFrom(issueNumber, stepName); err != nil {
+		return fmt.Errorf("deleting steps from %s: %w", stepName, err)
+	}
+
+	// Clear any active LLM session
+	if o.currentTask != nil && o.currentTask.Issue.Number == issueNumber {
+		o.currentTask.SetSessionID("")
+	}
+
+	log.Printf("[Orchestrator] Restarted current stage for #%d (stage: %s, step: %s)",
+		issueNumber, currentStage, stepName)
+
+	// Broadcast update
+	if o.hub != nil {
+		o.hub.BroadcastIssueUpdate(issue)
+	}
+
+	return nil
+}
+
+// RestartFromBeginning performs a full restart of a task from the initial stage.
+// This clears all progress and moves the task back to backlog.
+func (o *Orchestrator) RestartFromBeginning(issueNumber int) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	// Check if task is currently being processed
+	if o.currentTask != nil && o.currentTask.Issue.Number == issueNumber {
+		return errors.New("cannot restart task while it is actively being processed")
+	}
+
+	// Clear all steps
+	if o.store != nil {
+		if err := o.store.DeleteSteps(issueNumber); err != nil {
+			return fmt.Errorf("deleting all steps: %w", err)
+		}
+	}
+
+	// Reset stage to backlog
+	if err := o.ChangeStage(issueNumber, github.StageBacklog, github.ReasonManualRetry); err != nil {
+		return fmt.Errorf("resetting stage to backlog: %w", err)
+	}
+
+	log.Printf("[Orchestrator] Full restart completed for #%d", issueNumber)
+
+	return nil
+}
+
+// stageToStepName maps a stage label to the corresponding step name
+func stageToStepName(stage string) string {
+	switch stage {
+	case "stage:analysis":
+		return "technical-planning"
+	case "stage:coding":
+		return "implement"
+	case "stage:code-review":
+		return "code-review"
+	case "stage:create-pr":
+		return "create-pr"
+	case "stage:check-pipeline":
+		return "check-pipeline"
+	case "stage:awaiting-approval":
+		return "awaiting-approval"
+	case "stage:merging":
+		return "merge"
+	default:
+		return ""
 	}
 }

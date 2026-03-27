@@ -6705,3 +6705,129 @@ sprint:
 		t.Errorf("saved config should contain 'auto_start: false', got:\n%s", savedContent)
 	}
 }
+
+func TestHandleRestartStage(t *testing.T) {
+	orch := &mvp.Orchestrator{}
+	s := &Server{orchestrator: orch}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/task/42/restart-stage", nil)
+	req.SetPathValue("id", "42")
+	w := httptest.NewRecorder()
+
+	s.handleRestartStage(w, req)
+
+	// Should return error because store is not configured
+	if w.Code != http.StatusConflict {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusConflict)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["success"] != false {
+		t.Errorf("success = %v, want false", resp["success"])
+	}
+}
+
+func TestHandleRestartStageNoOrchestrator(t *testing.T) {
+	s := &Server{}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/task/42/restart-stage", nil)
+	req.SetPathValue("id", "42")
+	w := httptest.NewRecorder()
+
+	s.handleRestartStage(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["success"] != false {
+		t.Errorf("success = %v, want false", resp["success"])
+	}
+}
+
+func TestHandleRestartStageInvalidID(t *testing.T) {
+	orch := &mvp.Orchestrator{}
+	s := &Server{orchestrator: orch}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/task/abc/restart-stage", nil)
+	req.SetPathValue("id", "abc")
+	w := httptest.NewRecorder()
+
+	s.handleRestartStage(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["success"] != false {
+		t.Errorf("success = %v, want false", resp["success"])
+	}
+}
+
+func TestHandleRestartFull(t *testing.T) {
+	orch := &mvp.Orchestrator{}
+	s := &Server{orchestrator: orch}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/task/42/restart-full", nil)
+	req.SetPathValue("id", "42")
+	w := httptest.NewRecorder()
+
+	s.handleRestartFull(w, req)
+
+	// Should return error because store is not configured
+	if w.Code != http.StatusConflict {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusConflict)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["success"] != false {
+		t.Errorf("success = %v, want false", resp["success"])
+	}
+}
+
+func TestHandleRestartFullNoOrchestrator(t *testing.T) {
+	s := &Server{}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/task/42/restart-full", nil)
+	req.SetPathValue("id", "42")
+	w := httptest.NewRecorder()
+
+	s.handleRestartFull(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["success"] != false {
+		t.Errorf("success = %v, want false", resp["success"])
+	}
+}
+
+func TestHandleRestartFullInvalidID(t *testing.T) {
+	orch := &mvp.Orchestrator{}
+	s := &Server{orchestrator: orch}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/task/abc/restart-full", nil)
+	req.SetPathValue("id", "abc")
+	w := httptest.NewRecorder()
+
+	s.handleRestartFull(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["success"] != false {
+		t.Errorf("success = %v, want false", resp["success"])
+	}
+}
