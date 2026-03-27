@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"time"
@@ -45,9 +46,10 @@ type Server struct {
 	configPropagator *config.ConfigPropagator
 	yoloOverride     *bool // Runtime YOLO mode override (nil = use config file)
 	logStreamManager *LogStreamManager
+	spaFS            fs.FS // Embedded React SPA filesystem (served under /new/)
 }
 
-func NewServer(port int, webPort int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string, brMgr *git.BranchManager, configPropagator *config.ConfigPropagator) (*Server, error) {
+func NewServer(port int, webPort int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string, brMgr *git.BranchManager, configPropagator *config.ConfigPropagator, spaFS fs.FS) (*Server, error) {
 	tmpls, err := parseTemplates()
 	if err != nil {
 		return nil, err
@@ -77,6 +79,7 @@ func NewServer(port int, webPort int, store *db.Store, pool func() []worker.Work
 		brMgr:            brMgr,
 		configPropagator: configPropagator,
 		logStreamManager: NewLogStreamManager(hub, rootDir, 0),
+		spaFS:            spaFS,
 	}
 
 	if s.wizardLLM == "" {
@@ -280,6 +283,79 @@ func (s *Server) routes() {
 
 	// YOLO mode toggle endpoint
 	s.mux.HandleFunc("POST /api/yolo/toggle", s.handleYoloToggle)
+
+	// API v2 routes (JSON API for React SPA)
+	s.mux.HandleFunc("GET /api/v2/board", s.handleBoardV2)
+	s.mux.HandleFunc("GET /api/v2/issues/{id}", s.handleIssueDetailV2)
+	s.mux.HandleFunc("GET /api/v2/issues/{id}/steps", s.handleIssueStepsV2)
+	s.mux.HandleFunc("GET /api/v2/sprint/status", s.handleSprintStatusV2)
+	s.mux.HandleFunc("POST /api/v2/sprint/start", s.handleSprintStartV2)
+	s.mux.HandleFunc("POST /api/v2/sprint/pause", s.handleSprintPauseV2)
+	s.mux.HandleFunc("POST /api/v2/sprint/plan", s.handlePlanSprintV2)
+	s.mux.HandleFunc("GET /api/v2/version", s.handleVersionV2)
+	s.mux.HandleFunc("POST /api/v2/sprint/close/preview", s.handleSprintClosePreviewV2)
+	s.mux.HandleFunc("POST /api/v2/sprint/close/confirm", s.handleSprintCloseConfirmV2)
+	s.mux.HandleFunc("POST /api/v2/issues/{id}/approve", s.handleApproveV2)
+	s.mux.HandleFunc("POST /api/v2/issues/{id}/reject", s.handleRejectV2)
+	s.mux.HandleFunc("POST /api/v2/issues/{id}/retry", s.handleRetryV2)
+	s.mux.HandleFunc("POST /api/v2/issues/{id}/retry-fresh", s.handleRetryFreshV2)
+	s.mux.HandleFunc("POST /api/v2/issues/{id}/approve-merge", s.handleApproveMergeV2)
+	s.mux.HandleFunc("POST /api/v2/issues/{id}/decline", s.handleDeclineV2)
+	s.mux.HandleFunc("POST /api/v2/issues/{id}/block", s.handleBlockV2)
+	s.mux.HandleFunc("POST /api/v2/issues/{id}/unblock", s.handleUnblockV2)
+	s.mux.HandleFunc("POST /api/v2/issues/{id}/process", s.handleProcessV2)
+	s.mux.HandleFunc("GET /api/v2/workers", s.handleWorkersV2)
+	s.mux.HandleFunc("POST /api/v2/workers/toggle", s.handleWorkerToggleV2)
+	s.mux.HandleFunc("GET /api/v2/settings", s.handleSettingsV2)
+	s.mux.HandleFunc("PUT /api/v2/settings", s.handleSaveSettingsV2)
+	s.mux.HandleFunc("POST /api/v2/settings/yolo", s.handleYoloToggleV2)
+	s.mux.HandleFunc("POST /api/v2/sync", s.handleSyncV2)
+	s.mux.HandleFunc("GET /api/v2/rate-limit", s.handleRateLimitV2)
+	s.mux.HandleFunc("POST /api/v2/wizard/sessions", s.handleWizardCreateSessionV2)
+	s.mux.HandleFunc("GET /api/v2/wizard/sessions/{id}", s.handleWizardGetSessionV2)
+	s.mux.HandleFunc("DELETE /api/v2/wizard/sessions/{id}", s.handleWizardDeleteSessionV2)
+	s.mux.HandleFunc("POST /api/v2/wizard/sessions/{id}/refine", s.handleWizardRefineV2)
+	s.mux.HandleFunc("POST /api/v2/wizard/sessions/{id}/create", s.handleWizardCreateIssueV2)
+	s.mux.HandleFunc("GET /api/v2/wizard/sessions/{id}/logs", s.handleWizardLogsV2)
+	s.mux.HandleFunc("GET /api/v2/issues/{id}/stream", s.handleTaskStreamV2)
+	s.mux.HandleFunc("GET /api/v2/issues/{id}/logs/stream", s.handleLogStreamV2)
+
+	// React SPA under /new/
+	s.serveSPA()
+}
+
+// serveSPA registers a handler that serves the embedded React SPA under /new/.
+// Static assets (JS, CSS, images) are served directly. All other paths fall back
+// to index.html so that React Router can handle client-side routing.
+func (s *Server) serveSPA() {
+	if s.spaFS == nil {
+		return
+	}
+
+	fileServer := http.FileServer(http.FS(s.spaFS))
+
+	s.mux.HandleFunc("GET /new/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		path := r.PathValue("path")
+		if path == "" {
+			path = "index.html"
+		}
+
+		// Try to serve the requested static file.
+		if f, err := s.spaFS.Open(path); err == nil {
+			f.Close()
+			http.StripPrefix("/new/", fileServer).ServeHTTP(w, r)
+			return
+		}
+
+		// SPA fallback: return index.html for client-side routing.
+		indexBytes, err := fs.ReadFile(s.spaFS, "index.html")
+		if err != nil {
+			http.Error(w, "SPA not available", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(indexBytes)
+	})
 }
 
 func (s *Server) Start() error {

@@ -24,8 +24,16 @@ import (
 )
 
 const (
+	columnBacklog       = "Backlog"
+	columnBlocked       = "Blocked"
+	columnPlan          = "Plan"
+	columnCode          = "Code"
 	columnAIReview      = "AI Review"
 	columnCheckPipeline = "Pipeline"
+	columnApprove       = "Approve"
+	columnMerge         = "Merge"
+	columnDone          = "Done"
+	columnFailed        = "Failed"
 	defaultBugTitle     = "[Bug] Fix issue"
 	defaultFeatureTitle = "[Feature] New feature"
 )
@@ -204,16 +212,16 @@ func inferColumnFromIssue(issue github.Issue) string {
 	// Priority order matches state-machine.md Column Mapping.
 	// Legacy bare labels kept for backward compatibility with existing issues.
 	if labelSet["stage:blocked"] || labelSet["blocked"] {
-		return "Blocked"
+		return columnBlocked
 	}
 	if labelSet["stage:failed"] || labelSet["failed"] {
-		return "Failed"
+		return columnFailed
 	}
 	if labelSet["stage:merging"] {
-		return "Merge"
+		return columnMerge
 	}
 	if labelSet["stage:awaiting-approval"] || labelSet["awaiting-approval"] {
-		return "Approve"
+		return columnApprove
 	}
 	if labelSet["stage:check-pipeline"] {
 		return columnCheckPipeline
@@ -228,17 +236,17 @@ func inferColumnFromIssue(issue github.Issue) string {
 		return columnAIReview
 	}
 	if labelSet["stage:coding"] || labelSet["stage:testing"] || labelSet["in-progress"] {
-		return "Code"
+		return columnCode
 	}
 	if labelSet["stage:analysis"] || labelSet["stage:planning"] {
-		return "Plan"
+		return columnPlan
 	}
 
 	if strings.EqualFold(issue.State, "CLOSED") {
-		return "Done"
+		return columnDone
 	}
 
-	return "Backlog"
+	return columnBacklog
 }
 
 func (s *Server) addCardToColumn(data *boardData, col string, issue github.Issue) {
@@ -252,30 +260,30 @@ func (s *Server) addCardToColumn(data *boardData, col string, issue github.Issue
 	}
 
 	switch col {
-	case "Backlog":
+	case columnBacklog:
 		data.Backlog = append(data.Backlog, card)
-	case "Plan":
+	case columnPlan:
 		data.Plan = append(data.Plan, card)
-	case "Code":
+	case columnCode:
 		data.Code = append(data.Code, card)
-	case "AI Review":
+	case columnAIReview:
 		data.AIReview = append(data.AIReview, card)
-	case "Pipeline":
+	case columnCheckPipeline:
 		data.CheckPipeline = append(data.CheckPipeline, card)
-	case "Approve":
+	case columnApprove:
 		if s.store != nil {
 			if prURL, err := s.store.GetStepResponse(issue.Number, "create-pr"); err == nil && prURL != "" {
 				card.PRURL = prURL
 			}
 		}
 		data.Approve = append(data.Approve, card)
-	case "Merge":
+	case columnMerge:
 		data.Merge = append(data.Merge, card)
-	case "Done":
+	case columnDone:
 		data.Done = append(data.Done, card)
-	case "Blocked":
+	case columnBlocked:
 		data.Blocked = append(data.Blocked, card)
-	case "Failed":
+	case columnFailed:
 		data.Failed = append(data.Failed, card)
 	}
 }

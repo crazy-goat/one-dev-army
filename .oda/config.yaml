@@ -1,12 +1,12 @@
 github:
     repo: crazy-goat/one-dev-army
 dashboard:
-    port: 5000
+    port: 7000
 workers:
     count: 3
 opencode:
-    url: http://localhost:5002
-    web_port: 5001
+    url: http://localhost:6002
+    web_port: 6001
 tools:
     lint_cmd: golangci-lint run ./...
     test_cmd: go test -race ./...
