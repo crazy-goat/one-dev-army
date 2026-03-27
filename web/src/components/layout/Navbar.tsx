@@ -64,12 +64,6 @@ export function Navbar() {
 
         {/* Right: Sprint info + worker detail + controls */}
         <div className="flex items-center gap-4">
-          {board?.sprint_name && (
-            <span className="text-sm text-gray-400">
-              🏃 {board.sprint_name}
-            </span>
-          )}
-
           {/* MISSING 10: Worker status detail */}
           {activeWorkers.length > 0 ? (
             <div className="flex items-center gap-2">
