@@ -25,7 +25,7 @@ export function LogViewer({ issueNumber }: LogViewerProps) {
   const handleEvent = useCallback((data: unknown) => {
     const event = data as StreamEvent
 
-    if (event.done) {
+    if (event.done === true) {
       setConnected(false)
       // MISSING 8: Invalidate queries on stream done so page refreshes with final data
       void queryClient.invalidateQueries({ queryKey: ['issue', issueNumber] })
@@ -34,12 +34,12 @@ export function LogViewer({ issueNumber }: LogViewerProps) {
       return
     }
 
-    if (event.history) {
+    if (event.history !== undefined) {
       setHistory(event.history)
       return
     }
 
-    if (event.delta) {
+    if (event.delta !== undefined) {
       setLines((prev) => {
         const updated = [...prev]
         const lastIdx = updated.length - 1

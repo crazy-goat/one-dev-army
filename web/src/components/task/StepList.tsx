@@ -14,7 +14,7 @@ const statusColors: Record<string, string> = {
 }
 
 function formatDuration(start?: string, end?: string): string | null {
-  if (!start || !end) {return null}
+  if (start === undefined || end === undefined) {return null}
   const ms = new Date(end).getTime() - new Date(start).getTime()
   if (ms < 1000) {return `${String(ms)}ms`}
   const secs = Math.floor(ms / 1000)
@@ -41,10 +41,10 @@ function StepItem({ step }: { step: TaskStep }) {
           <span className="font-semibold text-sm text-gray-200">
             {step.step_name}
           </span>
-          {duration && (
+          {duration !== null && (
             <span className="text-xs text-gray-500">{duration}</span>
           )}
-          {step.llm_model && (
+          {step.llm_model !== undefined && (
             <span className="text-xs text-gray-600 font-mono">
               {step.llm_model}
             </span>
@@ -60,7 +60,7 @@ function StepItem({ step }: { step: TaskStep }) {
       {/* Body */}
       {open && (
         <div className="border-t border-gray-800 px-4 pb-4">
-          {step.prompt && (
+          {step.prompt !== undefined && (
             <div className="mt-3">
               <h4 className="text-xs uppercase tracking-wider text-gray-500 mb-1.5">
                 Prompt
@@ -71,7 +71,7 @@ function StepItem({ step }: { step: TaskStep }) {
             </div>
           )}
 
-          {step.response && (
+          {step.response !== undefined && (
             <div className="mt-3">
               <h4 className="text-xs uppercase tracking-wider text-gray-500 mb-1.5">
                 Response
@@ -82,7 +82,7 @@ function StepItem({ step }: { step: TaskStep }) {
             </div>
           )}
 
-          {step.error_msg && (
+          {step.error_msg !== undefined && (
             <div className="mt-3">
               <h4 className="text-xs uppercase tracking-wider text-red-500 mb-1.5">
                 Error
