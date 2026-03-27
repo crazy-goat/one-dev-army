@@ -187,13 +187,13 @@ export function Footer() {
           <span>Sync</span>
         </button>
 
-        {/* Try new dashboard link */}
+        {/* Back to classic dashboard link */}
         <a
-          href="/new/"
+          href="/"
           className="text-[#58a6ff] hover:text-[#79c0ff] transition-colors text-xs ml-4 flex items-center gap-1"
         >
-          <span>🚀</span>
-          <span>Try new dashboard</span>
+          <span>←</span>
+          <span>Back to classic dashboard</span>
         </a>
       </div>
 
