@@ -41,6 +41,72 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
   // Check if browser supports speech recognition
   const supportsSpeechRecognition = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
 
+  // Start audio recording - must be defined before early return
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = mediaRecorder
+      audioChunksRef.current = []
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+
+      mediaRecorder.onstop = () => {
+        // Audio recording stopped - in production, send to speech-to-text API
+        // For now, just indicate that recording is complete
+        setIdea((prev) => prev + (prev ? '\n\n' : '') + '[Audio recorded - transcription would appear here]')
+        
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop())
+      }
+
+      mediaRecorder.start()
+      setIsRecording(true)
+      setRecordingTime(0)
+      
+      // Start timer
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1)
+      }, 1000)
+    } catch (err) {
+      console.error('Error accessing microphone:', err)
+      alert('Could not access microphone. Please check permissions.')
+    }
+  }, [])
+
+  // Stop audio recording - must be defined before early return
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+      
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current)
+        recordingTimerRef.current = null
+      }
+    }
+  }, [isRecording])
+
+  // Toggle recording - must be defined before early return
+  const toggleRecording = useCallback(() => {
+    if (isRecording) {
+      stopRecording()
+    } else {
+      startRecording()
+    }
+  }, [isRecording, startRecording, stopRecording])
+
+  // Format recording time
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
   // Type selection screen
   if (!type) {
     return (
@@ -80,72 +146,6 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
     e.preventDefault()
     if (!idea.trim()) return
     onSubmit({ type, idea: idea.trim(), language, addToSprint })
-  }
-
-  // Start audio recording
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mediaRecorder = new MediaRecorder(stream)
-      mediaRecorderRef.current = mediaRecorder
-      audioChunksRef.current = []
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data)
-        }
-      }
-
-      mediaRecorder.onstop = () => {
-        // Audio recording stopped - in production, send to speech-to-text API
-        // For now, just indicate that recording is complete
-        setIdea((prev) => prev + (prev ? '\n\n' : '') + '[Audio recorded - transcription would appear here]')
-        
-        // Stop all tracks
-        stream.getTracks().forEach(track => track.stop())
-      }
-
-      mediaRecorder.start()
-      setIsRecording(true)
-      setRecordingTime(0)
-      
-      // Start timer
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1)
-      }, 1000)
-    } catch (err) {
-      console.error('Error accessing microphone:', err)
-      alert('Could not access microphone. Please check permissions.')
-    }
-  }, [])
-
-  // Stop audio recording
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop()
-      setIsRecording(false)
-      
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current)
-        recordingTimerRef.current = null
-      }
-    }
-  }, [isRecording])
-
-  // Toggle recording
-  const toggleRecording = useCallback(() => {
-    if (isRecording) {
-      stopRecording()
-    } else {
-      startRecording()
-    }
-  }, [isRecording, startRecording, stopRecording])
-
-  // Format recording time
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
   return (
