@@ -425,7 +425,7 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
           {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
           {{if .Assignee}}<div class="card-meta"><div class="card-assignee">@{{.Assignee}}</div></div>{{end}}
           <div class="card-actions">
-            <form method="post" action="/approve-merge/{{.ID}}"><button type="submit" class="btn btn-success">Approve & Merge</button></form>
+            <form method="post" action="/approve-merge/{{.ID}}"><button type="submit" class="btn btn-success">✅ Approve & Merge</button></form>
             <button type="button" class="btn btn-danger" onclick="openDeclineModal({{.ID}}, '{{.Title}}')">Decline</button>
           </div>
         </div>
