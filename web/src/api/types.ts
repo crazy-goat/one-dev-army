@@ -129,7 +129,7 @@ export interface LLMConfig {
 }
 
 export interface ModelConfig {
-  model: string
+  Model: string
 }
 
 export interface ProviderModel {
