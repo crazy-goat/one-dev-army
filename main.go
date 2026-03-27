@@ -38,6 +38,10 @@ var skillsFS embed.FS
 //go:embed all:web/dist
 var spaDistFS embed.FS
 
+const helpFlag = "--help"
+const helpFlagShort = "-h"
+const helpCmd = "help"
+
 func main() {
 	// Define flags
 	var debugWebSocket bool
@@ -95,7 +99,7 @@ func main() {
 				os.Exit(1)
 			}
 			return
-		case "--help", "-h", "help":
+		case helpFlag, helpFlagShort, helpCmd:
 			printUsage()
 			return
 		default:
@@ -137,7 +141,7 @@ func runInit(dir string) error {
 }
 
 func runIssue(args []string, dir string) error {
-	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
+	if len(args) == 0 || args[0] == helpFlag || args[0] == helpFlagShort || args[0] == helpCmd {
 		cmd.PrintIssueUsage()
 		return nil
 	}
@@ -160,7 +164,7 @@ func runIssue(args []string, dir string) error {
 }
 
 func runSprint(args []string, dir string) error {
-	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
+	if len(args) == 0 || args[0] == helpFlag || args[0] == helpFlagShort || args[0] == helpCmd {
 		cmd.PrintSprintUsage()
 		return nil
 	}

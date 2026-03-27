@@ -71,6 +71,8 @@ linters:
       - comments
       - std-error-handling
       - common-false-positives
+    paths:
+      - web/node_modules/.*
     rules:
       - path: _test\.go
         linters:
