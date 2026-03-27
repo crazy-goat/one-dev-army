@@ -97,7 +97,7 @@ export function ProcessingPanel({ currentTicket, totalTickets }: ProcessingPanel
 
   if (!currentTicket) {
     return (
-      <div className="bg-gray-500/8 border border-gray-500/20 rounded-lg p-4 h-full">
+      <div className="bg-gray-500/8 border border-gray-500/20 rounded-lg p-4 h-full flex flex-col">
         <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">
           Processing
         </div>
@@ -120,35 +120,37 @@ export function ProcessingPanel({ currentTicket, totalTickets }: ProcessingPanel
   }
 
   return (
-    <div className="bg-blue-500/8 border border-blue-500/20 rounded-lg p-4 h-full">
-      <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-2">
-        Processing
-        <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+    <div className="bg-blue-500/8 border border-blue-500/20 rounded-lg p-4 h-full flex flex-col">
+      <div className="flex-shrink-0">
+        <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-2">
+          Processing
+          <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+        </div>
+
+        {/* Badges */}
+        <div className="flex gap-1.5 flex-wrap mb-2">
+          {currentTicket.priority !== undefined && priorityBadge(currentTicket.priority)}
+          {currentTicket.type !== undefined && typeBadge(currentTicket.type)}
+          {currentTicket.size !== undefined && sizeBadge(currentTicket.size)}
+        </div>
+
+        {/* Ticket info */}
+        <Link to={`/task/${String(currentTicket.number)}`} className="block group">
+          <span className="text-xs text-gray-500 font-medium">#{currentTicket.number}</span>
+          <span className="block text-xl font-semibold text-gray-100 leading-snug group-hover:text-white transition-colors line-clamp-2">
+            {currentTicket.title}
+          </span>
+        </Link>
+
+        {/* Status */}
+        <div className="mt-2 text-xs text-blue-400 capitalize">{currentTicket.status}</div>
       </div>
-
-      {/* Badges */}
-      <div className="flex gap-1.5 flex-wrap mb-2">
-        {currentTicket.priority !== undefined && priorityBadge(currentTicket.priority)}
-        {currentTicket.type !== undefined && typeBadge(currentTicket.type)}
-        {currentTicket.size !== undefined && sizeBadge(currentTicket.size)}
-      </div>
-
-      {/* Ticket info */}
-      <Link to={`/task/${String(currentTicket.number)}`} className="block group">
-        <span className="text-xs text-gray-500 font-medium">#{currentTicket.number}</span>
-        <span className="block text-xl font-semibold text-gray-100 leading-snug group-hover:text-white transition-colors line-clamp-2">
-          {currentTicket.title}
-        </span>
-      </Link>
-
-      {/* Status */}
-      <div className="mt-2 text-xs text-blue-400 capitalize">{currentTicket.status}</div>
 
       {/* MISSING 12: Mini log viewer */}
       {logLines.length > 0 && (
         <div
           ref={logContainerRef}
-          className="mt-3 max-h-[120px] overflow-y-auto bg-gray-950 border border-gray-800 rounded p-2 font-mono text-xs text-gray-400 leading-relaxed"
+          className="mt-3 flex-1 min-h-0 overflow-y-auto bg-gray-950 border border-gray-800 rounded p-2 font-mono text-xs text-gray-400 leading-relaxed"
         >
           {logLines.map((line, i) => (
             <div key={`log-${String(i)}`} className="whitespace-pre-wrap break-words">
