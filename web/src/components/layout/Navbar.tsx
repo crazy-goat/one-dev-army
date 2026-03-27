@@ -138,6 +138,15 @@ export function Navbar() {
           >
             \uD83D\uDD04 Sync
           </button>
+          {board && board.opencode_port > 0 && (
+            <button
+              type="button"
+              onClick={() => window.open(`http://localhost:${board.opencode_port}`, '_blank')}
+              className="px-3 py-1.5 rounded text-sm font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors"
+            >
+              \uD83D\uDCAC Chat
+            </button>
+          )}
         </div>
       </div>
     </nav>

@@ -98,6 +98,7 @@ type boardResponseV2 struct {
 	YoloMode       bool                `json:"yolo_mode"`
 	TotalTickets   int                 `json:"total_tickets"`
 	WorkerCount    int                 `json:"worker_count"`
+	OpenCodePort   int                 `json:"opencode_port"`
 	CurrentTicket  *currentTicketV2    `json:"current_ticket,omitempty"`
 	Columns        map[string][]cardV2 `json:"columns"`
 }
@@ -209,6 +210,7 @@ func (s *Server) handleBoardV2(w http.ResponseWriter, r *http.Request) {
 		YoloMode:       data.YoloMode,
 		TotalTickets:   data.TotalTickets,
 		WorkerCount:    data.WorkerCount,
+		OpenCodePort:   s.webPort,
 		Columns:        make(map[string][]cardV2),
 	}
 
@@ -395,6 +397,17 @@ func (s *Server) handleSprintPauseV2(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"paused":  s.orchestrator.IsPaused(),
+	})
+}
+
+// handlePlanSprintV2 plans the sprint by assigning backlog tickets.
+// POST /api/v2/sprint/plan
+func (*Server) handlePlanSprintV2(w http.ResponseWriter, _ *http.Request) {
+	// Currently a no-op placeholder - the old handler just redirects.
+	// In the future, this could trigger automatic sprint planning.
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"message": "Sprint planning is not yet implemented",
 	})
 }
 

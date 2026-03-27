@@ -66,6 +66,7 @@ export const api = {
   getSprintStatus: () => request<SprintStatus>('/sprint/status'),
   startSprint: () => post<SuccessResponse>('/sprint/start'),
   pauseSprint: () => post<SuccessResponse>('/sprint/pause'),
+  planSprint: () => post<SuccessResponse>('/sprint/plan'),
   previewSprintClose: (bumpType: string) =>
     post<SprintClosePreview>('/sprint/close/preview', { bump_type: bumpType }),
   confirmSprintClose: (data: {

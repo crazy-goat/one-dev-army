@@ -89,6 +89,17 @@ export function usePauseSprint() {
   })
 }
 
+export function usePlanSprint() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.planSprint,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['sprint'] })
+      void qc.invalidateQueries({ queryKey: ['board'] })
+    },
+  })
+}
+
 export function useApproveIssue() {
   const qc = useQueryClient()
   return useMutation({

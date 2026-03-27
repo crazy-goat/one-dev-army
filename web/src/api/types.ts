@@ -13,6 +13,7 @@ export interface Board {
   yolo_mode: boolean
   total_tickets: number
   worker_count: number
+  opencode_port: number
   current_ticket?: CurrentTicket
   columns: Record<string, Card[]>
 }

@@ -1,23 +1,37 @@
 import { Link } from 'react-router'
-import { useBoard } from '../api/queries'
+import { useBoard, usePlanSprint } from '../api/queries'
 import type { Card } from '../api/types'
 import { Column } from '../components/board/Column'
 import { ProcessingPanel } from '../components/board/ProcessingPanel'
 
 /**
- * Ordered column definitions for the Kanban board.
- * `key` must match the snake_case keys returned by the Go API (`columns` map).
- * `label` is the human-readable display name.
+ * Column definitions for the 3-region Kanban board layout.
+ *
+ * Layout:
+ * - Left (15%): Backlog + Blocked (stacked vertically)
+ * - Center (70%): 6 pipeline columns (Plan, Code, AI Review, Pipeline, Approve, Merge)
+ *                   + Processing Panel below
+ * - Right (15%): Done + Failed (stacked vertically)
  */
-const COLUMNS = [
+
+// Left side columns (stacked)
+const LEFT_COLUMNS = [
   { key: 'backlog', label: 'Backlog', empty: 'No tickets in backlog' },
   { key: 'blocked', label: 'Blocked', empty: 'No blocked tickets' },
+] as const
+
+// Center pipeline columns
+const CENTER_COLUMNS = [
   { key: 'plan', label: 'Plan', empty: 'No tickets in planning' },
   { key: 'code', label: 'Code', empty: 'No tickets in coding' },
   { key: 'ai_review', label: 'AI Review', empty: 'No tickets in AI review' },
   { key: 'check_pipeline', label: 'Pipeline', empty: 'No tickets in pipeline' },
   { key: 'approve', label: 'Approve', empty: 'No tickets awaiting approval' },
   { key: 'merge', label: 'Merge', empty: 'No tickets merging' },
+] as const
+
+// Right side columns (stacked)
+const RIGHT_COLUMNS = [
   { key: 'done', label: 'Done', empty: 'No completed tickets' },
   { key: 'failed', label: 'Failed', empty: 'No failed tickets' },
 ] as const
@@ -26,6 +40,7 @@ const EMPTY_CARDS: Card[] = []
 
 export default function BoardPage() {
   const { data: board, isLoading, error } = useBoard()
+  const planSprint = usePlanSprint()
 
   if (isLoading) {
     return (
@@ -74,20 +89,15 @@ export default function BoardPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {/* MISSING 2: Plan Sprint button (placeholder — v2 API not yet available) */}
           {board.can_plan_sprint && (
             <button
               type="button"
-              className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+              onClick={() => planSprint.mutate()}
+              disabled={planSprint.isPending}
+              className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50"
               title="Plan Sprint — assigns backlog tickets to the current sprint"
-              onClick={() => {
-                // Plan sprint API doesn't exist in v2 yet; show alert as placeholder
-                window.alert(
-                  'Plan Sprint is not yet available in the SPA. Use the classic dashboard for now.',
-                )
-              }}
             >
-              Plan Sprint
+              {planSprint.isPending ? 'Planning...' : 'Plan Sprint'}
             </button>
           )}
           {board.can_close_sprint && (
@@ -101,25 +111,57 @@ export default function BoardPage() {
         </div>
       </div>
 
-      {/* Processing panel */}
-      <div className="flex-shrink-0">
-        <ProcessingPanel
-          currentTicket={board.current_ticket}
-          totalTickets={board.total_tickets}
-        />
-      </div>
+      {/* 3-Region Board Layout */}
+      <div className="flex-1 min-h-0 grid grid-cols-[15%_1fr_15%] gap-4">
+        {/* Left: Backlog + Blocked (stacked) */}
+        <div className="flex flex-col gap-4 min-h-0">
+          {LEFT_COLUMNS.map(({ key, label, empty }) => (
+            <div key={key} className="flex-1 min-h-0">
+              <Column
+                title={label}
+                columnKey={key}
+                cards={board.columns[key] ?? EMPTY_CARDS}
+                emptyText={empty}
+              />
+            </div>
+          ))}
+        </div>
 
-      {/* Kanban columns — horizontal scroll */}
-      <div className="flex-1 min-h-0 overflow-x-auto">
-        <div className="grid grid-cols-10 gap-3 min-w-[1600px] h-full">
-          {COLUMNS.map(({ key, label, empty }) => (
-            <Column
-              key={key}
-              title={label}
-              columnKey={key}
-              cards={board.columns[key] ?? EMPTY_CARDS}
-              emptyText={empty}
+        {/* Center: Pipeline columns + Processing Panel */}
+        <div className="flex flex-col gap-4 min-h-0">
+          {/* Pipeline columns (top 40%) */}
+          <div className="grid grid-cols-6 gap-3 h-[40%] min-h-0">
+            {CENTER_COLUMNS.map(({ key, label, empty }) => (
+              <Column
+                key={key}
+                title={label}
+                columnKey={key}
+                cards={board.columns[key] ?? EMPTY_CARDS}
+                emptyText={empty}
+              />
+            ))}
+          </div>
+
+          {/* Processing Panel (bottom 60%) */}
+          <div className="h-[60%] min-h-0">
+            <ProcessingPanel
+              currentTicket={board.current_ticket}
+              totalTickets={board.total_tickets}
             />
+          </div>
+        </div>
+
+        {/* Right: Done + Failed (stacked) */}
+        <div className="flex flex-col gap-4 min-h-0">
+          {RIGHT_COLUMNS.map(({ key, label, empty }) => (
+            <div key={key} className="flex-1 min-h-0">
+              <Column
+                title={label}
+                columnKey={key}
+                cards={board.columns[key] ?? EMPTY_CARDS}
+                emptyText={empty}
+              />
+            </div>
           ))}
         </div>
       </div>
