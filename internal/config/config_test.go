@@ -480,6 +480,24 @@ func TestCategoryModels_NormalizeModel(t *testing.T) {
 	}
 }
 
+func TestSprintPlanningConfig(t *testing.T) {
+	cfg := &config.Config{
+		Sprint: config.Sprint{
+			Planning: config.SprintPlanningConfig{
+				DefaultTargetCount:      10,
+				MaxOvercommitPercentage: 20,
+			},
+		},
+	}
+
+	if cfg.Sprint.Planning.DefaultTargetCount != 10 {
+		t.Errorf("sprint.planning.default_target_count = %d, want 10", cfg.Sprint.Planning.DefaultTargetCount)
+	}
+	if cfg.Sprint.Planning.MaxOvercommitPercentage != 20 {
+		t.Errorf("sprint.planning.max_overcommit_percentage = %d, want 20", cfg.Sprint.Planning.MaxOvercommitPercentage)
+	}
+}
+
 func TestLLMConfig_NormalizeAllModels(t *testing.T) {
 	cfg := config.LLMConfig{
 		Setup:         config.CategoryModels{Model: "Kimi K2.5"},

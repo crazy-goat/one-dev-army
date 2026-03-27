@@ -52,8 +52,14 @@ type Pipeline struct {
 }
 
 type Sprint struct {
-	TasksPerSprint int  `yaml:"tasks_per_sprint"`
-	AutoStart      bool `yaml:"auto_start"`
+	TasksPerSprint int                  `yaml:"tasks_per_sprint"`
+	AutoStart      bool                 `yaml:"auto_start"`
+	Planning       SprintPlanningConfig `yaml:"planning"`
+}
+
+type SprintPlanningConfig struct {
+	DefaultTargetCount      int `yaml:"default_target_count"`
+	MaxOvercommitPercentage int `yaml:"max_overcommit_percentage"`
 }
 
 func Load(rootDir string, _ ...string) (*Config, error) {
