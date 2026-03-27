@@ -80,7 +80,7 @@ export function ActionButtons({ issueNumber, status }: ActionButtonsProps) {
               disabled={retry.isPending}
               className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium text-sm transition-colors disabled:opacity-50"
             >
-              &circlearrowleft; Retry
+              ↺ Retry
             </button>
             <button
               type="button"
@@ -88,7 +88,7 @@ export function ActionButtons({ issueNumber, status }: ActionButtonsProps) {
               disabled={retryFresh.isPending}
               className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm transition-colors disabled:opacity-50"
             >
-              &circlearrowleft; Fresh Retry
+              ↺ Fresh Retry
             </button>
           </>
         )}

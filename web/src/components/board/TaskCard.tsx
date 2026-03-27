@@ -210,7 +210,7 @@ export function TaskCard({ card, column, columnKey }: TaskCardProps) {
               disabled={retry.isPending}
               className="px-2 py-1 text-xs rounded bg-green-600 hover:bg-green-500 text-white font-medium transition-colors disabled:opacity-50"
             >
-              &circlearrowleft; Retry
+              ↺ Retry
             </button>
             <button
               type="button"
@@ -218,7 +218,7 @@ export function TaskCard({ card, column, columnKey }: TaskCardProps) {
               disabled={retryFresh.isPending}
               className="px-2 py-1 text-xs rounded bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors disabled:opacity-50"
             >
-              &circlearrowleft; Fresh Retry
+              ↺ Fresh Retry
             </button>
           </>
         )}
