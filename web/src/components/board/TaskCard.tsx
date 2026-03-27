@@ -129,7 +129,7 @@ export function TaskCard({ card, column, columnKey }: TaskCardProps) {
       </div>
 
       {/* PR link */}
-      {card.pr_url && (
+      {card.pr_url !== null && card.pr_url !== undefined && (
         <div className="mt-1">
           <a
             href={card.pr_url}
@@ -172,12 +172,12 @@ export function TaskCard({ card, column, columnKey }: TaskCardProps) {
       )}
 
       {/* Assignee */}
-      {card.assignee && (
+      {card.assignee !== null && card.assignee !== undefined && (
         <div className="text-xs text-blue-400 mt-1">@{card.assignee}</div>
       )}
 
       {/* Worker */}
-      {card.worker && (
+      {card.worker !== null && card.worker !== undefined && (
         <div className="text-xs text-blue-400 mt-1">{card.worker}</div>
       )}
 

@@ -126,9 +126,9 @@ export function ProcessingPanel({
 
       {/* Badges */}
       <div className="flex gap-1.5 flex-wrap mb-2">
-        {currentTicket.priority && priorityBadge(currentTicket.priority)}
-        {currentTicket.type && typeBadge(currentTicket.type)}
-        {currentTicket.size && sizeBadge(currentTicket.size)}
+        {currentTicket.priority !== null && currentTicket.priority !== undefined && priorityBadge(currentTicket.priority)}
+        {currentTicket.type !== null && currentTicket.type !== undefined && typeBadge(currentTicket.type)}
+        {currentTicket.size !== null && currentTicket.size !== undefined && sizeBadge(currentTicket.size)}
       </div>
 
       {/* Ticket info */}

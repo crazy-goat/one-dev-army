@@ -189,7 +189,7 @@ export function Footer() {
                   </div>
                   
                   {/* Step - only show if active */}
-                  {activeWorker?.stage && (
+                  {activeWorker?.stage !== null && activeWorker?.stage !== undefined && (
                     <div className="flex items-center gap-2">
                       <span className="text-[#8b949e] w-[50px]">Step:</span>
                       <span className="text-[#e6edf3]">{activeWorker.stage}</span>
@@ -197,11 +197,11 @@ export function Footer() {
                   )}
                   
                   {/* Issue - only show if active */}
-                  {activeWorker?.task_id && (
+                  {activeWorker?.task_id !== null && activeWorker?.task_id !== undefined && (
                     <div className="flex items-center gap-2">
                       <span className="text-[#8b949e] w-[50px]">Issue:</span>
                       <span className="text-blue-400">#{activeWorker.task_id}</span>
-                      {activeWorker.task_title && (
+                      {activeWorker.task_title !== null && activeWorker.task_title !== undefined && (
                         <span className="text-[#8b949e] truncate max-w-[120px]">{activeWorker.task_title}</span>
                       )}
                     </div>

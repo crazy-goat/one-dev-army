@@ -32,16 +32,16 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
   })
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText })) as { error: string }
+    const body = await res.json().catch(() => ({ error: res.statusText })) as { error: string | undefined }
     throw new ApiError(res.status, body.error ?? res.statusText)
   }
   return res.json() as Promise<T>
 }
 
-function post<T>(path: string, body?: unknown): Promise<T> {
+function post<T>(path: string, body?: Record<string, unknown>): Promise<T> {
   return request<T>(path, {
     method: 'POST',
-    body: body ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   })
 }
 
