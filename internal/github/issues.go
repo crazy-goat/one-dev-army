@@ -190,8 +190,11 @@ type PRCheck struct {
 }
 
 type PRChecksResult struct {
-	Status string
-	Logs   string
+	Status         string
+	Logs           string
+	TotalCount     int
+	CompletedCount int
+	PendingChecks  []string
 }
 
 // runIDPattern extracts the run ID from a GitHub Actions URL like
@@ -214,10 +217,16 @@ func (c *Client) GetPRChecks(branch string) (*PRChecksResult, error) {
 
 	var failedNames []string
 	var failedLinks []string
+	var pendingNames []string
 	allComplete := true
+	completedCount := 0
+
 	for _, check := range checks {
-		if check.Status != "COMPLETED" {
+		if check.Status == "COMPLETED" {
+			completedCount++
+		} else {
 			allComplete = false
+			pendingNames = append(pendingNames, check.Name)
 		}
 		if check.Conclusion == "FAILURE" {
 			failedNames = append(failedNames, check.Name)
@@ -225,8 +234,15 @@ func (c *Client) GetPRChecks(branch string) (*PRChecksResult, error) {
 		}
 	}
 
+	totalCount := len(checks)
+
 	if !allComplete {
-		return &PRChecksResult{Status: "pending"}, nil
+		return &PRChecksResult{
+			Status:         "pending",
+			TotalCount:     totalCount,
+			CompletedCount: completedCount,
+			PendingChecks:  pendingNames,
+		}, nil
 	}
 
 	if len(failedNames) > 0 {
