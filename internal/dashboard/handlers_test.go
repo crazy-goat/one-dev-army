@@ -5474,7 +5474,7 @@ func TestBoardTemplate_ProcessingPanel_Visible(t *testing.T) {
 	}
 
 	// Verify size badge is present
-	if !strings.Contains(output, "📏 L") {
+	if !strings.Contains(output, "🐘 L") {
 		t.Error("template should contain size L badge")
 	}
 
@@ -5719,10 +5719,10 @@ func TestBoardTemplate_ProcessingPanel_SizeVariations(t *testing.T) {
 		size          string
 		expectedBadge string
 	}{
-		{"size S", "S", "📏 S"},
-		{"size M", "M", "📏 M"},
-		{"size L", "L", "📏 L"},
-		{"size XL", "XL", "📏 XL"},
+		{"size S", "S", "🐜 S"},
+		{"size M", "M", "🐕 M"},
+		{"size L", "L", "🐘 L"},
+		{"size XL", "XL", "🦕 XL"},
 	}
 
 	for _, tt := range tests {

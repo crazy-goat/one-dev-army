@@ -545,7 +545,9 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
           </span>
           {{end}}
           {{if .CurrentTicket.Size}}
-          <span class="processing-badge">📏 {{.CurrentTicket.Size}}</span>
+          <span class="processing-badge">
+            {{if eq .CurrentTicket.Size "S"}}🐜{{else if eq .CurrentTicket.Size "M"}}🐕{{else if eq .CurrentTicket.Size "L"}}🐘{{else if eq .CurrentTicket.Size "XL"}}🦕{{else}}📏{{end}} {{.CurrentTicket.Size}}
+          </span>
           {{end}}
         </div>
         <a href="/task/{{.CurrentTicket.Number}}" class="processing-ticket">
