@@ -205,7 +205,7 @@ export function TaskCard({ card, column, columnKey }: TaskCardProps) {
               disabled={approveMerge.isPending}
               className="px-2 py-1 text-xs rounded bg-green-600 hover:bg-green-500 text-white font-medium transition-colors disabled:opacity-50"
             >
-              &check; Approve+Merge
+              ✅ Approve+Merge
             </button>
             <button
               type="button"

@@ -62,7 +62,7 @@ export function ActionButtons({ issueNumber, status }: ActionButtonsProps) {
               disabled={approveMerge.isPending}
               className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium text-sm transition-colors disabled:opacity-50"
             >
-              &check; Approve &amp; Merge
+              ✅ Approve &amp; Merge
             </button>
             <button
               type="button"
