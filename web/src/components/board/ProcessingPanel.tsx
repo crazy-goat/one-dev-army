@@ -147,18 +147,20 @@ export function ProcessingPanel({ currentTicket, totalTickets }: ProcessingPanel
       </div>
 
       {/* MISSING 12: Mini log viewer */}
-      {logLines.length > 0 && (
-        <div
-          ref={logContainerRef}
-          className="mt-3 flex-1 min-h-0 overflow-y-auto bg-gray-950 border border-gray-800 rounded p-2 font-mono text-xs text-gray-400 leading-relaxed"
-        >
-          {logLines.map((line, i) => (
+      <div
+        ref={logContainerRef}
+        className="mt-3 flex-1 min-h-0 overflow-y-auto bg-gray-950 border border-gray-800 rounded p-2 font-mono text-xs text-gray-400 leading-relaxed"
+      >
+        {logLines.length > 0 ? (
+          logLines.map((line, i) => (
             <div key={`log-${String(i)}`} className="whitespace-pre-wrap break-words">
               {line}
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        ) : (
+          <div className="text-gray-600 italic">Waiting for logs…</div>
+        )}
+      </div>
     </div>
   )
 }
