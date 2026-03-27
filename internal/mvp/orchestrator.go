@@ -50,17 +50,21 @@ type Orchestrator struct {
 	manualNext       int
 	mu               sync.Mutex
 	logStreamManager LogStreamManagerInterface
+	completionCh     chan int      // receives issue numbers when tickets complete
+	stopCh           chan struct{} // closed when Stop() is called to wake up Run()
 }
 
 func NewOrchestrator(cfg *config.Config, gh *github.Client, oc *opencode.Client, brMgr *git.BranchManager, store *db.Store, hub StageBroadcaster, router *llm.Router) *Orchestrator {
 	o := &Orchestrator{
-		gh:     gh,
-		oc:     oc,
-		brMgr:  brMgr,
-		store:  store,
-		hub:    hub,
-		router: router,
-		paused: true,
+		gh:           gh,
+		oc:           oc,
+		brMgr:        brMgr,
+		store:        store,
+		hub:          hub,
+		router:       router,
+		paused:       true,
+		completionCh: make(chan int, 1), // buffered to prevent blocking
+		stopCh:       make(chan struct{}),
 	}
 	o.cfg.Store(cfg)
 	o.worker = NewWorker(1, cfg, oc.Clone(), gh, brMgr, store, o, router)
@@ -85,6 +89,7 @@ func (o *Orchestrator) Stop() {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.running = false
+	close(o.stopCh)
 }
 
 func (o *Orchestrator) OpenCodeURL() string {
@@ -170,10 +175,30 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	o.running = true
 	o.mu.Unlock()
 
+	// immediateSearchCh triggers immediate ticket search when worker completes
+	immediateSearchCh := make(chan struct{}, 1)
+
+	// Start a goroutine to listen for completion notifications and trigger immediate search
+	completionCtx, completionCancel := context.WithCancel(ctx)
+	defer completionCancel()
+	go func() {
+		for {
+			select {
+			case <-completionCtx.Done():
+				return
+			case issueNumber := <-o.completionCh:
+				log.Printf("[Orchestrator] Completion notification received for #%d, triggering immediate search", issueNumber)
+				select {
+				case immediateSearchCh <- struct{}{}:
+				default:
+				}
+			}
+		}
+	}()
+
 	for {
 		o.mu.Lock()
 		running := o.running
-		paused := o.paused
 		o.mu.Unlock()
 
 		if !running {
@@ -183,27 +208,43 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
+		case <-o.stopCh:
+			return nil
+		case <-immediateSearchCh:
+			// Immediate search triggered - proceed to ticket processing
+			log.Println("[Orchestrator] Performing immediate ticket search")
+		case <-time.After(30 * time.Second):
+			// Regular cyclic check
+			log.Println("[Orchestrator] Regular cycle - checking for tickets")
 		}
 
-		if paused {
+		// Check if we're still running after the select
+		o.mu.Lock()
+		running = o.running
+		o.mu.Unlock()
+
+		if !running {
+			return nil
+		}
+
+		if o.paused {
 			select {
 			case <-time.After(5 * time.Second):
 				continue
 			case <-ctx.Done():
 				return ctx.Err()
+			case <-o.stopCh:
+				return nil
 			}
 		}
 
 		milestone, err := o.gh.GetOldestOpenMilestone()
 		if err != nil {
 			log.Printf("[Orchestrator] Error getting milestone: %v", err)
-			o.sleep(ctx, 30*time.Second)
 			continue
 		}
 		if milestone == nil {
 			log.Println("[Orchestrator] No active milestone, waiting...")
-			o.sleep(ctx, 30*time.Second)
 			continue
 		}
 
@@ -211,7 +252,6 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		issues, err := o.store.GetOpenIssuesCacheByMilestone(milestone.Title)
 		if err != nil {
 			log.Printf("[Orchestrator] Error listing issues from cache: %v", err)
-			o.sleep(ctx, 30*time.Second)
 			continue
 		}
 
@@ -272,8 +312,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		}
 
 		if nextIssue == nil {
-			log.Println("[Orchestrator] No available issues in sprint, waiting 30s...")
-			o.sleep(ctx, 30*time.Second)
+			log.Println("[Orchestrator] No available issues in sprint, waiting for next cycle...")
 			continue
 		}
 
@@ -350,7 +389,15 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			o.recordStep(nextIssue.Number, "done", "Ticket completed and merged")
 		}
 
-		o.sleep(ctx, 5*time.Second)
+		// After processing, check if another completion notification arrived
+		// If so, we'll immediately search for next ticket
+		select {
+		case <-immediateSearchCh:
+			// Another completion notification arrived during processing
+			log.Println("[Orchestrator] Another completion notification received, continuing immediately")
+		default:
+			// No immediate work, continue to next iteration
+		}
 	}
 }
 
@@ -475,13 +522,6 @@ func (o *Orchestrator) HandleSyncEvent(issue github.Issue) {
 				log.Printf("[Orchestrator] Error setting stage:merging for #%d: %v", issue.Number, err)
 			}
 		}
-	}
-}
-
-func (*Orchestrator) sleep(ctx context.Context, d time.Duration) {
-	select {
-	case <-time.After(d):
-	case <-ctx.Done():
 	}
 }
 
@@ -742,6 +782,17 @@ func (o *Orchestrator) activeMilestone() string {
 		return o.gh.GetActiveMilestone().Title
 	}
 	return ""
+}
+
+// NotifyTicketCompleted is called by worker to signal immediate ticket completion
+func (o *Orchestrator) NotifyTicketCompleted(issueNumber int) {
+	select {
+	case o.completionCh <- issueNumber:
+		log.Printf("[Orchestrator] Received completion notification for #%d", issueNumber)
+	default:
+		// Channel full (shouldn't happen with buffer), log but don't block
+		log.Printf("[Orchestrator] Warning: completion notification channel full for #%d", issueNumber)
+	}
 }
 
 // CheckoutDefault switches to the default branch (main or master) after merge.

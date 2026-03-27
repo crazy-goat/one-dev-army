@@ -541,6 +541,12 @@ func (w *Worker) Process(ctx context.Context, task *Task) error {
 				Summary: fmt.Sprintf("Implemented and merged #%d: %s", task.Issue.Number, task.Issue.Title),
 			}
 			log.Printf("[Worker %d] ✓ DONE #%d in %s → merged", w.id, task.Issue.Number, time.Since(start).Round(time.Second))
+
+			// Notify orchestrator of immediate completion
+			if w.orchestrator != nil {
+				w.orchestrator.NotifyTicketCompleted(task.Issue.Number)
+			}
+
 			return nil
 		}
 
