@@ -2,10 +2,13 @@ package dashboard
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/scheduler"
 )
 
@@ -138,4 +141,92 @@ func (s *Server) handleGetProposal(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(job)
+}
+
+// AssignRequest represents the request to assign issues to sprint
+type AssignRequest struct {
+	IssueNumbers []int    `json:"issueNumbers"`
+	Branches     []string `json:"branches,omitempty"`
+}
+
+// AssignProgress represents the progress of assigning issues
+type AssignProgress struct {
+	Type    string `json:"type"` // progress, completed, error
+	Current int    `json:"current"`
+	Total   int    `json:"total"`
+	Issue   int    `json:"issue,omitempty"`
+	Branch  string `json:"branch,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+// handleAssignIssues assigns selected issues to the current sprint using SSE
+func (s *Server) handleAssignIssues(w http.ResponseWriter, r *http.Request) {
+	var req AssignRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Get current sprint
+	sprintDetector := github.NewSprintDetector(s.gh)
+	currentSprint, err := sprintDetector.GetCurrentSprint()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if currentSprint == nil {
+		http.Error(w, "No active sprint", http.StatusBadRequest)
+		return
+	}
+
+	// Setup SSE
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	total := len(req.IssueNumbers)
+
+	// Map issue to branch for progress reporting
+	issueToBranch := make(map[int]string)
+	// TODO: Build this map from request data if needed
+
+	for i, issueNumber := range req.IssueNumbers {
+		// Assign issue to milestone using milestone title
+		err := s.gh.SetMilestone(issueNumber, currentSprint.Title)
+
+		progress := AssignProgress{
+			Type:    "progress",
+			Current: i + 1,
+			Total:   total,
+			Issue:   issueNumber,
+			Branch:  issueToBranch[issueNumber],
+		}
+
+		if err != nil {
+			progress.Type = "error"
+			progress.Error = err.Error()
+		}
+
+		// Send SSE event
+		data, _ := json.Marshal(progress)
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+
+		// Small delay to avoid rate limiting
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Send completion event
+	completed := AssignProgress{Type: "completed", Current: total, Total: total}
+	data, _ := json.Marshal(completed)
+	fmt.Fprintf(w, "data: %s\n\n", data)
+	flusher.Flush()
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -72,5 +73,40 @@ func TestGetUnassignedIssues(t *testing.T) {
 		if issue.Title == "" {
 			t.Error("issue title should not be empty")
 		}
+	}
+}
+
+func TestAssignIssuesSSE(t *testing.T) {
+	srv := newTestServerV2(t)
+	defer srv.wizardStore.Stop()
+
+	// Without a GitHub client configured, skip this test
+	if srv.gh == nil {
+		t.Skip("Skipping test: no GitHub client configured")
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v2/sprint/assign", strings.NewReader(`{
+		"issueNumbers": [1, 2],
+		"branches": ["branch-1"]
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	srv.handleAssignIssues(rec, req)
+
+	// Should return 200 OK with SSE content type
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d (body: %s)", rec.Code, rec.Body.String())
+	}
+
+	contentType := rec.Header().Get("Content-Type")
+	if !strings.Contains(contentType, "text/event-stream") {
+		t.Errorf("expected Content-Type to contain 'text/event-stream', got %s", contentType)
+	}
+
+	// Should receive progress events
+	body := rec.Body.String()
+	if !strings.Contains(body, "data:") {
+		t.Error("expected SSE data events in response")
 	}
 }
