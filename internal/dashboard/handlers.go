@@ -69,6 +69,7 @@ type boardData struct {
 	CanPlanSprint        bool
 	CurrentTicket        *currentTicketInfo
 	YoloMode             bool
+	KeepScreenOn         bool
 	Blocked              []taskCard
 	Backlog              []taskCard
 	Plan                 []taskCard
@@ -113,12 +114,21 @@ func (s *Server) buildBoardData(_ *http.Request) boardData {
 		yoloMode = *s.yoloOverride
 	}
 
+	// Load config to get keep_screen_on setting
+	keepScreenOn := false
+	if s.rootDir != "" {
+		if cfg, err := config.Load(s.rootDir); err == nil {
+			keepScreenOn = cfg.Dashboard.KeepScreenOn
+		}
+	}
+
 	data := boardData{
 		Active:       "board",
 		OpenCodePort: s.webPort,
 		WorkerCount:  workerCount,
 		Paused:       true,
 		YoloMode:     yoloMode,
+		KeepScreenOn: keepScreenOn,
 	}
 
 	if s.orchestrator != nil {

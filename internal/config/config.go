@@ -26,7 +26,8 @@ type GitHub struct {
 }
 
 type Dashboard struct {
-	Port int `yaml:"port"`
+	Port         int  `yaml:"port"`
+	KeepScreenOn bool `yaml:"keep_screen_on"`
 }
 
 type Workers struct {
