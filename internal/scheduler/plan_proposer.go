@@ -111,10 +111,6 @@ func (p *PlanProposer) processProposal(jobID string, candidates []IssueCandidate
 	// Build prompt for LLM
 	prompt := buildProposalPrompt(candidates, targetCount, lastTag, graph)
 
-	// Call LLM
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
 	// Select model for planning
 	llmModel := p.router.SelectModel(config.CategoryPlanning, config.ComplexityMedium, nil)
 

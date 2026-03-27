@@ -28,7 +28,9 @@ func (s *Server) handleGetLastTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tagInfo)
+	if err := json.NewEncoder(w).Encode(tagInfo); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 // IssueCandidate represents an issue without milestone (candidate for sprint planning)
@@ -40,7 +42,7 @@ type IssueCandidate struct {
 }
 
 // handleGetUnassignedIssues returns all open issues without a milestone
-func (s *Server) handleGetUnassignedIssues(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetUnassignedIssues(w http.ResponseWriter, _ *http.Request) {
 	// Get all open issues without milestone
 	issues, err := s.gh.ListIssuesWithoutMilestone()
 	if err != nil {
@@ -69,7 +71,9 @@ func (s *Server) handleGetUnassignedIssues(w http.ResponseWriter, r *http.Reques
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(candidates)
+	if err := json.NewEncoder(w).Encode(candidates); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 // CreateProposalRequest represents the request to create a proposal
@@ -122,7 +126,9 @@ func (s *Server) handleCreateProposal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(CreateProposalResponse{JobID: jobID})
+	if err := json.NewEncoder(w).Encode(CreateProposalResponse{JobID: jobID}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 // handleGetProposal returns the status and result of a proposal job
@@ -140,7 +146,9 @@ func (s *Server) handleGetProposal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(job)
+	if err := json.NewEncoder(w).Encode(job); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 // AssignRequest represents the request to assign issues to sprint

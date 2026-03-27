@@ -45,9 +45,11 @@ func TestPlanProposer_CreateProposal(t *testing.T) {
 	status, err := proposer.GetProposalStatus(jobID)
 	if err != nil {
 		t.Errorf("GetProposalStatus() error = %v", err)
+		return
 	}
 	if status == nil {
 		t.Error("GetProposalStatus() returned nil")
+		return
 	}
 	if status.ID != jobID {
 		t.Errorf("GetProposalStatus() returned wrong job ID, got %s want %s", status.ID, jobID)

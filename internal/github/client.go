@@ -111,7 +111,7 @@ type TagInfo struct {
 }
 
 // GetLastTag returns the most recent tag/release
-func (c *Client) GetLastTag(ctx context.Context) (*TagInfo, error) {
+func (c *Client) GetLastTag(_ context.Context) (*TagInfo, error) {
 	// Try to get the latest release first
 	output, err := c.gh("api", "repos/"+c.Repo+"/releases/latest")
 	if err == nil {
@@ -174,7 +174,7 @@ func (c *Client) GetLinkedIssues(ctx context.Context, issueNumber int) ([]Linked
 	return c.getLinkedIssuesFromBody(ctx, issueNumber)
 }
 
-func (c *Client) getLinkedIssuesGraphQL(ctx context.Context, issueNumber int) ([]LinkedIssue, error) {
+func (c *Client) getLinkedIssuesGraphQL(_ context.Context, issueNumber int) ([]LinkedIssue, error) {
 	// Parse owner and repo from c.Repo
 	parts := strings.Split(c.Repo, "/")
 	if len(parts) != 2 {
@@ -247,7 +247,7 @@ func (c *Client) getLinkedIssuesGraphQL(ctx context.Context, issueNumber int) ([
 	return linked, nil
 }
 
-func (c *Client) getLinkedIssuesFromBody(ctx context.Context, issueNumber int) ([]LinkedIssue, error) {
+func (c *Client) getLinkedIssuesFromBody(_ context.Context, issueNumber int) ([]LinkedIssue, error) {
 	// Get issue details
 	issue, err := c.GetIssue(issueNumber)
 	if err != nil {

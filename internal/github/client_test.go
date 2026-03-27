@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"testing"
 )
 
@@ -176,7 +177,7 @@ func TestClient_GetLinkedIssues(t *testing.T) {
 
 	// This test will likely fail or return empty since we don't have
 	// a real GitHub API to test against, but it should not panic
-	linked, err := client.GetLinkedIssues(nil, 123)
+	linked, err := client.GetLinkedIssues(context.TODO(), 123)
 
 	// We expect an error since there's no real API, but it shouldn't panic
 	// If the API is available, it should return a slice (may be empty)
