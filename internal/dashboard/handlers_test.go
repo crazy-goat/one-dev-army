@@ -3342,11 +3342,11 @@ func TestInferColumnFromIssue_MergedStatus(t *testing.T) {
 	}
 }
 
-// TestBuildBoardData_CanCloseSprint_True verifies CanCloseSprint is true when all tasks are in Done/Failed and not processing
+// TestBuildBoardData_CanCloseSprint_True verifies CanCloseSprint is true when all tasks are in Done and not processing
 func TestBuildBoardData_CanCloseSprint_True(t *testing.T) {
 	_ = &Server{tmpls: make(map[string]*template.Template)}
 
-	// Simulate board data with all tasks in Done/Failed columns and not processing
+	// Simulate board data with all tasks in Done column and not processing
 	data := boardData{
 		Active:     "board",
 		Processing: false,
@@ -3358,13 +3358,11 @@ func TestBuildBoardData_CanCloseSprint_True(t *testing.T) {
 		Code:     []taskCard{},
 		AIReview: []taskCard{},
 		Approve:  []taskCard{},
-		// Tasks only in Done and Failed
+		// Tasks only in Done, no Failed
 		Done: []taskCard{
 			{ID: 1, Title: "Completed task", Status: "Done"},
 		},
-		Failed: []taskCard{
-			{ID: 2, Title: "Failed task", Status: "Failed"},
-		},
+		Failed: []taskCard{},
 	}
 
 	// Apply the same logic as in buildBoardData
@@ -3375,12 +3373,14 @@ func TestBuildBoardData_CanCloseSprint_True(t *testing.T) {
 		len(data.Code) == 0 &&
 		len(data.AIReview) == 0 &&
 		len(data.Approve) == 0 &&
-		len(data.Merge) == 0 {
+		len(data.Merge) == 0 &&
+		len(data.Failed) == 0 &&
+		len(data.Done) > 0 {
 		data.CanCloseSprint = true
 	}
 
 	if !data.CanCloseSprint {
-		t.Error("expected CanCloseSprint to be true when all tasks are in Done/Failed and not processing")
+		t.Error("expected CanCloseSprint to be true when all tasks are in Done and not processing")
 	}
 }
 
@@ -3388,7 +3388,7 @@ func TestBuildBoardData_CanCloseSprint_True(t *testing.T) {
 func TestBuildBoardData_CanCloseSprint_False_WhenProcessing(t *testing.T) {
 	_ = &Server{tmpls: make(map[string]*template.Template)}
 
-	// Simulate board data with all tasks in Done/Failed but processing is true
+	// Simulate board data with all tasks in Done but processing is true
 	data := boardData{
 		Active:     "board",
 		Processing: true, // Processing is true
@@ -3400,13 +3400,11 @@ func TestBuildBoardData_CanCloseSprint_False_WhenProcessing(t *testing.T) {
 		Code:     []taskCard{},
 		AIReview: []taskCard{},
 		Approve:  []taskCard{},
-		// Tasks only in Done and Failed
+		// Tasks only in Done, no Failed
 		Done: []taskCard{
 			{ID: 1, Title: "Completed task", Status: "Done"},
 		},
-		Failed: []taskCard{
-			{ID: 2, Title: "Failed task", Status: "Failed"},
-		},
+		Failed: []taskCard{},
 	}
 
 	// Apply the same logic as in buildBoardData
@@ -3419,7 +3417,8 @@ func TestBuildBoardData_CanCloseSprint_False_WhenProcessing(t *testing.T) {
 		len(data.CheckPipeline) == 0 &&
 		len(data.Approve) == 0 &&
 		len(data.Merge) == 0 &&
-		(len(data.Done) > 0 || len(data.Failed) > 0) {
+		len(data.Failed) == 0 &&
+		len(data.Done) > 0 {
 		data.CanCloseSprint = true
 	}
 
@@ -3522,7 +3521,8 @@ func TestBuildBoardData_CanCloseSprint_False_WhenActiveTasks(t *testing.T) {
 				len(data.CheckPipeline) == 0 &&
 				len(data.Approve) == 0 &&
 				len(data.Merge) == 0 &&
-				(len(data.Done) > 0 || len(data.Failed) > 0) {
+				len(data.Failed) == 0 &&
+				len(data.Done) > 0 {
 				data.CanCloseSprint = true
 			}
 
@@ -3558,12 +3558,78 @@ func TestBuildBoardData_CanCloseSprint_False_WhenEmptySprint(t *testing.T) {
 		len(data.CheckPipeline) == 0 &&
 		len(data.Approve) == 0 &&
 		len(data.Merge) == 0 &&
-		(len(data.Done) > 0 || len(data.Failed) > 0) {
+		len(data.Failed) == 0 &&
+		len(data.Done) > 0 {
 		data.CanCloseSprint = true
 	}
 
 	if data.CanCloseSprint {
 		t.Error("expected CanCloseSprint to be false when sprint has no tickets at all")
+	}
+}
+
+// TestBuildBoardData_CanCloseSprint_False_WhenFailedTickets verifies CanCloseSprint is false when tickets exist in Failed state
+func TestBuildBoardData_CanCloseSprint_False_WhenFailedTickets(t *testing.T) {
+	tests := []struct {
+		name          string
+		done          []taskCard
+		failed        []taskCard
+		expectedClose bool
+	}{
+		{
+			name:          "only failed tickets",
+			failed:        []taskCard{{ID: 1, Title: "Failed task"}},
+			expectedClose: false,
+		},
+		{
+			name:          "both done and failed tickets",
+			done:          []taskCard{{ID: 1, Title: "Done task"}},
+			failed:        []taskCard{{ID: 2, Title: "Failed task"}},
+			expectedClose: false,
+		},
+		{
+			name:          "multiple failed tickets with done tickets",
+			done:          []taskCard{{ID: 1, Title: "Done task"}},
+			failed:        []taskCard{{ID: 2, Title: "Failed task 1"}, {ID: 3, Title: "Failed task 2"}},
+			expectedClose: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := boardData{
+				Active:     "board",
+				Processing: false,
+				Blocked:    []taskCard{},
+				Backlog:    []taskCard{},
+				Plan:       []taskCard{},
+				Code:       []taskCard{},
+				AIReview:   []taskCard{},
+				Approve:    []taskCard{},
+				Merge:      []taskCard{},
+				Done:       tt.done,
+				Failed:     tt.failed,
+			}
+
+			// Apply the same logic as in buildBoardData
+			if !data.Processing &&
+				len(data.Blocked) == 0 &&
+				len(data.Backlog) == 0 &&
+				len(data.Plan) == 0 &&
+				len(data.Code) == 0 &&
+				len(data.AIReview) == 0 &&
+				len(data.CheckPipeline) == 0 &&
+				len(data.Approve) == 0 &&
+				len(data.Merge) == 0 &&
+				len(data.Failed) == 0 &&
+				len(data.Done) > 0 {
+				data.CanCloseSprint = true
+			}
+
+			if data.CanCloseSprint != tt.expectedClose {
+				t.Errorf("expected CanCloseSprint=%v, got %v", tt.expectedClose, data.CanCloseSprint)
+			}
+		})
 	}
 }
 
