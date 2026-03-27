@@ -53,10 +53,10 @@
 .badge-merged{background:#6f42c1;color:white;font-size:.65rem;padding:.1rem .4rem;border-radius:4px;display:inline-flex;align-items:center;gap:.25rem}
 .badge-closed{background:#6c757d;color:white;font-size:.65rem;padding:.1rem .4rem;border-radius:4px;display:inline-flex;align-items:center;gap:.25rem}
 .processing-panel-title{font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.5rem;display:flex;align-items:center;gap:.5rem}
-.processing-panel{background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.2);border-radius:8px;padding:1rem 1rem .5rem;display:flex;align-items:flex-start;flex:0 0 auto;min-height:0;z-index:10;overflow-y:auto}
+.processing-panel{background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.2);border-radius:8px;padding:1rem 1rem .5rem;display:flex;align-items:flex-start;flex:1 1 auto;min-height:150px;z-index:10;overflow-y:auto;flex-direction:column}
 .processing-panel-idle{background:rgba(108,117,125,0.08);border-color:rgba(108,117,125,0.2)}
 .processing-idle-text{color:var(--muted);font-size:.85rem}
-.processing-panel-content{display:flex;flex-direction:column;align-items:flex-start;gap:.5rem;width:100%;min-width:0}
+.processing-panel-content{display:flex;flex-direction:column;align-items:flex-start;gap:.5rem;width:100%;min-width:0;flex:1;min-height:0}
 .processing-ticket{display:flex;flex-direction:column;gap:.25rem;text-decoration:none;color:var(--text);min-width:0;width:100%}
 .processing-id{color:var(--muted);font-weight:500;font-size:.8rem}
 .processing-title{font-size:1.2rem;font-weight:600;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
@@ -81,6 +81,10 @@
     border: 1px solid var(--border);
     border-radius: 6px;
     overflow: hidden;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100px;
 }
 
 .log-stream-header {
@@ -126,7 +130,8 @@
 }
 
 .log-stream-content {
-    max-height: 200px;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     font-family: 'SF Mono', Monaco, Inconsolata, 'Fira Code', monospace;
     font-size: 0.75rem;

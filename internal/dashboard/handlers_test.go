@@ -6401,10 +6401,10 @@ func TestBoardTemplate_CSSLayout(t *testing.T) {
 		t.Error("board-center-columns should use repeat(6,1fr) for 6 pipeline columns")
 	}
 
-	// Verify processing-panel has flex:0 0 auto to prevent shrinking (flexbox layout)
+	// Verify processing-panel has flex:1 1 auto to fill available space (issue #466)
 	if strings.Contains(output, ".processing-panel{") {
-		if !strings.Contains(output, "flex:0 0 auto") {
-			t.Error("processing-panel should have flex:0 0 auto to prevent shrinking in flex container")
+		if !strings.Contains(output, "flex:1 1 auto") {
+			t.Error("processing-panel should have flex:1 1 auto to fill available space in flex container")
 		}
 	} else {
 		t.Error("processing-panel CSS rule not found")
