@@ -130,6 +130,16 @@ func (o *Orchestrator) CurrentTask() *Task {
 	return o.currentTask
 }
 
+// Router returns the LLM router
+func (o *Orchestrator) Router() *llm.Router {
+	return o.router
+}
+
+// GetConfig returns the current configuration
+func (o *Orchestrator) GetConfig() *config.Config {
+	return o.cfg.Load()
+}
+
 func (o *Orchestrator) QueueManualProcess(issueNumber int) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()

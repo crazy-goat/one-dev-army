@@ -18,6 +18,7 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/mvp"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
+	"github.com/crazy-goat/one-dev-army/internal/scheduler"
 	"github.com/crazy-goat/one-dev-army/internal/worker"
 )
 
@@ -47,6 +48,7 @@ type Server struct {
 	yoloOverride     *bool // Runtime YOLO mode override (nil = use config file)
 	logStreamManager *LogStreamManager
 	spaFS            fs.FS // Embedded React SPA filesystem (served under /new/)
+	planProposer     *scheduler.PlanProposer
 }
 
 func NewServer(port int, webPort int, store *db.Store, pool func() []worker.WorkerInfo, gh *github.Client, orchestrator *mvp.Orchestrator, oc *opencode.Client, wizardLLM string, hub *Hub, syncService *SyncService, rootDir string, brMgr *git.BranchManager, configPropagator *config.ConfigPropagator, spaFS fs.FS) (*Server, error) {
@@ -80,6 +82,13 @@ func NewServer(port int, webPort int, store *db.Store, pool func() []worker.Work
 		configPropagator: configPropagator,
 		logStreamManager: NewLogStreamManager(hub, rootDir, 0),
 		spaFS:            spaFS,
+	}
+
+	// Initialize plan proposer if dependencies are available
+	if orchestrator != nil && oc != nil && gh != nil {
+		cfg := orchestrator.GetConfig()
+		router := orchestrator.Router()
+		s.planProposer = scheduler.NewPlanProposer(cfg, router, oc, gh)
 	}
 
 	if s.wizardLLM == "" {
@@ -293,6 +302,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/v2/issues/unassigned", s.handleGetUnassignedIssues)
 	s.mux.HandleFunc("GET /api/v2/sprint/status", s.handleSprintStatusV2)
 	s.mux.HandleFunc("GET /api/v2/sprint/last-tag", s.handleGetLastTag)
+	s.mux.HandleFunc("POST /api/v2/sprint/propose", s.handleCreateProposal)
+	s.mux.HandleFunc("GET /api/v2/sprint/propose/{jobId}", s.handleGetProposal)
 	s.mux.HandleFunc("POST /api/v2/sprint/start", s.handleSprintStartV2)
 	s.mux.HandleFunc("POST /api/v2/sprint/pause", s.handleSprintPauseV2)
 	s.mux.HandleFunc("POST /api/v2/sprint/plan", s.handlePlanSprintV2)
