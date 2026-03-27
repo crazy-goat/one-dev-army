@@ -459,11 +459,13 @@ func (s *Server) handleRetryFresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Close any open PR and delete branch
-	if branch, err := s.gh.FindPRBranch(issueNum); err == nil {
-		log.Printf("[Dashboard] Closing PR for #%d (branch: %s)", issueNum, branch)
-		if closeErr := s.gh.ClosePR(branch); closeErr != nil {
-			log.Printf("[Dashboard] Error closing PR for #%d: %v", issueNum, closeErr)
+	// Close any open PR
+	if s.gh != nil {
+		if branch, err := s.gh.FindPRBranch(issueNum); err == nil {
+			log.Printf("[Dashboard] Closing PR for #%d (branch: %s)", issueNum, branch)
+			if closeErr := s.gh.ClosePR(branch); closeErr != nil {
+				log.Printf("[Dashboard] Error closing PR for #%d: %v", issueNum, closeErr)
+			}
 		}
 	}
 
@@ -2836,4 +2838,125 @@ func (s *Server) handleYoloToggle(w http.ResponseWriter, _ *http.Request) {
   </div>
 </div>`)
 	}
+}
+
+// handleRestartStage handles restarting the current stage of a task
+func (s *Server) handleRestartStage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	id := r.PathValue("id")
+	issueNum := 0
+	if _, err := fmt.Sscanf(id, "%d", &issueNum); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   "invalid issue ID",
+		})
+		return
+	}
+
+	if issueNum == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   "invalid issue ID",
+		})
+		return
+	}
+
+	if s.orchestrator == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   "orchestrator not configured",
+		})
+		return
+	}
+
+	if err := s.orchestrator.RestartCurrentStage(issueNum); err != nil {
+		log.Printf("[Dashboard] Error restarting stage for #%d: %v", issueNum, err)
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	log.Printf("[Dashboard] Restarted current stage for #%d", issueNum)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"message": fmt.Sprintf("Stage restarted for issue #%d", issueNum),
+	})
+}
+
+// handleRestartFull handles full restart of a task from the beginning
+func (s *Server) handleRestartFull(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	id := r.PathValue("id")
+	issueNum := 0
+	if _, err := fmt.Sscanf(id, "%d", &issueNum); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   "invalid issue ID",
+		})
+		return
+	}
+
+	if issueNum == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   "invalid issue ID",
+		})
+		return
+	}
+
+	if s.orchestrator == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   "orchestrator not configured",
+		})
+		return
+	}
+
+	// Close any open PR
+	if s.gh != nil {
+		if branch, err := s.gh.FindPRBranch(issueNum); err == nil {
+			log.Printf("[Dashboard] Closing PR for #%d (branch: %s)", issueNum, branch)
+			if closeErr := s.gh.ClosePR(branch); closeErr != nil {
+				log.Printf("[Dashboard] Error closing PR for #%d: %v", issueNum, closeErr)
+			}
+		}
+	}
+
+	// Delete local branch if it exists
+	if s.brMgr != nil {
+		branchPrefix := fmt.Sprintf("oda-%d-", issueNum)
+		if localBranch := s.brMgr.FindBranchByPrefix(branchPrefix); localBranch != "" {
+			log.Printf("[Dashboard] Deleting local branch %q for #%d", localBranch, issueNum)
+			if err := s.brMgr.RemoveBranch(localBranch); err != nil {
+				log.Printf("[Dashboard] Error deleting local branch %q for #%d: %v", localBranch, issueNum, err)
+			}
+		}
+	}
+
+	if err := s.orchestrator.RestartFromBeginning(issueNum); err != nil {
+		log.Printf("[Dashboard] Error restarting task #%d: %v", issueNum, err)
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	log.Printf("[Dashboard] Full restart completed for #%d", issueNum)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"message": fmt.Sprintf("Task #%d restarted from beginning", issueNum),
+	})
 }

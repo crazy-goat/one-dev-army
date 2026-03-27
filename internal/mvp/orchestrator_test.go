@@ -3,6 +3,7 @@ package mvp
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -813,5 +814,73 @@ func TestOrchestrator_UpdateConfig_PropagatesToWorker(t *testing.T) {
 	// Verify worker received the update
 	if o.worker.cfg.Load().YoloMode != true {
 		t.Error("worker YoloMode should be true after orchestrator UpdateConfig")
+	}
+}
+
+func TestOrchestratorRestartCurrentStage_StoreNotConfigured(t *testing.T) {
+	o := &Orchestrator{}
+
+	err := o.RestartCurrentStage(42)
+	if err == nil {
+		t.Error("expected error when store not configured")
+	}
+	if !strings.Contains(err.Error(), "store not configured") {
+		t.Errorf("expected 'store not configured' error, got: %v", err)
+	}
+}
+
+func TestOrchestratorRestartCurrentStage_TaskProcessing(t *testing.T) {
+	o := &Orchestrator{
+		currentTask: &Task{
+			Issue: github.Issue{Number: 42},
+		},
+	}
+
+	err := o.RestartCurrentStage(42)
+	if err == nil {
+		t.Error("expected error when task is actively being processed")
+	}
+	if !strings.Contains(err.Error(), "actively being processed") {
+		t.Errorf("expected 'actively being processed' error, got: %v", err)
+	}
+}
+
+func TestOrchestratorRestartFromBeginning_TaskProcessing(t *testing.T) {
+	o := &Orchestrator{
+		currentTask: &Task{
+			Issue: github.Issue{Number: 42},
+		},
+	}
+
+	err := o.RestartFromBeginning(42)
+	if err == nil {
+		t.Error("expected error when task is actively being processed")
+	}
+	if !strings.Contains(err.Error(), "actively being processed") {
+		t.Errorf("expected 'actively being processed' error, got: %v", err)
+	}
+}
+
+func TestStageToStepName(t *testing.T) {
+	tests := []struct {
+		stage    string
+		expected string
+	}{
+		{"stage:analysis", "technical-planning"},
+		{"stage:coding", "implement"},
+		{"stage:code-review", "code-review"},
+		{"stage:create-pr", "create-pr"},
+		{"stage:check-pipeline", "check-pipeline"},
+		{"stage:awaiting-approval", "awaiting-approval"},
+		{"stage:merging", "merge"},
+		{"stage:unknown", ""},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		got := stageToStepName(tt.stage)
+		if got != tt.expected {
+			t.Errorf("stageToStepName(%q) = %q, want %q", tt.stage, got, tt.expected)
+		}
 	}
 }
