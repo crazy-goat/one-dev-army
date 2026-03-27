@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 
 const LANGUAGES = [
   { value: 'en-US', label: '\uD83C\uDDFA\uD83C\uDDF8 English' },
@@ -30,6 +30,16 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
   const [idea, setIdea] = useState('')
   const [language, setLanguage] = useState('en-US')
   const [addToSprint, setAddToSprint] = useState(true)
+  
+  // Audio recording state
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordingTime, setRecordingTime] = useState(0)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Check if browser supports speech recognition
+  const supportsSpeechRecognition = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
 
   // Type selection screen
   if (!type) {
@@ -72,6 +82,72 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
     onSubmit({ type, idea: idea.trim(), language, addToSprint })
   }
 
+  // Start audio recording
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = mediaRecorder
+      audioChunksRef.current = []
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+
+      mediaRecorder.onstop = () => {
+        // Audio recording stopped - in production, send to speech-to-text API
+        // For now, just indicate that recording is complete
+        setIdea((prev) => prev + (prev ? '\n\n' : '') + '[Audio recorded - transcription would appear here]')
+        
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop())
+      }
+
+      mediaRecorder.start()
+      setIsRecording(true)
+      setRecordingTime(0)
+      
+      // Start timer
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1)
+      }, 1000)
+    } catch (err) {
+      console.error('Error accessing microphone:', err)
+      alert('Could not access microphone. Please check permissions.')
+    }
+  }, [])
+
+  // Stop audio recording
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+      
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current)
+        recordingTimerRef.current = null
+      }
+    }
+  }, [isRecording])
+
+  // Toggle recording
+  const toggleRecording = useCallback(() => {
+    if (isRecording) {
+      stopRecording()
+    } else {
+      startRecording()
+    }
+  }, [isRecording, startRecording, stopRecording])
+
+  // Format recording time
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
   return (
     <div>
       <h2 className="text-xl font-bold text-white mb-6">
@@ -86,19 +162,60 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
           >
             Describe your {type === 'bug' ? 'bug' : 'feature idea'}:
           </label>
-          <textarea
-            id="wizard-idea"
-            value={idea}
-            onChange={(e) => setIdea(e.target.value)}
-            rows={6}
-            required
-            className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 text-sm resize-y focus:outline-none focus:border-blue-500 transition-colors font-sans"
-            placeholder={
-              type === 'bug'
-                ? 'Describe the bug, steps to reproduce, and expected behavior...'
-                : 'Describe the feature, who it\'s for, and what problem it solves...'
-            }
-          />
+          <div className="relative">
+            <textarea
+              id="wizard-idea"
+              value={idea}
+              onChange={(e) => setIdea(e.target.value)}
+              rows={6}
+              required
+              className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 text-sm resize-y focus:outline-none focus:border-blue-500 transition-colors font-sans pr-12"
+              placeholder={
+                type === 'bug'
+                  ? 'Describe the bug, steps to reproduce, and expected behavior...'
+                  : 'Describe the feature, who it\'s for, and what problem it solves...'
+              }
+            />
+            
+            {/* Microphone button */}
+            <button
+              type="button"
+              onClick={toggleRecording}
+              disabled={!supportsSpeechRecognition}
+              className={`absolute bottom-3 right-3 p-2 rounded-full transition-all ${
+                isRecording
+                  ? 'bg-red-500/20 text-red-400 animate-pulse'
+                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+              } ${!supportsSpeechRecognition ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={
+                !supportsSpeechRecognition
+                  ? 'Speech recognition not supported in this browser'
+                  : isRecording
+                  ? 'Stop recording'
+                  : 'Start voice recording'
+              }
+            >
+              {isRecording ? (
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                </svg>
+              )}
+            </button>
+          </div>
+          
+          {/* Recording indicator */}
+          {isRecording && (
+            <div className="flex items-center gap-2 mt-2 text-xs text-red-400">
+              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              <span>Recording... {formatTime(recordingTime)}</span>
+              <span className="text-gray-500">(Click microphone to stop)</span>
+            </div>
+          )}
         </div>
 
         <div className="mb-4">
