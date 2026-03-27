@@ -1,4 +1,40 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
+
+// Type declarations for Web Speech API
+interface SpeechRecognitionResult {
+  isFinal: boolean
+  [index: number]: {
+    transcript: string
+    confidence: number
+  }
+}
+
+interface SpeechRecognitionEvent {
+  resultIndex: number
+  results: SpeechRecognitionResult[]
+}
+
+interface SpeechRecognitionErrorEvent {
+  error: string
+}
+
+interface SpeechRecognition {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
+  onend: (() => void) | null
+  start(): void
+  stop(): void
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognition
+    webkitSpeechRecognition: new () => SpeechRecognition
+  }
+}
 
 const LANGUAGES = [
   { value: 'en-US', label: '\uD83C\uDDFA\uD83C\uDDF8 English' },
@@ -31,67 +67,87 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
   const [language, setLanguage] = useState('en-US')
   const [addToSprint, setAddToSprint] = useState(true)
   
-  // Audio recording state
+  // Speech recognition state
   const [isRecording, setIsRecording] = useState(false)
-  const [recordingTime, setRecordingTime] = useState(0)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const audioChunksRef = useRef<Blob[]>([])
-  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const recognitionRef = useRef<SpeechRecognition | null>(null)
 
   // Check if browser supports speech recognition
   const supportsSpeechRecognition = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
 
-  // Start audio recording - must be defined before early return
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mediaRecorder = new MediaRecorder(stream)
-      mediaRecorderRef.current = mediaRecorder
-      audioChunksRef.current = []
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data)
+  // Initialize speech recognition
+  const initRecognition = useCallback(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) return null
+    
+    const recognition = new SpeechRecognition()
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.lang = language
+    
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let finalTranscript = ''
+      
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i]
+        if (result && result[0]) {
+          const transcript = result[0].transcript
+          if (result.isFinal) {
+            finalTranscript += transcript
+          }
         }
       }
-
-      mediaRecorder.onstop = () => {
-        // Audio recording stopped - in production, send to speech-to-text API
-        // For now, just indicate that recording is complete
-        setIdea((prev) => prev + (prev ? '\n\n' : '') + '[Audio recorded - transcription would appear here]')
-        
-        // Stop all tracks
-        stream.getTracks().forEach(track => track.stop())
-      }
-
-      mediaRecorder.start()
-      setIsRecording(true)
-      setRecordingTime(0)
       
-      // Start timer
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1)
-      }, 1000)
-    } catch (err) {
-      console.error('Error accessing microphone:', err)
-      alert('Could not access microphone. Please check permissions.')
+      if (finalTranscript) {
+        setIdea((prev) => {
+          const newValue = prev + (prev ? ' ' : '') + finalTranscript
+          return newValue
+        })
+      }
     }
+    
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error('Speech recognition error:', event.error)
+      setIsRecording(false)
+    }
+    
+    recognition.onend = () => {
+      // If still recording, restart (handles pauses)
+      if (isRecording && recognitionRef.current) {
+        recognition.start()
+      }
+    }
+    
+    return recognition
+  }, [language, isRecording])
+
+  // Start speech recognition
+  const startRecording = useCallback(() => {
+    if (!supportsSpeechRecognition) {
+      alert('Speech recognition is not supported in your browser. Please use Chrome or Edge.')
+      return
+    }
+    
+    const recognition = initRecognition()
+    if (!recognition) {
+      alert('Could not initialize speech recognition.')
+      return
+    }
+    
+    recognitionRef.current = recognition
+    recognition.start()
+    setIsRecording(true)
+  }, [initRecognition, supportsSpeechRecognition])
+
+  // Stop speech recognition
+  const stopRecording = useCallback(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
+      recognitionRef.current = null
+    }
+    setIsRecording(false)
   }, [])
 
-  // Stop audio recording - must be defined before early return
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop()
-      setIsRecording(false)
-      
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current)
-        recordingTimerRef.current = null
-      }
-    }
-  }, [isRecording])
-
-  // Toggle recording - must be defined before early return
+  // Toggle recording
   const toggleRecording = useCallback(() => {
     if (isRecording) {
       stopRecording()
@@ -100,12 +156,21 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
     }
   }, [isRecording, startRecording, stopRecording])
 
-  // Format recording time
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
+  // Update recognition language when language changes
+  useEffect(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.lang = language
+    }
+  }, [language])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop()
+      }
+    }
+  }, [])
 
   // Type selection screen
   if (!type) {
@@ -212,7 +277,7 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
           {isRecording && (
             <div className="flex items-center gap-2 mt-2 text-xs text-red-400">
               <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              <span>Recording... {formatTime(recordingTime)}</span>
+              <span>Listening... (speak now)</span>
               <span className="text-gray-500">(Click microphone to stop)</span>
             </div>
           )}
