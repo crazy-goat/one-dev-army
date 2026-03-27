@@ -1,4 +1,4 @@
-import { useRateLimit, useToggleYolo, useBoard, useTriggerSync } from '../../api/queries'
+import { useRateLimit, useToggleYolo, useBoard, useTriggerSync, useStartSprint, usePauseSprint } from '../../api/queries'
 import { useAppContext } from '../../App'
 import type { RateLimit, APILimit } from '../../api/types'
 
@@ -76,6 +76,8 @@ export function Footer() {
   const { data: board } = useBoard()
   const toggleYolo = useToggleYolo()
   const triggerSync = useTriggerSync()
+  const startSprint = useStartSprint()
+  const pauseSprint = usePauseSprint()
   const { wsConnected } = useAppContext()
 
   return (
@@ -133,6 +135,13 @@ export function Footer() {
                   ? 'border-[#30363d] bg-[#21262d] text-[#8b949e] hover:bg-[#30363d]' 
                   : 'border-dashed border-[#30363d] bg-[#161b22] text-[#8b949e]'
               }`}
+              onClick={() => {
+                if (board.paused) {
+                  startSprint.mutate()
+                } else {
+                  pauseSprint.mutate()
+                }
+              }}
             >
               <span className="flex items-center justify-center w-3 h-3">
                 {board.paused ? (
