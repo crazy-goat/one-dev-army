@@ -21,6 +21,22 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/prompts"
 )
 
+// Stage label constants to avoid string duplication (goconst)
+const (
+	stageLabelAnalysis         = "stage:analysis"
+	stageLabelCoding           = "stage:coding"
+	stageLabelCodeReview       = "stage:code-review"
+	stageLabelCreatePR         = "stage:create-pr"
+	stageLabelCheckPipeline    = "stage:check-pipeline"
+	stageLabelAwaitingApproval = "stage:awaiting-approval"
+)
+
+// Step name constants to avoid string duplication (goconst)
+const (
+	stepNameCheckPipeline    = "check-pipeline"
+	stepNameAwaitingApproval = "awaiting-approval"
+)
+
 type StageBroadcaster interface {
 	BroadcastIssueUpdate(issue github.Issue)
 	BroadcastWorkerUpdate(workerID, status string, taskID int, taskTitle, stage string, elapsedSeconds int)
@@ -539,7 +555,7 @@ func getStageLabel(issue github.Issue) string {
 // These stages indicate the worker was interrupted (e.g. ODA restart) and should resume.
 func isWorkerStage(stage string) bool {
 	switch stage {
-	case "stage:analysis", "stage:coding", "stage:code-review", "stage:create-pr", "stage:check-pipeline", "stage:awaiting-approval":
+	case stageLabelAnalysis, stageLabelCoding, stageLabelCodeReview, stageLabelCreatePR, stageLabelCheckPipeline, stageLabelAwaitingApproval:
 		return true
 	default:
 		return false
@@ -578,7 +594,7 @@ func (o *Orchestrator) HandleWorkerEvent(event WorkerEvent) {
 
 	// Clear task steps when retrying from check-pipeline failure to coding
 	// This ensures worker starts from implement step, not from check-pipeline
-	if event.Stage == "check-pipeline" && event.Status == EventFailed && nextStage == github.StageCode {
+	if event.Stage == stepNameCheckPipeline && event.Status == EventFailed && nextStage == github.StageCode {
 		if o.store != nil {
 			log.Printf("[Orchestrator] Clearing task steps for #%d after pipeline failure - will retry from implement", event.IssueNumber)
 			if err := o.store.DeleteStepsFrom(event.IssueNumber, "implement"); err != nil {
@@ -617,14 +633,14 @@ func (*Orchestrator) decideNextStage(event WorkerEvent) (github.Stage, github.St
 		if event.Status == EventSuccess {
 			return github.StageCheckPipeline, github.ReasonWorkerCompletedCreatePR, true
 		}
-	case "check-pipeline":
+	case stepNameCheckPipeline:
 		if event.Status == EventSuccess {
 			return github.StageApprove, github.ReasonWorkerCompletedCheckPipeline, true
 		}
 		if event.Status == EventFailed {
 			return github.StageCode, github.ReasonCheckPipelineFailed, true
 		}
-	case "awaiting-approval":
+	case stepNameAwaitingApproval:
 		if event.Status == EventSuccess {
 			return github.StageMerge, github.ReasonManualMerge, true
 		}
@@ -749,10 +765,10 @@ func inferColumnForClosableCheck(issue github.Issue) string {
 	for _, l := range labels {
 		lower := strings.ToLower(l)
 		switch lower {
-		case "stage:blocked", "blocked", "stage:merging", "stage:awaiting-approval",
-			"awaiting-approval", "stage:create-pr", "stage:code-review",
-			"stage:coding", "stage:testing", "in-progress",
-			"stage:analysis", "stage:planning", "stage:check-pipeline":
+		case "stage:blocked", "blocked", "stage:merging", stageLabelAwaitingApproval,
+			"awaiting-approval", stageLabelCreatePR, stageLabelCodeReview,
+			stageLabelCoding, "stage:testing", "in-progress",
+			stageLabelAnalysis, "stage:planning", stageLabelCheckPipeline:
 			return "Active"
 		}
 	}
@@ -898,18 +914,18 @@ func (o *Orchestrator) RestartFromBeginning(issueNumber int) error {
 // stageToStepName maps a stage label to the corresponding step name
 func stageToStepName(stage string) string {
 	switch stage {
-	case "stage:analysis":
+	case stageLabelAnalysis:
 		return "technical-planning"
-	case "stage:coding":
+	case stageLabelCoding:
 		return "implement"
-	case "stage:code-review":
+	case stageLabelCodeReview:
 		return "code-review"
-	case "stage:create-pr":
+	case stageLabelCreatePR:
 		return "create-pr"
-	case "stage:check-pipeline":
-		return "check-pipeline"
-	case "stage:awaiting-approval":
-		return "awaiting-approval"
+	case stageLabelCheckPipeline:
+		return stepNameCheckPipeline
+	case stageLabelAwaitingApproval:
+		return stepNameAwaitingApproval
 	case "stage:merging":
 		return "merge"
 	default:
