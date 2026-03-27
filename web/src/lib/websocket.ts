@@ -84,7 +84,7 @@ export class OdaWebSocket {
   }
 
   private stopPing() {
-    if (this.pingInterval) {
+    if (this.pingInterval !== null) {
       clearInterval(this.pingInterval)
       this.pingInterval = null
     }

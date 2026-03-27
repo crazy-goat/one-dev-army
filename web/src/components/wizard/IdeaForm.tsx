@@ -365,7 +365,7 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
           >
             {availableLanguages.map((langCode) => (
               <option key={langCode} value={langCode}>
-                {LANGUAGE_LABELS[langCode] || langCode}
+                {LANGUAGE_LABELS[langCode] ?? langCode}
               </option>
             ))}
           </select>

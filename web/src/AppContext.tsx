@@ -9,6 +9,7 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue>({
   wsConnected: false,
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
   onLogStream: () => () => {},
 })
 

@@ -39,12 +39,12 @@ export function RefinePreview({
   isLoading,
 }: RefinePreviewProps) {
   const [title, setTitle] = useState(
-    session.custom_title || session.generated_title || '',
+    session.custom_title ?? session.generated_title ?? '',
   )
   const [addToSprint, setAddToSprint] = useState(session.add_to_sprint)
   const [showRaw, setShowRaw] = useState(false)
   const [description, setDescription] = useState(
-    session.technical_planning || session.refined_description || '',
+    session.technical_planning ?? session.refined_description ?? '',
   )
 
   // Render markdown to HTML
@@ -84,7 +84,7 @@ export function RefinePreview({
       </div>
 
       {/* Badges */}
-      {(session.priority || session.complexity) && (
+      {(session.priority ?? session.complexity) && (
         <div className="flex items-center gap-2 flex-wrap mb-4">
           {session.priority && (
             <span
@@ -165,6 +165,7 @@ export function RefinePreview({
           /* MISSING 5: Markdown rendering with marked */
           <div
             className="min-h-[200px] max-h-[400px] overflow-y-auto p-4 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none"
+            // eslint-disable-next-line react/no-danger
             dangerouslySetInnerHTML={{ __html: renderedHtml }}
           />
         )}
