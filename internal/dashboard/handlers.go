@@ -177,7 +177,7 @@ func (s *Server) buildBoardData(_ *http.Request) boardData {
 	data.TotalTickets = len(issues)
 	data.CanPlanSprint = data.TotalTickets == 0
 
-	// Check if sprint can be closed: all tasks in Done/Failed columns and not processing
+	// Check if sprint can be closed: all tasks in Done column (no Failed), not processing
 	if !data.Processing &&
 		len(data.Blocked) == 0 &&
 		len(data.Backlog) == 0 &&
@@ -187,7 +187,8 @@ func (s *Server) buildBoardData(_ *http.Request) boardData {
 		len(data.CheckPipeline) == 0 &&
 		len(data.Approve) == 0 &&
 		len(data.Merge) == 0 &&
-		(len(data.Done) > 0 || len(data.Failed) > 0) {
+		len(data.Failed) == 0 &&
+		len(data.Done) > 0 {
 		data.CanCloseSprint = true
 	}
 
