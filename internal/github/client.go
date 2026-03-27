@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -98,4 +99,56 @@ func GetToken() (string, error) {
 		return "", errors.New("getting token: empty result from gh")
 	}
 	return token, nil
+}
+
+// TagInfo represents information about a Git tag/release
+type TagInfo struct {
+	Tag  string `json:"tag"`
+	Date string `json:"date,omitempty"`
+	SHA  string `json:"sha,omitempty"`
+}
+
+// GetLastTag returns the most recent tag/release
+func (c *Client) GetLastTag(ctx context.Context) (*TagInfo, error) {
+	// Try to get the latest release first
+	output, err := c.gh("api", "repos/"+c.Repo+"/releases/latest")
+	if err == nil {
+		var release struct {
+			TagName string `json:"tag_name"`
+			Created string `json:"created_at"`
+		}
+		if err := json.Unmarshal(output, &release); err == nil && release.TagName != "" {
+			return &TagInfo{
+				Tag:  release.TagName,
+				Date: release.Created,
+			}, nil
+		}
+	}
+
+	// Fallback to tags if no releases
+	output, err = c.gh("api", "repos/"+c.Repo+"/tags?per_page=1")
+	if err != nil {
+		return nil, fmt.Errorf("getting last tag: %w", err)
+	}
+
+	var tags []struct {
+		Name   string `json:"name"`
+		Commit struct {
+			SHA string `json:"sha"`
+			URL string `json:"url"`
+		} `json:"commit"`
+	}
+
+	if err := json.Unmarshal(output, &tags); err != nil {
+		return nil, fmt.Errorf("parsing tags: %w", err)
+	}
+
+	if len(tags) == 0 {
+		return nil, nil
+	}
+
+	return &TagInfo{
+		Tag: tags[0].Name,
+		SHA: tags[0].Commit.SHA,
+	}, nil
 }
