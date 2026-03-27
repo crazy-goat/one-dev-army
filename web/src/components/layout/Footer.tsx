@@ -1,6 +1,15 @@
-import { useRateLimit, useToggleYolo, useBoard, useTriggerSync, useStartSprint, usePauseSprint } from '../../api/queries'
+import { useRateLimit, useToggleYolo, useBoard, useTriggerSync, useStartSprint, usePauseSprint, useWorkers } from '../../api/queries'
 import { useAppContext } from '../../App'
 import type { RateLimit, APILimit } from '../../api/types'
+
+/** Format elapsed milliseconds to a human-readable string. */
+function formatElapsed(ms: number): string {
+  const secs = Math.floor(ms / 1000)
+  if (secs < 60) return `${String(secs)}s`
+  const mins = Math.floor(secs / 60)
+  const remainSecs = secs % 60
+  return `${String(mins)}m ${String(remainSecs)}s`
+}
 
 /** Calculate usage percentage for an API limit */
 function getUsagePercentage(limit: APILimit | null): number {
@@ -74,11 +83,15 @@ function getApiLimitColor(percentage: number): string {
 export function Footer() {
   const { data: rateLimit } = useRateLimit()
   const { data: board } = useBoard()
+  const { data: workersData } = useWorkers()
   const toggleYolo = useToggleYolo()
   const triggerSync = useTriggerSync()
   const startSprint = useStartSprint()
   const pauseSprint = usePauseSprint()
   const { wsConnected } = useAppContext()
+
+  // Get active worker details
+  const activeWorker = workersData?.workers.find(w => w.status === 'working' || w.status === 'busy')
 
   return (
     <footer className="bg-[#161b22] border-t border-[#30363d] px-6 py-2 fixed bottom-0 left-0 right-0 flex justify-between items-center text-[0.8rem] text-[#8b949e] z-[100]">
@@ -160,24 +173,54 @@ export function Footer() {
             </div>
             
             {/* Tooltip */}
-            <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-[260px] bg-[#161b22] border border-[#30363d] rounded-md shadow-lg z-[1000]">
+            <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-[280px] bg-[#161b22] border border-[#30363d] rounded-md shadow-lg z-[1000]">
               <div className="p-3">
-                <div className={`font-semibold text-sm mb-2 pb-2 border-b border-[#30363d] ${board.paused ? 'text-[#d29922]' : 'text-[#e6edf3]'}`}>
-                  {board.paused ? 'Worker Paused' : 'Worker Idle'}
+                <div className="font-semibold text-sm mb-2 pb-2 border-b border-[#30363d] text-[#e6edf3]">
+                  Worker Status
                 </div>
                 
-                <div className="text-xs text-[#8b949e] leading-relaxed">
-                  {board.paused 
-                    ? 'Worker is currently paused. No tickets are being processed. Click to resume.'
-                    : 'Worker is idle and waiting for tickets. When tickets are available, processing will begin automatically.'
-                  }
-                </div>
-                
-                {board.worker_count > 0 && (
-                  <div className="mt-2 pt-2 border-t border-[#30363d] text-[10px] text-[#8b949e]">
-                    {board.worker_count} worker{board.worker_count !== 1 ? 's' : ''} ready
+                <div className="space-y-1.5 text-xs">
+                  {/* State */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#8b949e] w-[50px]">State:</span>
+                    <span className={board.paused ? 'text-[#d29922]' : activeWorker ? 'text-green-400' : 'text-[#8b949e]'}>
+                      {board.paused ? 'Paused' : activeWorker ? 'Running' : 'Idle'}
+                    </span>
                   </div>
-                )}
+                  
+                  {/* Step - only show if active */}
+                  {activeWorker?.stage && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#8b949e] w-[50px]">Step:</span>
+                      <span className="text-[#e6edf3]">{activeWorker.stage}</span>
+                    </div>
+                  )}
+                  
+                  {/* Issue - only show if active */}
+                  {activeWorker?.task_id && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#8b949e] w-[50px]">Issue:</span>
+                      <span className="text-blue-400">#{activeWorker.task_id}</span>
+                      {activeWorker.task_title && (
+                        <span className="text-[#8b949e] truncate max-w-[120px]">{activeWorker.task_title}</span>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Time - only show if active */}
+                  {activeWorker?.elapsed_ms && activeWorker.elapsed_ms > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#8b949e] w-[50px]">Time:</span>
+                      <span className="text-[#e6edf3]">{formatElapsed(activeWorker.elapsed_ms)}</span>
+                    </div>
+                  )}
+                  
+                  {/* Worker count */}
+                  <div className="flex items-center gap-2 pt-1 border-t border-[#30363d] mt-1">
+                    <span className="text-[#8b949e] w-[50px]">Workers:</span>
+                    <span className="text-[#e6edf3]">{board.worker_count || 0} ready</span>
+                  </div>
+                </div>
               </div>
               
               {/* Arrow */}
