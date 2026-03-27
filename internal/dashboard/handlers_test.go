@@ -2282,7 +2282,107 @@ func TestBoardLayout_BacklogAboveBlocked(t *testing.T) {
 	}
 }
 
-// TestBoardLayout_SprintControlsFunctional verifies sprint control buttons work
+// TestBoardLayout_BlockedColumnCollapsedWhenEmpty verifies blocked column shows only header when empty
+func TestBoardLayout_BlockedColumnCollapsedWhenEmpty(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleBoard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify "Blocked" header is present
+	if !strings.Contains(body, ">Blocked <") {
+		t.Error("blocked column header not found in board output")
+	}
+
+	// Verify "No blocked tickets" empty state is NOT present when collapsed
+	if strings.Contains(body, "No blocked tickets") {
+		t.Error("blocked column should not show 'No blocked tickets' when collapsed")
+	}
+
+	// Verify the blocked column div structure
+	blockedColIdx := strings.Index(body, `class="column col-blocked"`)
+	if blockedColIdx < 0 {
+		t.Fatal("blocked column container not found")
+	}
+
+	// Find the end of the blocked column section by looking for the next column or closing div
+	// The blocked column should end with </div> after the title when empty
+	blockedSectionEnd := strings.Index(body[blockedColIdx:], "</div>")
+	if blockedSectionEnd < 0 {
+		t.Fatal("could not find end of blocked column section")
+	}
+	blockedSectionEnd += blockedColIdx + 6 // Include the </div>
+
+	// Extract the blocked column section
+	blockedSection := body[blockedColIdx:blockedSectionEnd]
+
+	// Count occurrences of "card" class in blocked section - should be 0 when empty
+	cardCount := strings.Count(blockedSection, `class="card"`)
+	if cardCount > 0 {
+		t.Errorf("expected 0 cards in empty blocked column, found %d", cardCount)
+	}
+}
+
+// TestBoardLayout_BlockedColumnFullWhenPopulated verifies blocked column shows full content when tickets exist
+func TestBoardLayout_BlockedColumnFullWhenPopulated(t *testing.T) {
+	srv := createTestServerWithTemplates(t)
+	defer srv.wizardStore.Stop()
+
+	// Create board data with a blocked ticket
+	data := boardData{
+		Active: "board",
+		Blocked: []taskCard{
+			{ID: 123, Title: "Test Blocked Ticket", Status: "Blocked"},
+		},
+	}
+
+	// Execute the board-columns template directly with populated data
+	tmpl := srv.tmpls["board.html"]
+	if tmpl == nil {
+		t.Fatal("board.html template not found")
+	}
+
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "board-columns", data); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	body := buf.String()
+
+	// Verify "Blocked" header is present with count
+	if !strings.Contains(body, ">Blocked <") {
+		t.Error("blocked column header not found in board output")
+	}
+
+	// Verify count shows 1
+	if !strings.Contains(body, `<span class="count">1</span>`) {
+		t.Error("blocked column count should show 1 when populated")
+	}
+
+	// Verify the blocked ticket card is rendered
+	if !strings.Contains(body, "Test Blocked Ticket") {
+		t.Error("blocked ticket title not found in column when populated")
+	}
+
+	// Verify card structure is present
+	if !strings.Contains(body, `class="card"`) {
+		t.Error("card element not found in blocked column when populated")
+	}
+
+	// Verify unblock button is present
+	if !strings.Contains(body, `action="/unblock/123"`) {
+		t.Error("unblock form action not found for blocked ticket")
+	}
+}
 func TestBoardLayout_SprintControlsFunctional(t *testing.T) {
 	srv := createTestServerWithTemplates(t)
 	defer srv.wizardStore.Stop()

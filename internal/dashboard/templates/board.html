@@ -330,6 +330,7 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
 
     <div class="column col-blocked">
       <div class="column-title">Blocked <span class="count">{{len .Blocked}}</span></div>
+      {{if gt (len .Blocked) 0}}
       {{range .Blocked}}
       <div class="card">
         <div class="card-icons">{{range .Labels}}{{if labelIcon .}}<span class="label-icon" title="{{labelTooltip .}}">{{labelIcon .}}</span>{{end}}{{end}}</div>
@@ -341,8 +342,7 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
           <form method="post" action="/unblock/{{.ID}}"><button type="submit" class="btn btn-success">Unblock</button></form>
         </div>
       </div>
-      {{else}}
-      <div class="empty-state">No blocked tickets</div>
+      {{end}}
       {{end}}
     </div>
   </div>
