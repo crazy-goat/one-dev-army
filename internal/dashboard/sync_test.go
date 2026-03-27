@@ -455,6 +455,38 @@ func TestSyncService_AutoAssignStageBacklog_NoLabels(t *testing.T) {
 	}
 }
 
+func TestSyncService_AutoAssignStageBacklog_CachedIssueHasLabel(t *testing.T) {
+	gh := &mockGitHubClient{
+		issues: []github.Issue{
+			{Number: 1, Title: "Issue 1", State: "open", Labels: []struct {
+				Name string `json:"name"`
+			}{}},
+		},
+		oldestMilestone: &github.Milestone{Number: 1, Title: "Sprint 1"},
+	}
+	store := &mockStore{}
+	service := NewSyncService(gh, store, nil, nil)
+	service.SetActiveMilestone("Sprint 1")
+
+	service.syncNow()
+
+	cached := store.getCachedIssues()
+	if len(cached) != 1 {
+		t.Fatalf("Expected 1 cached issue, got %d", len(cached))
+	}
+
+	hasBacklog := false
+	for _, label := range cached[0].Labels {
+		if label.Name == "stage:backlog" {
+			hasBacklog = true
+			break
+		}
+	}
+	if !hasBacklog {
+		t.Error("Expected cached issue to have stage:backlog label after auto-assignment")
+	}
+}
+
 func TestSyncService_AutoAssignStageBacklog_NonStageLabels(t *testing.T) {
 	gh := &mockGitHubClient{
 		issues: []github.Issue{
