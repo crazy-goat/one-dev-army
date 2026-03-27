@@ -76,6 +76,36 @@ func (c *Client) GetLatestTag() (string, error) {
 	return versions[0].String(), nil
 }
 
+// GetDefaultBranch returns the default branch name (main or master)
+func (c *Client) GetDefaultBranch() (string, error) {
+	out, err := c.ghNoRepo("api", "repos/"+c.Repo)
+	if err != nil {
+		return "", fmt.Errorf("fetching repo info: %w", err)
+	}
+
+	var repo struct {
+		DefaultBranch string `json:"default_branch"`
+	}
+	if err := json.Unmarshal(out, &repo); err != nil {
+		return "", fmt.Errorf("parsing repo info: %w", err)
+	}
+
+	if repo.DefaultBranch == "" {
+		return "main", nil // fallback
+	}
+
+	return repo.DefaultBranch, nil
+}
+
+// GetLatestTagFromDefaultBranch returns the latest semantic version tag
+// For now, this returns the latest tag from the entire repo (same as GetLatestTag)
+// TODO: Filter tags to only include those reachable from default branch
+func (c *Client) GetLatestTagFromDefaultBranch() (string, error) {
+	// For now, just return the latest tag from the repo
+	// This matches the behavior of the old UI
+	return c.GetLatestTag()
+}
+
 // TagExists checks if a tag already exists in the repository
 func (c *Client) TagExists(tagName string) (bool, error) {
 	_, err := c.ghNoRepo("api", "repos/"+c.Repo+"/git/refs/tags/"+tagName)

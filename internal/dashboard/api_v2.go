@@ -411,12 +411,14 @@ func (*Server) handlePlanSprintV2(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-// handleVersionV2 returns the current version from GitHub tags.
+// handleVersionV2 returns the current version from the default branch.
 // GET /api/v2/version
 func (s *Server) handleVersionV2(w http.ResponseWriter, _ *http.Request) {
 	currentVersion := defaultVersion
-	if latest, err := s.gh.GetLatestTag(); err == nil {
-		currentVersion = latest
+	if s.gh != nil {
+		if version, err := s.gh.GetLatestTagFromDefaultBranch(); err == nil {
+			currentVersion = version
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
