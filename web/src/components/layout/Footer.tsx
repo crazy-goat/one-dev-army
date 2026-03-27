@@ -124,30 +124,57 @@ export function Footer() {
 
       {/* Right side */}
       <div className="flex items-center gap-3">
-        {/* Worker status */}
+        {/* Worker status with tooltip */}
         {board && (
-          <div 
-            className={`flex items-center gap-2 px-3 py-1.5 rounded border text-xs font-medium cursor-pointer transition-colors ${
-              board.paused 
-                ? 'border-[#30363d] bg-[#21262d] text-[#8b949e] hover:bg-[#30363d]' 
-                : 'border-dashed border-[#30363d] bg-[#161b22] text-[#8b949e]'
-            }`}
-            title={board.paused ? 'Worker is paused. Click to start.' : 'Worker is idle. Click to start.'}
-          >
-            <span className="flex items-center justify-center w-3 h-3">
-              {board.paused ? (
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
-                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-                </svg>
-              ) : (
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
-                  <circle cx="12" cy="12" r="10"/>
-                </svg>
-              )}
-            </span>
-            <span className="uppercase tracking-wider">
-              {board.paused ? 'Paused' : 'Idle'}
-            </span>
+          <div className="relative group">
+            <div 
+              className={`flex items-center gap-2 px-3 py-1.5 rounded border text-xs font-medium cursor-pointer transition-colors ${
+                board.paused 
+                  ? 'border-[#30363d] bg-[#21262d] text-[#8b949e] hover:bg-[#30363d]' 
+                  : 'border-dashed border-[#30363d] bg-[#161b22] text-[#8b949e]'
+              }`}
+            >
+              <span className="flex items-center justify-center w-3 h-3">
+                {board.paused ? (
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+                    <circle cx="12" cy="12" r="10"/>
+                  </svg>
+                )}
+              </span>
+              <span className="uppercase tracking-wider">
+                {board.paused ? 'Paused' : 'Idle'}
+              </span>
+            </div>
+            
+            {/* Tooltip */}
+            <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-[260px] bg-[#161b22] border border-[#30363d] rounded-md shadow-lg z-[1000]">
+              <div className="p-3">
+                <div className={`font-semibold text-sm mb-2 pb-2 border-b border-[#30363d] ${board.paused ? 'text-[#d29922]' : 'text-[#e6edf3]'}`}>
+                  {board.paused ? 'Worker Paused' : 'Worker Idle'}
+                </div>
+                
+                <div className="text-xs text-[#8b949e] leading-relaxed">
+                  {board.paused 
+                    ? 'Worker is currently paused. No tickets are being processed. Click to resume.'
+                    : 'Worker is idle and waiting for tickets. When tickets are available, processing will begin automatically.'
+                  }
+                </div>
+                
+                {board.worker_count > 0 && (
+                  <div className="mt-2 pt-2 border-t border-[#30363d] text-[10px] text-[#8b949e]">
+                    {board.worker_count} worker{board.worker_count !== 1 ? 's' : ''} ready
+                  </div>
+                )}
+              </div>
+              
+              {/* Arrow */}
+              <div className="absolute top-full right-4 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-[#161b22]" />
+              <div className="absolute top-full right-[15px] w-0 h-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-t-[7px] border-t-[#30363d] -mt-[1px]" />
+            </div>
           </div>
         )}
 
