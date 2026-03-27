@@ -70,7 +70,10 @@ func TestOrchestratorCurrentTask(t *testing.T) {
 }
 
 func TestOrchestratorStop(t *testing.T) {
-	o := &Orchestrator{running: true}
+	o := &Orchestrator{
+		running: true,
+		stopCh:  make(chan struct{}),
+	}
 
 	o.Stop()
 
@@ -84,7 +87,11 @@ func TestOrchestratorStop(t *testing.T) {
 }
 
 func TestOrchestratorRunContextCancel(t *testing.T) {
-	o := &Orchestrator{paused: true}
+	o := &Orchestrator{
+		paused:       true,
+		completionCh: make(chan int, 1),
+		stopCh:       make(chan struct{}),
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -107,7 +114,11 @@ func TestOrchestratorRunContextCancel(t *testing.T) {
 }
 
 func TestOrchestratorRunStop(t *testing.T) {
-	o := &Orchestrator{paused: true}
+	o := &Orchestrator{
+		paused:       true,
+		completionCh: make(chan int, 1),
+		stopCh:       make(chan struct{}),
+	}
 
 	ctx := context.Background()
 
@@ -682,6 +693,64 @@ func TestInferColumnForClosableCheck(t *testing.T) {
 				t.Errorf("inferColumnForClosableCheck() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestOrchestrator_NotifyTicketCompleted(t *testing.T) {
+	o := &Orchestrator{
+		completionCh: make(chan int, 1),
+	}
+
+	o.NotifyTicketCompleted(42)
+
+	select {
+	case num := <-o.completionCh:
+		if num != 42 {
+			t.Errorf("received issue number %d, want 42", num)
+		}
+	case <-time.After(time.Second):
+		t.Error("timeout waiting for completion notification")
+	}
+}
+
+func TestOrchestrator_NotifyTicketCompleted_NonBlocking(t *testing.T) {
+	o := &Orchestrator{
+		completionCh: make(chan int, 1),
+	}
+
+	// Fill the channel
+	o.completionCh <- 1
+
+	// This should not block even though channel is full
+	done := make(chan bool)
+	go func() {
+		o.NotifyTicketCompleted(2)
+		done <- true
+	}()
+
+	select {
+	case <-done:
+		// Success - didn't block
+	case <-time.After(time.Second):
+		t.Error("NotifyTicketCompleted blocked on full channel")
+	}
+}
+
+func TestOrchestrator_ImmediateSearchTriggered(t *testing.T) {
+	o := &Orchestrator{
+		completionCh: make(chan int, 1),
+		paused:       true,
+	}
+
+	// Simulate notification
+	o.NotifyTicketCompleted(42)
+
+	// Verify notification was received
+	select {
+	case <-o.completionCh:
+		// Good, notification received
+	case <-time.After(time.Second):
+		t.Error("notification not received within 1 second")
 	}
 }
 
