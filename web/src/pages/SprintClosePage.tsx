@@ -205,7 +205,7 @@ export default function SprintClosePage() {
           <div className="flex flex-col gap-2">
             <button
               type="button"
-              onClick={() => handlePreview(bumpType)}
+              onClick={() => void handlePreview(bumpType)}
               disabled={isLoadingPreview}
               className="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
@@ -229,7 +229,7 @@ export default function SprintClosePage() {
                 </Link>
                 <button
                   type="button"
-                  onClick={handleClose}
+                  onClick={() => void handleClose()}
                   disabled={isClosing}
                   className="w-full px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                 >

@@ -128,15 +128,15 @@ export default function WizardPage() {
 
       {/* Step content */}
       {step === 'idea' && (
-        <IdeaForm onSubmit={handleIdeaSubmit} isLoading={isLoading} />
+        <IdeaForm onSubmit={(data) => void handleIdeaSubmit(data)} isLoading={isLoading} />
       )}
 
       {step === 'review' && session && (
         <RefinePreview
           session={session}
           onBack={() => setStep('idea')}
-          onCreateIssue={handleCreateIssue}
-          onRegenerate={handleRegenerate}
+          onCreateIssue={(title, addToSprint) => void handleCreateIssue(title, addToSprint)}
+          onRegenerate={(desc) => void handleRegenerate(desc)}
           isLoading={isLoading}
         />
       )}
