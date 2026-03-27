@@ -258,6 +258,28 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
 .yolo-mode-tooltip-content{font-size:.8rem;line-height:1.4;color:var(--muted)}
 .yolo-mode-tooltip::after{content:'';position:absolute;top:100%;right:1rem;border:6px solid transparent;border-top-color:var(--surface)}
 .yolo-mode-tooltip::before{content:'';position:absolute;top:100%;right:calc(1rem - 1px);border:7px solid transparent;border-top-color:var(--border)}
+
+/* Wake Lock toggle styles */
+#wake-lock-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+#wake-lock-toggle.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+#wake-lock-toggle.active:hover {
+  opacity: 0.9;
+}
+
+#wake-lock-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 </style>
 </head>
 <body>
@@ -268,6 +290,10 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
     <a href="/settings" {{if eq .Active "settings"}}class="active"{{end}}>Settings</a>
   </div>
   <div class="nav-actions">
+    <button id="wake-lock-toggle" class="btn" onclick="toggleWakeLock()" title="Prevent screen sleep">
+      <span id="wake-lock-icon">🌙</span>
+      <span id="wake-lock-text">Keep Screen On</span>
+    </button>
     <button class="btn" onclick="window.open('http://localhost:{{.OpenCodePort}}', '_blank')">Chat</button>
     <a href="/wizard" class="btn btn-primary">+ New Issue</a>
   </div>
@@ -345,6 +371,11 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:.5re
   </div>
 </footer>
 <script>
+// Dashboard configuration from server
+window.dashboardConfig = {
+    keepScreenOn: {{.KeepScreenOn}}
+};
+
 (function() {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = wsProtocol + '//' + window.location.host + '/ws';
@@ -1148,6 +1179,147 @@ function triggerSync() {
             text.textContent = 'Sync';
         });
 }
+
+// Screen Wake Lock Manager
+(function() {
+    'use strict';
+    
+    class WakeLockManager {
+        constructor() {
+            this.wakeLock = null;
+            this.enabled = false;
+            this.isSupported = 'wakeLock' in navigator;
+        }
+        
+        async requestWakeLock() {
+            if (!this.isSupported) {
+                console.warn('[WakeLock] Screen Wake Lock API not supported');
+                return false;
+            }
+            
+            try {
+                this.wakeLock = await navigator.wakeLock.request('screen');
+                this.enabled = true;
+                
+                this.wakeLock.addEventListener('release', () => {
+                    console.log('[WakeLock] Screen Wake Lock released');
+                    this.wakeLock = null;
+                    this.enabled = false;
+                    updateWakeLockUI();
+                });
+                
+                console.log('[WakeLock] Screen Wake Lock active');
+                return true;
+            } catch (err) {
+                console.error('[WakeLock] Failed to acquire wake lock:', err);
+                this.enabled = false;
+                return false;
+            }
+        }
+        
+        async releaseWakeLock() {
+            if (this.wakeLock) {
+                try {
+                    await this.wakeLock.release();
+                    this.wakeLock = null;
+                    this.enabled = false;
+                    console.log('[WakeLock] Screen Wake Lock released manually');
+                    return true;
+                } catch (err) {
+                    console.error('[WakeLock] Failed to release wake lock:', err);
+                    return false;
+                }
+            }
+            return true;
+        }
+        
+        async toggle() {
+            if (this.enabled) {
+                await this.releaseWakeLock();
+            } else {
+                await this.requestWakeLock();
+            }
+            updateWakeLockUI();
+            return this.enabled;
+        }
+        
+        async reacquireIfEnabled() {
+            if (this.enabled && !this.wakeLock) {
+                await this.requestWakeLock();
+                updateWakeLockUI();
+            }
+        }
+    }
+    
+    // Global wake lock manager instance
+    window.wakeLockManager = new WakeLockManager();
+    
+    // UI update function
+    function updateWakeLockUI() {
+        const toggle = document.getElementById('wake-lock-toggle');
+        const icon = document.getElementById('wake-lock-icon');
+        const text = document.getElementById('wake-lock-text');
+        
+        if (!toggle || !icon || !text) return;
+        
+        if (wakeLockManager.enabled) {
+            toggle.classList.add('active');
+            icon.textContent = '☀️';
+            text.textContent = 'Screen On';
+            toggle.title = 'Click to allow screen sleep';
+        } else {
+            toggle.classList.remove('active');
+            icon.textContent = '🌙';
+            text.textContent = 'Keep Screen On';
+            toggle.title = wakeLockManager.isSupported 
+                ? 'Click to prevent screen sleep' 
+                : 'Screen Wake Lock not supported in this browser';
+        }
+        
+        // Disable button if not supported
+        if (!wakeLockManager.isSupported) {
+            toggle.disabled = true;
+            toggle.title = 'Screen Wake Lock API not supported in this browser';
+        }
+    }
+    
+    // Global toggle function
+    window.toggleWakeLock = async function() {
+        if (!wakeLockManager.isSupported) {
+            alert('Screen Wake Lock API is not supported in your browser.\n\nSupported browsers:\n- Chrome/Edge (all versions)\n- Firefox 128+\n- Safari 16.4+ (iOS) / 14.4+ (macOS)');
+            return;
+        }
+        
+        await wakeLockManager.toggle();
+    };
+    
+    // Handle visibility changes (re-acquire when tab becomes visible)
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            wakeLockManager.reacquireIfEnabled();
+        }
+    });
+    
+    // Initialize UI on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        updateWakeLockUI();
+        
+        // Auto-enable if configured in dashboard config
+        const dashboardConfig = window.dashboardConfig || {};
+        if (dashboardConfig.keepScreenOn && wakeLockManager.isSupported) {
+            wakeLockManager.requestWakeLock().then(() => {
+                updateWakeLockUI();
+            });
+        }
+    });
+    
+    // Release wake lock when page is unloaded
+    window.addEventListener('beforeunload', () => {
+        if (wakeLockManager.enabled) {
+            wakeLockManager.releaseWakeLock();
+        }
+    });
+})();
 </script>
 </body>
 </html>{{end}}

@@ -1047,11 +1047,13 @@ func TestLayoutNavigationButtons(t *testing.T) {
 		OpenCodePort int
 		WorkerCount  int
 		YoloMode     bool
+		KeepScreenOn bool
 	}{
 		Active:       "board",
 		OpenCodePort: 5001,
 		WorkerCount:  1,
 		YoloMode:     false,
+		KeepScreenOn: false,
 	}
 
 	// We need to define a content template for the layout to work
