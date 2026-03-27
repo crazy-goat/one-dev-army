@@ -183,9 +183,10 @@ func (c *Client) ClosePR(branch string) error {
 }
 
 type PRCheck struct {
-	Name  string `json:"name"`
-	State string `json:"state"`
-	Link  string `json:"link"`
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
+	DetailsURL string `json:"detailsUrl"`
 }
 
 type PRChecksResult struct {
@@ -198,12 +199,15 @@ type PRChecksResult struct {
 var runIDPattern = regexp.MustCompile(`/actions/runs/(\d+)`)
 
 func (c *Client) GetPRChecks(branch string) (*PRChecksResult, error) {
-	var checks []PRCheck
-	err := c.ghJSON(&checks, "pr", "checks", branch, "--json", "name,state,link")
+	var result struct {
+		StatusCheckRollup []PRCheck `json:"statusCheckRollup"`
+	}
+	err := c.ghJSON(&result, "pr", "view", branch, "--json", "statusCheckRollup")
 	if err != nil {
 		return nil, fmt.Errorf("getting PR checks for %s: %w", branch, err)
 	}
 
+	checks := result.StatusCheckRollup
 	if len(checks) == 0 {
 		return &PRChecksResult{Status: "pending"}, nil
 	}
@@ -212,12 +216,12 @@ func (c *Client) GetPRChecks(branch string) (*PRChecksResult, error) {
 	var failedLinks []string
 	allComplete := true
 	for _, check := range checks {
-		if check.State != "SUCCESS" && check.State != "FAILURE" {
+		if check.Status != "COMPLETED" {
 			allComplete = false
 		}
-		if check.State == "FAILURE" {
+		if check.Conclusion == "FAILURE" {
 			failedNames = append(failedNames, check.Name)
-			failedLinks = append(failedLinks, check.Link)
+			failedLinks = append(failedLinks, check.DetailsURL)
 		}
 	}
 
