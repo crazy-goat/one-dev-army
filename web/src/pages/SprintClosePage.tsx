@@ -174,14 +174,10 @@ export default function SprintClosePage() {
           {/* Version display - always show */}
           <div className="bg-gray-950 border border-gray-800 rounded-lg p-4 mb-6 text-center">
             <div className="text-xs text-gray-500 mb-1">Current Version</div>
-            <div className="text-2xl font-semibold font-mono text-gray-200">
-              {currentVersion}
-            </div>
+            <div className="text-2xl font-semibold font-mono text-gray-200">{currentVersion}</div>
             <div className="text-gray-600 my-2">{'\u2193'}</div>
             <div className="text-xs text-gray-500 mb-1">New Version</div>
-            <div className="text-2xl font-semibold font-mono text-blue-400">
-              {newVersion}
-            </div>
+            <div className="text-2xl font-semibold font-mono text-blue-400">{newVersion}</div>
           </div>
 
           {/* Bump options */}
