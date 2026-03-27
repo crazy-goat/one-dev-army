@@ -192,6 +192,8 @@
     text-align: center;
     padding: 1rem;
 }
+
+.retry-btn,.fresh-retry-btn{cursor:pointer}
 </style>
 
 <div class="board-header">
@@ -537,8 +539,8 @@ document.getElementById('process-modal').addEventListener('click', function(e) {
         <div class="card-title">{{.Title}}</div>
         {{if .Labels}}<div class="card-meta"><div class="card-labels">{{range .Labels}}{{if not (labelIcon .)}}<span class="label">{{.}}</span>{{end}}{{end}}</div></div>{{end}}
         <div class="card-actions">
-          <form method="post" action="/retry/{{.ID}}"><button type="submit" class="btn btn-success">Retry</button></form>
-          <form method="post" action="/retry-fresh/{{.ID}}"><button type="submit" class="btn btn-primary">Retry Fresh</button></form>
+          <form method="post" action="/retry/{{.ID}}"><button type="submit" class="btn btn-success retry-btn">↺ Retry</button></form>
+          <form method="post" action="/retry-fresh/{{.ID}}"><button type="submit" class="btn btn-primary fresh-retry-btn">↺ Fresh Retry</button></form>
         </div>
       </div>
       {{else}}
