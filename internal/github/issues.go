@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -159,7 +160,23 @@ func (c *Client) RemoveLabel(issueNum int, label string) error {
 }
 
 func (c *Client) CreatePR(branch, title, body string) (string, error) {
-	out, err := c.gh("pr", "create", "--head", branch, "--title", title, "--body", body)
+	// Create temporary file for body content to avoid shell escaping issues
+	tmpFile, err := os.CreateTemp("", "oda-pr-body-*.md")
+	if err != nil {
+		return "", fmt.Errorf("creating temp file for PR body: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := tmpFile.WriteString(body); err != nil {
+		tmpFile.Close()
+		return "", fmt.Errorf("writing PR body to temp file: %w", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		return "", fmt.Errorf("closing temp file: %w", err)
+	}
+
+	out, err := c.gh("pr", "create", "--head", branch, "--title", title, "--body-file", tmpFile.Name())
 	if err != nil {
 		return "", fmt.Errorf("creating PR for branch %s: %w", branch, err)
 	}
