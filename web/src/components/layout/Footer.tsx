@@ -18,7 +18,7 @@ export function Footer() {
 
   return (
     <footer className="bg-gray-900 border-t border-gray-800 px-4 py-2 mt-auto">
-      <div className="flex items-center justify-between max-w-screen-2xl mx-auto text-xs text-gray-500">
+      <div className="flex items-center justify-between w-full text-xs text-gray-500">
         <div className="flex items-center gap-4">
           <span>ODA &mdash; One Dev Army</span>
           <a

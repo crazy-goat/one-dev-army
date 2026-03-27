@@ -39,7 +39,7 @@ export function Navbar() {
 
   return (
     <nav className="bg-gray-900 border-b border-gray-800 px-4 py-3">
-      <div className="flex items-center justify-between max-w-screen-2xl mx-auto">
+      <div className="flex items-center justify-between w-full">
         {/* Left: Logo + Navigation */}
         <div className="flex items-center gap-6">
           <Link to="/" className="text-xl font-bold text-white">
@@ -100,13 +100,7 @@ export function Navbar() {
                 </span>
               )}
             </div>
-          ) : (
-            board && (
-              <span className="text-xs bg-gray-800 text-gray-300 px-2 py-1 rounded">
-                {board.worker_count} worker{board.worker_count !== 1 ? 's' : ''}
-              </span>
-            )
-          )}
+          ) : null}
 
           {board && (
             <button
