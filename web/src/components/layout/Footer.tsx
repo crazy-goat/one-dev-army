@@ -151,28 +151,45 @@ export function Footer() {
           </div>
         )}
 
-        {/* YOLO / SAFE MODE */}
+        {/* YOLO / SAFE MODE with tooltip */}
         {board && (
-          <button
-            type="button"
-            onClick={() => toggleYolo.mutate()}
-            disabled={toggleYolo.isPending}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs font-medium transition-colors disabled:opacity-50 ${
-              board.yolo_mode
-                ? 'border-[#d29922]/40 bg-[#d29922]/10 text-[#d29922] hover:bg-[#d29922]/20'
-                : 'border-[#30363d] bg-[#21262d] text-[#8b949e] hover:bg-[#30363d]'
-            }`}
-            title={
-              board.yolo_mode
-                ? 'YOLO mode ON — PRs auto-merge without review. Click to disable.'
-                : 'SAFE MODE — All changes require manual approval. Click to enable YOLO mode.'
-            }
-          >
-            <span>{board.yolo_mode ? '⚡' : '🔒'}</span>
-            <span className="uppercase tracking-wider">
-              {board.yolo_mode ? 'YOLO MODE' : 'SAFE MODE'}
-            </span>
-          </button>
+          <div className="relative group">
+            <button
+              type="button"
+              onClick={() => toggleYolo.mutate()}
+              disabled={toggleYolo.isPending}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs font-medium transition-colors disabled:opacity-50 ${
+                board.yolo_mode
+                  ? 'border-[#d29922]/40 bg-[#d29922]/10 text-[#d29922] hover:bg-[#d29922]/20'
+                  : 'border-[#30363d] bg-[#21262d] text-[#8b949e] hover:bg-[#30363d]'
+              }`}
+            >
+              <span>{board.yolo_mode ? '⚡' : '🔒'}</span>
+              <span className="uppercase tracking-wider">
+                {board.yolo_mode ? 'YOLO MODE' : 'SAFE MODE'}
+              </span>
+            </button>
+            
+            {/* Tooltip */}
+            <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-[280px] bg-[#161b22] border border-[#30363d] rounded-md shadow-lg z-[1000]">
+              <div className="p-3">
+                <div className={`font-semibold text-sm mb-2 pb-2 border-b border-[#30363d] ${board.yolo_mode ? 'text-[#d29922]' : 'text-[#e6edf3]'}`}>
+                  {board.yolo_mode ? 'YOLO Mode Enabled' : 'Safe Mode Enabled'}
+                </div>
+                
+                <div className="text-xs text-[#8b949e] leading-relaxed">
+                  {board.yolo_mode 
+                    ? 'AI will auto-approve all changes without human review. Click to disable.'
+                    : 'All changes require manual approval. Click to enable YOLO mode (auto-approve).'
+                  }
+                </div>
+              </div>
+              
+              {/* Arrow */}
+              <div className="absolute top-full right-4 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-[#161b22]" />
+              <div className="absolute top-full right-[15px] w-0 h-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-t-[7px] border-t-[#30363d] -mt-[1px]" />
+            </div>
+          </div>
         )}
 
         {/* GitHub API usage with tooltip */}
