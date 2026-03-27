@@ -88,7 +88,7 @@ export function ProcessingPanel({
 
   if (!currentTicket) {
     return (
-      <div className="bg-gray-500/8 border border-gray-500/20 rounded-lg p-4">
+      <div className="bg-gray-500/8 border border-gray-500/20 rounded-lg p-4 h-full">
         <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">
           Processing
         </div>
@@ -117,7 +117,7 @@ export function ProcessingPanel({
   }
 
   return (
-    <div className="bg-blue-500/8 border border-blue-500/20 rounded-lg p-4">
+    <div className="bg-blue-500/8 border border-blue-500/20 rounded-lg p-4 h-full">
       <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-2">
         Processing
         <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" />
