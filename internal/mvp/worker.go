@@ -861,6 +861,23 @@ func (w *Worker) codeReview(ctx context.Context, task *Task, prURL, llmModel str
 }
 
 func (w *Worker) createPR(_ context.Context, task *Task, logger *worker.StepLogger) (string, error) {
+	// Check if branch has any commits different from master
+	hasCommits, err := w.brMgr.HasCommitsDifferentFromMaster(task.Branch)
+	if err != nil {
+		log.Printf("[Worker %d] Warning: failed to check branch commits: %v", w.id, err)
+		// Continue anyway - let the PR creation fail naturally if there's a real issue
+	} else if !hasCommits {
+		// No commits - issue is already done
+		log.Printf("[Worker %d] No code changes needed for #%d, closing as already implemented", w.id, task.Issue.Number)
+
+		if logger != nil {
+			logger.Logf("No commits different from master - issue already implemented")
+		}
+
+		// Return special error that orchestrator will recognize
+		return "", fmt.Errorf("%w: no commits between %s and master", ErrAlreadyDone, task.Branch)
+	}
+
 	if existingBranch, err := w.gh.FindPRBranch(task.Issue.Number); err == nil && existingBranch != "" {
 		log.Printf("[Worker %d] PR already exists for issue #%d (branch: %s)", w.id, task.Issue.Number, existingBranch)
 	}

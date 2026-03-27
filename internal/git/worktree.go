@@ -247,7 +247,35 @@ func (m *BranchManager) FindBranchByPrefix(prefix string) string {
 	return ""
 }
 
-// Legacy aliases for backward compatibility during migration
+// HasCommitsDifferentFromMaster checks if the given branch has any commits
+// that are not in master. Returns true if there are new commits, false if
+// the branch is identical to master.
+func (m *BranchManager) HasCommitsDifferentFromMaster(branch string) (bool, error) {
+	// Get the default branch (main or master)
+	defaultBranch := m.detectDefaultBranch()
+
+	// Get merge base between default branch and the target branch
+	cmd := exec.Command("git", "merge-base", defaultBranch, branch)
+	cmd.Dir = m.repoDir
+	mergeBase, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("getting merge base: %w", err)
+	}
+
+	// Get HEAD of the target branch
+	cmd = exec.Command("git", "rev-parse", branch)
+	cmd.Dir = m.repoDir
+	head, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("getting branch HEAD: %w", err)
+	}
+
+	// If merge base equals HEAD, branch has no new commits
+	mergeBaseStr := strings.TrimSpace(string(mergeBase))
+	headStr := strings.TrimSpace(string(head))
+
+	return mergeBaseStr != headStr, nil
+}
 
 // WorktreeManager is an alias for BranchManager (legacy compatibility).
 type WorktreeManager = BranchManager
