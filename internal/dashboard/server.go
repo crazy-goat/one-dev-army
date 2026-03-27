@@ -292,6 +292,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/v2/sprint/start", s.handleSprintStartV2)
 	s.mux.HandleFunc("POST /api/v2/sprint/pause", s.handleSprintPauseV2)
 	s.mux.HandleFunc("POST /api/v2/sprint/plan", s.handlePlanSprintV2)
+	s.mux.HandleFunc("GET /api/v2/version", s.handleVersionV2)
 	s.mux.HandleFunc("POST /api/v2/sprint/close/preview", s.handleSprintClosePreviewV2)
 	s.mux.HandleFunc("POST /api/v2/sprint/close/confirm", s.handleSprintCloseConfirmV2)
 	s.mux.HandleFunc("POST /api/v2/issues/{id}/approve", s.handleApproveV2)

@@ -411,6 +411,19 @@ func (*Server) handlePlanSprintV2(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// handleVersionV2 returns the current version from GitHub tags.
+// GET /api/v2/version
+func (s *Server) handleVersionV2(w http.ResponseWriter, _ *http.Request) {
+	currentVersion := defaultVersion
+	if latest, err := s.gh.GetLatestTag(); err == nil {
+		currentVersion = latest
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"version": currentVersion,
+	})
+}
+
 // handleSprintClosePreviewV2 generates release notes preview without closing.
 // POST /api/v2/sprint/close/preview
 func (s *Server) handleSprintClosePreviewV2(w http.ResponseWriter, r *http.Request) {

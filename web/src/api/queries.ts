@@ -64,6 +64,13 @@ export function useRateLimit() {
   })
 }
 
+export function useVersion() {
+  return useQuery({
+    queryKey: ['version'],
+    queryFn: api.getVersion,
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Mutations
 // ---------------------------------------------------------------------------

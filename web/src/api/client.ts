@@ -102,6 +102,9 @@ export const api = {
   // Rate Limit
   getRateLimit: () => request<RateLimit>('/rate-limit'),
 
+  // Version
+  getVersion: () => request<{ version: string }>('/version'),
+
   // Wizard
   createWizardSession: (type: string) => post<WizardSession>('/wizard/sessions', { type }),
   getWizardSession: (id: string) => request<WizardSession>(`/wizard/sessions/${id}`),

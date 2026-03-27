@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 
 import { api } from '../api/client'
+import { useVersion } from '../api/queries'
 import type { SprintClosePreview, SprintCloseResult } from '../api/types'
 
 type BumpType = 'major' | 'minor' | 'patch'
@@ -28,7 +29,25 @@ const BUMP_OPTIONS: {
   },
 ]
 
+// Calculate new version based on bump type
+function calculateNewVersion(currentVersion: string, bumpType: BumpType): string {
+  const parts = currentVersion.replace(/^v/, '').split('.').map(Number)
+  const [major = 0, minor = 0, patch = 0] = parts
+
+  switch (bumpType) {
+    case 'major':
+      return `${major + 1}.0.0`
+    case 'minor':
+      return `${major}.${minor + 1}.0`
+    case 'patch':
+      return `${major}.${minor}.${patch + 1}`
+    default:
+      return currentVersion
+  }
+}
+
 export default function SprintClosePage() {
+  const { data: versionData } = useVersion()
   const [bumpType, setBumpType] = useState<BumpType>('patch')
   const [preview, setPreview] = useState<SprintClosePreview | null>(null)
   const [result, setResult] = useState<SprintCloseResult | null>(null)
@@ -37,6 +56,9 @@ export default function SprintClosePage() {
   const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const currentVersion = versionData?.version ?? '0.0.0'
+  const newVersion = calculateNewVersion(currentVersion, bumpType)
 
   const handlePreview = async (bump: BumpType) => {
     setBumpType(bump)
@@ -149,20 +171,18 @@ export default function SprintClosePage() {
       <div className="grid grid-cols-[minmax(auto,300px)_1fr] gap-6">
         {/* Left panel: Version bump selector */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          {/* Version display */}
-          {preview && (
-            <div className="bg-gray-950 border border-gray-800 rounded-lg p-4 mb-6 text-center">
-              <div className="text-xs text-gray-500 mb-1">Current Version</div>
-              <div className="text-2xl font-semibold font-mono text-gray-200">
-                {preview.current_version}
-              </div>
-              <div className="text-gray-600 my-2">{'\u2193'}</div>
-              <div className="text-xs text-gray-500 mb-1">New Version</div>
-              <div className="text-2xl font-semibold font-mono text-blue-400">
-                {preview.new_version}
-              </div>
+          {/* Version display - always show */}
+          <div className="bg-gray-950 border border-gray-800 rounded-lg p-4 mb-6 text-center">
+            <div className="text-xs text-gray-500 mb-1">Current Version</div>
+            <div className="text-2xl font-semibold font-mono text-gray-200">
+              {currentVersion}
             </div>
-          )}
+            <div className="text-gray-600 my-2">{'\u2193'}</div>
+            <div className="text-xs text-gray-500 mb-1">New Version</div>
+            <div className="text-2xl font-semibold font-mono text-blue-400">
+              {newVersion}
+            </div>
+          </div>
 
           {/* Bump options */}
           <div className="space-y-2 mb-6">
@@ -209,31 +229,28 @@ export default function SprintClosePage() {
               )}
             </button>
 
-            {preview && (
-              <>
-                <Link
-                  to="/"
-                  className="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm font-medium transition-colors text-center"
-                >
-                  Cancel
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => void handleClose()}
-                  disabled={isClosing}
-                  className="w-full px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                >
-                  {isClosing ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Closing...
-                    </span>
-                  ) : (
-                    'Create Tag & Close Sprint'
-                  )}
-                </button>
-              </>
-            )}
+            {/* Always show Cancel and Close buttons */}
+            <Link
+              to="/"
+              className="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm font-medium transition-colors text-center"
+            >
+              Cancel
+            </Link>
+            <button
+              type="button"
+              onClick={() => void handleClose()}
+              disabled={isClosing}
+              className="w-full px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {isClosing ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Closing...
+                </span>
+              ) : (
+                'Create Tag & Close Sprint'
+              )}
+            </button>
           </div>
         </div>
 
@@ -304,13 +321,41 @@ export default function SprintClosePage() {
               )}
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center h-[300px] text-gray-600 text-center">
-              <div className="text-4xl mb-4 opacity-50">{'\uD83D\uDCE6'}</div>
-              <p className="text-sm">
-                Select a version bump type and click &quot;Preview Release Notes&quot; to generate
-                release notes.
-              </p>
-            </div>
+            <>
+              {/* Default preview header */}
+              <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-800">
+                <h3 className="text-blue-400 font-semibold">Release Notes Preview</h3>
+                <span className="text-xs text-gray-500 font-mono bg-gray-950 px-2 py-1 rounded">
+                  v{newVersion}
+                </span>
+              </div>
+
+              {/* Default title */}
+              <div className="mb-4">
+                <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1">
+                  TITLE
+                </label>
+                <div className="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded-lg text-gray-200 text-sm font-semibold">
+                  Release v{newVersion} - Sprint {new Date().toISOString().split('T')[0]}
+                </div>
+              </div>
+
+              {/* Default body */}
+              <div className="mb-4">
+                <label className="text-xs text-gray-500 uppercase tracking-wider block mb-1">
+                  DESCRIPTION (MARKDOWN)
+                </label>
+                <div className="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded-lg text-gray-300 text-sm font-mono min-h-[200px]">
+                  Release v{newVersion} - Sprint {new Date().toISOString().split('T')[0]}
+                  {'\n\n'}
+                  No issues were closed in this sprint.
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-gray-800 text-xs text-gray-600 text-center">
+                Based on 0 merged issue(s) • Auto-generated
+              </div>
+            </>
           )}
         </div>
       </div>
