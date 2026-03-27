@@ -22,6 +22,13 @@ Currently:
 
 Add milestone detection to SyncService's sync cycle. When a different milestone is detected, update `activeMilestone` and log the change.
 
+### Edge Cases to Handle
+
+1. **No active milestone** - When all milestones are closed, SyncService should detect `nil` and stop syncing (log warning)
+2. **Milestone closed externally** - When someone closes milestone via GitHub UI (not dashboard), SyncService should detect the next open milestone
+3. **Close sprint via dashboard** - Already works (handlers.go:835-840), but verify it still works after our changes
+4. **Same milestone title, different number** - Should handle case where milestone is recreated with same name
+
 ---
 
 ### Task 1: Add Milestone Detection to SyncService
@@ -55,8 +62,15 @@ func (s *SyncService) doSync() {
 	latestMilestone, err := s.gh.GetOldestOpenMilestone()
 	if err != nil {
 		log.Printf("[SyncService] Error checking for new milestone: %v", err)
-	} else if latestMilestone != nil && latestMilestone.Title != currentMilestone {
-		log.Printf("[SyncService] New milestone detected: %s (was: %s)", 
+	} else if latestMilestone == nil {
+		// No open milestones at all
+		if currentMilestone != "" {
+			log.Printf("[SyncService] No open milestones found (was: %s), stopping sync", currentMilestone)
+			s.SetActiveMilestone("")
+		}
+		return
+	} else if latestMilestone.Title != currentMilestone {
+		log.Printf("[SyncService] Milestone change detected: %s (was: %s)", 
 			latestMilestone.Title, currentMilestone)
 		s.SetActiveMilestone(latestMilestone.Title)
 		// Also update GitHub client's active milestone
@@ -68,6 +82,10 @@ func (s *SyncService) doSync() {
 	}
 	
 	milestone := s.GetActiveMilestone()
+	if milestone == "" {
+		log.Println("[SyncService] No active milestone, skipping sync")
+		return
+	}
 	// ... rest of existing doSync logic
 }
 ```
@@ -310,15 +328,136 @@ git commit -m "docs: document milestone auto-detection feature"
 
 ---
 
+### Task 6: Handle Edge Cases - No Active Milestone
+
+**Files:**
+- Modify: `internal/dashboard/sync.go:150-201` (already updated in Task 1)
+- Test: `internal/dashboard/sync_milestone_test.go`
+
+**Step 1: Add test for no milestone scenario**
+
+```go
+func TestSyncService_HandlesNoMilestone(t *testing.T) {
+	mockGH := &mockGitHubClientWithMilestone{
+		milestones: []*github.Milestone{nil}, // No milestones
+	}
+	mockStore := &mockStore{}
+	mockHub := &mockHub{}
+
+	service := NewSyncService(mockGH, mockStore, mockHub, nil)
+	service.SetActiveMilestone("Old Sprint")
+
+	// Sync with no milestones
+	service.doSync()
+	
+	if service.GetActiveMilestone() != "" {
+		t.Errorf("Expected milestone to be empty, got %s", service.GetActiveMilestone())
+	}
+}
+```
+
+**Step 2: Run test**
+
+```bash
+cd /home/decodo/work/one-dev-army
+go test ./internal/dashboard/... -v -run TestSyncService_HandlesNoMilestone
+```
+
+Expected: Test passes
+
+**Step 3: Commit**
+
+```bash
+git add internal/dashboard/sync_milestone_test.go
+git commit -m "test: add test for no milestone scenario"
+```
+
+---
+
+### Task 7: Verify Close Sprint Still Works
+
+**Files:**
+- Manual verification (no code changes)
+
+**Step 1: Start ODA with current sprint**
+
+```bash
+cd /home/decodo/work/one-dev-army
+/tmp/oda-test 2>&1 | tee /tmp/oda_close_test.log
+```
+
+**Step 2: Create test issue and complete it**
+
+```bash
+# Create issue in current sprint
+CURRENT_SPRINT=$(gh api repos/crazy-goat/one-dev-army/milestones --jq '.[] | select(.state=="open") | .title' | head -1)
+gh issue create --title "[Test] Close sprint test" \
+  --body "Test issue" \
+  --milestone "$CURRENT_SPRINT" \
+  --label "test"
+
+# Move to Done column (via project board or labels)
+```
+
+**Step 3: Close sprint via dashboard**
+
+1. Open http://localhost:7000
+2. Click "Close Sprint" button
+3. Select version bump type
+4. Confirm
+
+**Step 4: Verify in logs**
+
+Watch for:
+```
+[Dashboard] Closed milestone: Sprint ...
+[Dashboard] Created new sprint: Sprint ...
+[Dashboard] Set new active milestone: Sprint ...
+[Dashboard] Updated sync service with new milestone: Sprint ...
+[SyncService] Milestone change detected: Sprint ... (was: Sprint ...)
+```
+
+**Step 5: Verify orchestrator picks up new sprint**
+
+Check that orchestrator shows:
+```
+[Orchestrator] Found 0 candidates, resume=false
+```
+(for the new empty sprint)
+
+**Step 6: Cleanup**
+
+```bash
+# Close test issue
+gh issue close <issue-number> --comment "Test complete"
+```
+
+**Step 7: Commit**
+
+```bash
+git commit --allow-empty -m "test: verify close sprint integration works"
+```
+
+---
+
 ## Verification Checklist
 
 Before claiming complete:
 - [ ] All tests pass: `go test ./internal/dashboard/... -v`
 - [ ] Lint passes: `golangci-lint run ./...`
-- [ ] Manual test shows milestone auto-detection in logs
+- [ ] Manual test shows milestone auto-detection in logs (new milestone via GitHub UI)
+- [ ] Manual test shows milestone cleared when all milestones closed
+- [ ] Close sprint via dashboard still works correctly
 - [ ] New issues in new sprint are picked up by orchestrator
 - [ ] Documentation updated
 
 ## Summary
 
 This change ensures ODA automatically adapts to new sprints without manual intervention. The sync service checks for milestone changes during its regular 30-second sync cycle, making the transition seamless.
+
+### Key Behaviors:
+
+1. **New milestone created via GitHub UI** → SyncService detects within 30s, switches automatically
+2. **Milestone closed via dashboard** → Already works, now also detected by SyncService
+3. **All milestones closed** → SyncService stops syncing, logs warning
+4. **No restart required** → ODA adapts to milestone changes on-the-fly
