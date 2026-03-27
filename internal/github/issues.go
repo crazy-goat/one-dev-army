@@ -117,6 +117,16 @@ func (c *Client) ListIssues(milestone string) ([]Issue, error) {
 	return issues, nil
 }
 
+// ListIssuesWithoutMilestone returns all open issues without a milestone assigned
+func (c *Client) ListIssuesWithoutMilestone() ([]Issue, error) {
+	args := []string{"issue", "list", "--state", "open", "--json", "number,title,body,state,labels,updatedAt"}
+	var issues []Issue
+	if err := c.ghJSON(&issues, args...); err != nil {
+		return nil, fmt.Errorf("listing issues without milestone: %w", err)
+	}
+	return issues, nil
+}
+
 func (c *Client) AddComment(issueNum int, body string) error {
 	_, err := c.gh("issue", "comment", strconv.Itoa(issueNum), "--body", body)
 	if err != nil {

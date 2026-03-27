@@ -290,6 +290,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/v2/board", s.handleBoardV2)
 	s.mux.HandleFunc("GET /api/v2/issues/{id}", s.handleIssueDetailV2)
 	s.mux.HandleFunc("GET /api/v2/issues/{id}/steps", s.handleIssueStepsV2)
+	s.mux.HandleFunc("GET /api/v2/issues/unassigned", s.handleGetUnassignedIssues)
 	s.mux.HandleFunc("GET /api/v2/sprint/status", s.handleSprintStatusV2)
 	s.mux.HandleFunc("GET /api/v2/sprint/last-tag", s.handleGetLastTag)
 	s.mux.HandleFunc("POST /api/v2/sprint/start", s.handleSprintStartV2)
