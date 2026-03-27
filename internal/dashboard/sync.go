@@ -149,6 +149,15 @@ func (s *SyncService) syncNow() {
 	s.doSync()
 }
 
+func hasStageLabel(issue github.Issue) bool {
+	for _, label := range issue.Labels {
+		if github.IsStageLabel(label.Name) {
+			return true
+		}
+	}
+	return false
+}
+
 // doSync performs the actual synchronization work
 func (s *SyncService) doSync() {
 	if s.gh == nil {
@@ -199,16 +208,26 @@ func (s *SyncService) doSync() {
 
 	// Cache each issue and notify orchestrator
 	cachedCount := 0
-	for _, issue := range issues {
-		if err := s.store.SaveIssueCache(issue, milestone, false); err != nil {
-			log.Printf("[SyncService] Error caching issue #%d: %v", issue.Number, err)
+	for i := range issues {
+		if issues[i].State == "open" && !hasStageLabel(issues[i]) {
+			log.Printf("[SyncService] Auto-assigning stage:backlog to issue #%d", issues[i].Number)
+			if err := s.gh.AddLabel(issues[i].Number, string(github.StageBacklog)); err != nil {
+				log.Printf("[SyncService] Error adding stage:backlog to issue #%d: %v", issues[i].Number, err)
+			} else {
+				issues[i].Labels = append(issues[i].Labels, struct {
+					Name string `json:"name"`
+				}{Name: string(github.StageBacklog)})
+			}
+		}
+
+		if err := s.store.SaveIssueCache(issues[i], milestone, false); err != nil {
+			log.Printf("[SyncService] Error caching issue #%d: %v", issues[i].Number, err)
 			continue
 		}
 		cachedCount++
 
-		// Notify orchestrator of sync event
 		if s.orchestrator != nil {
-			s.orchestrator.HandleSyncEvent(issue)
+			s.orchestrator.HandleSyncEvent(issues[i])
 		}
 	}
 
