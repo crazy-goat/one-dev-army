@@ -25,7 +25,7 @@ const titleColor: Record<string, string> = {
 
 export function Column({ title, columnKey, cards, emptyText }: ColumnProps) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg p-3 min-w-0 flex flex-col">
+    <div className="bg-gray-900 border border-gray-800 rounded-lg p-3 min-w-0 flex flex-col h-full">
       {/* Column header */}
       <div className="flex justify-between items-center mb-3 sticky top-0 bg-gray-900 z-[1]">
         <span
