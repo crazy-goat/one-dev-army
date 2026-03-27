@@ -59,27 +59,29 @@ type currentTicketInfo struct {
 }
 
 type boardData struct {
-	Active         string
-	OpenCodePort   int
-	WorkerCount    int
-	SprintName     string
-	Paused         bool
-	Processing     bool
-	CanCloseSprint bool
-	CanPlanSprint  bool
-	CurrentTicket  *currentTicketInfo
-	YoloMode       bool
-	Blocked        []taskCard
-	Backlog        []taskCard
-	Plan           []taskCard
-	Code           []taskCard
-	AIReview       []taskCard
-	CheckPipeline  []taskCard
-	Approve        []taskCard
-	Merge          []taskCard
-	Done           []taskCard
-	Failed         []taskCard
-	TotalTickets   int
+	Active               string
+	OpenCodePort         int
+	WorkerCount          int
+	SprintName           string
+	Paused               bool
+	Processing           bool
+	CanCloseSprint       bool
+	CanPlanSprint        bool
+	CurrentTicket        *currentTicketInfo
+	YoloMode             bool
+	Blocked              []taskCard
+	Backlog              []taskCard
+	Plan                 []taskCard
+	Code                 []taskCard
+	AIReview             []taskCard
+	CheckPipeline        []taskCard
+	Approve              []taskCard
+	Merge                []taskCard
+	Done                 []taskCard
+	Failed               []taskCard
+	TotalTickets         int
+	CompletedTickets     int
+	CompletionPercentage float64
 }
 
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
@@ -175,6 +177,10 @@ func (s *Server) buildBoardData(_ *http.Request) boardData {
 	}
 
 	data.TotalTickets = len(issues)
+	data.CompletedTickets = len(data.Done)
+	if data.TotalTickets > 0 {
+		data.CompletionPercentage = float64(data.CompletedTickets) / float64(data.TotalTickets) * 100
+	}
 	data.CanPlanSprint = data.TotalTickets == 0
 
 	// Check if sprint can be closed: all tasks in Done column (no Failed), not processing
