@@ -172,11 +172,20 @@ export interface LLMLogEntry {
 }
 
 // Rate Limit
-export interface RateLimit {
+export interface APILimit {
+  name: string
   limit: number
   remaining: number
-  reset: string
-  used: number
+  reset: number
+  updated_at: string
+}
+
+export interface RateLimit {
+  core: APILimit | null
+  graphql: APILimit | null
+  search: APILimit | null
+  updated_at: string
+  error?: string
 }
 
 // WebSocket Messages

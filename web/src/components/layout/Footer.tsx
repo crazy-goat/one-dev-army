@@ -1,22 +1,48 @@
 import { useRateLimit, useToggleYolo, useBoard, useTriggerSync } from '../../api/queries'
 import { useAppContext } from '../../App'
+import type { RateLimit, APILimit } from '../../api/types'
 
-/** Returns a color class based on the percentage of remaining rate limit. */
-function rateLimitColor(remaining: number, limit: number): string {
-  if (limit === 0) return 'text-gray-500'
-  const pct = remaining / limit
-  if (pct > 0.5) return 'text-green-400'
-  if (pct > 0.2) return 'text-yellow-400'
-  return 'text-red-400'
+/** Calculate usage percentage for an API limit */
+function getUsagePercentage(limit: APILimit | null): number {
+  if (!limit || limit.limit === 0) return 0
+  return ((limit.limit - limit.remaining) / limit.limit) * 100
+}
+
+/** Get the worst API limit with highest usage percentage */
+function getWorstLimit(rateLimit: RateLimit): APILimit | null {
+  const limits: APILimit[] = []
+  if (rateLimit.core) limits.push(rateLimit.core)
+  if (rateLimit.graphql) limits.push(rateLimit.graphql)
+  if (rateLimit.search) limits.push(rateLimit.search)
+  
+  if (limits.length === 0) return null
+  
+  return limits.reduce((worst, current) => {
+    const worstPct = getUsagePercentage(worst)
+    const currentPct = getUsagePercentage(current)
+    return currentPct > worstPct ? current : worst
+  })
+}
+
+/** Get the worst usage percentage across all API types */
+function getWorstPercentage(rateLimit: RateLimit): number {
+  const worst = getWorstLimit(rateLimit)
+  if (!worst) return 0
+  return getUsagePercentage(worst)
+}
+
+/** Returns a color class based on the usage percentage. */
+function rateLimitColor(percentage: number): string {
+  if (percentage > 80) return 'text-red-400'
+  if (percentage > 50) return 'text-yellow-400'
+  return 'text-green-400'
 }
 
 /** Returns background color class for rate limit badge. */
-function rateLimitBgColor(remaining: number, limit: number): string {
-  if (limit === 0) return 'bg-gray-800'
-  const pct = remaining / limit
-  if (pct > 0.5) return 'bg-green-900/30'
-  if (pct > 0.2) return 'bg-yellow-900/30'
-  return 'bg-red-900/30'
+function rateLimitBgColor(percentage: number): string {
+  if (percentage > 80) return 'bg-red-900/30'
+  if (percentage > 50) return 'bg-yellow-900/30'
+  return 'bg-green-900/30'
 }
 
 export function Footer() {
@@ -125,9 +151,12 @@ export function Footer() {
 
         {/* GitHub API usage */}
         {rateLimit && (
-          <div className={`px-3 py-1.5 rounded border text-xs font-medium ${rateLimitBgColor(rateLimit.remaining, rateLimit.limit)} border-[#30363d]`}>
-            <span className={rateLimitColor(rateLimit.remaining, rateLimit.limit)}>
-              GitHub API usage: {Math.round((rateLimit.remaining / rateLimit.limit) * 100)}%
+          <div 
+            className={`px-3 py-1.5 rounded border text-xs font-medium ${rateLimitBgColor(getWorstPercentage(rateLimit))} border-[#30363d]`}
+            title="GitHub API rate limit usage"
+          >
+            <span className={rateLimitColor(getWorstPercentage(rateLimit))}>
+              GitHub API usage: {Math.round(getWorstPercentage(rateLimit))}%
             </span>
           </div>
         )}
