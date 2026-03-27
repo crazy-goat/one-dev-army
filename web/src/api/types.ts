@@ -36,6 +36,7 @@ export interface Card {
   labels: string[]
   pr_url?: string
   is_merged: boolean
+  yolo_mode?: boolean
 }
 
 // Issue Detail

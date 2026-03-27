@@ -121,6 +121,7 @@ export default function BoardPage() {
                 columnKey={key}
                 cards={board.columns[key] ?? EMPTY_CARDS}
                 emptyText={empty}
+                yoloMode={board.yolo_mode}
               />
             </div>
           ))}
@@ -137,6 +138,7 @@ export default function BoardPage() {
                 columnKey={key}
                 cards={board.columns[key] ?? EMPTY_CARDS}
                 emptyText={empty}
+                yoloMode={board.yolo_mode}
               />
             ))}
           </div>
@@ -159,6 +161,7 @@ export default function BoardPage() {
                 columnKey={key}
                 cards={board.columns[key] ?? EMPTY_CARDS}
                 emptyText={empty}
+                yoloMode={board.yolo_mode}
               />
             </div>
           ))}

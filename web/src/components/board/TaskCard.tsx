@@ -57,9 +57,10 @@ interface TaskCardProps {
   column: string
   /** Snake_case API column key (e.g. "backlog", "ai_review"). */
   columnKey: string
+  yoloMode?: boolean
 }
 
-export function TaskCard({ card, column, columnKey }: TaskCardProps) {
+export function TaskCard({ card, column, columnKey, yoloMode }: TaskCardProps) {
   const approveMerge = useApproveMergeIssue()
   const decline = useDeclineIssue()
   const retry = useRetryIssue()
@@ -197,7 +198,7 @@ export function TaskCard({ card, column, columnKey }: TaskCardProps) {
 
       {/* Action buttons */}
       <div className="flex gap-1.5 mt-2 flex-wrap">
-        {columnKey === 'approve' && (
+        {columnKey === 'approve' && yoloMode !== true && (
           <>
             <button
               type="button"

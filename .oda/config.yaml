@@ -2,6 +2,7 @@ github:
     repo: crazy-goat/one-dev-army
 dashboard:
     port: 7000
+    keep_screen_on: false
 workers:
     count: 3
 opencode:
@@ -26,7 +27,7 @@ llm:
     orchestration:
         model: openrouter/stepfun/step-3.5-flash:free
     code:
-        model: nexos-ai/Kimi K2.5
+        model: nexos-ai/Claude Opus 4.6
     code-heavy:
         model: nexos-ai/Claude Opus 4.6
 yolo_mode: false

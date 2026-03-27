@@ -8,6 +8,7 @@ interface ColumnProps {
   columnKey: string
   cards: Card[]
   emptyText?: string
+  yoloMode?: boolean
 }
 
 /** Column header color mapping (keyed by display label). */
@@ -24,7 +25,7 @@ const titleColor: Record<string, string> = {
   Failed: 'text-red-500',
 }
 
-export function Column({ title, columnKey, cards, emptyText }: ColumnProps) {
+export function Column({ title, columnKey, cards, emptyText, yoloMode }: ColumnProps) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg p-3 min-w-0 flex flex-col h-full">
       {/* Column header */}
@@ -43,7 +44,13 @@ export function Column({ title, columnKey, cards, emptyText }: ColumnProps) {
       <div className="flex flex-col gap-2 overflow-y-auto flex-1 min-h-0">
         {cards.length > 0 ? (
           cards.map(card => (
-            <TaskCard key={card.id} card={card} column={title} columnKey={columnKey} />
+            <TaskCard
+              key={card.id}
+              card={card}
+              column={title}
+              columnKey={columnKey}
+              yoloMode={yoloMode}
+            />
           ))
         ) : (
           <p className="text-gray-600 text-sm text-center py-8 italic">
