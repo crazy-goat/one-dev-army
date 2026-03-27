@@ -6369,18 +6369,20 @@ func TestBoardTemplate_CSSLayout(t *testing.T) {
 
 	output := buf.String()
 
-	// Verify board-center uses grid with 40/60 split
-	if !strings.Contains(output, "display:grid;grid-template-rows:40% 60%") {
-		t.Error("board-center should use display:grid with grid-template-rows:40% 60%")
+	// Verify board-center uses flexbox layout (changed from grid to fix overlapping columns issue #493)
+	if !strings.Contains(output, "display:flex;flex-direction:column") {
+		t.Error("board-center should use display:flex with flex-direction:column")
 	}
 
-	// Verify board-center-columns does NOT have flex properties (grid parent handles sizing)
+	// Verify board-center has overflow:hidden to prevent content spill
+	if !strings.Contains(output, ".board-center{") || !strings.Contains(output, "overflow:hidden") {
+		t.Error("board-center should have overflow:hidden to prevent content spill")
+	}
+
+	// Verify board-center-columns has flex:1 1 auto for proper sizing in flex container
 	if strings.Contains(output, ".board-center-columns{") {
-		if strings.Contains(output, "flex:1 1 auto") {
-			t.Error("board-center-columns should NOT have flex:1 1 auto (grid parent handles sizing)")
-		}
-		if strings.Contains(output, "flex:0 0 auto") {
-			t.Error("board-center-columns should NOT have flex:0 0 auto")
+		if !strings.Contains(output, "flex:1 1 auto") {
+			t.Error("board-center-columns should have flex:1 1 auto for proper flex container sizing")
 		}
 	} else {
 		t.Error("board-center-columns CSS rule not found")
@@ -6399,10 +6401,10 @@ func TestBoardTemplate_CSSLayout(t *testing.T) {
 		t.Error("board-center-columns should use repeat(6,1fr) for 6 pipeline columns")
 	}
 
-	// Verify processing-panel does NOT have flex:0 0 auto (grid parent handles sizing)
+	// Verify processing-panel has flex:0 0 auto to prevent shrinking (flexbox layout)
 	if strings.Contains(output, ".processing-panel{") {
-		if strings.Contains(output, "flex:0 0 auto") {
-			t.Error("processing-panel should NOT have flex:0 0 auto (grid parent handles sizing)")
+		if !strings.Contains(output, "flex:0 0 auto") {
+			t.Error("processing-panel should have flex:0 0 auto to prevent shrinking in flex container")
 		}
 	} else {
 		t.Error("processing-panel CSS rule not found")
