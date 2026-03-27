@@ -45,6 +45,32 @@ function rateLimitBgColor(percentage: number): string {
   return 'bg-green-900/30'
 }
 
+/** Format reset time to human readable format */
+function formatResetTime(resetTimestamp: number): string {
+  if (resetTimestamp === 0) return 'Unknown'
+  
+  const resetTime = new Date(resetTimestamp * 1000)
+  const now = new Date()
+  const diffMs = resetTime.getTime() - now.getTime()
+  const diffMinutes = Math.ceil(diffMs / 60000)
+  
+  if (diffMinutes <= 0) return 'Resets soon'
+  if (diffMinutes < 1) return 'Resets in <1 min'
+  if (diffMinutes < 60) return `Resets in ${diffMinutes} min`
+  
+  const hours = Math.floor(diffMinutes / 60)
+  const remainingMinutes = diffMinutes % 60
+  if (remainingMinutes === 0) return `Resets in ${hours} hr`
+  return `Resets in ${hours} hr ${remainingMinutes} min`
+}
+
+/** Get color for API limit based on usage percentage */
+function getApiLimitColor(percentage: number): string {
+  if (percentage > 80) return 'text-red-400'
+  if (percentage > 50) return 'text-yellow-400'
+  return 'text-green-400'
+}
+
 export function Footer() {
   const { data: rateLimit } = useRateLimit()
   const { data: board } = useBoard()
@@ -149,15 +175,74 @@ export function Footer() {
           </button>
         )}
 
-        {/* GitHub API usage */}
+        {/* GitHub API usage with tooltip */}
         {rateLimit && (
-          <div 
-            className={`px-3 py-1.5 rounded border text-xs font-medium ${rateLimitBgColor(getWorstPercentage(rateLimit))} border-[#30363d]`}
-            title="GitHub API rate limit usage"
-          >
-            <span className={rateLimitColor(getWorstPercentage(rateLimit))}>
-              GitHub API usage: {Math.round(getWorstPercentage(rateLimit))}%
-            </span>
+          <div className="relative group">
+            <div 
+              className={`px-3 py-1.5 rounded border text-xs font-medium ${rateLimitBgColor(getWorstPercentage(rateLimit))} border-[#30363d] cursor-pointer`}
+            >
+              <span className={rateLimitColor(getWorstPercentage(rateLimit))}>
+                GitHub API usage: {Math.round(getWorstPercentage(rateLimit))}%
+              </span>
+            </div>
+            
+            {/* Tooltip */}
+            <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-[320px] bg-[#161b22] border border-[#30363d] rounded-md shadow-lg z-[1000]">
+              <div className="p-3">
+                <div className="text-[#e6edf3] font-semibold text-sm mb-2 pb-2 border-b border-[#30363d]">
+                  GitHub API Rate Limits
+                </div>
+                
+                <div className="space-y-2">
+                  {/* Core API */}
+                  {rateLimit.core && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-[#8b949e] w-[70px]">REST API:</span>
+                      <span className={getApiLimitColor(getUsagePercentage(rateLimit.core))}>
+                        {rateLimit.core.remaining}/{rateLimit.core.limit} ({Math.round(getUsagePercentage(rateLimit.core))}%)
+                      </span>
+                      <span className="text-[#8b949e] ml-auto">
+                        {formatResetTime(rateLimit.core.reset)}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {/* GraphQL API */}
+                  {rateLimit.graphql && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-[#8b949e] w-[70px]">GraphQL:</span>
+                      <span className={getApiLimitColor(getUsagePercentage(rateLimit.graphql))}>
+                        {rateLimit.graphql.remaining}/{rateLimit.graphql.limit} ({Math.round(getUsagePercentage(rateLimit.graphql))}%)
+                      </span>
+                      <span className="text-[#8b949e] ml-auto">
+                        {formatResetTime(rateLimit.graphql.reset)}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {/* Search API */}
+                  {rateLimit.search && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-[#8b949e] w-[70px]">Search:</span>
+                      <span className={getApiLimitColor(getUsagePercentage(rateLimit.search))}>
+                        {rateLimit.search.remaining}/{rateLimit.search.limit} ({Math.round(getUsagePercentage(rateLimit.search))}%)
+                      </span>
+                      <span className="text-[#8b949e] ml-auto">
+                        {formatResetTime(rateLimit.search.reset)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="mt-2 pt-2 border-t border-[#30363d] text-[10px] text-[#8b949e] italic">
+                  Rate limits reset hourly. Click to refresh.
+                </div>
+              </div>
+              
+              {/* Arrow */}
+              <div className="absolute top-full right-4 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-[#161b22]" />
+              <div className="absolute top-full right-[15px] w-0 h-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-t-[7px] border-t-[#30363d] -mt-[1px]" />
+            </div>
           </div>
         )}
       </div>
