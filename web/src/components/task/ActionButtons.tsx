@@ -1,4 +1,5 @@
 import { useState } from 'react'
+
 import {
   useApproveMergeIssue,
   useDeclineIssue,
@@ -28,7 +29,7 @@ export function ActionButtons({ issueNumber, status }: ActionButtonsProps) {
   const [declineReason, setDeclineReason] = useState('')
 
   const handleDecline = () => {
-    if (!declineReason.trim()) return
+    if (!declineReason.trim()) {return}
     decline.mutate(
       { id: issueNumber, reason: declineReason },
       { onSuccess: () => setDeclineOpen(false) },
@@ -121,7 +122,7 @@ export function ActionButtons({ issueNumber, status }: ActionButtonsProps) {
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setDeclineOpen(false)
+            if (e.target === e.currentTarget) {setDeclineOpen(false)}
           }}
         >
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-[500px] max-w-[90vw]">

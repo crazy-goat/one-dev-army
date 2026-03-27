@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router'
+
 import { useBoard } from '../../api/queries'
 
 const NAV_LINKS = [

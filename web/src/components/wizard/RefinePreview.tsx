@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
 import { marked } from 'marked'
+import { useState, useMemo } from 'react'
+
 import type { WizardSession } from '../../api/types'
 
 interface RefinePreviewProps {
@@ -48,7 +49,7 @@ export function RefinePreview({
 
   // Render markdown to HTML
   const renderedHtml = useMemo(() => {
-    if (!description) return ''
+    if (!description) {return ''}
     return marked(description) as string
   }, [description])
 

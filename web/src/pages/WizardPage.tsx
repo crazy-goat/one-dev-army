@@ -1,10 +1,11 @@
 import { useState } from 'react'
+
 import { api } from '../api/client'
 import type { WizardSession, CreatedIssue } from '../api/types'
-import { StepIndicator } from '../components/wizard/StepIndicator'
+import { CreateConfirm } from '../components/wizard/CreateConfirm'
 import { IdeaForm } from '../components/wizard/IdeaForm'
 import { RefinePreview } from '../components/wizard/RefinePreview'
-import { CreateConfirm } from '../components/wizard/CreateConfirm'
+import { StepIndicator } from '../components/wizard/StepIndicator'
 
 type WizardStep = 'idea' | 'review' | 'confirm'
 
@@ -58,7 +59,7 @@ export default function WizardPage() {
   }
 
   const handleCreateIssue = async (title: string, addToSprint: boolean) => {
-    if (!session) return
+    if (!session) {return}
     setIsLoading(true)
     setError(null)
     try {
@@ -80,7 +81,7 @@ export default function WizardPage() {
 
   // MISSING 4: Regenerate handler — re-refine with current description
   const handleRegenerate = async (currentDescription: string) => {
-    if (!session) return
+    if (!session) {return}
     setIsLoading(true)
     setError(null)
     try {

@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { OdaWebSocket } from '../lib/websocket'
+import { useEffect, useRef, useState, useCallback } from 'react'
+
 import type { WSMessage, LogStreamPayload } from '../api/types'
+import { OdaWebSocket } from '../lib/websocket'
 
 /** Callback for log_stream messages from WebSocket. */
 type LogStreamHandler = (payload: LogStreamPayload) => void

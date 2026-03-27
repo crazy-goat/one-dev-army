@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { Link } from 'react-router'
-import type { Card } from '../../api/types'
+
 import {
   useApproveMergeIssue,
   useBlockIssue,
@@ -9,7 +10,7 @@ import {
   useUnblockIssue,
   useProcessIssue,
 } from '../../api/queries'
-import { useState } from 'react'
+import type { Card } from '../../api/types'
 
 /** Maps known GitHub labels to emoji icons. */
 function labelIcon(label: string): string | null {
@@ -19,17 +20,17 @@ function labelIcon(label: string): string | null {
     lower === 'feature' ||
     lower === 'enhancement'
   )
-    return '\u2728'
-  if (lower === 'type:bug' || lower === 'bug') return '\uD83D\uDC1B'
-  if (lower === 'type:docs') return '\uD83D\uDCDA'
-  if (lower === 'type:refactor') return '\uD83D\uDD27'
-  if (lower === 'size:s') return '\uD83D\uDC1C'
-  if (lower === 'size:m') return '\uD83D\uDC15'
-  if (lower === 'size:l') return '\uD83D\uDC18'
-  if (lower === 'size:xl') return '\uD83E\uDD95'
-  if (lower === 'priority:high') return '\uD83D\uDD34'
-  if (lower === 'priority:medium') return '\uD83D\uDFE1'
-  if (lower === 'priority:low') return '\uD83D\uDFE2'
+    {return '\u2728'}
+  if (lower === 'type:bug' || lower === 'bug') {return '\uD83D\uDC1B'}
+  if (lower === 'type:docs') {return '\uD83D\uDCDA'}
+  if (lower === 'type:refactor') {return '\uD83D\uDD27'}
+  if (lower === 'size:s') {return '\uD83D\uDC1C'}
+  if (lower === 'size:m') {return '\uD83D\uDC15'}
+  if (lower === 'size:l') {return '\uD83D\uDC18'}
+  if (lower === 'size:xl') {return '\uD83E\uDD95'}
+  if (lower === 'priority:high') {return '\uD83D\uDD34'}
+  if (lower === 'priority:medium') {return '\uD83D\uDFE1'}
+  if (lower === 'priority:low') {return '\uD83D\uDFE2'}
   return null
 }
 
@@ -58,7 +59,7 @@ export function TaskCard({ card, column, columnKey }: TaskCardProps) {
   const textLabels = card.labels.filter((l) => labelIcon(l) === null)
 
   const handleDecline = () => {
-    if (!declineReason.trim()) return
+    if (!declineReason.trim()) {return}
     decline.mutate(
       { id: card.id, reason: declineReason },
       { onSuccess: () => setDeclineOpen(false) },
@@ -262,7 +263,7 @@ export function TaskCard({ card, column, columnKey }: TaskCardProps) {
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setDeclineOpen(false)
+            if (e.target === e.currentTarget) {setDeclineOpen(false)}
           }}
         >
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-[500px] max-w-[90vw]">
@@ -306,7 +307,7 @@ export function TaskCard({ card, column, columnKey }: TaskCardProps) {
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setProcessConfirmOpen(false)
+            if (e.target === e.currentTarget) {setProcessConfirmOpen(false)}
           }}
         >
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-[400px] max-w-[90vw]">

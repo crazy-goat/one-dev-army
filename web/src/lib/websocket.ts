@@ -51,7 +51,7 @@ export class OdaWebSocket {
     this.ws.onmessage = (event: MessageEvent) => {
       try {
         const msg = JSON.parse(event.data as string) as WSMessage
-        if (msg.type === 'pong') return
+        if (msg.type === 'pong') {return}
         this.handlers.forEach((h) => h(msg))
       } catch {
         /* ignore malformed frames */

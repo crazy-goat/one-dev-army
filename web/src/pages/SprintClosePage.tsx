@@ -1,15 +1,16 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
+
 import { api } from '../api/client'
 import type { SprintClosePreview, SprintCloseResult } from '../api/types'
 
 type BumpType = 'major' | 'minor' | 'patch'
 
-const BUMP_OPTIONS: Array<{
+const BUMP_OPTIONS: {
   value: BumpType
   label: string
   description: string
-}> = [
+}[] = [
   {
     value: 'major',
     label: 'Major Release',

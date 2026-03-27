@@ -1,8 +1,9 @@
 import { Link, useParams } from 'react-router'
+
 import { useIssue, useIssueSteps } from '../api/queries'
-import { StepList } from '../components/task/StepList'
-import { LogViewer } from '../components/task/LogViewer'
 import { ActionButtons } from '../components/task/ActionButtons'
+import { LogViewer } from '../components/task/LogViewer'
+import { StepList } from '../components/task/StepList'
 
 export default function TaskPage() {
   const { id } = useParams<{ id: string }>()
@@ -50,7 +51,7 @@ export default function TaskPage() {
     )
   }
 
-  if (!issue) return null
+  if (!issue) {return null}
 
   return (
     <div className="max-w-4xl mx-auto p-4">

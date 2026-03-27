@@ -1,11 +1,11 @@
 import { useRateLimit, useToggleYolo, useBoard, useTriggerSync, useStartSprint, usePauseSprint, useWorkers } from '../../api/queries'
-import { useAppContext } from '../../hooks/useAppContext'
 import type { RateLimit, APILimit } from '../../api/types'
+import { useAppContext } from '../../hooks/useAppContext'
 
 /** Format elapsed milliseconds to a human-readable string. */
 function formatElapsed(ms: number): string {
   const secs = Math.floor(ms / 1000)
-  if (secs < 60) return `${String(secs)}s`
+  if (secs < 60) {return `${String(secs)}s`}
   const mins = Math.floor(secs / 60)
   const remainSecs = secs % 60
   return `${String(mins)}m ${String(remainSecs)}s`
@@ -13,18 +13,18 @@ function formatElapsed(ms: number): string {
 
 /** Calculate usage percentage for an API limit */
 function getUsagePercentage(limit: APILimit | null): number {
-  if (!limit || limit.limit === 0) return 0
+  if (!limit || limit.limit === 0) {return 0}
   return ((limit.limit - limit.remaining) / limit.limit) * 100
 }
 
 /** Get the worst API limit with highest usage percentage */
 function getWorstLimit(rateLimit: RateLimit): APILimit | null {
   const limits: APILimit[] = []
-  if (rateLimit.core) limits.push(rateLimit.core)
-  if (rateLimit.graphql) limits.push(rateLimit.graphql)
-  if (rateLimit.search) limits.push(rateLimit.search)
+  if (rateLimit.core) {limits.push(rateLimit.core)}
+  if (rateLimit.graphql) {limits.push(rateLimit.graphql)}
+  if (rateLimit.search) {limits.push(rateLimit.search)}
   
-  if (limits.length === 0) return null
+  if (limits.length === 0) {return null}
   
   return limits.reduce((worst, current) => {
     const worstPct = getUsagePercentage(worst)
@@ -36,47 +36,47 @@ function getWorstLimit(rateLimit: RateLimit): APILimit | null {
 /** Get the worst usage percentage across all API types */
 function getWorstPercentage(rateLimit: RateLimit): number {
   const worst = getWorstLimit(rateLimit)
-  if (!worst) return 0
+  if (!worst) {return 0}
   return getUsagePercentage(worst)
 }
 
 /** Returns a color class based on the usage percentage. */
 function rateLimitColor(percentage: number): string {
-  if (percentage > 80) return 'text-red-400'
-  if (percentage > 50) return 'text-yellow-400'
+  if (percentage > 80) {return 'text-red-400'}
+  if (percentage > 50) {return 'text-yellow-400'}
   return 'text-green-400'
 }
 
 /** Returns background color class for rate limit badge. */
 function rateLimitBgColor(percentage: number): string {
-  if (percentage > 80) return 'bg-red-900/30'
-  if (percentage > 50) return 'bg-yellow-900/30'
+  if (percentage > 80) {return 'bg-red-900/30'}
+  if (percentage > 50) {return 'bg-yellow-900/30'}
   return 'bg-green-900/30'
 }
 
 /** Format reset time to human readable format */
 function formatResetTime(resetTimestamp: number): string {
-  if (resetTimestamp === 0) return 'Unknown'
+  if (resetTimestamp === 0) {return 'Unknown'}
   
   const resetTime = new Date(resetTimestamp * 1000)
   const now = new Date()
   const diffMs = resetTime.getTime() - now.getTime()
   const diffMinutes = Math.ceil(diffMs / 60000)
   
-  if (diffMinutes <= 0) return 'Resets soon'
-  if (diffMinutes < 1) return 'Resets in <1 min'
-  if (diffMinutes < 60) return `Resets in ${diffMinutes} min`
+  if (diffMinutes <= 0) {return 'Resets soon'}
+  if (diffMinutes < 1) {return 'Resets in <1 min'}
+  if (diffMinutes < 60) {return `Resets in ${diffMinutes} min`}
   
   const hours = Math.floor(diffMinutes / 60)
   const remainingMinutes = diffMinutes % 60
-  if (remainingMinutes === 0) return `Resets in ${hours} hr`
+  if (remainingMinutes === 0) {return `Resets in ${hours} hr`}
   return `Resets in ${hours} hr ${remainingMinutes} min`
 }
 
 /** Get color for API limit based on usage percentage */
 function getApiLimitColor(percentage: number): string {
-  if (percentage > 80) return 'text-red-400'
-  if (percentage > 50) return 'text-yellow-400'
+  if (percentage > 80) {return 'text-red-400'}
+  if (percentage > 50) {return 'text-yellow-400'}
   return 'text-green-400'
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Link } from 'react-router'
+
 import type { CurrentTicket, LogStreamPayload } from '../../api/types'
 import { useAppContext } from '../../hooks/useAppContext'
 
@@ -57,7 +58,7 @@ export function ProcessingPanel({
 
   // MISSING 12: Subscribe to log_stream WebSocket messages
   const handleLogStream = useCallback((payload: LogStreamPayload) => {
-    if (!currentTicket || payload.issue_number !== currentTicket.number) return
+    if (payload.issue_number !== currentTicket?.number) {return}
     const line = payload.message || ''
     setLogLines((prev) => {
       const updated = [...prev, line]

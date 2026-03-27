@@ -1,4 +1,5 @@
 import { useState } from 'react'
+
 import type { TaskStep } from '../../api/types'
 
 interface StepListProps {
@@ -13,11 +14,11 @@ const statusColors: Record<string, string> = {
 }
 
 function formatDuration(start?: string, end?: string): string | null {
-  if (!start || !end) return null
+  if (!start || !end) {return null}
   const ms = new Date(end).getTime() - new Date(start).getTime()
-  if (ms < 1000) return `${String(ms)}ms`
+  if (ms < 1000) {return `${String(ms)}ms`}
   const secs = Math.floor(ms / 1000)
-  if (secs < 60) return `${String(secs)}s`
+  if (secs < 60) {return `${String(secs)}s`}
   const mins = Math.floor(secs / 60)
   const remainSecs = secs % 60
   return `${String(mins)}m ${String(remainSecs)}s`

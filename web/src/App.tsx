@@ -1,13 +1,14 @@
 import { Routes, Route } from 'react-router'
-import { Navbar } from './components/layout/Navbar'
-import { Footer } from './components/layout/Footer'
-import { useWebSocketUpdates } from './hooks/useWebSocket'
+
 import { AppContext } from './AppContext'
+import { Footer } from './components/layout/Footer'
+import { Navbar } from './components/layout/Navbar'
+import { useWebSocketUpdates } from './hooks/useWebSocket'
 import BoardPage from './pages/BoardPage'
-import TaskPage from './pages/TaskPage'
 import SettingsPage from './pages/SettingsPage'
-import WizardPage from './pages/WizardPage'
 import SprintClosePage from './pages/SprintClosePage'
+import TaskPage from './pages/TaskPage'
+import WizardPage from './pages/WizardPage'
 
 export default function App() {
   const { wsConnected, onLogStream } = useWebSocketUpdates()

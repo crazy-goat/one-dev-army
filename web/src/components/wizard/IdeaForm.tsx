@@ -144,7 +144,7 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
   // Initialize speech recognition
   const initRecognition = useCallback(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SpeechRecognition) return null
+    if (!SpeechRecognition) {return null}
     
     const recognition = new SpeechRecognition()
     recognition.continuous = true
@@ -156,7 +156,7 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
       
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i]
-        if (result && result[0]) {
+        if (result?.[0]) {
           const transcript = result[0].transcript
           if (result.isFinal) {
             finalTranscript += transcript
@@ -276,7 +276,7 @@ export function IdeaForm({ onSubmit, isLoading }: IdeaFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!idea.trim()) return
+    if (!idea.trim()) {return}
     onSubmit({ type, idea: idea.trim(), language, addToSprint })
   }
 

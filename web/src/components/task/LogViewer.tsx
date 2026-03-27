@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef, useState, useCallback } from 'react'
+
 import { useSSE } from '../../hooks/useSSE'
 
 interface LogViewerProps {
@@ -9,13 +10,13 @@ interface LogViewerProps {
 interface StreamEvent {
   delta?: string
   done?: boolean
-  history?: Array<{ role: string; content: string }>
+  history?: { role: string; content: string }[]
 }
 
 export function LogViewer({ issueNumber }: LogViewerProps) {
   const [lines, setLines] = useState<string[]>([])
   const [history, setHistory] = useState<
-    Array<{ role: string; content: string }>
+    { role: string; content: string }[]
   >([])
   const [connected, setConnected] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)

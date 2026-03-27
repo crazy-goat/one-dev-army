@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+
 import { useBoard, usePlanSprint } from '../api/queries'
 import type { Card } from '../api/types'
 import { Column } from '../components/board/Column'
@@ -72,7 +73,7 @@ export default function BoardPage() {
     )
   }
 
-  if (!board) return null
+  if (!board) {return null}
 
   return (
     <div className="flex flex-col gap-4 p-4 h-[calc(100vh-7rem)]">

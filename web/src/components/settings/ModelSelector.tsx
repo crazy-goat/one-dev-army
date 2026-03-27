@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+
 import type { ProviderModel } from '../../api/types'
 
 interface ModelSelectorProps {
@@ -62,7 +63,7 @@ export function ModelSelector({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!open) return
+    if (!open) {return}
 
     if (e.key === 'ArrowDown') {
       e.preventDefault()
