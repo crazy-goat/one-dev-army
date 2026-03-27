@@ -2074,7 +2074,7 @@ func (s *Server) handleWizardCreateSingle(w http.ResponseWriter, r *http.Request
 	}
 
 	// Create the single issue
-	body := session.TechnicalPlanning
+	body := CleanupMarkdown(session.TechnicalPlanning)
 	issueNum, err := s.gh.CreateIssue(title, body, labels)
 	if err != nil {
 		log.Printf("[Wizard] Error creating single issue: %v", err)
