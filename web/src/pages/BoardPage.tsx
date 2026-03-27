@@ -1,6 +1,6 @@
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 
-import { useBoard, usePlanSprint } from '../api/queries'
+import { useBoard } from '../api/queries'
 import type { Card } from '../api/types'
 import { Column } from '../components/board/Column'
 import { ProcessingPanel } from '../components/board/ProcessingPanel'
@@ -35,8 +35,8 @@ const RIGHT_COLUMNS = [
 const EMPTY_CARDS: Card[] = []
 
 export default function BoardPage() {
+  const navigate = useNavigate()
   const { data: board, isLoading, error } = useBoard()
-  const planSprint = usePlanSprint()
 
   if (isLoading) {
     return (
@@ -83,15 +83,14 @@ export default function BoardPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {board.can_plan_sprint && (
+          {board.total_tickets === 0 && (
             <button
               type="button"
-              onClick={() => planSprint.mutate()}
-              disabled={planSprint.isPending}
-              className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50"
-              title="Plan Sprint — assigns backlog tickets to the current sprint"
+              onClick={() => navigate('/sprint/plan')}
+              className="px-3 py-1.5 rounded text-sm font-medium bg-green-600 hover:bg-green-500 text-white transition-colors"
+              title="Plan Sprint — AI-powered ticket selection"
             >
-              {planSprint.isPending ? 'Planning...' : 'Plan Sprint'}
+              Plan Sprint
             </button>
           )}
           {board.can_close_sprint && (
