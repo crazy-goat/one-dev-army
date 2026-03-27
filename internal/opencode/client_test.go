@@ -683,3 +683,44 @@ func TestSendMessageStream_WithSubagentToolCall(t *testing.T) {
 		t.Error("missing tool_result part — subagent results should be visible even when assistantMsgID changes")
 	}
 }
+
+func TestProviderModel_JSONSerialization(t *testing.T) {
+	model := opencode.ProviderModel{
+		ID:         "openai/gpt-4",
+		ProviderID: "openai",
+		Name:       "GPT-4",
+	}
+
+	data, err := json.Marshal(model)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	jsonStr := string(data)
+	if !strings.Contains(jsonStr, `"provider_id"`) {
+		t.Errorf("JSON should contain 'provider_id', got: %s", jsonStr)
+	}
+	if strings.Contains(jsonStr, `"providerID"`) {
+		t.Errorf("JSON should NOT contain 'providerID', got: %s", jsonStr)
+	}
+}
+
+func TestModelRef_JSONSerialization(t *testing.T) {
+	ref := opencode.ModelRef{
+		ProviderID: "anthropic",
+		ModelID:    "claude-sonnet-4",
+	}
+
+	data, err := json.Marshal(ref)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	jsonStr := string(data)
+	if !strings.Contains(jsonStr, `"providerID"`) {
+		t.Errorf("JSON should contain 'providerID' (upstream API format), got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"modelID"`) {
+		t.Errorf("JSON should contain 'modelID' (upstream API format), got: %s", jsonStr)
+	}
+}

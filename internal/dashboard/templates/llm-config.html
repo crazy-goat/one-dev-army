@@ -313,7 +313,7 @@
 // Model data from server - use window object to avoid redeclaration errors on HTMX swaps
 window.availableModels = {{if .AvailableModels}}[
   {{range .AvailableModels}}
-  { id: "{{.ID}}", providerID: "{{.ProviderID}}", name: "{{.Name}}" },
+  { id: "{{.ID}}", provider_id: "{{.ProviderID}}", name: "{{.Name}}" },
   {{end}}
 ]{{else}}[]{{end}};
 
@@ -410,7 +410,7 @@ function filterModels(query) {
   return window.availableModels.filter(function(model) {
     return model.name.toLowerCase().includes(query) ||
            model.id.toLowerCase().includes(query) ||
-           model.providerID.toLowerCase().includes(query);
+           model.provider_id.toLowerCase().includes(query);
   });
 }
 
@@ -425,10 +425,10 @@ function renderDropdown(models, list, query) {
   // Group models by provider
   const grouped = {};
   models.forEach(function(model) {
-    if (!grouped[model.providerID]) {
-      grouped[model.providerID] = [];
+    if (!grouped[model.provider_id]) {
+      grouped[model.provider_id] = [];
     }
-    grouped[model.providerID].push(model);
+    grouped[model.provider_id].push(model);
   });
   
   // Render grouped models
@@ -442,7 +442,7 @@ function renderDropdown(models, list, query) {
       const item = document.createElement('div');
       item.className = 'model-dropdown-item';
       item.setAttribute('data-model-id', model.id);
-      item.setAttribute('data-provider-id', model.providerID);
+      item.setAttribute('data-provider-id', model.provider_id);
       item.innerHTML = '<div class="model-name">' + escapeHtml(model.name) + '</div>' +
                       '<div class="model-provider">' + escapeHtml(model.id) + '</div>';
       

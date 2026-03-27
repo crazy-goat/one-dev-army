@@ -737,7 +737,7 @@ func (c *Client) GetMessages(sessionID string) (messages []Message, err error) {
 
 type ProviderModel struct {
 	ID         string `json:"id"`
-	ProviderID string `json:"providerID"`
+	ProviderID string `json:"provider_id"`
 	Name       string `json:"name"`
 }
 
