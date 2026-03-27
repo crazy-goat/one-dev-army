@@ -982,9 +982,25 @@ func (w *Worker) checkPipeline(ctx context.Context, task *Task, logger *worker.S
 				}
 				return w.handlePipelineFailure(task, result.Logs)
 			case "pending":
-				log.Printf("[Worker %d] CI checks still pending for #%d...", w.id, task.Issue.Number)
+				// Build detailed status message
+				var statusMsg string
+				if result.TotalCount > 0 {
+					pendingCount := result.TotalCount - result.CompletedCount
+					if len(result.PendingChecks) > 0 {
+						statusMsg = fmt.Sprintf("CI checks: %d/%d completed, %d pending (%s)",
+							result.CompletedCount, result.TotalCount, pendingCount,
+							strings.Join(result.PendingChecks, ", "))
+					} else {
+						statusMsg = fmt.Sprintf("CI checks: %d/%d completed, %d pending",
+							result.CompletedCount, result.TotalCount, pendingCount)
+					}
+				} else {
+					statusMsg = "CI checks still pending..."
+				}
+
+				log.Printf("[Worker %d] %s for #%d", w.id, statusMsg, task.Issue.Number)
 				if logger != nil {
-					logger.Logf("CI checks still pending...")
+					logger.Logf("%s", statusMsg)
 				}
 			}
 		}
