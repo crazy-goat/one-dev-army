@@ -714,6 +714,50 @@ func (c *Client) CloseMilestone(number int) error {
 	return nil
 }
 
+// GetMostRecentlyClosedSprint returns the most recently closed milestone
+func (c *Client) GetMostRecentlyClosedSprint() (*Milestone, error) {
+	var milestones []Milestone
+	if err := c.ghNoRepoJSON(&milestones, "api", "repos/"+c.Repo+"/milestones?state=closed"); err != nil {
+		return nil, fmt.Errorf("listing closed milestones: %w", err)
+	}
+
+	if len(milestones) == 0 {
+		return nil, nil
+	}
+
+	// Sort by creation date, newest first
+	sort.Slice(milestones, func(i, j int) bool {
+		return milestones[i].CreatedAt.After(milestones[j].CreatedAt)
+	})
+
+	return &milestones[0], nil
+}
+
+// GetClosedTicketsForSprint returns closed (merged) tickets from a sprint
+func (c *Client) GetClosedTicketsForSprint(milestoneNumber int) ([]Issue, error) {
+	// Get milestone title first
+	var milestone Milestone
+	if err := c.ghNoRepoJSON(&milestone, "api", "repos/"+c.Repo+"/milestones/"+strconv.Itoa(milestoneNumber)); err != nil {
+		return nil, fmt.Errorf("getting milestone %d: %w", milestoneNumber, err)
+	}
+
+	// Use ListIssuesWithPRStatus to get all issues with PR merge status
+	issues, err := c.ListIssuesWithPRStatus(milestone.Title)
+	if err != nil {
+		return nil, fmt.Errorf("listing issues for sprint: %w", err)
+	}
+
+	// Filter to only merged issues
+	var mergedIssues []Issue
+	for _, issue := range issues {
+		if issue.PRMerged {
+			mergedIssues = append(mergedIssues, issue)
+		}
+	}
+
+	return mergedIssues, nil
+}
+
 func parseJSON(data []byte, v any) error {
 	if err := json.Unmarshal(data, v); err != nil {
 		return fmt.Errorf("parsing JSON: %w", err)
