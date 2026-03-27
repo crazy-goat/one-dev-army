@@ -64,7 +64,6 @@ export default function PlanSprintPage() {
     setError(null)
 
     try {
-      // Start proposal generation
       const response = await fetch('/api/v2/sprint/propose', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -74,7 +73,6 @@ export default function PlanSprintPage() {
       if (!response.ok) throw new Error('Failed to start proposal')
       const { jobId } = await response.json()
 
-      // Poll for completion
       const pollProposal = async (): Promise<{ issues: ProposedIssue[]; branches: Branch[] }> => {
         const statusRes = await fetch(`/api/v2/sprint/propose/${jobId}`)
         const job: ProposalJob = await statusRes.json()
@@ -87,7 +85,6 @@ export default function PlanSprintPage() {
           return { issues: job.proposal, branches: job.branches }
         }
 
-        // Wait and retry
         await new Promise((resolve) => setTimeout(resolve, 1000))
         return pollProposal()
       }
@@ -96,7 +93,6 @@ export default function PlanSprintPage() {
       setProposal(result.issues)
       setBranches(result.branches)
 
-      // Select all by default
       const allIssueIds = new Set(result.issues.map((p) => p.number))
       const allBranchIds = new Set(result.branches.map((b) => b.id))
       setSelectedIssues(allIssueIds)
@@ -151,7 +147,6 @@ export default function PlanSprintPage() {
 
       if (!response.ok) throw new Error('Failed to start assignment')
 
-      // Read SSE stream
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
 
@@ -193,65 +188,55 @@ export default function PlanSprintPage() {
 
   if (error && !sprint) {
     return (
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
-        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-          <h2>Error</h2>
-          <p>{error}</p>
-          <button onClick={() => navigate('/')}>Back to Board</button>
+      <div className="flex items-center justify-center flex-1 py-20">
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-white mb-2">Error</h2>
+          <p className="text-gray-400 mb-4">{error}</p>
+          <button
+            onClick={() => navigate('/')}
+            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm transition-colors"
+          >
+            Back to Board
+          </button>
         </div>
       </div>
     )
   }
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '20px',
-          marginBottom: '30px',
-          paddingBottom: '20px',
-          borderBottom: '1px solid #e0e0e0',
-        }}
-      >
-        <button
-          onClick={() => navigate('/')}
-          style={{
-            padding: '8px 16px',
-            background: '#f5f5f5',
-            border: '1px solid #ddd',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
-          ← Back to Board
-        </button>
-        <h1 style={{ margin: 0, flex: 1 }}>Plan Sprint</h1>
+    <div className="max-w-5xl mx-auto p-4 pb-12">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate('/')}
+            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm transition-colors"
+          >
+            ← Back to Board
+          </button>
+          <h1 className="text-xl font-bold text-white">Plan Sprint</h1>
+        </div>
         {sprint && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-            <span style={{ fontWeight: 'bold', fontSize: '1.1em' }}>{sprint.title}</span>
-            <span style={{ color: '#666', fontSize: '0.9em' }}>
-              {new Date(sprint.start_date).toLocaleDateString()} -{' '}
-              {new Date(sprint.end_date).toLocaleDateString()}
-            </span>
+          <div className="text-right">
+            <div className="text-white font-semibold">{sprint.title}</div>
+            <div className="text-sm text-gray-500">
+              {new Date(sprint.start_date).toLocaleDateString()} - {new Date(sprint.end_date).toLocaleDateString()}
+            </div>
           </div>
         )}
-      </header>
+      </div>
 
-      <main>
-        <section
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '15px',
-            marginBottom: '30px',
-            padding: '20px',
-            background: '#f9f9f9',
-            borderRadius: '8px',
-          }}
-        >
-          <label htmlFor="target-count" style={{ fontWeight: 500 }}>
+      {/* Error message */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-lg mb-4 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Configuration Section */}
+      <section className="bg-gray-900 border border-gray-800 rounded-lg p-6 mb-6">
+        <div className="flex items-center gap-4">
+          <label htmlFor="target-count" className="text-gray-300 font-medium">
             Target ticket count:
           </label>
           <input
@@ -262,153 +247,86 @@ export default function PlanSprintPage() {
             value={targetCount}
             onChange={(e) => setTargetCount(parseInt(e.target.value) || 10)}
             disabled={isGenerating || isAssigning}
-            style={{ width: '80px', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+            className="w-20 px-3 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 disabled:opacity-50"
           />
           <button
             onClick={handleGenerate}
             disabled={isGenerating || isAssigning || !sprint}
-            style={{
-              padding: '10px 20px',
-              background: isGenerating ? '#ccc' : '#4CAF50',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: isGenerating ? 'not-allowed' : 'pointer',
-              fontWeight: 500,
-            }}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isGenerating ? 'Generating...' : 'Generate Proposal'}
-          </button>
-        </section>
-
-        {error && (
-          <div
-            style={{
-              background: '#ffebee',
-              color: '#c62828',
-              padding: '15px',
-              borderRadius: '4px',
-              marginBottom: '20px',
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        {isGenerating && (
-          <div style={{ textAlign: 'center', padding: '40px' }}>
-            <div
-              style={{
-                width: '40px',
-                height: '40px',
-                border: '4px solid #f3f3f3',
-                borderTop: '4px solid #4CAF50',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-                margin: '0 auto 20px',
-              }}
-            />
-            <p>AI is selecting the best tickets for your sprint...</p>
-            <p style={{ color: '#666', fontSize: '0.9em' }}>
-              Analyzing dependencies and last release context
-            </p>
-          </div>
-        )}
-
-        {proposal.length > 0 && !isGenerating && (
-          <section style={{ marginBottom: '30px' }}>
-            <h2>Proposed Tickets</h2>
-            <p style={{ color: '#666', fontSize: '0.9em', marginBottom: '20px', fontStyle: 'italic' }}>
-              Branches are selected as a whole. Unchecking any issue removes the entire branch.
-            </p>
-            <DependencyTree
-              nodes={treeNodes}
-              selectedIssues={selectedIssues}
-              onToggleBranch={handleToggleBranch}
-            />
-          </section>
-        )}
-
-        {isAssigning && assignmentProgress && (
-          <section
-            style={{
-              background: '#f5f5f5',
-              padding: '30px',
-              borderRadius: '8px',
-              textAlign: 'center',
-              margin: '20px 0',
-            }}
-          >
-            <h3>Assigning tickets to sprint...</h3>
-            <div
-              style={{
-                width: '100%',
-                height: '20px',
-                background: '#e0e0e0',
-                borderRadius: '10px',
-                overflow: 'hidden',
-                margin: '20px 0',
-              }}
-            >
-              <div
-                style={{
-                  height: '100%',
-                  background: '#4CAF50',
-                  transition: 'width 0.3s ease',
-                  width: `${(assignmentProgress.current / assignmentProgress.total) * 100}%`,
-                }}
-              />
-            </div>
-            <p>
-              {assignmentProgress.current} / {assignmentProgress.total} tickets assigned
-            </p>
-            {assignmentProgress.branch && (
-              <p style={{ color: '#666', fontStyle: 'italic' }}>
-                Processing branch: {assignmentProgress.branch}...
-              </p>
+            {isGenerating ? (
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Generating...
+              </span>
+            ) : (
+              'Generate Proposal'
             )}
-          </section>
-        )}
+          </button>
+        </div>
+      </section>
 
-        {proposal.length > 0 && !isAssigning && (
-          <section
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '20px',
-              background: '#f9f9f9',
-              borderRadius: '8px',
-              marginTop: '30px',
-              position: 'sticky',
-              bottom: '20px',
-            }}
+      {/* Loading State */}
+      {isGenerating && (
+        <div className="flex flex-col items-center justify-center py-12">
+          <div className="w-10 h-10 border-3 border-gray-700 border-t-blue-500 rounded-full animate-spin mb-4" />
+          <p className="text-gray-300 font-medium">AI is selecting the best tickets for your sprint...</p>
+          <p className="text-sm text-gray-500 mt-1">Analyzing dependencies and last release context</p>
+        </div>
+      )}
+
+      {/* Proposal Results */}
+      {proposal.length > 0 && !isGenerating && (
+        <section className="bg-gray-900 border border-gray-800 rounded-lg p-6 mb-6">
+          <h2 className="text-lg font-semibold text-blue-400 mb-1">Proposed Tickets</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Branches are selected as a whole. Unchecking any issue removes the entire branch.
+          </p>
+          <DependencyTree
+            nodes={treeNodes}
+            selectedIssues={selectedIssues}
+            onToggleBranch={handleToggleBranch}
+          />
+        </section>
+      )}
+
+      {/* Assignment Progress */}
+      {isAssigning && assignmentProgress && (
+        <section className="bg-gray-900 border border-gray-800 rounded-lg p-6 mb-6">
+          <h3 className="text-lg font-semibold text-white mb-4">Assigning tickets to sprint...</h3>
+          <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden mb-3">
+            <div
+              className="h-full bg-blue-500 transition-all duration-300"
+              style={{ width: `${(assignmentProgress.current / assignmentProgress.total) * 100}%` }}
+            />
+          </div>
+          <p className="text-gray-400 text-sm">
+            {assignmentProgress.current} / {assignmentProgress.total} tickets assigned
+          </p>
+          {assignmentProgress.branch && (
+            <p className="text-sm text-gray-500 mt-1">
+              Processing branch: {assignmentProgress.branch}...
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* Action Bar */}
+      {proposal.length > 0 && !isAssigning && (
+        <div className="sticky bottom-4 bg-gray-900 border border-gray-800 rounded-lg p-4 flex items-center justify-between">
+          <div className={`font-medium ${overcommit ? 'text-yellow-400' : 'text-gray-300'}`}>
+            Selected: {selectedCount} / {targetCount} tickets ({targetPercentage}%)
+            {overcommit && <span className="text-sm ml-2">(Over target)</span>}
+          </div>
+          <button
+            onClick={handleAssign}
+            disabled={selectedIssues.size === 0}
+            className="px-6 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <div style={{ fontWeight: 500, color: overcommit ? '#ff9800' : 'inherit' }}>
-              Selected: {selectedCount} / {targetCount} tickets ({targetPercentage}%)
-              {overcommit && (
-                <span style={{ fontSize: '0.9em', marginLeft: '8px' }}>(Over target)</span>
-              )}
-            </div>
-            <button
-              onClick={handleAssign}
-              disabled={selectedIssues.size === 0}
-              style={{
-                padding: '12px 30px',
-                background: selectedIssues.size === 0 ? '#ccc' : '#2196F3',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: selectedIssues.size === 0 ? 'not-allowed' : 'pointer',
-                fontWeight: 500,
-                fontSize: '1em',
-              }}
-            >
-              Assign to Sprint
-            </button>
-          </section>
-        )}
-      </main>
+            Assign to Sprint
+          </button>
+        </div>
+      )}
     </div>
   )
 }

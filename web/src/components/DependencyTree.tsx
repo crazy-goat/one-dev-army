@@ -19,80 +19,45 @@ export default function DependencyTree({
     return (
       <div
         key={node.issue.number}
-        className={`tree-node level-${level}`}
-        style={{ marginLeft: level * 20 }}
+        className={`mb-2 ${level > 0 ? 'ml-5' : ''}`}
       >
         <label
-          className={`tree-node-label ${isSelected ? 'selected' : ''}`}
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '12px',
-            padding: '15px',
-            cursor: 'pointer',
-            backgroundColor: isSelected ? '#e3f2fd' : 'transparent',
-            borderLeft: isRoot ? '4px solid #2196F3' : `${3 - level}px solid #90caf9`,
-            borderRadius: '8px',
-            marginBottom: '8px',
-          }}
+          className={`flex items-start gap-3 p-4 rounded-lg cursor-pointer transition-colors ${
+            isSelected ? 'bg-blue-500/10 border border-blue-500/30' : 'bg-gray-950 border border-gray-800 hover:border-gray-700'
+          } ${isRoot ? 'border-l-4 border-l-blue-500' : ''}`}
         >
           <input
             type="checkbox"
             checked={isSelected}
             onChange={() => onToggleBranch(node.branch, !isSelected)}
-            style={{ marginTop: '4px' }}
+            className="mt-1 w-4 h-4 rounded border-gray-600 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 bg-gray-800"
           />
-          <span style={{ fontSize: '1.2em' }}>{getTypeIcon(node.issue.labels)}</span>
-          <div style={{ flex: 1 }}>
-            <div>
-              <span style={{ color: '#666', fontWeight: 500, marginRight: '8px' }}>
-                #{node.issue.number}
-              </span>
-              <span style={{ fontWeight: 500 }}>{node.issue.title}</span>
+          <span className="text-lg">{getTypeIcon(node.issue.labels)}</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-gray-500 text-sm font-medium">#{node.issue.number}</span>
+              <span className="text-white font-medium truncate">{node.issue.title}</span>
             </div>
-            <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
+            <div className="flex flex-wrap gap-2 mb-2">
               {node.issue.labels.map((label) => (
                 <span
                   key={label}
-                  style={{
-                    background: '#e3f2fd',
-                    color: '#1976d2',
-                    padding: '2px 8px',
-                    borderRadius: '12px',
-                    fontSize: '0.85em',
-                  }}
+                  className="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-xs rounded-full"
                 >
                   {label}
                 </span>
               ))}
               {node.issue.complexity && (
-                <span
-                  style={{
-                    background: '#fff3e0',
-                    color: '#f57c00',
-                    padding: '2px 8px',
-                    borderRadius: '12px',
-                    fontSize: '0.85em',
-                  }}
-                >
+                <span className="px-2 py-0.5 bg-yellow-500/10 text-yellow-400 text-xs rounded-full">
                   Complexity: {node.issue.complexity}
                 </span>
               )}
             </div>
-            <p
-              style={{
-                margin: '8px 0 0 0',
-                color: '#666',
-                fontSize: '0.9em',
-                fontStyle: 'italic',
-              }}
-            >
-              {node.issue.reason}
-            </p>
+            <p className="text-sm text-gray-500 italic">{node.issue.reason}</p>
           </div>
         </label>
         {hasChildren && (
-          <div style={{ marginTop: '8px' }}>
+          <div className="mt-2">
             {node.children.map((child) => renderNode(child, level + 1))}
           </div>
         )}
@@ -108,7 +73,7 @@ export default function DependencyTree({
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    <div className="space-y-2">
       {nodes.map((node) => renderNode(node))}
     </div>
   )
