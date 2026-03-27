@@ -4,6 +4,7 @@ import { useBoard, usePlanSprint } from '../api/queries'
 import type { Card } from '../api/types'
 import { Column } from '../components/board/Column'
 import { ProcessingPanel } from '../components/board/ProcessingPanel'
+import { SprintProgressPanel } from '../components/board/SprintProgressPanel'
 
 /**
  * Column definitions for the 3-region Kanban board layout.
@@ -152,8 +153,12 @@ export default function BoardPage() {
           </div>
         </div>
 
-        {/* Right: Done + Failed (stacked) */}
+        {/* Right: Sprint Progress + Done + Failed (stacked) */}
         <div className="flex flex-col gap-4 min-h-0">
+          <SprintProgressPanel
+            totalTickets={board.total_tickets}
+            completedTickets={(board.columns.done ?? EMPTY_CARDS).length}
+          />
           {RIGHT_COLUMNS.map(({ key, label, empty }) => (
             <div key={key} className="flex-1 min-h-0">
               <Column
