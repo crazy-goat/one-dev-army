@@ -9,6 +9,15 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/github"
 )
 
+func hasStageLabel(issue github.Issue) bool {
+	for _, label := range issue.Labels {
+		if github.IsStageLabel(label.Name) {
+			return true
+		}
+	}
+	return false
+}
+
 // GitHubClient defines the interface for GitHub operations needed by SyncService
 type GitHubClient interface {
 	ListIssuesWithPRStatus(milestone string) ([]github.Issue, error)
@@ -200,6 +209,17 @@ func (s *SyncService) doSync() {
 	// Cache each issue and notify orchestrator
 	cachedCount := 0
 	for _, issue := range issues {
+		if issue.State == "open" && !hasStageLabel(issue) {
+			log.Printf("[SyncService] Auto-assigning stage:backlog to issue #%d", issue.Number)
+			if err := s.gh.AddLabel(issue.Number, string(github.StageBacklog)); err != nil {
+				log.Printf("[SyncService] Error adding stage:backlog to issue #%d: %v", issue.Number, err)
+			} else {
+				issue.Labels = append(issue.Labels, struct {
+					Name string `json:"name"`
+				}{Name: string(github.StageBacklog)})
+			}
+		}
+
 		if err := s.store.SaveIssueCache(issue, milestone, false); err != nil {
 			log.Printf("[SyncService] Error caching issue #%d: %v", issue.Number, err)
 			continue

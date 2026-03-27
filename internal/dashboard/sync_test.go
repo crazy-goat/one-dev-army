@@ -16,6 +16,11 @@ type mockGitHubClient struct {
 	listErr         error
 	milestone       string
 	oldestMilestone *github.Milestone
+	addLabelCalls   []struct {
+		IssueNum int
+		Label    string
+	}
+	addLabelErr error
 }
 
 func (m *mockGitHubClient) ListIssuesWithPRStatus(milestone string) ([]github.Issue, error) {
@@ -31,8 +36,31 @@ func (m *mockGitHubClient) ListIssuesWithPRStatus(milestone string) ([]github.Is
 	return result, nil
 }
 
-func (*mockGitHubClient) AddLabel(_ int, _ string) error {
+func (m *mockGitHubClient) AddLabel(issueNum int, label string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.addLabelErr != nil {
+		return m.addLabelErr
+	}
+	m.addLabelCalls = append(m.addLabelCalls, struct {
+		IssueNum int
+		Label    string
+	}{IssueNum: issueNum, Label: label})
 	return nil
+}
+
+func (m *mockGitHubClient) getAddLabelCalls() []struct {
+	IssueNum int
+	Label    string
+} {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([]struct {
+		IssueNum int
+		Label    string
+	}, len(m.addLabelCalls))
+	copy(result, m.addLabelCalls)
+	return result
 }
 
 func (m *mockGitHubClient) GetOldestOpenMilestone() (*github.Milestone, error) {
@@ -396,5 +424,151 @@ func TestSyncService_syncNow_FetchesPRStatus(t *testing.T) {
 	}
 	if closedIssue.MergedAt != nil {
 		t.Error("Expected issue #3 to have MergedAt=nil")
+	}
+}
+
+func TestSyncService_AutoAssignStageBacklog_NoLabels(t *testing.T) {
+	gh := &mockGitHubClient{
+		issues: []github.Issue{
+			{Number: 1, Title: "Issue 1", State: "open", Labels: []struct {
+				Name string `json:"name"`
+			}{}},
+		},
+		oldestMilestone: &github.Milestone{Number: 1, Title: "Sprint 1"},
+	}
+	store := &mockStore{}
+	service := NewSyncService(gh, store, nil, nil)
+	service.SetActiveMilestone("Sprint 1")
+
+	service.syncNow()
+
+	calls := gh.getAddLabelCalls()
+	if len(calls) != 1 {
+		t.Errorf("Expected 1 AddLabel call, got %d", len(calls))
+	}
+	if len(calls) > 0 && calls[0].Label != "stage:backlog" {
+		t.Errorf("Expected label 'stage:backlog', got %q", calls[0].Label)
+	}
+
+	if len(store.cachedIssues) != 1 {
+		t.Errorf("Expected 1 cached issue, got %d", len(store.cachedIssues))
+	}
+}
+
+func TestSyncService_AutoAssignStageBacklog_NonStageLabels(t *testing.T) {
+	gh := &mockGitHubClient{
+		issues: []github.Issue{
+			{
+				Number: 1,
+				Title:  "Issue 1",
+				State:  "open",
+				Labels: []struct {
+					Name string `json:"name"`
+				}{
+					{Name: "bug"},
+					{Name: "priority:high"},
+				},
+			},
+		},
+		oldestMilestone: &github.Milestone{Number: 1, Title: "Sprint 1"},
+	}
+	store := &mockStore{}
+	service := NewSyncService(gh, store, nil, nil)
+	service.SetActiveMilestone("Sprint 1")
+
+	service.syncNow()
+
+	calls := gh.getAddLabelCalls()
+	if len(calls) != 1 {
+		t.Errorf("Expected 1 AddLabel call, got %d", len(calls))
+	}
+	if len(calls) > 0 && calls[0].Label != "stage:backlog" {
+		t.Errorf("Expected label 'stage:backlog', got %q", calls[0].Label)
+	}
+}
+
+func TestSyncService_AutoAssignStageBacklog_ExistingStageLabel(t *testing.T) {
+	gh := &mockGitHubClient{
+		issues: []github.Issue{
+			{
+				Number: 1,
+				Title:  "Issue 1",
+				State:  "open",
+				Labels: []struct {
+					Name string `json:"name"`
+				}{
+					{Name: "stage:analysis"},
+					{Name: "bug"},
+				},
+			},
+		},
+		oldestMilestone: &github.Milestone{Number: 1, Title: "Sprint 1"},
+	}
+	store := &mockStore{}
+	service := NewSyncService(gh, store, nil, nil)
+	service.SetActiveMilestone("Sprint 1")
+
+	service.syncNow()
+
+	calls := gh.getAddLabelCalls()
+	if len(calls) != 0 {
+		t.Errorf("Expected 0 AddLabel calls for issue with existing stage label, got %d", len(calls))
+	}
+
+	if len(store.cachedIssues) != 1 {
+		t.Errorf("Expected 1 cached issue, got %d", len(store.cachedIssues))
+	}
+}
+
+func TestSyncService_AutoAssignStageBacklog_ClosedIssue(t *testing.T) {
+	gh := &mockGitHubClient{
+		issues: []github.Issue{
+			{
+				Number: 1,
+				Title:  "Issue 1",
+				State:  "closed",
+				Labels: []struct {
+					Name string `json:"name"`
+				}{
+					{Name: "bug"},
+				},
+			},
+		},
+		oldestMilestone: &github.Milestone{Number: 1, Title: "Sprint 1"},
+	}
+	store := &mockStore{}
+	service := NewSyncService(gh, store, nil, nil)
+	service.SetActiveMilestone("Sprint 1")
+
+	service.syncNow()
+
+	calls := gh.getAddLabelCalls()
+	if len(calls) != 0 {
+		t.Errorf("Expected 0 AddLabel calls for closed issue, got %d", len(calls))
+	}
+
+	if len(store.cachedIssues) != 1 {
+		t.Errorf("Expected 1 cached issue, got %d", len(store.cachedIssues))
+	}
+}
+
+func TestSyncService_AutoAssignStageBacklog_AddLabelError(t *testing.T) {
+	gh := &mockGitHubClient{
+		issues: []github.Issue{
+			{Number: 1, Title: "Issue 1", State: "open", Labels: []struct {
+				Name string `json:"name"`
+			}{}},
+		},
+		oldestMilestone: &github.Milestone{Number: 1, Title: "Sprint 1"},
+		addLabelErr:     errors.New("github api error"),
+	}
+	store := &mockStore{}
+	service := NewSyncService(gh, store, nil, nil)
+	service.SetActiveMilestone("Sprint 1")
+
+	service.syncNow()
+
+	if len(store.cachedIssues) != 1 {
+		t.Errorf("Expected 1 cached issue even when AddLabel fails, got %d", len(store.cachedIssues))
 	}
 }
