@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Link } from 'react-router'
 import type { CurrentTicket, LogStreamPayload } from '../../api/types'
-import { useAppContext } from '../../App'
+import { useAppContext } from '../../hooks/useAppContext'
 
 interface ProcessingPanelProps {
   currentTicket?: CurrentTicket

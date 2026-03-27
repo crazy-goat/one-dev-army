@@ -1,5 +1,5 @@
 import { useRateLimit, useToggleYolo, useBoard, useTriggerSync, useStartSprint, usePauseSprint, useWorkers } from '../../api/queries'
-import { useAppContext } from '../../App'
+import { useAppContext } from '../../hooks/useAppContext'
 import type { RateLimit, APILimit } from '../../api/types'
 
 /** Format elapsed milliseconds to a human-readable string. */
