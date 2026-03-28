@@ -142,14 +142,24 @@ func (p *PlanProposer) processProposal(jobID string, candidates []IssueCandidate
 		}
 	}
 
+	// Extract JSON from response (handle markdown code blocks and text around JSON)
+	jsonStr := extractJSON(responseText)
+	if jsonStr == "" {
+		p.mu.Lock()
+		job.Status = "failed"
+		job.Error = "No JSON found in AI response"
+		p.mu.Unlock()
+		return
+	}
+
 	var result struct {
 		Issues   []ProposedIssue `json:"issues"`
 		Branches []Branch        `json:"branches"`
 	}
-	if err := json.Unmarshal([]byte(responseText), &result); err != nil {
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
 		p.mu.Lock()
 		job.Status = "failed"
-		job.Error = fmt.Sprintf("Failed to parse proposal: %v", err)
+		job.Error = fmt.Sprintf("Failed to parse proposal: %v\nResponse: %s", err, jsonStr[:min(len(jsonStr), 200)])
 		p.mu.Unlock()
 		return
 	}
@@ -244,4 +254,12 @@ Format:
 }
 
 Do not include any other text, only the JSON.`, candidatesJSON, lastTag, targetCount, graphJSON)
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
