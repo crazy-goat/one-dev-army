@@ -581,10 +581,15 @@ func (s *Server) handleSprintCloseConfirmV2(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Create the tag on master branch
+	defaultBranch, err := s.gh.GetDefaultBranch()
+	if err != nil {
+		log.Printf("[API v2] Warning: failed to get default branch, falling back to 'main': %v", err)
+		defaultBranch = "main"
+	}
+
 	tagMessage := fmt.Sprintf("Release %s - %s", tagName, milestone.Title)
-	if err := s.gh.CreateTag(tagName, "master", tagMessage); err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to create tag: %v", err))
+	if err := s.gh.CreateTag(tagName, defaultBranch, tagMessage); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to create tag on branch %s: %v", defaultBranch, err))
 		return
 	}
 

@@ -1032,10 +1032,15 @@ func (s *Server) handleSprintCloseConfirm(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Create the tag on master branch
+	defaultBranch, err := s.gh.GetDefaultBranch()
+	if err != nil {
+		log.Printf("[Dashboard] Warning: failed to get default branch, falling back to 'main': %v", err)
+		defaultBranch = "main"
+	}
+
 	tagMessage := fmt.Sprintf("Release %s - %s", tagName, milestone.Title)
-	if err := s.gh.CreateTag(tagName, "master", tagMessage); err != nil {
-		log.Printf("[Dashboard] Error creating tag %s: %v", tagName, err)
+	if err := s.gh.CreateTag(tagName, defaultBranch, tagMessage); err != nil {
+		log.Printf("[Dashboard] Error creating tag %s on branch %s: %v", tagName, defaultBranch, err)
 		http.Redirect(w, r, "/sprint/close?bump_type="+bumpType+"&error=Failed+to+create+tag", http.StatusSeeOther)
 		return
 	}

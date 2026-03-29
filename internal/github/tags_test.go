@@ -18,6 +18,7 @@ type tagClientInterface interface {
 	createTagReference(tagName, tagSHA string) error
 	getBranchSHA(branch string) (string, error)
 	createRelease(tagName, title, body string) error
+	fetchRepoInfo() ([]byte, error)
 }
 
 // tagRef represents a git tag reference
@@ -37,6 +38,8 @@ type mockTagClient struct {
 	branchSHA    string
 	branchErr    error
 	releaseErr   error
+	repoInfo     []byte
+	repoInfoErr  error
 	calls        []string
 }
 
@@ -88,6 +91,11 @@ func (m *mockTagClient) getBranchSHA(branch string) (string, error) {
 func (m *mockTagClient) createRelease(tagName, _, _ string) error {
 	m.calls = append(m.calls, "createRelease:"+tagName)
 	return m.releaseErr
+}
+
+func (m *mockTagClient) fetchRepoInfo() ([]byte, error) {
+	m.calls = append(m.calls, "fetchRepoInfo")
+	return m.repoInfo, m.repoInfoErr
 }
 
 // getLatestTagLogic implements the core logic for GetLatestTag using the interface
@@ -680,6 +688,129 @@ func TestCreateReleaseLogic(t *testing.T) {
 			// Verify the method was called
 			if !slices.Contains(mc.calls, "createRelease:"+tt.tagName) {
 				t.Errorf("createRelease() was not called for tag %q", tt.tagName)
+			}
+		})
+	}
+}
+
+func getDefaultBranchLogic(client tagClientInterface) (string, error) {
+	out, err := client.fetchRepoInfo()
+	if err != nil {
+		return "", fmt.Errorf("fetching repo info: %w", err)
+	}
+
+	var repo struct {
+		DefaultBranch string `json:"default_branch"`
+	}
+	if err := json.Unmarshal(out, &repo); err != nil {
+		return "", fmt.Errorf("parsing repo info: %w", err)
+	}
+
+	if repo.DefaultBranch == "" {
+		return "main", nil
+	}
+
+	return repo.DefaultBranch, nil
+}
+
+func TestGetDefaultBranchLogic(t *testing.T) {
+	tests := []struct {
+		name        string
+		repoInfo    string
+		repoInfoErr error
+		expected    string
+		expectError bool
+	}{
+		{
+			name:     "default branch is main",
+			repoInfo: `{"default_branch": "main"}`,
+			expected: "main",
+		},
+		{
+			name:     "default branch is master",
+			repoInfo: `{"default_branch": "master"}`,
+			expected: "master",
+		},
+		{
+			name:     "default branch is custom name",
+			repoInfo: `{"default_branch": "develop"}`,
+			expected: "develop",
+		},
+		{
+			name:     "empty default branch falls back to main",
+			repoInfo: `{"default_branch": ""}`,
+			expected: "main",
+		},
+		{
+			name:     "missing default_branch field falls back to main",
+			repoInfo: `{"name": "my-repo"}`,
+			expected: "main",
+		},
+		{
+			name:        "API error",
+			repoInfoErr: errors.New("network error"),
+			expectError: true,
+		},
+		{
+			name:        "invalid JSON",
+			repoInfo:    `not json`,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mc := newMockTagClient()
+			mc.repoInfo = []byte(tt.repoInfo)
+			mc.repoInfoErr = tt.repoInfoErr
+
+			result, err := getDefaultBranchLogic(mc)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("getDefaultBranchLogic() expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("getDefaultBranchLogic() unexpected error: %v", err)
+				return
+			}
+			if result != tt.expected {
+				t.Errorf("getDefaultBranchLogic() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestDefaultBranchRepoParsing(t *testing.T) {
+	tests := []struct {
+		name     string
+		jsonData string
+		expected string
+	}{
+		{
+			name:     "main branch",
+			jsonData: `{"default_branch": "main", "name": "my-repo"}`,
+			expected: "main",
+		},
+		{
+			name:     "master branch",
+			jsonData: `{"default_branch": "master", "name": "my-repo"}`,
+			expected: "master",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var repo struct {
+				DefaultBranch string `json:"default_branch"`
+			}
+			if err := json.Unmarshal([]byte(tt.jsonData), &repo); err != nil {
+				t.Fatalf("Failed to parse repo info: %v", err)
+			}
+			if repo.DefaultBranch != tt.expected {
+				t.Errorf("Expected default_branch %q, got %q", tt.expected, repo.DefaultBranch)
 			}
 		})
 	}

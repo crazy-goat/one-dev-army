@@ -6833,3 +6833,19 @@ func TestHandleRestartFullInvalidID(t *testing.T) {
 		t.Errorf("success = %v, want false", resp["success"])
 	}
 }
+
+func TestHandleSprintCloseConfirm_UsesGetDefaultBranch(t *testing.T) {
+	src, err := os.ReadFile("handlers.go")
+	if err != nil {
+		t.Fatalf("failed to read handlers.go: %v", err)
+	}
+	content := string(src)
+
+	if strings.Contains(content, `CreateTag(tagName, "master"`) {
+		t.Error("handlers.go still contains hardcoded 'master' in CreateTag call; should use GetDefaultBranch()")
+	}
+
+	if !strings.Contains(content, "GetDefaultBranch()") {
+		t.Error("handlers.go should call GetDefaultBranch() to determine the branch for tag creation")
+	}
+}
