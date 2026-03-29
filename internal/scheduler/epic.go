@@ -162,27 +162,50 @@ func extractTextContent(msg *opencode.Message) string {
 }
 
 func extractJSON(content string) string {
-	arrStart := strings.Index(content, "[")
-	arrEnd := strings.LastIndex(content, "]")
-
-	objStart := strings.Index(content, "{")
-	objEnd := strings.LastIndex(content, "}")
-
-	arrValid := arrStart >= 0 && arrEnd > arrStart
-	objValid := objStart >= 0 && objEnd > objStart
-
-	if objValid && arrValid {
-		if objStart < arrStart {
-			return content[objStart : objEnd+1]
+	// Find the first '{' and track brace depth to find the matching '}'
+	start := strings.Index(content, "{")
+	if start < 0 {
+		// Try array if no object found
+		arrStart := strings.Index(content, "[")
+		if arrStart >= 0 {
+			return extractJSONArray(content[arrStart:])
 		}
-		return content[arrStart : arrEnd+1]
-	}
-	if objValid {
-		return content[objStart : objEnd+1]
-	}
-	if arrValid {
-		return content[arrStart : arrEnd+1]
+		return content
 	}
 
-	return content
+	// Find the matching closing brace
+	depth := 0
+	for i := start; i < len(content); i++ {
+		if content[i] == '{' {
+			depth++
+		} else if content[i] == '}' {
+			depth--
+			if depth == 0 {
+				return content[start : i+1]
+			}
+		}
+	}
+
+	return content[start:]
+}
+
+func extractJSONArray(content string) string {
+	start := strings.Index(content, "[")
+	if start < 0 {
+		return content
+	}
+
+	depth := 0
+	for i := start; i < len(content); i++ {
+		if content[i] == '[' {
+			depth++
+		} else if content[i] == ']' {
+			depth--
+			if depth == 0 {
+				return content[start : i+1]
+			}
+		}
+	}
+
+	return content[start:]
 }

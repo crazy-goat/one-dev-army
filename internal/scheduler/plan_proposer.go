@@ -253,7 +253,11 @@ Format:
   ]
 }
 
-Do not include any other text, only the JSON.`, candidatesJSON, lastTag, targetCount, graphJSON)
+Do not include any other text, only the JSON.
+
+CRITICAL: Return ONLY the JSON object. Do NOT add any text before or after the JSON.
+Do NOT add explanations, comments, or markdown formatting.
+The response must start with '{' and end with '}' with nothing else.`, candidatesJSON, lastTag, targetCount, graphJSON)
 }
 
 // min returns the minimum of two integers

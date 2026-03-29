@@ -12,6 +12,52 @@ import (
 	"github.com/crazy-goat/one-dev-army/internal/scheduler"
 )
 
+// SprintInfo represents current sprint information
+type SprintInfo struct {
+	Number      int    `json:"number"`
+	Title       string `json:"title"`
+	State       string `json:"state"`
+	StartDate   string `json:"start_date"`
+	EndDate     string `json:"end_date"`
+	TicketCount int    `json:"ticket_count"`
+}
+
+// handleGetCurrentSprint returns the current active sprint
+func (s *Server) handleGetCurrentSprint(w http.ResponseWriter, r *http.Request) {
+	sprintDetector := github.NewSprintDetector(s.gh)
+	currentSprint, err := sprintDetector.GetCurrentSprint()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if currentSprint == nil {
+		http.Error(w, "No active sprint", http.StatusNotFound)
+		return
+	}
+
+	// Count tickets in this sprint
+	tickets, err := s.gh.ListIssuesForMilestone(currentSprint.Title)
+	if err != nil {
+		// Don't fail if we can't count tickets, just return 0
+		tickets = []github.Issue{}
+	}
+
+	info := SprintInfo{
+		Number:      currentSprint.Number,
+		Title:       currentSprint.Title,
+		State:       currentSprint.State,
+		StartDate:   currentSprint.CreatedAt.Format(time.RFC3339),
+		EndDate:     currentSprint.DueOn.Format(time.RFC3339),
+		TicketCount: len(tickets),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(info); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
 // handleGetLastTag returns the most recent tag/release for AI context
 func (s *Server) handleGetLastTag(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
