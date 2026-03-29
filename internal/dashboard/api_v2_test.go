@@ -6,6 +6,8 @@ import (
 	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/crazy-goat/one-dev-army/internal/db"
@@ -934,5 +936,21 @@ func TestConvertSteps(t *testing.T) {
 	steps = convertSteps([]db.TaskStep{})
 	if len(steps) != 0 {
 		t.Errorf("expected empty slice for empty input, got %d", len(steps))
+	}
+}
+
+func TestHandleSprintCloseConfirmV2_UsesGetDefaultBranch(t *testing.T) {
+	src, err := os.ReadFile("api_v2.go")
+	if err != nil {
+		t.Fatalf("failed to read api_v2.go: %v", err)
+	}
+	content := string(src)
+
+	if strings.Contains(content, `CreateTag(tagName, "master"`) {
+		t.Error("api_v2.go still contains hardcoded 'master' in CreateTag call; should use GetDefaultBranch()")
+	}
+
+	if !strings.Contains(content, "GetDefaultBranch()") {
+		t.Error("api_v2.go should call GetDefaultBranch() to determine the branch for tag creation")
 	}
 }
