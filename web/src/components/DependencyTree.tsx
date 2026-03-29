@@ -11,19 +11,18 @@ export default function DependencyTree({
   selectedIssues,
   onToggleBranch,
 }: DependencyTreeProps) {
-  const renderNode = (node: TreeNode, level: number = 0) => {
+  const renderNode = (node: TreeNode, level = 0) => {
     const isSelected = selectedIssues.has(node.issue.number)
     const hasChildren = node.children.length > 0
     const isRoot = level === 0
 
     return (
-      <div
-        key={node.issue.number}
-        className={`mb-2 ${level > 0 ? 'ml-5' : ''}`}
-      >
+      <div key={node.issue.number} className={`mb-2 ${level > 0 ? 'ml-5' : ''}`}>
         <label
           className={`flex items-start gap-3 p-4 rounded-lg cursor-pointer transition-colors ${
-            isSelected ? 'bg-blue-500/10 border border-blue-500/30' : 'bg-gray-950 border border-gray-800 hover:border-gray-700'
+            isSelected
+              ? 'bg-blue-500/10 border border-blue-500/30'
+              : 'bg-gray-950 border border-gray-800 hover:border-gray-700'
           } ${isRoot ? 'border-l-4 border-l-blue-500' : ''}`}
         >
           <input
@@ -39,7 +38,7 @@ export default function DependencyTree({
               <span className="text-white font-medium truncate">{node.issue.title}</span>
             </div>
             <div className="flex flex-wrap gap-2 mb-2">
-              {node.issue.labels.map((label) => (
+              {node.issue.labels.map(label => (
                 <span
                   key={label}
                   className="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-xs rounded-full"
@@ -47,7 +46,7 @@ export default function DependencyTree({
                   {label}
                 </span>
               ))}
-              {node.issue.complexity && (
+              {node.issue.complexity !== undefined && node.issue.complexity !== 0 && (
                 <span className="px-2 py-0.5 bg-yellow-500/10 text-yellow-400 text-xs rounded-full">
                   Complexity: {node.issue.complexity}
                 </span>
@@ -57,24 +56,24 @@ export default function DependencyTree({
           </div>
         </label>
         {hasChildren && (
-          <div className="mt-2">
-            {node.children.map((child) => renderNode(child, level + 1))}
-          </div>
+          <div className="mt-2">{node.children.map(child => renderNode(child, level + 1))}</div>
         )}
       </div>
     )
   }
 
   const getTypeIcon = (labels: string[]) => {
-    if (labels.includes('type:bug')) return '🐛'
-    if (labels.includes('type:feature')) return '✨'
-    if (labels.includes('type:docs')) return '📚'
+    if (labels.includes('type:bug')) {
+      return '🐛'
+    }
+    if (labels.includes('type:feature')) {
+      return '✨'
+    }
+    if (labels.includes('type:docs')) {
+      return '📚'
+    }
     return '📝'
   }
 
-  return (
-    <div className="space-y-2">
-      {nodes.map((node) => renderNode(node))}
-    </div>
-  )
+  return <div className="space-y-2">{nodes.map(node => renderNode(node))}</div>
 }

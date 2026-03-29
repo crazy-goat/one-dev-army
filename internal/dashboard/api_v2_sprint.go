@@ -23,7 +23,7 @@ type SprintInfo struct {
 }
 
 // handleGetCurrentSprint returns the current active sprint
-func (s *Server) handleGetCurrentSprint(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetCurrentSprint(w http.ResponseWriter, _ *http.Request) {
 	sprintDetector := github.NewSprintDetector(s.gh)
 	currentSprint, err := sprintDetector.GetCurrentSprint()
 	if err != nil {
@@ -106,8 +106,8 @@ func (s *Server) handleGetUnassignedIssues(w http.ResponseWriter, _ *http.Reques
 
 		// Extract complexity from labels if present (e.g., "complexity:3")
 		for _, label := range candidate.Labels {
-			if strings.HasPrefix(label, "complexity:") {
-				if val, err := strconv.Atoi(strings.TrimPrefix(label, "complexity:")); err == nil {
+			if after, ok := strings.CutPrefix(label, "complexity:"); ok {
+				if val, err := strconv.Atoi(after); err == nil {
 					candidate.Complexity = &val
 				}
 			}

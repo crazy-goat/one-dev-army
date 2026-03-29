@@ -1,7 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import type { Sprint, ProposedIssue, ProposalJob, AssignmentProgress, TreeNode, Branch } from '../types/sprint'
+
 import DependencyTree from '../components/DependencyTree'
+import type {
+  Sprint,
+  ProposedIssue,
+  ProposalJob,
+  AssignmentProgress,
+  TreeNode,
+  Branch,
+} from '../types/sprint'
 
 export default function PlanSprintPage() {
   const navigate = useNavigate()
@@ -16,31 +24,38 @@ export default function PlanSprintPage() {
   const [assignmentProgress, setAssignmentProgress] = useState<AssignmentProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // Load current sprint on mount
   useEffect(() => {
     fetch('/api/v2/sprint/current')
-      .then((res) => {
-        if (!res.ok) throw new Error('No active sprint')
-        return res.json()
+      .then(res => {
+        if (!res.ok) {
+          throw new Error('No active sprint')
+        }
+        return res.json() as Promise<Sprint>
       })
       .then(setSprint)
-      .catch((err) => setError(err.message))
+      .catch((err: Error) => {
+        setError(err.message)
+      })
   }, [])
 
-  const buildTree = (issues: ProposedIssue[], branches: Branch[]): TreeNode[] => {
-    const issueMap = new Map(issues.map((i) => [i.number, i]))
+  const buildTree = (issues: ProposedIssue[], branchList: Branch[]): TreeNode[] => {
+    const issueMap = new Map(issues.map(i => [i.number, i]))
     const treeNodes: TreeNode[] = []
 
-    branches.forEach((branch) => {
+    branchList.forEach(branch => {
       const rootIssue = issueMap.get(branch.root_issue)
-      if (!rootIssue) return
+      if (!rootIssue) {
+        return
+      }
 
       const buildBranchTree = (issueNum: number, branchId: string): TreeNode | null => {
         const issue = issueMap.get(issueNum)
-        if (!issue) return null
+        if (!issue) {
+          return null
+        }
 
         const children = issue.dependencies
-          .map((dep) => buildBranchTree(dep, branchId))
+          .map(dep => buildBranchTree(dep, branchId))
           .filter((child): child is TreeNode => child !== null)
 
         return {
@@ -70,22 +85,24 @@ export default function PlanSprintPage() {
         body: JSON.stringify({ targetCount }),
       })
 
-      if (!response.ok) throw new Error('Failed to start proposal')
-      const { jobId } = await response.json()
+      if (!response.ok) {
+        throw new Error('Failed to start proposal')
+      }
+      const jobData: { jobId: string } = (await response.json()) as { jobId: string }
 
       const pollProposal = async (): Promise<{ issues: ProposedIssue[]; branches: Branch[] }> => {
-        const statusRes = await fetch(`/api/v2/sprint/propose/${jobId}`)
-        const job: ProposalJob = await statusRes.json()
+        const statusRes = await fetch(`/api/v2/sprint/propose/${jobData.jobId}`)
+        const job: ProposalJob = (await statusRes.json()) as ProposalJob
 
         if (job.status === 'failed') {
-          throw new Error(job.error || 'Proposal generation failed')
+          throw new Error(job.error ?? 'Proposal generation failed')
         }
 
         if (job.status === 'completed' && job.proposal && job.branches) {
           return { issues: job.proposal, branches: job.branches }
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 1000))
+        await new Promise(resolve => setTimeout(resolve, 1000))
         return pollProposal()
       }
 
@@ -93,8 +110,8 @@ export default function PlanSprintPage() {
       setProposal(result.issues)
       setBranches(result.branches)
 
-      const allIssueIds = new Set(result.issues.map((p) => p.number))
-      const allBranchIds = new Set(result.branches.map((b) => b.id))
+      const allIssueIds = new Set(result.issues.map(p => p.number))
+      const allBranchIds = new Set(result.branches.map(b => b.id))
       setSelectedIssues(allIssueIds)
       setSelectedBranches(allBranchIds)
     } catch (err) {
@@ -105,10 +122,12 @@ export default function PlanSprintPage() {
   }
 
   const handleToggleBranch = (branchId: string, selected: boolean) => {
-    const branch = branches.find((b) => b.id === branchId)
-    if (!branch) return
+    const branch = branches.find(b => b.id === branchId)
+    if (!branch) {
+      return
+    }
 
-    setSelectedBranches((prev) => {
+    setSelectedBranches(prev => {
       const next = new Set(prev)
       if (selected) {
         next.add(branchId)
@@ -118,9 +137,9 @@ export default function PlanSprintPage() {
       return next
     })
 
-    setSelectedIssues((prev) => {
+    setSelectedIssues(prev => {
       const next = new Set(prev)
-      branch.issues.forEach((issueNum) => {
+      branch.issues.forEach(issueNum => {
         if (selected) {
           next.add(issueNum)
         } else {
@@ -145,32 +164,40 @@ export default function PlanSprintPage() {
         body: JSON.stringify({ issueNumbers, branches: branchIds }),
       })
 
-      if (!response.ok) throw new Error('Failed to start assignment')
+      if (!response.ok) {
+        throw new Error('Failed to start assignment')
+      }
 
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
 
-      if (!reader) throw new Error('No response body')
+      if (reader === undefined) {
+        throw new Error('No response body')
+      }
 
-      while (true) {
+      for (;;) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) {
+          break
+        }
 
         const chunk = decoder.decode(value)
         const lines = chunk.split('\n')
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
-            const data: AssignmentProgress = JSON.parse(line.slice(6))
+            const data: AssignmentProgress = JSON.parse(line.slice(6)) as AssignmentProgress
             setAssignmentProgress(data)
 
             if (data.type === 'completed') {
-              setTimeout(() => navigate('/'), 1000)
+              setTimeout(() => {
+                void navigate('/')
+              }, 1000)
               return
             }
 
             if (data.type === 'error') {
-              throw new Error(data.error || 'Assignment failed')
+              throw new Error(data.error ?? 'Assignment failed')
             }
           }
         }
@@ -186,14 +213,16 @@ export default function PlanSprintPage() {
   const targetPercentage = Math.round((selectedCount / targetCount) * 100)
   const overcommit = targetPercentage > 100
 
-  if (error && !sprint) {
+  if (error !== null && sprint === null) {
     return (
       <div className="flex items-center justify-center flex-1 py-20">
         <div className="text-center">
           <h2 className="text-xl font-bold text-white mb-2">Error</h2>
           <p className="text-gray-400 mb-4">{error}</p>
           <button
-            onClick={() => navigate('/')}
+            onClick={() => {
+              void navigate('/')
+            }}
             className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm transition-colors"
           >
             Back to Board
@@ -209,25 +238,28 @@ export default function PlanSprintPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => {
+              void navigate('/')
+            }}
             className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm transition-colors"
           >
             ← Back to Board
           </button>
           <h1 className="text-xl font-bold text-white">Plan Sprint</h1>
         </div>
-        {sprint && (
+        {sprint !== null && (
           <div className="text-right">
             <div className="text-white font-semibold">{sprint.title}</div>
             <div className="text-sm text-gray-500">
-              {new Date(sprint.start_date).toLocaleDateString()} - {new Date(sprint.end_date).toLocaleDateString()}
+              {new Date(sprint.start_date).toLocaleDateString()} -{' '}
+              {new Date(sprint.end_date).toLocaleDateString()}
             </div>
           </div>
         )}
       </div>
 
       {/* Error message */}
-      {error && (
+      {error !== null && (
         <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-lg mb-4 text-sm">
           {error}
         </div>
@@ -245,13 +277,15 @@ export default function PlanSprintPage() {
             min={1}
             max={50}
             value={targetCount}
-            onChange={(e) => setTargetCount(parseInt(e.target.value) || 10)}
+            onChange={e => setTargetCount(parseInt(e.target.value) || 10)}
             disabled={isGenerating || isAssigning}
             className="w-20 px-3 py-2 bg-gray-950 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 disabled:opacity-50"
           />
           <button
-            onClick={handleGenerate}
-            disabled={isGenerating || isAssigning || !sprint}
+            onClick={() => {
+              void handleGenerate()
+            }}
+            disabled={isGenerating || isAssigning || sprint === null}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isGenerating ? (
@@ -270,8 +304,12 @@ export default function PlanSprintPage() {
       {isGenerating && (
         <div className="flex flex-col items-center justify-center py-12">
           <div className="w-10 h-10 border-3 border-gray-700 border-t-blue-500 rounded-full animate-spin mb-4" />
-          <p className="text-gray-300 font-medium">AI is selecting the best tickets for your sprint...</p>
-          <p className="text-sm text-gray-500 mt-1">Analyzing dependencies and last release context</p>
+          <p className="text-gray-300 font-medium">
+            AI is selecting the best tickets for your sprint...
+          </p>
+          <p className="text-sm text-gray-500 mt-1">
+            Analyzing dependencies and last release context
+          </p>
         </div>
       )}
 
@@ -291,7 +329,7 @@ export default function PlanSprintPage() {
       )}
 
       {/* Assignment Progress */}
-      {isAssigning && assignmentProgress && (
+      {isAssigning && assignmentProgress !== null && (
         <section className="bg-gray-900 border border-gray-800 rounded-lg p-6 mb-6">
           <h3 className="text-lg font-semibold text-white mb-4">Assigning tickets to sprint...</h3>
           <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden mb-3">
@@ -303,7 +341,7 @@ export default function PlanSprintPage() {
           <p className="text-gray-400 text-sm">
             {assignmentProgress.current} / {assignmentProgress.total} tickets assigned
           </p>
-          {assignmentProgress.branch && (
+          {assignmentProgress.branch !== undefined && assignmentProgress.branch !== '' && (
             <p className="text-sm text-gray-500 mt-1">
               Processing branch: {assignmentProgress.branch}...
             </p>
@@ -319,7 +357,9 @@ export default function PlanSprintPage() {
             {overcommit && <span className="text-sm ml-2">(Over target)</span>}
           </div>
           <button
-            onClick={handleAssign}
+            onClick={() => {
+              void handleAssign()
+            }}
             disabled={selectedIssues.size === 0}
             className="px-6 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >

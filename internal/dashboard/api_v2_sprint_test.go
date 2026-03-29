@@ -30,7 +30,7 @@ func TestGetLastTag(t *testing.T) {
 
 	// If we got a 200, verify the response structure
 	if rec.Code == http.StatusOK {
-		var tag map[string]interface{}
+		var tag map[string]any
 		if err := json.Unmarshal(rec.Body.Bytes(), &tag); err != nil {
 			t.Errorf("failed to decode response: %v (body: %s)", err, rec.Body.String())
 		}

@@ -8,12 +8,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/crazy-goat/one-dev-army/internal/config"
 	"github.com/crazy-goat/one-dev-army/internal/github"
 	"github.com/crazy-goat/one-dev-army/internal/llm"
 	"github.com/crazy-goat/one-dev-army/internal/opencode"
-	"github.com/google/uuid"
 )
+
+const statusFailed = "failed"
 
 // IssueCandidate represents an issue for sprint planning
 type IssueCandidate struct {
@@ -118,7 +121,7 @@ func (p *PlanProposer) processProposal(jobID string, candidates []IssueCandidate
 	session, err := p.oc.CreateSession("sprint-planning-proposal")
 	if err != nil {
 		p.mu.Lock()
-		job.Status = "failed"
+		job.Status = statusFailed
 		job.Error = fmt.Sprintf("Failed to create session: %v", err)
 		p.mu.Unlock()
 		return
@@ -127,7 +130,7 @@ func (p *PlanProposer) processProposal(jobID string, candidates []IssueCandidate
 	msg, err := p.oc.SendMessage(session.ID, prompt, opencode.ParseModelRef(llmModel), os.Stdout)
 	if err != nil {
 		p.mu.Lock()
-		job.Status = "failed"
+		job.Status = statusFailed
 		job.Error = fmt.Sprintf("Failed to get AI response: %v", err)
 		p.mu.Unlock()
 		return
@@ -146,7 +149,7 @@ func (p *PlanProposer) processProposal(jobID string, candidates []IssueCandidate
 	jsonStr := extractJSON(responseText)
 	if jsonStr == "" {
 		p.mu.Lock()
-		job.Status = "failed"
+		job.Status = statusFailed
 		job.Error = "No JSON found in AI response"
 		p.mu.Unlock()
 		return
@@ -158,7 +161,7 @@ func (p *PlanProposer) processProposal(jobID string, candidates []IssueCandidate
 	}
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
 		p.mu.Lock()
-		job.Status = "failed"
+		job.Status = statusFailed
 		job.Error = fmt.Sprintf("Failed to parse proposal: %v\nResponse: %s", err, jsonStr[:min(len(jsonStr), 200)])
 		p.mu.Unlock()
 		return
@@ -258,12 +261,4 @@ Do not include any other text, only the JSON.
 CRITICAL: Return ONLY the JSON object. Do NOT add any text before or after the JSON.
 Do NOT add explanations, comments, or markdown formatting.
 The response must start with '{' and end with '}' with nothing else.`, candidatesJSON, lastTag, targetCount, graphJSON)
-}
-
-// min returns the minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
